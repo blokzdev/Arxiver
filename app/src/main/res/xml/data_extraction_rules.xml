@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Nothing is cloud-backed-up or device-transferred automatically: the app's own
+     export feature (token-free, SPEC-DATA §6) is the supported backup path, and
+     routine tokens must never leave the device (CLAUDE.md red lines). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="." />
+    </device-transfer>
+</data-extraction-rules>

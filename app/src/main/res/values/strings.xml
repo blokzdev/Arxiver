@@ -1,0 +1,218 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Arxiver</string>
+
+    <string name="nav_today">Today</string>
+    <string name="nav_browse">Browse</string>
+    <string name="nav_search">Search</string>
+    <string name="nav_library">Library</string>
+
+    <plurals name="browse_following_count">
+        <item quantity="one">%1$d followed</item>
+        <item quantity="other">%1$d followed</item>
+    </plurals>
+    <string name="cd_expand_group">Expand group</string>
+    <string name="cd_collapse_group">Collapse group</string>
+    <string name="cd_follow_category">Follow %1$s</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_clear_query">Clear search query</string>
+    <string name="cd_toggle_night_mode">Toggle night mode</string>
+    <string name="cd_pdf_page">Page %1$d</string>
+
+    <string name="feed_loading_queued">Querying arXiv… requests are spaced to respect arXiv\'s rate limits</string>
+
+    <string name="search_hint">Search arXiv (try ti:attention AND cat:cs.LG)</string>
+    <string name="search_querying_arxiv">Searching arXiv…</string>
+    <plurals name="search_result_count">
+        <item quantity="one">%1$d result on arXiv</item>
+        <item quantity="other">%1$d results on arXiv</item>
+    </plurals>
+    <string name="search_no_results">No papers matched. Try different terms or field prefixes.</string>
+    <string name="search_intro_title">Search all of arXiv</string>
+    <string name="search_intro_body">Bare terms search everything. Use ti:, au:, abs:, cat: prefixes and AND/OR/ANDNOT for precision. Library search arrives with your local index.</string>
+
+    <string name="paper_not_found">Paper unavailable — check the link or your connection.</string>
+    <string name="paper_abstract_heading">Abstract</string>
+    <string name="paper_dates">Submitted %1$s · updated %3$s (v%2$d)</string>
+    <string name="paper_meta_arxiv_id">arXiv ID</string>
+    <string name="paper_meta_comment">Comments</string>
+    <string name="paper_meta_journal">Journal ref</string>
+    <string name="paper_meta_doi">DOI</string>
+    <string name="paper_meta_citations">Citations</string>
+
+    <string name="pdf_title">PDF</string>
+    <string name="pdf_downloading">Downloading PDF…</string>
+
+    <string name="action_retry">Retry</string>
+    <string name="action_share">Share</string>
+    <string name="action_open_pdf">Read PDF</string>
+
+    <string name="cd_refresh_inbox">Refresh inbox</string>
+    <string name="cd_weekly_review">Send weekly review to Claude</string>
+    <string name="cd_save_paper">Save to library</string>
+    <string name="cd_unsave_paper">Remove from library</string>
+    <plurals name="cd_rate_star">
+        <item quantity="one">Rate %1$d star</item>
+        <item quantity="other">Rate %1$d stars</item>
+    </plurals>
+    <string name="cd_remove_tag">Remove tag %1$s</string>
+    <string name="cd_delete_note">Delete note</string>
+    <string name="cd_library_menu">Library options</string>
+    <string name="cd_delete_collection">Delete collection %1$s</string>
+
+    <string name="today_no_follows_title">Nothing to triage yet</string>
+    <string name="today_no_follows_body">Follow categories in Browse and new papers will arrive here automatically.</string>
+    <string name="today_go_browse">Browse categories</string>
+    <string name="today_likely_relevant">Likely relevant</string>
+    <string name="today_more_from_follows">More from your follows</string>
+    <string name="today_inbox_zero_title">Inbox zero 🎉</string>
+    <string name="today_inbox_zero_body">All caught up. New papers appear after the next sync.</string>
+
+    <string name="search_tab_library">Library</string>
+    <string name="search_tab_arxiv">arXiv</string>
+    <string name="search_local_intro">Search your saved and cached papers — titles, abstracts, authors, and your notes.</string>
+    <string name="search_local_no_results">Nothing in your local index matches.</string>
+    <string name="search_semantic_pending">Keyword results only — semantic search activates after the model downloads on Wi-Fi.</string>
+    <string name="search_badge_semantic">semantic</string>
+    <string name="search_badge_both">keyword+semantic</string>
+
+    <string name="library_tab_papers">Papers</string>
+    <string name="library_tab_collections">Collections</string>
+    <string name="library_tab_tags">Tags</string>
+    <string name="library_filter_all">All</string>
+    <string name="library_filter_to_read">To read</string>
+    <string name="library_filter_reading">Reading</string>
+    <string name="library_filter_read">Read</string>
+    <string name="library_empty">Save papers and they\'ll live here, fully indexed.</string>
+    <string name="library_no_collections">No collections yet.</string>
+    <string name="library_no_tags">No tags yet — add them from any saved paper.</string>
+    <string name="library_new_collection">New collection</string>
+    <string name="library_collection_name_hint">Collection name</string>
+    <string name="library_export_json">Export JSON</string>
+    <string name="library_export_bibtex">Export BibTeX</string>
+    <string name="library_filtered_empty">Nothing here yet.</string>
+
+    <string name="paper_related_heading">Related papers</string>
+    <string name="paper_tags_heading">Tags</string>
+    <string name="paper_add_tag">Add tag</string>
+    <string name="paper_tag_hint">tag name</string>
+    <string name="paper_notes_heading">Notes</string>
+    <string name="paper_note_hint">Add a note…</string>
+
+    <string name="connections_title">Connections</string>
+    <string name="connections_empty">No citation data yet — the graph fills in after the nightly sync for saved papers.</string>
+    <string name="connections_references">References (%1$d)</string>
+    <string name="connections_cited_by">Cited by (%1$d)</string>
+    <plurals name="connections_citation_count">
+        <item quantity="one">%1$d citation</item>
+        <item quantity="other">%1$d citations</item>
+    </plurals>
+    <string name="connections_in_library">In your library</string>
+    <string name="paper_view_connections">Connections</string>
+
+    <string name="cd_send_to_claude">Send to Claude</string>
+    <string name="cd_clear_selection">Clear selection</string>
+    <string name="cd_add_routine">Add routine</string>
+    <string name="cd_copy_starter">Copy routine starter instructions</string>
+    <string name="cd_delete_routine">Delete routine %1$s</string>
+    <plurals name="library_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="library_menu_routines">Claude routines…</string>
+    <string name="library_menu_history">Dispatch history</string>
+
+    <plurals name="dispatch_title">
+        <item quantity="one">Send %1$d paper to Claude</item>
+        <item quantity="other">Send %1$d papers to Claude</item>
+    </plurals>
+    <string name="dispatch_no_routines">No routines configured yet. Create one in the Claude app with an API trigger, then add its URL and token here.</string>
+    <string name="dispatch_setup_routines">Set up routines</string>
+    <string name="dispatch_routine_label">Routine</string>
+    <string name="dispatch_action_label">Action</string>
+    <string name="dispatch_instruction_label">Instruction</string>
+    <string name="dispatch_include_notes">Include my notes &amp; tags</string>
+    <string name="dispatch_include_notes_hint">Sends your annotations with the papers — preview shows exactly what leaves the device</string>
+    <string name="dispatch_show_preview">Show payload preview</string>
+    <string name="dispatch_hide_preview">Hide payload preview</string>
+    <string name="dispatch_preview_loading">Building preview…</string>
+    <string name="dispatch_send">Send to Claude</string>
+    <string name="dispatch_sending">Sending…</string>
+
+    <string name="action_digest">Digest</string>
+    <string name="action_deep_dive">Deep dive</string>
+    <string name="action_compare">Compare</string>
+    <string name="action_weekly_review">Weekly review</string>
+    <string name="action_literature_scan">Literature scan</string>
+    <string name="action_custom">Custom</string>
+
+    <string name="routines_title">Claude routines</string>
+    <string name="routines_empty_title">Connect your Claude</string>
+    <string name="routines_empty_body">In the Claude app, create a routine with an API trigger. Paste its trigger URL and token here — Arxiver dispatches papers to it, and your routine handles the thinking. Use the copy icon above for paste-ready routine instructions.</string>
+    <string name="routine_add_title">Add routine</string>
+    <string name="routine_reauth_title">New token for %1$s</string>
+    <string name="routine_name_label">Name</string>
+    <string name="routine_url_label">Trigger URL</string>
+    <string name="routine_url_https_required">Must be an https:// URL</string>
+    <string name="routine_token_label">Token</string>
+    <string name="routine_ping">Test</string>
+    <string name="routine_reauth">Token</string>
+    <string name="routine_auth_invalid">Token rejected — re-enter it</string>
+    <string name="routine_ping_ok">Ping accepted — the routine is running</string>
+    <string name="routine_ping_auth">Token rejected</string>
+    <string name="routine_ping_queued">Offline — ping queued</string>
+    <string name="routine_ping_failed">Ping failed: %1$s</string>
+    <string name="routine_instructions_copied">Starter instructions copied — paste into your routine</string>
+
+    <string name="history_title">Dispatch history</string>
+    <string name="history_empty">Dispatches you send to Claude appear here.</string>
+    <string name="history_row_title">%1$s · papers: %2$d</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_save">Save</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_sync_section">Sync</string>
+    <string name="settings_sync_interval">Check follows for new papers every…</string>
+    <string name="settings_hours">%1$dh</string>
+    <string name="settings_semantic_section">Semantic search</string>
+    <string name="settings_model_ready">Model ready — hybrid search active</string>
+    <string name="settings_model_downloading">Downloading model… %1$d%%</string>
+    <string name="settings_model_failed">Model download failed — retry on Wi-Fi</string>
+    <string name="settings_model_absent">Model not downloaded (~34MB, fetched on Wi-Fi)</string>
+    <plurals name="settings_embedded_count">
+        <item quantity="one">%1$d paper embedded locally</item>
+        <item quantity="other">%1$d papers embedded locally</item>
+    </plurals>
+    <string name="settings_model_download">Download now</string>
+    <string name="settings_model_reindex">Re-index</string>
+    <string name="settings_model_delete">Delete model</string>
+    <string name="settings_storage_section">Storage</string>
+    <string name="settings_pdf_cache">Downloaded PDFs: %1$d MB</string>
+    <string name="settings_clear">Clear</string>
+    <string name="settings_backup_section">Backup</string>
+    <string name="settings_backup_export">Export backup</string>
+    <string name="settings_backup_import">Import backup</string>
+    <string name="settings_backup_hint">One JSON file: library, notes, tags, collections, follows, routine URLs. Tokens are never exported — re-enter them after a restore. PDFs and embeddings rebuild themselves.</string>
+    <string name="settings_import_ok">Backup imported.</string>
+    <string name="settings_import_tokens_needed">Re-enter routine tokens in Claude routines.</string>
+    <string name="settings_import_failed">Import failed — is this an Arxiver backup file?</string>
+    <string name="settings_claude_section">Claude</string>
+    <string name="settings_about_section">About</string>
+    <string name="settings_version">Arxiver %1$s</string>
+    <string name="settings_about_blurb">Local-first arXiv explorer. No accounts, no telemetry — your library lives on this device. Thank you to arXiv for use of its open access interoperability.</string>
+
+    <string name="onboarding_title">Welcome to Arxiver</string>
+    <string name="onboarding_pitch">Your personal arXiv engine: follow fields, triage daily papers, build a deeply-indexed local library, and dispatch anything to your Claude.</string>
+    <string name="onboarding_pick_categories">Pick a few fields to follow</string>
+    <string name="onboarding_more_in_browse">The full category directory lives in Browse.</string>
+    <string name="onboarding_claude_note">Optional: connect a Claude routine later from Library → Claude routines to digest and deep-dive papers with your own connectors.</string>
+    <string name="onboarding_start">Start reading</string>
+
+    <string name="action_add">Add</string>
+    <string name="action_create">Create</string>
+    <string name="action_cancel">Cancel</string>
+
+    <string name="error_offline">You\'re offline. Cached papers remain available.</string>
+    <string name="error_rate_limited">arXiv is throttling requests — trying again shortly.</string>
+    <string name="error_generic">Something went wrong talking to arXiv.</string>
+</resources>
