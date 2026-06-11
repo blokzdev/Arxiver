@@ -79,9 +79,22 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] 5.3 Backup/restore: single-JSON export/import (library+notes+tags+collections+follows+routine URLs, token-free by construction — asserted in tests), idempotent import, embedding backfill scheduled; SAF picker in Settings. (Zip wrapper deferred — single JSON suffices at v1 scale)
 - [!] 5.4 [needs-user/device] Performance pass: cold start < 2s, search < 300ms @ 5K corpus — measurement requires a physical device; baseline profile generation likewise
 - [!] 5.5 [needs-user/device] Accessibility: TalkBack labels shipped on all actionables during feature work; the verification pass (TalkBack walkthrough, font-scale 1.3x) needs a device
-- [~] 5.6 Release engineering: signing-from-env config + tag-triggered release workflow shipped; [needs-user] repo secrets (KEYSTORE_*) + first tag + install-from-scratch test
+- [x] 5.6 Release engineering: signing-from-env config + tag-triggered release workflow shipped; repo secrets (KEYSTORE_*) configured and v1.0.0 tag released — signed APK published 2026-06-11 (see memory: release-engineering-state)
 - [x] 5.7 README: install guide + Claude connection guide (screenshots pending first device run)
-- [ ] **CHECKPOINT 5 = v1.0.0:** GitHub Release published; success criteria in PRD §7 verified and recorded
+- [!] 5.8 [needs-user/device] Install-from-scratch test of the published v1.0.0 APK on a physical device
+- [ ] **CHECKPOINT 5 = v1.0.0:** GitHub Release published ✅ (2026-06-11, signed `arxiver-v1.0.0.apk`); remaining: PRD §7 success criteria verified and recorded — device-bound, blocked with 5.4/5.5/5.8
+
+## Phase 6 — Routine catalog & guided setup
+
+> Goal: a curated catalog of Claude routine templates plus an in-app guided setup flow, so a non-expert goes from template → verified working routine without guesswork. The catalog design is reviewed by the user **before** implementation. 4.8/CHECKPOINT 4 (real-trigger E2E) gates only the verification tasks (6.6), not the design ones.
+
+- [ ] 6.1 [needs-user] Routine template catalog proposal: 6–10 paper-centric use cases, each with name, purpose, optimal instruction text, trigger type + config, minimal connector set (see memory: claude-routines-ui-contract), and payload/action mapping — drafted as `docs/SPEC-ROUTINES-CATALOG.md` and presented for user review
+- [ ] 6.2 Spec finalization: fold review feedback into SPEC-ROUTINES-CATALOG; extend SPEC-CLAUDE-BRIDGE with the guided-setup + verification contract (test-dispatch semantics, error taxonomy)
+- [ ] 6.3 Catalog in app: bundled versioned template data + browse/detail UI (what each template does, what it needs); per-template "copy instructions" built on the 4.7 generator
+- [ ] 6.4 Guided setup wizard: stepper walking the user through creating the routine at claude.ai/code/routines (API trigger) → copying URL + token → pasting into Arxiver; input validation at entry; tokens only via TokenVault
+- [ ] 6.5 Auto-verification: test dispatch on save with success confirmation; graceful failure handling + troubleshooting per error class (401 bad token, 404 wrong URL, 5xx, rate-limit, offline) with actionable fixes
+- [ ] 6.6 (depends on 4.8) Real-trigger validation: run ≥2 catalog templates end-to-end against live routines; adapt `RoutineTriggerClient` if the contract differs from Bearer-POST; record findings in SPEC-CLAUDE-BRIDGE
+- [ ] **CHECKPOINT 6:** user-reviewed catalog shipped in-app; wizard takes a fresh user from template to verified working routine; all error paths covered by tests; tokens absent from logs/exports; CI green
 
 ---
 
@@ -97,3 +110,6 @@ Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-pap
 | 2026-06-11 | Single SQLite engine for relational/FTS/vector/graph; orbit-indexing not full mirror; features as packages in `:app` |
 | 2026-06-11 | bge-small-en-v1.5 (384d) ONNX, downloaded not bundled; sqlite-vec with BLOB fallback behind `VectorStore` |
 | 2026-06-11 | FTS4 + matchinfo-BM25 instead of FTS5 (unavailable in platform/Robolectric SQLite); BLOB vector store adopted, sqlite-vec → v2 backlog; CLS pooling per BGE convention (spec updated) |
+| 2026-06-11 | v1.0.0 released via tag-triggered CI; keystore + credentials held offline by maintainer, CI signs from Actions secrets |
+| 2026-06-11 | In-repo memory harness adopted (`.claude/memory/` + `MEMORY.md` index, protocol in CLAUDE.md) for continuity across local/cloud/mobile sessions; secrets and personal context excluded by rule |
+| 2026-06-11 | Phase 6 added: user-reviewed routine template catalog + guided setup wizard with auto-verification (catalog review precedes implementation) |

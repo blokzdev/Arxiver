@@ -10,7 +10,7 @@ Local-first Android arXiv explorer (Kotlin + Jetpack Compose) with on-device hyb
 
 Every working session, and repeatedly within a session:
 
-1. **Orient:** read `ROADMAP.md`; find the first `[~]` or `[ ]` task. Never skip ahead across an unmet CHECKPOINT.
+1. **Orient:** read `ROADMAP.md` and the memory index `.claude/memory/MEMORY.md` (see Memory harness below); find the first `[~]` or `[ ]` task. Never skip ahead across an unmet CHECKPOINT.
 2. **Mark:** set the task `[~]` (in progress).
 3. **Read the spec** section governing the task before writing code. Specs are the source of truth; if implementation must deviate, update the spec in the same commit and note it in the Decision log (ROADMAP bottom).
 4. **Implement** with tests per the spec's testing section.
@@ -21,6 +21,26 @@ Every working session, and repeatedly within a session:
 9. Tasks tagged `[needs-user]` (e.g. real routine token): ask the user, mark `[!] blocked` with reason if no answer, and continue with the next non-dependent task.
 
 Rules: no `[x]` without green build · ROADMAP edits travel in the same commit as the work · blocked ≠ stopped (find the next unblocked task) · when context is summarized mid-session, re-orient from step 1.
+
+## Memory harness (continuity across environments)
+
+`.claude/memory/` is versioned agent memory — the continuity channel across local machines, cloud/mobile sessions, and collaborators. The repo is the only state every environment shares, so durable working context lives here, never in a machine-local store. `MEMORY.md` is the index: one line per memory (`- [Title](file.md) — hook`). Each memory is one file holding one fact:
+
+```markdown
+---
+name: short-kebab-slug
+description: one-line summary used to judge relevance
+type: project | process | gotcha | reference
+---
+
+The fact. Absolute dates only. Link related memories with [[name]].
+```
+
+- **Read at orient time:** scan the index every session; open any memory whose hook touches the task at hand.
+- **Self-healing — memory you use, you verify:** if a memory contradicts the repo or reality, fix or delete it (file + index line) in the same commit as your work; if the index and the files drift apart, rebuild the index. Verify concrete claims (paths, task numbers, URLs) before acting on them.
+- **Write when it saves a future session real work:** process constraints, environment gotchas, external-service contract details, state of external systems (CI, releases, secret *names*).
+- **Never record** what the repo already states (code, specs, ROADMAP, git history) or anything sensitive — no tokens, passwords, or personal user context. The Red lines section applies to memory files in full.
+- **Memory ≠ roadmap:** tasks and progress belong in `ROADMAP.md`; memory holds the facts and context tasks rely on. Memory edits travel in the same commit as the work that made them true.
 
 ## Commands
 
