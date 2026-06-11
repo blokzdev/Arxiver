@@ -1,0 +1,103 @@
+# SPEC-CLAUDE-BRIDGE — Claude Routines Integration
+
+**Status:** Approved · Implemented in `:core:claude`
+
+## 1. Concept
+
+The Claude app's **Routines** feature lets a user define an agentic routine (instructions + repo + connectors + permissions) with an **API trigger**: the routine runs when an authenticated POST hits its trigger URL. Arxiver is a *client* of that trigger: the user creates a routine in the Claude app (e.g. "Arxiver Digest" with instructions like *"You will receive JSON describing arXiv papers and an instruction; produce the requested digest, save it to my Drive, and email me a summary"*), then pastes the trigger URL + token into Arxiver.
+
+Arxiver's job ends at delivering a **well-formed, information-rich payload**. The routine's instructions, connectors, model, and output destination are entirely the user's. This keeps the app free of LLM costs and lets users leverage every connector they have (Gmail, Drive, Notion-likes, etc.).
+
+**v1 non-goal:** consuming routine *output* in Arxiver. Results land wherever the user's routine puts them (Claude app, email, Drive…). A result-webhook inbox is the top v2 candidate.
+
+## 2. Routine configuration (in-app)
+
+- Add routine: **name** (user label), **trigger URL**, **token**. Optional: default action association.
+- Validation on save: URL must be HTTPS; a **test ping** (payload `{"action":"ping", ...}` per schema below) is offered but optional — some users won't want to burn a routine run to test. Note: a live test triggers a real routine run; the UI says so.
+- Token storage: `EncryptedSharedPreferences` (Keystore master key). DB row stores `token_alias` only. Tokens are write-only in the UI (re-enter to change), excluded from backups/exports, never logged. If decryption fails (restore to new device), the routine shows "re-authentication needed".
+
+## 3. Transport
+
+```
+POST <trigger_url>
+Authorization: Bearer <token>
+Content-Type: application/json
+User-Agent: Arxiver/<version>
+
+<payload JSON, ≤ 256 KB>
+```
+
+- Success = any 2xx. 401/403 → "token invalid/revoked" state on the routine config. 4xx other → failed, no retry. 5xx/network → exponential backoff retry ×3, then queued for `DispatchWorker` (network-constrained).
+- Offline: dispatch is queued with status `queued` and sent when connectivity returns; user sees queue state in history.
+- If the real trigger contract differs in details (header name, expected wrapper), the transport layer isolates that in `RoutineTriggerClient` — one class to adapt, verified against a real routine before Phase 4 completes.
+
+## 4. Payload schema (v1)
+
+Versioned envelope; `schema` bumps on breaking change. Routine authors can rely on this shape — it's documented in-app ("copy routine starter instructions" button gives the user a paste-ready instruction block for their routine that explains the schema to Claude).
+
+```json
+{
+  "schema": "arxiver/v1",
+  "app_version": "1.0.0",
+  "action": "digest",
+  "sent_at": "2026-06-11T18:30:00Z",
+  "instruction": "Digest these papers for a practitioner; focus on methods.",
+  "context": {
+    "include_notes": true,
+    "library_size": 412,
+    "user_tags_in_selection": ["ssm", "efficiency"]
+  },
+  "papers": [
+    {
+      "arxiv_id": "2403.01234",
+      "version": 2,
+      "title": "…",
+      "authors": ["A. Researcher", "B. Scholar"],
+      "abstract": "…",
+      "primary_category": "cs.LG",
+      "categories": ["cs.LG", "stat.ML"],
+      "published": "2024-03-02",
+      "updated": "2024-03-15",
+      "doi": null,
+      "abs_url": "https://arxiv.org/abs/2403.01234v2",
+      "pdf_url": "https://arxiv.org/pdf/2403.01234v2",
+      "citation_count": 87,
+      "user": {
+        "tags": ["ssm"],
+        "status": "read",
+        "rating": 4,
+        "notes": ["My note text…"]
+      }
+    }
+  ]
+}
+```
+
+- `papers[].user` present only when `include_notes` is toggled on for the dispatch (per-dispatch toggle, defaulting to the routine config's setting). Privacy: the confirm sheet always previews exactly what leaves the device.
+- Abstract always included (Claude shouldn't need to re-fetch); PDFs never uploaded — links suffice, routines can fetch.
+- Size guard: > 256 KB (≈ >40 papers with notes) → app refuses with "split the selection" message.
+
+## 5. Action catalog
+
+| action | selection | instruction template (user-editable before send) |
+|---|---|---|
+| `digest` | 1–N papers | "Produce a structured digest of each paper: TL;DR, key contributions, methods, limitations." |
+| `deep_dive` | 1 paper | "Read the full PDF and produce a deep technical analysis: approach, evidence quality, reproducibility, open questions." |
+| `compare` | 2–6 papers | "Compare these papers: shared problem, differing approaches, trade-offs, which to build on and why." |
+| `weekly_review` | auto: library adds + top inbox of last 7 days | "Synthesize my week in research: themes, must-reads, what I should queue next." |
+| `literature_scan` | 0–N papers + required free-text question | "Investigate this question. Local context attached; extend with your own search." |
+| `custom` | any | empty — user writes the instruction |
+| `ping` | none | connectivity test payload, `papers: []` |
+
+Every dispatch flows through the same confirm sheet: routine picker → editable instruction → notes toggle → payload preview (collapsible JSON) → send.
+
+## 6. Dispatch history
+
+List of `routine_dispatches`: action, routine name, paper count, status chip (queued/sent/failed + HTTP code), timestamp. Tap → payload preview + retry (failed/queued) + delete. Retention 90 days.
+
+## 7. Testing
+
+- `PayloadBuilder`: golden-file JSON tests per action (kotlinx.serialization output vs committed fixtures).
+- `RoutineTriggerClient`: MockWebServer — 200/401/500/timeout/offline-queue paths.
+- Size guard and notes-toggle redaction unit-tested (a payload with `include_notes=false` must contain no `user` keys anywhere — asserted structurally).
+- End-to-end against a real routine trigger: manual checklist item before Phase 4 sign-off (requires user-provided routine; see ROADMAP).

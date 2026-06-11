@@ -1,0 +1,122 @@
+# SPEC-DATA — Storage Schema & arXiv Mapping
+
+**Status:** Approved · Implemented in `:core:database` (Room) — this document is the source of truth for schema intent; Room entities mirror it.
+
+## 1. Principles
+
+- One SQLite database file: `arxiver.db`. Room manages relational tables and migrations; FTS5 and vec tables are created/maintained via Room callbacks + raw SQL migrations.
+- arXiv ID **without version** (`2403.01234` or legacy `math/0211159`) is the canonical paper key; version tracked as a column.
+- Every remote-derived row is upsert-safe and carries provenance timestamps; every sync has a cursor so workers are resumable and idempotent.
+
+## 2. Relational tables
+
+### papers
+| column | type | notes |
+|---|---|---|
+| id | TEXT PK | arXiv id, no version |
+| latest_version | INTEGER | from `<updated>` entries |
+| title | TEXT | LaTeX preserved as-is |
+| abstract | TEXT | |
+| published_at | INTEGER | epoch ms, v1 date |
+| updated_at | INTEGER | latest version date |
+| primary_category | TEXT | e.g. `cs.LG` |
+| comment | TEXT? | arxiv:comment |
+| journal_ref | TEXT? | |
+| doi | TEXT? | |
+| pdf_url | TEXT | |
+| citation_count | INTEGER? | from S2 |
+| s2_paper_id | TEXT? | Semantic Scholar id |
+| source | TEXT | `search` / `follow` / `share_in` / `manual` |
+| fetched_at | INTEGER | local provenance |
+| embedded_at | INTEGER? | null = needs embedding |
+| citations_synced_at | INTEGER? | null = never synced |
+
+### authors / paper_authors
+- `authors(id INTEGER PK, name TEXT, s2_author_id TEXT?)` — name-keyed dedupe (`UNIQUE(name)`); proper disambiguation via S2 ids when available.
+- `paper_authors(paper_id, author_id, position)` — PK(paper_id, author_id); position preserves order. Co-authorship graph is derived from this table (self-join), not stored.
+
+### categories / paper_categories
+- `categories(code TEXT PK, name TEXT, group_name TEXT)` — full arXiv taxonomy **seeded at build time** from a bundled asset (taxonomy is static enough; no endpoint exists).
+- `paper_categories(paper_id, category_code, is_primary)`.
+
+### library_entries
+| column | type | notes |
+|---|---|---|
+| paper_id | TEXT PK → papers | |
+| added_at | INTEGER | |
+| status | TEXT | `to_read` / `reading` / `read` |
+| rating | INTEGER? | 1–5 |
+| pdf_path | TEXT? | local file if downloaded |
+
+### collections / collection_papers / tags / paper_tags
+- `collections(id PK, name UNIQUE, created_at)`; `collection_papers(collection_id, paper_id, added_at)` PK(both).
+- `tags(id PK, name UNIQUE COLLATE NOCASE)`; `paper_tags(paper_id, tag_id)` PK(both).
+
+### notes
+`notes(id PK, paper_id → papers, content TEXT /* markdown */, created_at, updated_at)`. Multiple notes per paper allowed.
+
+### follows
+| column | type | notes |
+|---|---|---|
+| id | INTEGER PK | |
+| type | TEXT | `category` / `author` / `query` |
+| value | TEXT | `cs.LG`, author name, or raw arXiv query |
+| label | TEXT | display name |
+| created_at | INTEGER | |
+| last_synced_at | INTEGER? | **sync cursor**: next sync requests `submittedDate > last_synced_at` |
+| enabled | INTEGER | bool |
+
+### inbox_items
+`inbox_items(paper_id PK → papers, follow_id → follows, arrived_at, state TEXT /* new / seen / saved / dismissed */, score REAL? /* similarity-to-library, Phase 3 */)`. Saving creates a `library_entries` row and marks state=saved. Dismissed rows pruned after 30 days.
+
+### citation_edges
+`citation_edges(citing_id TEXT, cited_id TEXT, source TEXT DEFAULT 's2', fetched_at, PK(citing_id, cited_id))`. Either endpoint may reference a paper not in `papers` — store **stub rows** in `papers` (title-only, `source='s2_stub'`) so FKs hold and the graph can render unfetched nodes. Recursive CTE traversal capped at depth 2 in queries.
+
+### routine_configs / routine_dispatches
+- `routine_configs(id PK, name, trigger_url, token_alias /* key into EncryptedSharedPreferences; NEVER the token */, created_at, last_used_at?)`.
+- `routine_dispatches(id PK, routine_id → routine_configs, action TEXT, payload_json TEXT, status TEXT /* queued / sent / failed */, http_code INTEGER?, error TEXT?, created_at, sent_at?)`. Payloads retained for history/retry; pruned after 90 days.
+
+### related_papers (precompute cache)
+`related_papers(paper_id, neighbor_id, similarity REAL, computed_at, PK(paper_id, neighbor_id))` — top-8 per library paper, refreshed by EmbeddingWorker.
+
+## 3. FTS5
+
+```sql
+CREATE VIRTUAL TABLE papers_fts USING fts5(
+  paper_id UNINDEXED, title, abstract, authors, notes,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+```
+One row per paper; `authors` is the concatenated name list, `notes` the concatenated note bodies. Maintained by triggers on `papers`/`notes` plus a DAO-level re-index call after author writes (multi-table triggers are brittle). Ranking: `bm25(papers_fts, 10.0, 5.0, 3.0, 2.0)` — title boosted strongest, mirroring ArxivExplorer's 10:1:5 finding.
+
+## 4. Vectors (sqlite-vec)
+
+```sql
+CREATE VIRTUAL TABLE paper_embeddings USING vec0(
+  paper_id TEXT PRIMARY KEY,
+  embedding float[384]
+);
+```
+- Model: bge-small-en-v1.5 (384-dim); `embedding_meta(model_name, model_rev, dim)` single-row table guards against mixing models — model change ⇒ wipe + re-embed.
+- KNN: `SELECT paper_id, distance FROM paper_embeddings WHERE embedding MATCH :query AND k = 30`.
+- **Fallback mode** (if extension loading blocks a phase): `paper_embeddings_blob(paper_id PK, embedding BLOB)` + chunked cosine scan in Kotlin behind the same `VectorStore` interface.
+
+## 5. arXiv Atom → schema mapping
+
+| Atom element | Destination |
+|---|---|
+| `<id>` (`http://arxiv.org/abs/2403.01234v2`) | `papers.id` = `2403.01234`, `latest_version` = 2 |
+| `<title>`, `<summary>` | title, abstract (whitespace-normalized, LaTeX kept) |
+| `<published>` / `<updated>` | published_at / updated_at |
+| `<author><name>` (+ optional affiliation) | authors + paper_authors (affiliation dropped in v1) |
+| `<arxiv:primary_category term>` | primary_category + paper_categories(is_primary=1) |
+| `<category term>` | paper_categories |
+| `<arxiv:comment>`, `<arxiv:journal_ref>`, `<arxiv:doi>` | comment, journal_ref, doi |
+| `<link title="pdf">` | pdf_url |
+
+Client behavior contract: ≥3s between requests (global queue), `max_results ≤ 100` per page for UI loads, exponential backoff on 5xx/429, treat empty feed with `totalResults>0` as a transient arXiv glitch (retry once).
+
+## 6. Migrations & backup
+
+- Room `fallbackToDestructiveMigration` is **forbidden**; every schema change ships a tested `Migration`. Schema JSONs exported to `core/database/schemas/` and committed.
+- Backup/export (Phase 5): single zip = serialized JSON of all relational tables (sans `routine_configs` tokens — aliases exported, tokens never) + notes; PDFs and embeddings excluded (re-derivable). Import = transactional upsert, then embedding backfill job.

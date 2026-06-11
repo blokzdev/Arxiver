@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android / IDE
+local.properties
+captures/
+.idea/
+*.iml
+.DS_Store
+
+# Signing — never commit keys
+*.jks
+*.keystore
+keystore.properties
+
+# ML model artifacts (downloaded at runtime, never committed)
+*.onnx
