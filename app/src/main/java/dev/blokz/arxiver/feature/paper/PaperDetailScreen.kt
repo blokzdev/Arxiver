@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.feature.paper
 
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
@@ -65,12 +67,15 @@ private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy")
 fun PaperDetailScreen(
     onBack: () -> Unit,
     onOpenPdf: (String) -> Unit,
+    onPaperClick: (String) -> Unit,
+    onOpenConnections: (String) -> Unit,
     viewModel: PaperDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val entry by viewModel.entry.collectAsState()
     val notes by viewModel.notes.collectAsState()
     val tags by viewModel.tags.collectAsState()
+    val related by viewModel.related.collectAsState()
     val context = LocalContext.current
 
     Scaffold(
@@ -130,7 +135,10 @@ fun PaperDetailScreen(
                             entry = entry,
                             notes = notes,
                             tags = tags,
+                            related = related,
                             onOpenPdf = onOpenPdf,
+                            onPaperClick = onPaperClick,
+                            onOpenConnections = onOpenConnections,
                             onSetStatus = viewModel::setStatus,
                             onSetRating = viewModel::setRating,
                             onAddNote = viewModel::addNote,
@@ -150,7 +158,10 @@ private fun PaperDetailContent(
     entry: LibraryEntryEntity?,
     notes: List<NoteEntity>,
     tags: List<TagEntity>,
+    related: List<RelatedPaper>,
     onOpenPdf: (String) -> Unit,
+    onPaperClick: (String) -> Unit,
+    onOpenConnections: (String) -> Unit,
     onSetStatus: (String) -> Unit,
     onSetRating: (Int?) -> Unit,
     onAddNote: (String) -> Unit,
@@ -195,6 +206,13 @@ private fun PaperDetailContent(
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }
+            FilledTonalButton(onClick = { onOpenConnections(paper.id.value) }) {
+                Icon(Icons.Filled.Hub, contentDescription = null)
+                Text(
+                    text = stringResource(R.string.paper_view_connections),
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
         }
 
         if (entry != null) {
@@ -211,6 +229,11 @@ private fun PaperDetailContent(
         if (entry != null) {
             TagsSection(tags, onAddTag, onRemoveTag)
             NotesSection(notes, onAddNote, onDeleteNote)
+            HorizontalDivider()
+        }
+
+        if (related.isNotEmpty()) {
+            RelatedSection(related, onPaperClick)
             HorizontalDivider()
         }
 
@@ -354,6 +377,46 @@ private fun NotesSection(
                 },
                 enabled = draft.isNotBlank(),
             ) { Text(stringResource(R.string.action_add)) }
+        }
+    }
+}
+
+@Composable
+private fun RelatedSection(
+    related: List<RelatedPaper>,
+    onPaperClick: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.paper_related_heading), style = MaterialTheme.typography.titleMedium)
+        related.forEach { item ->
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onPaperClick(item.paper.id.value) }
+                        .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.paper.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                    )
+                    Text(
+                        text = item.paper.authors.joinToString(", "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+                Text(
+                    text = "${(item.similarity * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
         }
     }
 }

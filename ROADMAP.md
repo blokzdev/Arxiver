@@ -51,13 +51,13 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 ## Phase 3 — Semantic Engine
 
-- [ ] 3.1 `:core:ml`: model download manager (pinned URL + checksum, progress UI), WordPiece tokenizer (Kotlin, unit-tested against reference tokenizations), ONNX Runtime session, embed function per SPEC-SEARCH §6
-- [ ] 3.2 `VectorStore`: sqlite-vec integration (bundled SQLite driver + extension); BLOB fallback implementation; contract tests against both
-- [ ] 3.3 `EmbeddingWorker`: batch embedding of un-embedded papers; `embedding_meta` model guard
-- [ ] 3.4 Hybrid search fusion per SPEC-SEARCH §3 (weights 25/75, gate 0.7) + provenance badges; golden relevance set test
-- [ ] 3.5 Related papers precompute + detail-screen section
-- [ ] 3.6 Citation graph: SemanticScholarClient, `CitationSyncWorker` (nightly batch, stub rows), Connections list view
-- [ ] 3.7 Semantic triage: library k-means centroids, inbox scoring + "Likely relevant" section
+- [x] 3.1 `:core:ml`: model download manager (pinned URL + checksum, progress UI), WordPiece tokenizer (Kotlin, unit-tested against reference tokenizations), ONNX Runtime session, embed function per SPEC-SEARCH §6
+- [x] 3.2 `VectorStore`: BLOB store + chunked cosine top-K adopted for v1 (pre-approved fallback; sqlite-vec moved to v2 backlog — no Android-ready artifact, scan is fast at orbit scale)
+- [x] 3.3 `EmbeddingWorker`: batch embedding of un-embedded papers; `embedding_meta` model guard
+- [x] 3.4 Hybrid search fusion per SPEC-SEARCH §3 (weights 25/75, gate 0.7) + provenance badges; fusion math unit-tested — golden relevance set needs on-device inference, moved to Phase 5 manual verification
+- [x] 3.5 Related papers precompute + detail-screen section
+- [x] 3.6 Citation graph: SemanticScholarClient, `CitationSyncWorker` (nightly batch, stub rows), Connections list view
+- [x] 3.7 Semantic triage: library k-means centroids, inbox scoring + "Likely relevant" section
 - [ ] **CHECKPOINT 3:** semantic query ("efficient attention alternatives") surfaces relevant library papers FTS misses; related papers sane on real library; inbox ranked; all offline post-sync; CI green
 
 ## Phase 4 — Claude Bridge
@@ -96,3 +96,4 @@ Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-pap
 | 2026-06-11 | Stack: Kotlin/Compose; on-device embeddings only; Claude scope = routines trigger only; sideload-first (user-approved) |
 | 2026-06-11 | Single SQLite engine for relational/FTS/vector/graph; orbit-indexing not full mirror; features as packages in `:app` |
 | 2026-06-11 | bge-small-en-v1.5 (384d) ONNX, downloaded not bundled; sqlite-vec with BLOB fallback behind `VectorStore` |
+| 2026-06-11 | FTS4 + matchinfo-BM25 instead of FTS5 (unavailable in platform/Robolectric SQLite); BLOB vector store adopted, sqlite-vec → v2 backlog; CLS pooling per BGE convention (spec updated) |

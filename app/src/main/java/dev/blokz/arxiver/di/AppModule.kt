@@ -75,6 +75,54 @@ object AppModule {
     fun arxivRateLimiter(): ArxivRateLimiter = ArxivRateLimiter()
 
     @Provides
+    fun citationDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.CitationDao = db.citationDao()
+
+    @Provides
+    @Singleton
+    fun semanticScholarClient(
+        httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.network.s2.SemanticScholarClient =
+        dev.blokz.arxiver.core.network.s2.SemanticScholarClient(httpClient, dispatchers)
+
+    @Provides
+    fun embeddingDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.EmbeddingDao = db.embeddingDao()
+
+    @Provides
+    @Singleton
+    fun modelDownloader(
+        @ApplicationContext context: Context,
+        httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ml.ModelDownloader =
+        dev.blokz.arxiver.core.ml.ModelDownloader(
+            httpClient = httpClient,
+            dispatchers = dispatchers,
+            modelDir = java.io.File(context.filesDir, "models"),
+        )
+
+    @Provides
+    @Singleton
+    fun embeddingService(
+        @ApplicationContext context: Context,
+        modelDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ml.EmbeddingService =
+        dev.blokz.arxiver.core.ml.EmbeddingService(
+            modelDownloader = modelDownloader,
+            tokenizerProvider = {
+                dev.blokz.arxiver.core.ml.WordPieceTokenizer(context.assets.open("bge_vocab.txt"))
+            },
+            dispatchers = dispatchers,
+        )
+
+    @Provides
+    @Singleton
+    fun vectorIndex(
+        embeddingDao: dev.blokz.arxiver.core.database.dao.EmbeddingDao,
+    ): dev.blokz.arxiver.core.search.VectorIndex = dev.blokz.arxiver.core.search.VectorIndex(embeddingDao)
+
+    @Provides
     @Singleton
     fun pdfDownloader(
         httpClient: OkHttpClient,

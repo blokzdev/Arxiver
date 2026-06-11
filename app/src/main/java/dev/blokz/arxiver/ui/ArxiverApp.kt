@@ -24,6 +24,7 @@ import dev.blokz.arxiver.feature.browse.BrowseScreen
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
 import dev.blokz.arxiver.feature.library.FilteredPapersScreen
 import dev.blokz.arxiver.feature.library.LibraryScreen
+import dev.blokz.arxiver.feature.paper.ConnectionsScreen
 import dev.blokz.arxiver.feature.paper.PaperDetailScreen
 import dev.blokz.arxiver.feature.pdf.PdfViewerScreen
 import dev.blokz.arxiver.feature.search.SearchScreen
@@ -34,6 +35,7 @@ object Routes {
     const val CATEGORY_FEED = "browse/category/{code}?title={title}"
     const val PAPER_DETAIL = "paper/{id}"
     const val PDF_VIEWER = "paper/{id}/pdf"
+    const val CONNECTIONS = "paper/{id}/graph"
     const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
 
     fun categoryFeed(
@@ -45,6 +47,8 @@ object Routes {
     fun paperDetail(id: ArxivId) = "paper/${Uri.encode(id.value)}"
 
     fun pdfViewer(id: String) = "paper/${Uri.encode(id)}/pdf"
+
+    fun connections(id: String) = "paper/${Uri.encode(id)}/graph"
 
     fun filteredPapers(
         mode: String,
@@ -126,10 +130,18 @@ fun ArxiverApp(deepLinkPaperId: ArxivId? = null) {
                 PaperDetailScreen(
                     onBack = { navController.popBackStack() },
                     onOpenPdf = { id -> navController.navigate(Routes.pdfViewer(id)) },
+                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                    onOpenConnections = { id -> navController.navigate(Routes.connections(id)) },
                 )
             }
             composable(Routes.PDF_VIEWER) {
                 PdfViewerScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.CONNECTIONS) {
+                ConnectionsScreen(
+                    onBack = { navController.popBackStack() },
+                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                )
             }
         }
     }

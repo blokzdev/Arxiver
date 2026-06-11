@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "4b72ccde96cbee2214551cf09eed3075",
+    "identityHash": "8b7b58db50e3a9f2797b5dcd8ad1defa",
     "entities": [
       {
         "tableName": "papers",
@@ -866,11 +866,158 @@
           "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_notes_fts_AFTER_UPDATE AFTER UPDATE ON `notes` BEGIN INSERT INTO `notes_fts`(`docid`, `content`) VALUES (NEW.`rowid`, NEW.`content`); END",
           "CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_notes_fts_AFTER_INSERT AFTER INSERT ON `notes` BEGIN INSERT INTO `notes_fts`(`docid`, `content`) VALUES (NEW.`rowid`, NEW.`content`); END"
         ]
+      },
+      {
+        "tableName": "paper_embeddings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`paper_id` TEXT NOT NULL, `vector` BLOB NOT NULL, `model` TEXT NOT NULL, `dim` INTEGER NOT NULL, PRIMARY KEY(`paper_id`), FOREIGN KEY(`paper_id`) REFERENCES `papers`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "paperId",
+            "columnName": "paper_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vector",
+            "columnName": "vector",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "model",
+            "columnName": "model",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "dim",
+            "columnName": "dim",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "paper_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "papers",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "paper_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "related_papers",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`paper_id` TEXT NOT NULL, `neighbor_id` TEXT NOT NULL, `similarity` REAL NOT NULL, `computed_at` INTEGER NOT NULL, PRIMARY KEY(`paper_id`, `neighbor_id`), FOREIGN KEY(`paper_id`) REFERENCES `papers`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "paperId",
+            "columnName": "paper_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "neighborId",
+            "columnName": "neighbor_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "similarity",
+            "columnName": "similarity",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "computedAt",
+            "columnName": "computed_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "paper_id",
+            "neighbor_id"
+          ]
+        },
+        "foreignKeys": [
+          {
+            "table": "papers",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "paper_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "citation_edges",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`citing_id` TEXT NOT NULL, `cited_id` TEXT NOT NULL, `source` TEXT NOT NULL, `fetched_at` INTEGER NOT NULL, PRIMARY KEY(`citing_id`, `cited_id`))",
+        "fields": [
+          {
+            "fieldPath": "citingId",
+            "columnName": "citing_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "citedId",
+            "columnName": "cited_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAt",
+            "columnName": "fetched_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "citing_id",
+            "cited_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_citation_edges_cited_id",
+            "unique": false,
+            "columnNames": [
+              "cited_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_citation_edges_cited_id` ON `${TABLE_NAME}` (`cited_id`)"
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4b72ccde96cbee2214551cf09eed3075')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '8b7b58db50e3a9f2797b5dcd8ad1defa')"
     ]
   }
 }

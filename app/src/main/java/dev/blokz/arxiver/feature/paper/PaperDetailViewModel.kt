@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
+import dev.blokz.arxiver.core.database.toListDomain
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.data.LibraryRepository
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -26,6 +28,8 @@ data class PaperDetailUiState(
     val notFound: Boolean = false,
 )
 
+data class RelatedPaper(val paper: Paper, val similarity: Double)
+
 @HiltViewModel
 class PaperDetailViewModel
     @Inject
@@ -33,6 +37,7 @@ class PaperDetailViewModel
         savedStateHandle: SavedStateHandle,
         private val paperRepository: PaperRepository,
         private val libraryRepository: LibraryRepository,
+        embeddingDao: dev.blokz.arxiver.core.database.dao.EmbeddingDao,
     ) : ViewModel() {
         private val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
 
@@ -49,6 +54,13 @@ class PaperDetailViewModel
 
         val tags: StateFlow<List<TagEntity>> =
             libraryRepository.observeTagsFor(paperId.value)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+        val related: StateFlow<List<RelatedPaper>> =
+            embeddingDao.observeRelated(paperId.value)
+                .map { rows ->
+                    rows.map { RelatedPaper(paper = it.paper.toListDomain(), similarity = it.similarity) }
+                }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
         init {

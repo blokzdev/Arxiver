@@ -35,6 +35,7 @@ fun PaperListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     showDivider: Boolean = true,
+    badge: String? = null,
 ) {
     Column(
         modifier =
@@ -81,6 +82,13 @@ fun PaperListItem(
                     text = "· $it citations",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            badge?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
                 )
             }
         }

@@ -62,6 +62,8 @@
     <string name="today_no_follows_title">Nothing to triage yet</string>
     <string name="today_no_follows_body">Follow categories in Browse and new papers will arrive here automatically.</string>
     <string name="today_go_browse">Browse categories</string>
+    <string name="today_likely_relevant">Likely relevant</string>
+    <string name="today_more_from_follows">More from your follows</string>
     <string name="today_inbox_zero_title">Inbox zero 🎉</string>
     <string name="today_inbox_zero_body">All caught up. New papers appear after the next sync.</string>
 
@@ -69,6 +71,9 @@
     <string name="search_tab_arxiv">arXiv</string>
     <string name="search_local_intro">Search your saved and cached papers — titles, abstracts, authors, and your notes.</string>
     <string name="search_local_no_results">Nothing in your local index matches.</string>
+    <string name="search_semantic_pending">Keyword results only — semantic search activates after the model downloads on Wi-Fi.</string>
+    <string name="search_badge_semantic">semantic</string>
+    <string name="search_badge_both">keyword+semantic</string>
 
     <string name="library_tab_papers">Papers</string>
     <string name="library_tab_collections">Collections</string>
@@ -86,11 +91,23 @@
     <string name="library_export_bibtex">Export BibTeX</string>
     <string name="library_filtered_empty">Nothing here yet.</string>
 
+    <string name="paper_related_heading">Related papers</string>
     <string name="paper_tags_heading">Tags</string>
     <string name="paper_add_tag">Add tag</string>
     <string name="paper_tag_hint">tag name</string>
     <string name="paper_notes_heading">Notes</string>
     <string name="paper_note_hint">Add a note…</string>
+
+    <string name="connections_title">Connections</string>
+    <string name="connections_empty">No citation data yet — the graph fills in after the nightly sync for saved papers.</string>
+    <string name="connections_references">References (%1$d)</string>
+    <string name="connections_cited_by">Cited by (%1$d)</string>
+    <plurals name="connections_citation_count">
+        <item quantity="one">%1$d citation</item>
+        <item quantity="other">%1$d citations</item>
+    </plurals>
+    <string name="connections_in_library">In your library</string>
+    <string name="paper_view_connections">Connections</string>
 
     <string name="action_add">Add</string>
     <string name="action_create">Create</string>

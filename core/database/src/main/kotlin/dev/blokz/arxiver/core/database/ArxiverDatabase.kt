@@ -5,6 +5,8 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import dev.blokz.arxiver.core.database.dao.CategoryDao
+import dev.blokz.arxiver.core.database.dao.CitationDao
+import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.database.dao.FollowDao
 import dev.blokz.arxiver.core.database.dao.InboxDao
 import dev.blokz.arxiver.core.database.dao.LibraryDao
@@ -12,6 +14,7 @@ import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.dao.SearchDao
 import dev.blokz.arxiver.core.database.entity.AuthorEntity
 import dev.blokz.arxiver.core.database.entity.CategoryEntity
+import dev.blokz.arxiver.core.database.entity.CitationEdgeEntity
 import dev.blokz.arxiver.core.database.entity.CollectionEntity
 import dev.blokz.arxiver.core.database.entity.CollectionPaperCrossRef
 import dev.blokz.arxiver.core.database.entity.FollowEntity
@@ -21,9 +24,11 @@ import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.NoteFtsEntity
 import dev.blokz.arxiver.core.database.entity.PaperAuthorCrossRef
 import dev.blokz.arxiver.core.database.entity.PaperCategoryCrossRef
+import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import dev.blokz.arxiver.core.database.entity.PaperEntity
 import dev.blokz.arxiver.core.database.entity.PaperFtsEntity
 import dev.blokz.arxiver.core.database.entity.PaperTagCrossRef
+import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 
 @Database(
@@ -43,6 +48,9 @@ import dev.blokz.arxiver.core.database.entity.TagEntity
         InboxItemEntity::class,
         PaperFtsEntity::class,
         NoteFtsEntity::class,
+        PaperEmbeddingEntity::class,
+        RelatedPaperEntity::class,
+        CitationEdgeEntity::class,
     ],
     version = 1,
     exportSchema = true,
@@ -59,6 +67,10 @@ abstract class ArxiverDatabase : RoomDatabase() {
     abstract fun inboxDao(): InboxDao
 
     abstract fun searchDao(): SearchDao
+
+    abstract fun embeddingDao(): EmbeddingDao
+
+    abstract fun citationDao(): CitationDao
 
     companion object {
         const val NAME = "arxiver.db"

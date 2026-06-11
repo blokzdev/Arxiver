@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.feature.browse.ErrorState
 import dev.blokz.arxiver.ui.components.PaperListItem
 
@@ -137,8 +138,27 @@ private fun LocalResultList(
             }
         else ->
             LazyColumn(modifier = Modifier.fillMaxSize()) {
+                if (!state.semanticActive) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.search_semantic_pending),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        )
+                    }
+                }
                 itemsIndexed(state.localResults, key = { _, hit -> hit.paper.id.value }) { _, hit ->
-                    PaperListItem(paper = hit.paper, onClick = { onPaperClick(hit.paper.id.value) })
+                    PaperListItem(
+                        paper = hit.paper,
+                        onClick = { onPaperClick(hit.paper.id.value) },
+                        badge =
+                            when (hit.provenance) {
+                                Provenance.BOTH -> stringResource(R.string.search_badge_both)
+                                Provenance.SEMANTIC -> stringResource(R.string.search_badge_semantic)
+                                Provenance.KEYWORD -> null
+                            },
+                    )
                 }
             }
     }

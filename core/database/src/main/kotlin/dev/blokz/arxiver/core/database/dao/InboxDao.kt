@@ -38,6 +38,9 @@ interface InboxDao {
         state: String,
     )
 
+    @Query("SELECT paper_id FROM inbox_items WHERE state IN ('new', 'seen')")
+    suspend fun activePaperIds(): List<String>
+
     @Query("UPDATE inbox_items SET score = :score WHERE paper_id = :paperId")
     suspend fun setScore(
         paperId: String,

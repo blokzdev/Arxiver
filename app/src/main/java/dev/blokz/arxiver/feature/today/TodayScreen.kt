@@ -105,8 +105,26 @@ private fun InboxList(
     onSave: (String) -> Unit,
     onDismiss: (String) -> Unit,
 ) {
+    // SPEC-SEARCH §5: scored items lead under "Likely relevant"; rest follow.
+    val (scored, unscored) = items.partition { (it.score ?: 0.0) >= RELEVANT_THRESHOLD }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(items, key = { it.paper.id.value }) { item ->
+        if (scored.isNotEmpty()) {
+            item(key = "header-relevant") { SectionHeader(stringResource(R.string.today_likely_relevant)) }
+        }
+        items(scored, key = { it.paper.id.value }) { item ->
+            key(item.paper.id.value) {
+                SwipeableInboxRow(
+                    item = item,
+                    onClick = { onPaperClick(item.paper.id.value) },
+                    onSave = { onSave(item.paper.id.value) },
+                    onDismiss = { onDismiss(item.paper.id.value) },
+                )
+            }
+        }
+        if (scored.isNotEmpty() && unscored.isNotEmpty()) {
+            item(key = "header-rest") { SectionHeader(stringResource(R.string.today_more_from_follows)) }
+        }
+        items(unscored, key = { it.paper.id.value }) { item ->
             key(item.paper.id.value) {
                 SwipeableInboxRow(
                     item = item,
@@ -117,6 +135,18 @@ private fun InboxList(
             }
         }
     }
+}
+
+private const val RELEVANT_THRESHOLD = 0.55
+
+@Composable
+private fun SectionHeader(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
