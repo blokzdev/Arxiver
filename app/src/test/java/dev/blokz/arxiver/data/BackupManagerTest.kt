@@ -1,0 +1,194 @@
+package dev.blokz.arxiver.data
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.toEntity
+import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.Paper
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import java.time.Instant
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+@RunWith(RobolectricTestRunner::class)
+class BackupManagerTest {
+    private lateinit var db: ArxiverDatabase
+    private lateinit var backupManager: BackupManager
+    private var restoredRoutines = mutableListOf<Pair<String, String>>()
+
+    @Before
+    fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
+        backupManager =
+            BackupManager(
+                libraryExporter = LibraryExporter(db.libraryDao(), db.paperDao()),
+                paperDao = db.paperDao(),
+                libraryDao = db.libraryDao(),
+                followDao = db.followDao(),
+                routineDao = db.routineDao(),
+                routineRestorer = { name, url ->
+                    restoredRoutines += name to url
+                    db.routineDao().insertConfig(
+                        dev.blokz.arxiver.core.database.entity.RoutineConfigEntity(
+                            name = name,
+                            triggerUrl = url,
+                            tokenAlias = "restored",
+                            createdAt = 0,
+                        ),
+                    )
+                },
+            )
+    }
+
+    @After
+    fun tearDown() {
+        db.close()
+    }
+
+    private fun paper(
+        id: String,
+        title: String,
+    ) = Paper(
+        id = ArxivId(id),
+        latestVersion = 1,
+        title = title,
+        abstract = "An abstract about $title.",
+        publishedAt = Instant.parse("2024-03-02T10:00:00Z"),
+        updatedAt = Instant.parse("2024-03-02T10:00:00Z"),
+        primaryCategory = "cs.LG",
+        categories = listOf("cs.LG"),
+        authors = listOf("Ada Researcher"),
+        comment = "10 pages",
+    )
+
+    private suspend fun seedSourceData() {
+        val p = paper("2401.00001", "Backup Subject")
+        db.paperDao().upsertPaperWithRelations(p.toEntity(), p.authors, p.categories)
+        db.libraryDao().upsertEntry(
+            dev.blokz.arxiver.core.database.entity.LibraryEntryEntity(
+                paperId = "2401.00001",
+                addedAt = 100,
+                status = "read",
+                rating = 5,
+            ),
+        )
+        db.libraryDao().insertNote(
+            dev.blokz.arxiver.core.database.entity.NoteEntity(
+                paperId = "2401.00001",
+                content = "important insight",
+                createdAt = 1,
+                updatedAt = 1,
+            ),
+        )
+        db.libraryDao().insertTag(dev.blokz.arxiver.core.database.entity.TagEntity(name = "ssm"))
+        db.libraryDao().tagIdByName("ssm")?.let {
+            db.libraryDao().addPaperTag(
+                dev.blokz.arxiver.core.database.entity.PaperTagCrossRef("2401.00001", it),
+            )
+        }
+        val collectionId =
+            db.libraryDao().createCollection(
+                dev.blokz.arxiver.core.database.entity.CollectionEntity(name = "Favorites", createdAt = 1),
+            )
+        db.libraryDao().addToCollection(
+            dev.blokz.arxiver.core.database.entity.CollectionPaperCrossRef(collectionId, "2401.00001", 1),
+        )
+        db.followDao().insert(
+            dev.blokz.arxiver.core.database.entity.FollowEntity(
+                type = "category",
+                value = "cs.LG",
+                label = "Machine Learning",
+                createdAt = 1,
+            ),
+        )
+        db.routineDao().insertConfig(
+            dev.blokz.arxiver.core.database.entity.RoutineConfigEntity(
+                name = "Digest",
+                triggerUrl = "https://claude.ai/api/routines/abc/trigger",
+                tokenAlias = "alias-1",
+                createdAt = 1,
+            ),
+        )
+    }
+
+    @Test
+    fun `backup never contains tokens or aliases`() =
+        runTest {
+            seedSourceData()
+            val json = backupManager.export()
+            assertTrue("https://claude.ai/api/routines/abc/trigger" in json)
+            assertFalse("alias-1" in json)
+            assertFalse("tokenAlias" in json)
+            assertFalse("token_alias" in json)
+        }
+
+    @Test
+    fun `export then import into a fresh database restores everything`() =
+        runTest {
+            seedSourceData()
+            val json = backupManager.export()
+
+            // Fresh database = new device.
+            db.close()
+            setUp()
+
+            val summary = backupManager.import(json)
+
+            assertEquals(1, summary.papers)
+            assertEquals(1, summary.follows)
+            assertEquals(1, summary.collections)
+            assertEquals(1, summary.routinesNeedingTokens)
+            assertEquals(listOf("Digest" to "https://claude.ai/api/routines/abc/trigger"), restoredRoutines)
+
+            val entry = db.libraryDao().observeEntry("2401.00001").first()
+            assertEquals("read", entry?.status)
+            assertEquals(5, entry?.rating)
+            assertEquals(
+                listOf("important insight"),
+                db.libraryDao().notesFor("2401.00001").map { it.content },
+            )
+            assertEquals(
+                listOf("ssm"),
+                db.libraryDao().observeTagsFor("2401.00001").first().map { it.name },
+            )
+            assertEquals(
+                listOf("Ada Researcher"),
+                db.paperDao().paperWithRelations("2401.00001")?.authors,
+            )
+            // Restored routine is flagged for re-authentication.
+            assertTrue(db.routineDao().observeConfigs().first().single().authInvalid)
+        }
+
+    @Test
+    fun `import is idempotent and does not duplicate`() =
+        runTest {
+            seedSourceData()
+            val json = backupManager.export()
+            backupManager.import(json)
+            backupManager.import(json)
+
+            assertEquals(1, db.libraryDao().count())
+            assertEquals(1, db.libraryDao().notesFor("2401.00001").size)
+            assertEquals(1, db.libraryDao().observeTagsFor("2401.00001").first().size)
+            assertEquals(1, db.libraryDao().observeCollections().first().size)
+            // Routine already present (same URL) — not restored twice.
+            assertEquals(1, db.routineDao().observeConfigs().first().size)
+        }
+
+    @Test
+    fun `import rejects foreign schema`() =
+        runTest {
+            val result = runCatching { backupManager.import("""{"schema":"other/v9","exportedAt":"x","papers":[]}""") }
+            assertTrue(result.isFailure)
+        }
+}

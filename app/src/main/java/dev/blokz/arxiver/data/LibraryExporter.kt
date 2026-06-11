@@ -23,6 +23,8 @@ data class ExportedPaper(
     val published: String,
     val updated: String,
     val doi: String?,
+    val comment: String? = null,
+    val journalRef: String? = null,
     val absUrl: String,
     val status: String,
     val rating: Int?,
@@ -48,7 +50,7 @@ class LibraryExporter
     ) {
         private val json = Json { prettyPrint = true }
 
-        private suspend fun collect(): List<ExportedPaper> =
+        suspend fun collectExportedPapers(): List<ExportedPaper> =
             libraryDao.observeLibrary().first().map { row ->
                 val full = paperDao.paperWithRelations(row.paper.id)
                 val tags = libraryDao.observeTagsFor(row.paper.id).first().map { it.name }
@@ -74,10 +76,10 @@ class LibraryExporter
             }
 
         suspend fun toJson(): String =
-            json.encodeToString(LibraryExport(exportedAt = Instant.now().toString(), papers = collect()))
+            json.encodeToString(LibraryExport(exportedAt = Instant.now().toString(), papers = collectExportedPapers()))
 
         suspend fun toBibtex(): String =
-            collect().joinToString("\n\n") { paper ->
+            collectExportedPapers().joinToString("\n\n") { paper ->
                 val year = Instant.parse(paper.published).atZone(ZoneOffset.UTC).year
                 val firstAuthorKey =
                     paper.authors.firstOrNull()

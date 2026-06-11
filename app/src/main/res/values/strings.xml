@@ -189,6 +189,13 @@
     <string name="settings_storage_section">Storage</string>
     <string name="settings_pdf_cache">Downloaded PDFs: %1$d MB</string>
     <string name="settings_clear">Clear</string>
+    <string name="settings_backup_section">Backup</string>
+    <string name="settings_backup_export">Export backup</string>
+    <string name="settings_backup_import">Import backup</string>
+    <string name="settings_backup_hint">One JSON file: library, notes, tags, collections, follows, routine URLs. Tokens are never exported — re-enter them after a restore. PDFs and embeddings rebuild themselves.</string>
+    <string name="settings_import_ok">Backup imported.</string>
+    <string name="settings_import_tokens_needed">Re-enter routine tokens in Claude routines.</string>
+    <string name="settings_import_failed">Import failed — is this an Arxiver backup file?</string>
     <string name="settings_claude_section">Claude</string>
     <string name="settings_about_section">About</string>
     <string name="settings_version">Arxiver %1$s</string>

@@ -1,5 +1,7 @@
 package dev.blokz.arxiver.feature.settings
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,14 +20,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -34,6 +41,7 @@ import dev.blokz.arxiver.BuildConfig
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.data.SettingsRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,8 +52,54 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val backupJson by viewModel.backupJson.collectAsState()
+    val importResult by viewModel.importResult.collectAsState()
+    val context = LocalContext.current
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    backupJson?.let { json ->
+        val send =
+            android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "arxiver-backup.json")
+                putExtra(android.content.Intent.EXTRA_TEXT, json)
+            }
+        context.startActivity(android.content.Intent.createChooser(send, "arxiver-backup.json"))
+        viewModel.consumeBackup()
+    }
+
+    val okPrefixMessage = stringResource(R.string.settings_import_ok)
+    val tokensMessage = stringResource(R.string.settings_import_tokens_needed)
+    val failedMessage = stringResource(R.string.settings_import_failed)
+    importResult?.let { result ->
+        scope.launch {
+            val message =
+                if (result.startsWith("ok:")) {
+                    val needTokens = result.substringAfterLast(':').toIntOrNull() ?: 0
+                    if (needTokens > 0) "$okPrefixMessage $tokensMessage" else okPrefixMessage
+                } else {
+                    failedMessage
+                }
+            snackbar.showSnackbar(message)
+            viewModel.consumeImportResult()
+        }
+    }
+
+    val importPicker =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            uri?.let {
+                val content =
+                    context.contentResolver.openInputStream(it)
+                        ?.bufferedReader()?.use { reader -> reader.readText() }
+                if (content != null) viewModel.importBackup(content)
+            }
+        }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_title)) },
@@ -126,6 +180,23 @@ fun SettingsScreen(
                     Text(stringResource(R.string.settings_clear))
                 }
             }
+
+            HorizontalDivider()
+
+            SectionTitle(stringResource(R.string.settings_backup_section))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = viewModel::exportBackup) {
+                    Text(stringResource(R.string.settings_backup_export))
+                }
+                TextButton(onClick = { importPicker.launch(arrayOf("application/json", "text/*")) }) {
+                    Text(stringResource(R.string.settings_backup_import))
+                }
+            }
+            Text(
+                stringResource(R.string.settings_backup_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             HorizontalDivider()
 

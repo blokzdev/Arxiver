@@ -37,8 +37,15 @@ class SettingsViewModel
         private val modelDownloader: ModelDownloader,
         private val embeddingDao: EmbeddingDao,
         private val syncScheduler: SyncScheduler,
+        private val backupManager: dev.blokz.arxiver.data.BackupManager,
     ) : ViewModel() {
         private val pdfCacheMb = MutableStateFlow(0L)
+
+        private val _backupJson = MutableStateFlow<String?>(null)
+        val backupJson: StateFlow<String?> = _backupJson
+
+        private val _importResult = MutableStateFlow<String?>(null)
+        val importResult: StateFlow<String?> = _importResult
 
         val uiState: StateFlow<SettingsUiState> =
             combine(
@@ -82,6 +89,29 @@ class SettingsViewModel
                 embeddingDao.deleteAll()
                 embeddingDao.clearEmbeddedMarks()
             }
+        }
+
+        fun exportBackup() {
+            viewModelScope.launch { _backupJson.value = backupManager.export() }
+        }
+
+        fun consumeBackup() {
+            _backupJson.value = null
+        }
+
+        fun importBackup(content: String) {
+            viewModelScope.launch {
+                _importResult.value =
+                    runCatching {
+                        val summary = backupManager.import(content)
+                        syncScheduler.embedNow() // SPEC-DATA §6: embedding backfill after import
+                        "ok:${summary.papers}:${summary.routinesNeedingTokens}"
+                    }.getOrElse { "error:${it.message}" }
+            }
+        }
+
+        fun consumeImportResult() {
+            _importResult.value = null
         }
 
         fun clearPdfCache() {

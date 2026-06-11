@@ -97,6 +97,25 @@ object AppModule {
         dev.blokz.arxiver.core.claude.RoutineTriggerClient(httpClient, dispatchers)
 
     @Provides
+    @Singleton
+    fun backupManager(
+        libraryExporter: dev.blokz.arxiver.data.LibraryExporter,
+        paperDao: PaperDao,
+        libraryDao: dev.blokz.arxiver.core.database.dao.LibraryDao,
+        followDao: FollowDao,
+        routineDao: dev.blokz.arxiver.core.database.dao.RoutineDao,
+        dispatchRepository: dagger.Lazy<dev.blokz.arxiver.data.DispatchRepository>,
+    ): dev.blokz.arxiver.data.BackupManager =
+        dev.blokz.arxiver.data.BackupManager(
+            libraryExporter = libraryExporter,
+            paperDao = paperDao,
+            libraryDao = libraryDao,
+            followDao = followDao,
+            routineDao = routineDao,
+            routineRestorer = { name, url -> dispatchRepository.get().addRoutine(name, url, token = "") },
+        )
+
+    @Provides
     fun citationDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.CitationDao = db.citationDao()
 
     @Provides
