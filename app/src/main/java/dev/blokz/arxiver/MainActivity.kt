@@ -12,18 +12,27 @@ import dagger.hilt.android.AndroidEntryPoint
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.ui.ArxiverApp
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var settingsRepository: dev.blokz.arxiver.data.SettingsRepository
+
     private var deepLinkPaperId by mutableStateOf<ArxivId?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         deepLinkPaperId = intent?.extractArxivId()
+        val onboarded = runBlocking { settingsRepository.onboarded.first() }
         setContent {
             ArxiverTheme {
-                ArxiverApp(deepLinkPaperId = deepLinkPaperId)
+                ArxiverApp(
+                    deepLinkPaperId = deepLinkPaperId,
+                    startOnboarding = !onboarded && deepLinkPaperId == null,
+                )
             }
         }
     }

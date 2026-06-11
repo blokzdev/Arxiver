@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -51,6 +52,7 @@ fun TodayScreen(
     onPaperClick: (String) -> Unit,
     onGoBrowse: () -> Unit,
     onOpenRoutines: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -78,6 +80,9 @@ fun TodayScreen(
                         IconButton(onClick = viewModel::refresh) {
                             Icon(Icons.Filled.Refresh, stringResource(R.string.cd_refresh_inbox))
                         }
+                    }
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Filled.Settings, stringResource(R.string.settings_title))
                     }
                 },
             )

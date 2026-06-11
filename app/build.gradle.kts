@@ -19,11 +19,28 @@ android {
         versionName = "0.1.0"
     }
 
+    // CI release signing: keystore + credentials arrive via environment
+    // (see .github/workflows/release.yml). Local builds stay debug-signed.
+    val releaseKeystore = System.getenv("ARXIVER_KEYSTORE_FILE")?.let(::file)
+    if (releaseKeystore != null) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("ARXIVER_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ARXIVER_KEY_ALIAS")
+                keyPassword = System.getenv("ARXIVER_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseKeystore != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -76,6 +93,7 @@ dependencies {
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.androidx.compiler)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.androidx.datastore.preferences)
     implementation(libs.timber)
 
     debugImplementation(libs.androidx.compose.ui.tooling)

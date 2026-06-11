@@ -41,7 +41,17 @@ CI builds, tests, and publishes APK artifacts on every push (see `.github/workfl
 
 ## Distribution
 
-v1 ships as signed APKs via GitHub Releases. Play Store comes later.
+v1 ships as signed APKs via GitHub Releases (sideload). Play Store comes later.
+
+**Installing:** grab the APK from the latest [Release](../../releases), allow installs from your browser/files app, open it. On first launch you pick categories to follow; the semantic-search model (~34MB) downloads over Wi-Fi in the background.
+
+**Releasing (maintainers):** push a `v*` tag. The release workflow signs with repo secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD` (see `.github/workflows/release.yml` for keystore generation) and attaches the APK to a GitHub Release.
+
+## Connecting your Claude
+
+1. In the Claude app, create a **Routine** with an **API trigger** and the connectors you want it to use.
+2. In Arxiver: Library → ⋮ → *Claude routines…* → add the routine's trigger URL + token. Use the copy icon for paste-ready routine instructions that teach Claude the payload schema (`arxiver/v1`).
+3. Send any paper (detail screen ✨), selection (long-press in Library), or your weekly review (✨ on Today) — your routine does the thinking with your connectors, and delivers results wherever you configured it to.
 
 ## Status
 

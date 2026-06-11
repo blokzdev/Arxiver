@@ -79,6 +79,17 @@ class SyncScheduler
             ).enqueue()
         }
 
+        /** Settings change: replace the periodic cadence. */
+        fun reschedulePeriodicSync(intervalHours: Long) {
+            workManager.enqueueUniquePeriodicWork(
+                FollowSyncWorker.UNIQUE_PERIODIC,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                PeriodicWorkRequestBuilder<FollowSyncWorker>(intervalHours, TimeUnit.HOURS)
+                    .setConstraints(networked)
+                    .build(),
+            )
+        }
+
         /** Queue drain for offline-queued Claude dispatches. */
         fun drainDispatches() {
             workManager.enqueueUniqueWork(

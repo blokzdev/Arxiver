@@ -26,10 +26,12 @@ import dev.blokz.arxiver.feature.claude.DispatchHistoryScreen
 import dev.blokz.arxiver.feature.claude.RoutinesScreen
 import dev.blokz.arxiver.feature.library.FilteredPapersScreen
 import dev.blokz.arxiver.feature.library.LibraryScreen
+import dev.blokz.arxiver.feature.onboarding.OnboardingScreen
 import dev.blokz.arxiver.feature.paper.ConnectionsScreen
 import dev.blokz.arxiver.feature.paper.PaperDetailScreen
 import dev.blokz.arxiver.feature.pdf.PdfViewerScreen
 import dev.blokz.arxiver.feature.search.SearchScreen
+import dev.blokz.arxiver.feature.settings.SettingsScreen
 import dev.blokz.arxiver.feature.today.TodayScreen
 import dev.blokz.arxiver.ui.navigation.TopLevelDestination
 
@@ -39,6 +41,8 @@ object Routes {
     const val PDF_VIEWER = "paper/{id}/pdf"
     const val CONNECTIONS = "paper/{id}/graph"
     const val ROUTINES = "claude/routines"
+    const val SETTINGS = "settings"
+    const val ONBOARDING = "onboarding"
     const val DISPATCH_HISTORY = "claude/history"
     const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
 
@@ -62,7 +66,10 @@ object Routes {
 }
 
 @Composable
-fun ArxiverApp(deepLinkPaperId: ArxivId? = null) {
+fun ArxiverApp(
+    deepLinkPaperId: ArxivId? = null,
+    startOnboarding: Boolean = false,
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
@@ -78,13 +85,30 @@ fun ArxiverApp(deepLinkPaperId: ArxivId? = null) {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = TopLevelDestination.Today.route,
+            startDestination = if (startOnboarding) Routes.ONBOARDING else TopLevelDestination.Today.route,
             modifier = Modifier.padding(innerPadding),
         ) {
+            composable(Routes.ONBOARDING) {
+                OnboardingScreen(
+                    onDone = {
+                        navController.navigate(TopLevelDestination.Today.route) {
+                            popUpTo(Routes.ONBOARDING) { inclusive = true }
+                        }
+                    },
+                )
+            }
+            composable(Routes.SETTINGS) {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                    onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
+                )
+            }
             composable(TopLevelDestination.Today.route) {
                 TodayScreen(
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                     onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                     onGoBrowse = {
                         navController.navigate(TopLevelDestination.Browse.route) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
