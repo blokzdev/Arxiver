@@ -36,7 +36,7 @@
 - `paper_authors(paper_id, author_id, position)` — PK(paper_id, author_id); position preserves order. Co-authorship graph is derived from this table (self-join), not stored.
 
 ### categories / paper_categories
-- `categories(code TEXT PK, name TEXT, group_name TEXT)` — full arXiv taxonomy **seeded at build time** from a bundled asset (taxonomy is static enough; no endpoint exists).
+- `categories(code TEXT PK, name TEXT, group_name TEXT)` — full arXiv taxonomy **bundled at build time** as Kotlin source (`ArxivTaxonomy` in `:core:model`) and upserted idempotently on app start (taxonomy is static enough; no endpoint exists).
 - `paper_categories(paper_id, category_code, is_primary)`.
 
 ### library_entries

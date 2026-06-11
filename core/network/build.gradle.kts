@@ -32,4 +32,6 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.kotlinx.coroutines.test)
+    // XmlPullParser implementation for JVM unit tests (Android provides one at runtime).
+    testImplementation(libs.kxml2)
 }
