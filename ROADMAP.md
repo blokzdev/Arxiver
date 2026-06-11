@@ -19,12 +19,12 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 ## Phase 0 — Foundation
 
-- [ ] 0.1 Gradle scaffold: settings, version catalog (`gradle/libs.versions.toml`), root build files, wrapper; Kotlin 2.x, AGP 8.x, JDK 17 toolchain, compileSdk 35 / minSdk 26
-- [ ] 0.2 Modules created per ARCHITECTURE §2 (`:app`, `:core:{model,common,database,network,ml,search,claude}`) with placeholder sources compiling
-- [ ] 0.3 Hilt wired; single MainActivity with Compose + Navigation skeleton (4 bottom-nav stubs)
-- [ ] 0.4 Theme: M3 dynamic color + brand fallback, dark theme, typography per SPEC-UI §1
-- [ ] 0.5 CI: GitHub Actions workflow — build + unit tests + lint on push/PR, debug APK artifact uploaded
-- [ ] 0.6 Static analysis: Android lint configured as errors-fail; ktlint or kotlinter wired into `check`
+- [x] 0.1 Gradle scaffold: settings, version catalog (`gradle/libs.versions.toml`), root build files, wrapper; Kotlin 2.x, AGP 8.x, JDK 17 toolchain, compileSdk 35 / minSdk 26
+- [x] 0.2 Modules created per ARCHITECTURE §2 (`:app`, `:core:{model,common,database,network,ml,search,claude}`) with placeholder sources compiling
+- [x] 0.3 Hilt wired; single MainActivity with Compose + Navigation skeleton (4 bottom-nav stubs)
+- [x] 0.4 Theme: M3 dynamic color + brand fallback, dark theme, typography per SPEC-UI §1
+- [x] 0.5 CI: GitHub Actions workflow — build + unit tests + lint on push/PR, debug APK artifact uploaded
+- [x] 0.6 Static analysis: Android lint configured as errors-fail; ktlint or kotlinter wired into `check`
 - [ ] **CHECKPOINT 0:** `./gradlew build` green locally and in CI; APK artifact installs and shows nav skeleton
 
 ## Phase 1 — Browse & Read
