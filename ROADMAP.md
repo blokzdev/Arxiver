@@ -15,7 +15,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] D5. Claude bridge spec (`docs/SPEC-CLAUDE-BRIDGE.md`)
 - [x] D6. UI spec (`docs/SPEC-UI.md`)
 - [x] D7. README, ROADMAP, CLAUDE.md
-- [ ] **CHECKPOINT D:** docs committed & pushed; user has visibility into full plan
+- [x] **CHECKPOINT D:** docs committed & pushed; user has visibility into full plan
 
 ## Phase 0 — Foundation
 
