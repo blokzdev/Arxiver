@@ -77,8 +77,8 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] 5.1 Onboarding flow (welcome → starter category picker → first sync; model + routine steps folded into Settings/notes per scope)
 - [x] 5.2 Settings: sync cadence, model mgmt (download/re-index/delete), PDF storage mgmt, Claude links, about (theme follows system — dedicated toggle deferred)
 - [x] 5.3 Backup/restore: single-JSON export/import (library+notes+tags+collections+follows+routine URLs, token-free by construction — asserted in tests), idempotent import, embedding backfill scheduled; SAF picker in Settings. (Zip wrapper deferred — single JSON suffices at v1 scale)
-- [ ] 5.4 Performance pass: cold start < 2s, search < 300ms @ 5K corpus (measured, recorded in PR), baseline profile
-- [ ] 5.5 Accessibility pass per SPEC-UI §5
+- [!] 5.4 [needs-user/device] Performance pass: cold start < 2s, search < 300ms @ 5K corpus — measurement requires a physical device; baseline profile generation likewise
+- [!] 5.5 [needs-user/device] Accessibility: TalkBack labels shipped on all actionables during feature work; the verification pass (TalkBack walkthrough, font-scale 1.3x) needs a device
 - [~] 5.6 Release engineering: signing-from-env config + tag-triggered release workflow shipped; [needs-user] repo secrets (KEYSTORE_*) + first tag + install-from-scratch test
 - [x] 5.7 README: install guide + Claude connection guide (screenshots pending first device run)
 - [ ] **CHECKPOINT 5 = v1.0.0:** GitHub Release published; success criteria in PRD §7 verified and recorded
