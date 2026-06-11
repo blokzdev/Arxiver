@@ -5,9 +5,11 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import dev.blokz.arxiver.core.database.dao.CategoryDao
+import dev.blokz.arxiver.core.database.dao.FollowDao
 import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.entity.AuthorEntity
 import dev.blokz.arxiver.core.database.entity.CategoryEntity
+import dev.blokz.arxiver.core.database.entity.FollowEntity
 import dev.blokz.arxiver.core.database.entity.PaperAuthorCrossRef
 import dev.blokz.arxiver.core.database.entity.PaperCategoryCrossRef
 import dev.blokz.arxiver.core.database.entity.PaperEntity
@@ -19,6 +21,7 @@ import dev.blokz.arxiver.core.database.entity.PaperEntity
         PaperAuthorCrossRef::class,
         CategoryEntity::class,
         PaperCategoryCrossRef::class,
+        FollowEntity::class,
     ],
     version = 1,
     exportSchema = true,
@@ -27,6 +30,8 @@ abstract class ArxiverDatabase : RoomDatabase() {
     abstract fun paperDao(): PaperDao
 
     abstract fun categoryDao(): CategoryDao
+
+    abstract fun followDao(): FollowDao
 
     companion object {
         const val NAME = "arxiver.db"

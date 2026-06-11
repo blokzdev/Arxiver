@@ -8,7 +8,49 @@
     <string name="nav_library">Library</string>
 
     <string name="placeholder_today">Your research inbox lives here. Follow categories to fill it.</string>
-    <string name="placeholder_browse">Explore the arXiv category directory.</string>
-    <string name="placeholder_search">Search your library and all of arXiv.</string>
-    <string name="placeholder_library">Saved papers, collections, tags, and notes.</string>
+    <string name="placeholder_library">Saved papers, collections, tags, and notes arrive in Phase 2.</string>
+
+    <plurals name="browse_following_count">
+        <item quantity="one">%1$d followed</item>
+        <item quantity="other">%1$d followed</item>
+    </plurals>
+    <string name="cd_expand_group">Expand group</string>
+    <string name="cd_collapse_group">Collapse group</string>
+    <string name="cd_follow_category">Follow %1$s</string>
+    <string name="cd_back">Back</string>
+    <string name="cd_clear_query">Clear search query</string>
+    <string name="cd_toggle_night_mode">Toggle night mode</string>
+    <string name="cd_pdf_page">Page %1$d</string>
+
+    <string name="feed_loading_queued">Querying arXiv… requests are spaced to respect arXiv\'s rate limits</string>
+
+    <string name="search_hint">Search arXiv (try ti:attention AND cat:cs.LG)</string>
+    <string name="search_querying_arxiv">Searching arXiv…</string>
+    <plurals name="search_result_count">
+        <item quantity="one">%1$d result on arXiv</item>
+        <item quantity="other">%1$d results on arXiv</item>
+    </plurals>
+    <string name="search_no_results">No papers matched. Try different terms or field prefixes.</string>
+    <string name="search_intro_title">Search all of arXiv</string>
+    <string name="search_intro_body">Bare terms search everything. Use ti:, au:, abs:, cat: prefixes and AND/OR/ANDNOT for precision. Library search arrives with your local index.</string>
+
+    <string name="paper_not_found">Paper unavailable — check the link or your connection.</string>
+    <string name="paper_abstract_heading">Abstract</string>
+    <string name="paper_dates">Submitted %1$s · updated %3$s (v%2$d)</string>
+    <string name="paper_meta_arxiv_id">arXiv ID</string>
+    <string name="paper_meta_comment">Comments</string>
+    <string name="paper_meta_journal">Journal ref</string>
+    <string name="paper_meta_doi">DOI</string>
+    <string name="paper_meta_citations">Citations</string>
+
+    <string name="pdf_title">PDF</string>
+    <string name="pdf_downloading">Downloading PDF…</string>
+
+    <string name="action_retry">Retry</string>
+    <string name="action_share">Share</string>
+    <string name="action_open_pdf">Read PDF</string>
+
+    <string name="error_offline">You\'re offline. Cached papers remain available.</string>
+    <string name="error_rate_limited">arXiv is throttling requests — trying again shortly.</string>
+    <string name="error_generic">Something went wrong talking to arXiv.</string>
 </resources>

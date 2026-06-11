@@ -32,11 +32,11 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] 1.1 `:core:model` paper domain types; `:core:database` Room setup with `papers`, `authors`, `paper_authors`, `categories`, `paper_categories` (SPEC-DATA) + migration test harness
 - [x] 1.2 Category taxonomy asset (full arXiv taxonomy) + build-time seed
 - [x] 1.3 `:core:network` ArxivApiClient: Atom parser (XmlPullParser), query builder, **global 3s rate limiter**, paging; unit tests with recorded Atom fixtures
-- [ ] 1.4 Browse feature: category groups → category → latest listing (paged), follow toggle (persists, sync comes in Phase 2)
-- [ ] 1.5 arXiv online search: field-prefix query support, filters, queue-state UI
-- [ ] 1.6 Paper detail screen per SPEC-UI (sans Phase-2+ sections); viewed papers upserted to DB
-- [ ] 1.7 PDF: download manager + in-app reader (night invert, paging)
-- [ ] 1.8 Deep links / share-in for arxiv.org URLs
+- [x] 1.4 Browse feature: category groups → category → latest listing (paged), follow toggle (persists, sync comes in Phase 2)
+- [x] 1.5 arXiv online search: field-prefix query support, filters, queue-state UI
+- [x] 1.6 Paper detail screen per SPEC-UI (sans Phase-2+ sections); viewed papers upserted to DB
+- [x] 1.7 PDF: download manager + in-app reader (night invert, paging)
+- [x] 1.8 Deep links / share-in for arxiv.org URLs
 - [ ] **CHECKPOINT 1:** install APK → browse cs.LG latest → open paper → read PDF → search arXiv online; all offline-revisitable; CI green
 
 ## Phase 2 — Library & Index

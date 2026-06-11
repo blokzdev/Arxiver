@@ -22,6 +22,26 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- arxiv.org abs/pdf links open directly in the paper detail screen.
+                 autoVerify is off: arxiv.org is not our domain, so the user picks
+                 Arxiver from the disambiguation sheet. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="arxiv.org" />
+                <data android:host="www.arxiv.org" />
+                <data android:pathPrefix="/abs/" />
+                <data android:pathPrefix="/pdf/" />
+            </intent-filter>
+            <!-- Share-in: text containing an arXiv link or id. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
         </activity>
     </application>
 

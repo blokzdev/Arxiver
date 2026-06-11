@@ -26,8 +26,8 @@ kotlin {
 dependencies {
     api(project(":core:model"))
     implementation(project(":core:common"))
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.okhttp)
+    api(libs.kotlinx.coroutines.core)
+    api(libs.okhttp)
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.okhttp.mockwebserver)
