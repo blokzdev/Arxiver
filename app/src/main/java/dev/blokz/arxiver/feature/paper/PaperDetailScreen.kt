@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
@@ -57,6 +58,7 @@ import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.feature.claude.DispatchSheet
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -69,8 +71,10 @@ fun PaperDetailScreen(
     onOpenPdf: (String) -> Unit,
     onPaperClick: (String) -> Unit,
     onOpenConnections: (String) -> Unit,
+    onOpenRoutines: () -> Unit,
     viewModel: PaperDetailViewModel = hiltViewModel(),
 ) {
+    var showDispatch by remember { mutableStateOf(false) }
     val state by viewModel.uiState.collectAsState()
     val entry by viewModel.entry.collectAsState()
     val notes by viewModel.notes.collectAsState()
@@ -89,6 +93,9 @@ fun PaperDetailScreen(
                 },
                 actions = {
                     state.paper?.let { paper ->
+                        IconButton(onClick = { showDispatch = true }) {
+                            Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
+                        }
                         IconButton(onClick = viewModel::toggleSaved) {
                             if (entry != null) {
                                 Icon(Icons.Filled.Bookmark, stringResource(R.string.cd_unsave_paper))
@@ -148,6 +155,19 @@ fun PaperDetailScreen(
                         )
                     }
             }
+        }
+    }
+
+    if (showDispatch) {
+        state.paper?.let { paper ->
+            DispatchSheet(
+                paperIds = listOf(paper.id.value),
+                onDismiss = { showDispatch = false },
+                onGoToRoutines = {
+                    showDispatch = false
+                    onOpenRoutines()
+                },
+            )
         }
     }
 }

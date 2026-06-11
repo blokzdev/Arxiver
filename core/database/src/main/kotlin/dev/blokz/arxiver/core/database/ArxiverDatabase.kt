@@ -11,6 +11,7 @@ import dev.blokz.arxiver.core.database.dao.FollowDao
 import dev.blokz.arxiver.core.database.dao.InboxDao
 import dev.blokz.arxiver.core.database.dao.LibraryDao
 import dev.blokz.arxiver.core.database.dao.PaperDao
+import dev.blokz.arxiver.core.database.dao.RoutineDao
 import dev.blokz.arxiver.core.database.dao.SearchDao
 import dev.blokz.arxiver.core.database.entity.AuthorEntity
 import dev.blokz.arxiver.core.database.entity.CategoryEntity
@@ -29,6 +30,8 @@ import dev.blokz.arxiver.core.database.entity.PaperEntity
 import dev.blokz.arxiver.core.database.entity.PaperFtsEntity
 import dev.blokz.arxiver.core.database.entity.PaperTagCrossRef
 import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
+import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
+import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 
 @Database(
@@ -51,6 +54,8 @@ import dev.blokz.arxiver.core.database.entity.TagEntity
         PaperEmbeddingEntity::class,
         RelatedPaperEntity::class,
         CitationEdgeEntity::class,
+        RoutineConfigEntity::class,
+        RoutineDispatchEntity::class,
     ],
     version = 1,
     exportSchema = true,
@@ -71,6 +76,8 @@ abstract class ArxiverDatabase : RoomDatabase() {
     abstract fun embeddingDao(): EmbeddingDao
 
     abstract fun citationDao(): CitationDao
+
+    abstract fun routineDao(): RoutineDao
 
     companion object {
         const val NAME = "arxiver.db"

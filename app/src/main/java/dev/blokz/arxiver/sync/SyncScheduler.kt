@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.sync
 
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
@@ -76,6 +77,18 @@ class SyncScheduler
                     .setConstraints(unmetered)
                     .build(),
             ).enqueue()
+        }
+
+        /** Queue drain for offline-queued Claude dispatches. */
+        fun drainDispatches() {
+            workManager.enqueueUniqueWork(
+                DispatchWorker.UNIQUE,
+                ExistingWorkPolicy.KEEP,
+                OneTimeWorkRequestBuilder<DispatchWorker>()
+                    .setConstraints(networked)
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+                    .build(),
+            )
         }
 
         fun embedNow() {

@@ -75,6 +75,28 @@ object AppModule {
     fun arxivRateLimiter(): ArxivRateLimiter = ArxivRateLimiter()
 
     @Provides
+    fun routineDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.RoutineDao = db.routineDao()
+
+    @Provides
+    @Singleton
+    fun tokenVault(
+        @ApplicationContext context: Context,
+    ): dev.blokz.arxiver.core.claude.TokenVault = dev.blokz.arxiver.core.claude.TokenVault(context)
+
+    @Provides
+    @Singleton
+    fun payloadBuilder(): dev.blokz.arxiver.core.claude.PayloadBuilder =
+        dev.blokz.arxiver.core.claude.PayloadBuilder(appVersion = dev.blokz.arxiver.BuildConfig.VERSION_NAME)
+
+    @Provides
+    @Singleton
+    fun routineTriggerClient(
+        httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.claude.RoutineTriggerClient =
+        dev.blokz.arxiver.core.claude.RoutineTriggerClient(httpClient, dispatchers)
+
+    @Provides
     fun citationDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.CitationDao = db.citationDao()
 
     @Provides

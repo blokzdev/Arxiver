@@ -62,14 +62,14 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 ## Phase 4 — Claude Bridge
 
-- [ ] 4.1 `:core:claude`: TokenVault (EncryptedSharedPreferences), routine config CRUD + management UI
-- [ ] 4.2 PayloadBuilder per SPEC-CLAUDE-BRIDGE §4 + golden-file tests; size guard; notes-redaction structural test
-- [ ] 4.3 RoutineTriggerClient + retry/queue (`DispatchWorker`); MockWebServer tests (200/401/5xx/offline)
-- [ ] 4.4 Dispatch sheet UI (routine → action → instruction → notes toggle → payload preview → send) wired into paper detail + library multi-select
-- [ ] 4.5 Action catalog incl. `weekly_review` auto-selection and `literature_scan`
-- [ ] 4.6 Dispatch history screen + retry
-- [ ] 4.7 "Copy routine starter instructions" generator
-- [ ] 4.8 [needs-user] End-to-end test against a real Claude routine trigger — **ask the user for a test routine URL+token when reaching this task**
+- [x] 4.1 `:core:claude`: TokenVault (EncryptedSharedPreferences), routine config CRUD + management UI
+- [x] 4.2 PayloadBuilder per SPEC-CLAUDE-BRIDGE §4 + golden-file tests; size guard; notes-redaction structural test
+- [x] 4.3 RoutineTriggerClient + retry/queue (`DispatchWorker`); MockWebServer tests (200/401/5xx/offline)
+- [x] 4.4 Dispatch sheet UI (routine → action → instruction → notes toggle → payload preview → send) wired into paper detail + library multi-select
+- [x] 4.5 Action catalog incl. `weekly_review` auto-selection and `literature_scan`
+- [x] 4.6 Dispatch history screen + retry
+- [x] 4.7 "Copy routine starter instructions" generator
+- [!] 4.8 [needs-user] (blocked: awaiting a test routine trigger URL+token from the user — mock-verified meanwhile) End-to-end test against a real Claude routine trigger — **ask the user for a test routine URL+token when reaching this task**
 - [ ] **CHECKPOINT 4:** mock-verified contract + real-routine dispatch produces a successful run; tokens demonstrably absent from logs/backups; CI green
 
 ## Phase 5 — Polish & Release

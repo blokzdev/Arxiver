@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
@@ -28,29 +29,46 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.core.claude.RoutineAction
 import dev.blokz.arxiver.data.InboxPaper
+import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.ui.components.PaperListItem
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayScreen(
     onPaperClick: (String) -> Unit,
     onGoBrowse: () -> Unit,
+    onOpenRoutines: () -> Unit,
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    var weeklyReviewIds by remember { mutableStateOf<List<String>?>(null) }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.nav_today)) },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            scope.launch { weeklyReviewIds = viewModel.weeklyReviewSelection() }
+                        },
+                    ) {
+                        Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_weekly_review))
+                    }
                     if (state.syncing) {
                         CircularProgressIndicator(
                             modifier = Modifier.padding(end = 16.dp),
@@ -95,6 +113,31 @@ fun TodayScreen(
                     )
             }
         }
+    }
+
+    TodayDispatchHost(
+        weeklyReviewIds = weeklyReviewIds,
+        onDismiss = { weeklyReviewIds = null },
+        onOpenRoutines = onOpenRoutines,
+    )
+}
+
+@Composable
+private fun TodayDispatchHost(
+    weeklyReviewIds: List<String>?,
+    onDismiss: () -> Unit,
+    onOpenRoutines: () -> Unit,
+) {
+    weeklyReviewIds?.let { ids ->
+        DispatchSheet(
+            paperIds = ids,
+            onDismiss = onDismiss,
+            onGoToRoutines = {
+                onDismiss()
+                onOpenRoutines()
+            },
+            presetAction = RoutineAction.WEEKLY_REVIEW,
+        )
     }
 }
 

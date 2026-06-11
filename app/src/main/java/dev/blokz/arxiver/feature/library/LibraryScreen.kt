@@ -12,6 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -39,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,6 +55,8 @@ fun LibraryScreen(
     onPaperClick: (String) -> Unit,
     onCollectionClick: (Long, String) -> Unit,
     onTagClick: (Long, String) -> Unit,
+    onOpenRoutines: () -> Unit,
+    onOpenHistory: () -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -59,6 +64,8 @@ fun LibraryScreen(
     var tab by remember { mutableIntStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
     var showNewCollection by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf(setOf<String>()) }
+    var showDispatch by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     exportContent?.let { export ->
@@ -75,8 +82,24 @@ fun LibraryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.nav_library)) },
+                title = {
+                    Text(
+                        if (selectedIds.isEmpty()) {
+                            stringResource(R.string.nav_library)
+                        } else {
+                            pluralStringResource(R.plurals.library_selected_count, selectedIds.size, selectedIds.size)
+                        },
+                    )
+                },
                 actions = {
+                    if (selectedIds.isNotEmpty()) {
+                        IconButton(onClick = { showDispatch = true }) {
+                            Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
+                        }
+                        IconButton(onClick = { selectedIds = emptySet() }) {
+                            Icon(Icons.Filled.Close, stringResource(R.string.cd_clear_selection))
+                        }
+                    }
                     IconButton(onClick = { menuOpen = true }) {
                         Icon(Icons.Filled.MoreVert, stringResource(R.string.cd_library_menu))
                     }
@@ -93,6 +116,20 @@ fun LibraryScreen(
                             onClick = {
                                 menuOpen = false
                                 viewModel.exportBibtex()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.library_menu_routines)) },
+                            onClick = {
+                                menuOpen = false
+                                onOpenRoutines()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.library_menu_history)) },
+                            onClick = {
+                                menuOpen = false
+                                onOpenHistory()
                             },
                         )
                     }
@@ -112,7 +149,16 @@ fun LibraryScreen(
                 Tab(tab == 2, onClick = { tab = 2 }, text = { Text(stringResource(R.string.library_tab_tags)) })
             }
             when (tab) {
-                0 -> PapersTab(state, viewModel::setStatusFilter, onPaperClick)
+                0 ->
+                    PapersTab(
+                        state = state,
+                        selectedIds = selectedIds,
+                        onFilter = viewModel::setStatusFilter,
+                        onPaperClick = onPaperClick,
+                        onToggleSelect = { id ->
+                            selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
+                        },
+                    )
                 1 ->
                     CollectionsTab(
                         state = state,
@@ -123,6 +169,20 @@ fun LibraryScreen(
                 else -> TagsTab(state, onTagClick)
             }
         }
+    }
+
+    if (showDispatch) {
+        dev.blokz.arxiver.feature.claude.DispatchSheet(
+            paperIds = selectedIds.toList(),
+            onDismiss = {
+                showDispatch = false
+                selectedIds = emptySet()
+            },
+            onGoToRoutines = {
+                showDispatch = false
+                onOpenRoutines()
+            },
+        )
     }
 
     if (showNewCollection) {
@@ -139,8 +199,10 @@ fun LibraryScreen(
 @Composable
 private fun PapersTab(
     state: LibraryUiState,
+    selectedIds: Set<String>,
     onFilter: (String?) -> Unit,
     onPaperClick: (String) -> Unit,
+    onToggleSelect: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -170,7 +232,15 @@ private fun PapersTab(
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.papers, key = { it.paper.id.value }) { row ->
-                    PaperListItem(paper = row.paper, onClick = { onPaperClick(row.paper.id.value) })
+                    val id = row.paper.id.value
+                    PaperListItem(
+                        paper = row.paper,
+                        onClick = {
+                            if (selectedIds.isEmpty()) onPaperClick(id) else onToggleSelect(id)
+                        },
+                        onLongClick = { onToggleSelect(id) },
+                        selected = id in selectedIds,
+                    )
                 }
             }
         }

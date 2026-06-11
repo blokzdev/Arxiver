@@ -48,6 +48,7 @@
     <string name="action_open_pdf">Read PDF</string>
 
     <string name="cd_refresh_inbox">Refresh inbox</string>
+    <string name="cd_weekly_review">Send weekly review to Claude</string>
     <string name="cd_save_paper">Save to library</string>
     <string name="cd_unsave_paper">Remove from library</string>
     <plurals name="cd_rate_star">
@@ -108,6 +109,66 @@
     </plurals>
     <string name="connections_in_library">In your library</string>
     <string name="paper_view_connections">Connections</string>
+
+    <string name="cd_send_to_claude">Send to Claude</string>
+    <string name="cd_clear_selection">Clear selection</string>
+    <string name="cd_add_routine">Add routine</string>
+    <string name="cd_copy_starter">Copy routine starter instructions</string>
+    <string name="cd_delete_routine">Delete routine %1$s</string>
+    <plurals name="library_selected_count">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="library_menu_routines">Claude routines…</string>
+    <string name="library_menu_history">Dispatch history</string>
+
+    <plurals name="dispatch_title">
+        <item quantity="one">Send %1$d paper to Claude</item>
+        <item quantity="other">Send %1$d papers to Claude</item>
+    </plurals>
+    <string name="dispatch_no_routines">No routines configured yet. Create one in the Claude app with an API trigger, then add its URL and token here.</string>
+    <string name="dispatch_setup_routines">Set up routines</string>
+    <string name="dispatch_routine_label">Routine</string>
+    <string name="dispatch_action_label">Action</string>
+    <string name="dispatch_instruction_label">Instruction</string>
+    <string name="dispatch_include_notes">Include my notes &amp; tags</string>
+    <string name="dispatch_include_notes_hint">Sends your annotations with the papers — preview shows exactly what leaves the device</string>
+    <string name="dispatch_show_preview">Show payload preview</string>
+    <string name="dispatch_hide_preview">Hide payload preview</string>
+    <string name="dispatch_preview_loading">Building preview…</string>
+    <string name="dispatch_send">Send to Claude</string>
+    <string name="dispatch_sending">Sending…</string>
+
+    <string name="action_digest">Digest</string>
+    <string name="action_deep_dive">Deep dive</string>
+    <string name="action_compare">Compare</string>
+    <string name="action_weekly_review">Weekly review</string>
+    <string name="action_literature_scan">Literature scan</string>
+    <string name="action_custom">Custom</string>
+
+    <string name="routines_title">Claude routines</string>
+    <string name="routines_empty_title">Connect your Claude</string>
+    <string name="routines_empty_body">In the Claude app, create a routine with an API trigger. Paste its trigger URL and token here — Arxiver dispatches papers to it, and your routine handles the thinking. Use the copy icon above for paste-ready routine instructions.</string>
+    <string name="routine_add_title">Add routine</string>
+    <string name="routine_reauth_title">New token for %1$s</string>
+    <string name="routine_name_label">Name</string>
+    <string name="routine_url_label">Trigger URL</string>
+    <string name="routine_url_https_required">Must be an https:// URL</string>
+    <string name="routine_token_label">Token</string>
+    <string name="routine_ping">Test</string>
+    <string name="routine_reauth">Token</string>
+    <string name="routine_auth_invalid">Token rejected — re-enter it</string>
+    <string name="routine_ping_ok">Ping accepted — the routine is running</string>
+    <string name="routine_ping_auth">Token rejected</string>
+    <string name="routine_ping_queued">Offline — ping queued</string>
+    <string name="routine_ping_failed">Ping failed: %1$s</string>
+    <string name="routine_instructions_copied">Starter instructions copied — paste into your routine</string>
+
+    <string name="history_title">Dispatch history</string>
+    <string name="history_empty">Dispatches you send to Claude appear here.</string>
+    <string name="history_row_title">%1$s · papers: %2$d</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_save">Save</string>
 
     <string name="action_add">Add</string>
     <string name="action_create">Create</string>

@@ -22,6 +22,8 @@ import androidx.navigation.compose.rememberNavController
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.feature.browse.BrowseScreen
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
+import dev.blokz.arxiver.feature.claude.DispatchHistoryScreen
+import dev.blokz.arxiver.feature.claude.RoutinesScreen
 import dev.blokz.arxiver.feature.library.FilteredPapersScreen
 import dev.blokz.arxiver.feature.library.LibraryScreen
 import dev.blokz.arxiver.feature.paper.ConnectionsScreen
@@ -36,6 +38,8 @@ object Routes {
     const val PAPER_DETAIL = "paper/{id}"
     const val PDF_VIEWER = "paper/{id}/pdf"
     const val CONNECTIONS = "paper/{id}/graph"
+    const val ROUTINES = "claude/routines"
+    const val DISPATCH_HISTORY = "claude/history"
     const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
 
     fun categoryFeed(
@@ -80,6 +84,7 @@ fun ArxiverApp(deepLinkPaperId: ArxivId? = null) {
             composable(TopLevelDestination.Today.route) {
                 TodayScreen(
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                    onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                     onGoBrowse = {
                         navController.navigate(TopLevelDestination.Browse.route) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -104,6 +109,8 @@ fun ArxiverApp(deepLinkPaperId: ArxivId? = null) {
             composable(TopLevelDestination.Library.route) {
                 LibraryScreen(
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                    onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                    onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
                     onCollectionClick = { id, name ->
                         navController.navigate(Routes.filteredPapers("collection", id, name))
                     },
@@ -132,10 +139,17 @@ fun ArxiverApp(deepLinkPaperId: ArxivId? = null) {
                     onOpenPdf = { id -> navController.navigate(Routes.pdfViewer(id)) },
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                     onOpenConnections = { id -> navController.navigate(Routes.connections(id)) },
+                    onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                 )
             }
             composable(Routes.PDF_VIEWER) {
                 PdfViewerScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.ROUTINES) {
+                RoutinesScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.DISPATCH_HISTORY) {
+                DispatchHistoryScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.CONNECTIONS) {
                 ConnectionsScreen(

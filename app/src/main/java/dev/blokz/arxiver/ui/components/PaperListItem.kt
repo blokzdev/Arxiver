@@ -1,6 +1,8 @@
 package dev.blokz.arxiver.ui.components
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +31,7 @@ private val dateFormat = DateTimeFormatter.ofPattern("d MMM yyyy")
  * THE paper list cell (SPEC-UI §4): Today, Browse, Search, and Library all
  * render through this composable.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PaperListItem(
     paper: Paper,
@@ -36,12 +39,21 @@ fun PaperListItem(
     modifier: Modifier = Modifier,
     showDivider: Boolean = true,
     badge: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    selected: Boolean = false,
 ) {
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .then(
+                    if (selected) {
+                        Modifier.background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f))
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {

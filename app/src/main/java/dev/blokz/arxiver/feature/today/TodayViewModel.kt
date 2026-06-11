@@ -9,6 +9,7 @@ import dev.blokz.arxiver.sync.SyncScheduler
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -25,6 +26,7 @@ class TodayViewModel
     constructor(
         private val inboxRepository: InboxRepository,
         private val syncScheduler: SyncScheduler,
+        private val libraryRepository: dev.blokz.arxiver.data.LibraryRepository,
         followsRepository: dev.blokz.arxiver.data.CategoryRepository,
     ) : ViewModel() {
         val uiState: StateFlow<TodayUiState> =
@@ -41,6 +43,17 @@ class TodayViewModel
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState())
 
         fun refresh() = syncScheduler.syncNow()
+
+        /** SPEC-CLAUDE-BRIDGE §5 weekly_review auto-selection: recent library adds + top inbox. */
+        suspend fun weeklyReviewSelection(): List<String> {
+            val weekAgo = java.time.Instant.now().minusSeconds(7L * 24 * 3600)
+            val library =
+                libraryRepository.observeLibrary().first()
+                    .filter { it.addedAt.isAfter(weekAgo) }
+                    .map { it.paper.id.value }
+            val inbox = uiState.value.items.take(10).map { it.paper.id.value }
+            return (library + inbox).distinct().take(20)
+        }
 
         fun save(paperId: String) {
             viewModelScope.launch { inboxRepository.saveToLibrary(paperId) }
