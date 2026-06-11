@@ -25,7 +25,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] 0.4 Theme: M3 dynamic color + brand fallback, dark theme, typography per SPEC-UI §1
 - [x] 0.5 CI: GitHub Actions workflow — build + unit tests + lint on push/PR, debug APK artifact uploaded
 - [x] 0.6 Static analysis: Android lint configured as errors-fail; ktlint or kotlinter wired into `check`
-- [ ] **CHECKPOINT 0:** `./gradlew build` green locally and in CI; APK artifact installs and shows nav skeleton
+- [x] **CHECKPOINT 0:** `./gradlew build` green locally and in CI (run #3 green; APK artifact uploaded). Manual install smoke deferred to user — no emulator in cloud env
 
 ## Phase 1 — Browse & Read
 
