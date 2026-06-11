@@ -37,7 +37,7 @@ android {
         warningsAsErrors = true
         abortOnError = true
         // Version-currency checks break CI whenever upstream releases; bumps are deliberate.
-        disable += listOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable")
+        disable += listOf("GradleDependency", "AndroidGradlePluginVersion", "NewerVersionAvailable", "OldTargetApi")
     }
 }
 
