@@ -1,15 +1,213 @@
 package dev.blokz.arxiver.feature.today
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
-import dev.blokz.arxiver.ui.components.PlaceholderScreen
+import dev.blokz.arxiver.data.InboxPaper
+import dev.blokz.arxiver.ui.components.PaperListItem
 
-// Real inbox arrives in Phase 2 (ROADMAP 2.4/2.5).
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TodayScreen() {
-    PlaceholderScreen(
-        title = stringResource(R.string.nav_today),
-        subtitle = stringResource(R.string.placeholder_today),
-    )
+fun TodayScreen(
+    onPaperClick: (String) -> Unit,
+    onGoBrowse: () -> Unit,
+    viewModel: TodayViewModel = hiltViewModel(),
+) {
+    val state by viewModel.uiState.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.nav_today)) },
+                actions = {
+                    if (state.syncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(end = 16.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        IconButton(onClick = viewModel::refresh) {
+                            Icon(Icons.Filled.Refresh, stringResource(R.string.cd_refresh_inbox))
+                        }
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+        ) {
+            when {
+                !state.hasFollows ->
+                    EmptyState(
+                        title = stringResource(R.string.today_no_follows_title),
+                        body = stringResource(R.string.today_no_follows_body),
+                        actionLabel = stringResource(R.string.today_go_browse),
+                        onAction = onGoBrowse,
+                    )
+                state.items.isEmpty() ->
+                    EmptyState(
+                        title = stringResource(R.string.today_inbox_zero_title),
+                        body = stringResource(R.string.today_inbox_zero_body),
+                        actionLabel = null,
+                        onAction = {},
+                    )
+                else ->
+                    InboxList(
+                        items = state.items,
+                        onPaperClick = onPaperClick,
+                        onSave = viewModel::save,
+                        onDismiss = viewModel::dismiss,
+                    )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InboxList(
+    items: List<InboxPaper>,
+    onPaperClick: (String) -> Unit,
+    onSave: (String) -> Unit,
+    onDismiss: (String) -> Unit,
+) {
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(items, key = { it.paper.id.value }) { item ->
+            key(item.paper.id.value) {
+                SwipeableInboxRow(
+                    item = item,
+                    onClick = { onPaperClick(item.paper.id.value) },
+                    onSave = { onSave(item.paper.id.value) },
+                    onDismiss = { onDismiss(item.paper.id.value) },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeableInboxRow(
+    item: InboxPaper,
+    onClick: () -> Unit,
+    onSave: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val dismissState =
+        rememberSwipeToDismissBoxState(
+            confirmValueChange = { value ->
+                when (value) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        onSave()
+                        true
+                    }
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        onDismiss()
+                        true
+                    }
+                    SwipeToDismissBoxValue.Settled -> false
+                }
+            },
+        )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val (color, icon, alignment) =
+                when (dismissState.dismissDirection) {
+                    SwipeToDismissBoxValue.StartToEnd ->
+                        Triple(
+                            MaterialTheme.colorScheme.primaryContainer,
+                            Icons.Filled.BookmarkAdd,
+                            Alignment.CenterStart,
+                        )
+                    else ->
+                        Triple(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            Icons.Filled.Close,
+                            Alignment.CenterEnd,
+                        )
+                }
+            Box(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(color)
+                        .padding(horizontal = 24.dp),
+                contentAlignment = alignment,
+            ) {
+                Icon(icon, contentDescription = null)
+            }
+        },
+    ) {
+        Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
+            PaperListItem(paper = item.paper, onClick = onClick)
+        }
+    }
+}
+
+@Composable
+private fun EmptyState(
+    title: String,
+    body: String,
+    actionLabel: String?,
+    onAction: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            body,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+        if (actionLabel != null) {
+            Row(modifier = Modifier.padding(top = 16.dp)) {
+                androidx.compose.material3.FilledTonalButton(onClick = onAction) {
+                    Text(actionLabel)
+                }
+            }
+        }
+    }
 }

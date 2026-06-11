@@ -14,33 +14,47 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
+import dev.blokz.arxiver.core.database.entity.NoteEntity
+import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.model.Paper
-import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
-import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -54,6 +68,9 @@ fun PaperDetailScreen(
     viewModel: PaperDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val entry by viewModel.entry.collectAsState()
+    val notes by viewModel.notes.collectAsState()
+    val tags by viewModel.tags.collectAsState()
     val context = LocalContext.current
 
     Scaffold(
@@ -67,6 +84,13 @@ fun PaperDetailScreen(
                 },
                 actions = {
                     state.paper?.let { paper ->
+                        IconButton(onClick = viewModel::toggleSaved) {
+                            if (entry != null) {
+                                Icon(Icons.Filled.Bookmark, stringResource(R.string.cd_unsave_paper))
+                            } else {
+                                Icon(Icons.Filled.BookmarkBorder, stringResource(R.string.cd_save_paper))
+                            }
+                        }
                         IconButton(
                             onClick = {
                                 val send =
@@ -99,7 +123,22 @@ fun PaperDetailScreen(
                         text = stringResource(R.string.paper_not_found),
                         modifier = Modifier.align(Alignment.Center),
                     )
-                else -> state.paper?.let { PaperDetailContent(it, onOpenPdf) }
+                else ->
+                    state.paper?.let { paper ->
+                        PaperDetailContent(
+                            paper = paper,
+                            entry = entry,
+                            notes = notes,
+                            tags = tags,
+                            onOpenPdf = onOpenPdf,
+                            onSetStatus = viewModel::setStatus,
+                            onSetRating = viewModel::setRating,
+                            onAddNote = viewModel::addNote,
+                            onDeleteNote = viewModel::deleteNote,
+                            onAddTag = viewModel::addTag,
+                            onRemoveTag = viewModel::removeTag,
+                        )
+                    }
             }
         }
     }
@@ -108,7 +147,16 @@ fun PaperDetailScreen(
 @Composable
 private fun PaperDetailContent(
     paper: Paper,
+    entry: LibraryEntryEntity?,
+    notes: List<NoteEntity>,
+    tags: List<TagEntity>,
     onOpenPdf: (String) -> Unit,
+    onSetStatus: (String) -> Unit,
+    onSetRating: (Int?) -> Unit,
+    onAddNote: (String) -> Unit,
+    onDeleteNote: (Long) -> Unit,
+    onAddTag: (String) -> Unit,
+    onRemoveTag: (Long) -> Unit,
 ) {
     Column(
         modifier =
@@ -118,19 +166,14 @@ private fun PaperDetailContent(
                 .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(
-            text = paper.title,
-            style = MaterialTheme.typography.headlineSmall,
-        )
+        Text(text = paper.title, style = MaterialTheme.typography.headlineSmall)
         Text(
             text = paper.authors.joinToString(", "),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
         )
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(paper.categories) { code ->
-                AssistChip(onClick = {}, label = { Text(code) })
-            }
+            items(paper.categories) { code -> AssistChip(onClick = {}, label = { Text(code) }) }
         }
         Text(
             text =
@@ -154,20 +197,164 @@ private fun PaperDetailContent(
             }
         }
 
-        HorizontalDivider()
-
-        Text(
-            text = stringResource(R.string.paper_abstract_heading),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            text = paper.abstract,
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        if (entry != null) {
+            LibrarySection(entry, onSetStatus, onSetRating)
+        }
 
         HorizontalDivider()
+
+        Text(stringResource(R.string.paper_abstract_heading), style = MaterialTheme.typography.titleMedium)
+        Text(text = paper.abstract, style = MaterialTheme.typography.bodyMedium)
+
+        HorizontalDivider()
+
+        if (entry != null) {
+            TagsSection(tags, onAddTag, onRemoveTag)
+            NotesSection(notes, onAddNote, onDeleteNote)
+            HorizontalDivider()
+        }
 
         MetadataSection(paper)
+    }
+}
+
+@Composable
+private fun LibrarySection(
+    entry: LibraryEntryEntity,
+    onSetStatus: (String) -> Unit,
+    onSetRating: (Int?) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(
+                LibraryEntryEntity.STATUS_TO_READ to stringResource(R.string.library_filter_to_read),
+                LibraryEntryEntity.STATUS_READING to stringResource(R.string.library_filter_reading),
+                LibraryEntryEntity.STATUS_READ to stringResource(R.string.library_filter_read),
+            ).forEach { (value, label) ->
+                FilterChip(
+                    selected = entry.status == value,
+                    onClick = { onSetStatus(value) },
+                    label = { Text(label) },
+                )
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            (1..5).forEach { star ->
+                val starDescription = pluralStringResource(R.plurals.cd_rate_star, star, star)
+                IconButton(
+                    onClick = { onSetRating(if (entry.rating == star) null else star) },
+                ) {
+                    val filled = (entry.rating ?: 0) >= star
+                    Icon(
+                        imageVector = if (filled) Icons.Filled.Star else Icons.Outlined.StarOutline,
+                        contentDescription = starDescription,
+                        tint = MaterialTheme.colorScheme.secondary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TagsSection(
+    tags: List<TagEntity>,
+    onAddTag: (String) -> Unit,
+    onRemoveTag: (Long) -> Unit,
+) {
+    var adding by remember { mutableStateOf(false) }
+    var newTag by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.paper_tags_heading), style = MaterialTheme.typography.titleMedium)
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(tags, key = { it.id }) { tag ->
+                InputChip(
+                    selected = false,
+                    onClick = {},
+                    label = { Text("#${tag.name}") },
+                    trailingIcon = {
+                        IconButton(onClick = { onRemoveTag(tag.id) }) {
+                            Icon(
+                                Icons.Filled.Close,
+                                stringResource(R.string.cd_remove_tag, tag.name),
+                                modifier = Modifier.padding(0.dp),
+                            )
+                        }
+                    },
+                )
+            }
+            item {
+                AssistChip(
+                    onClick = { adding = true },
+                    label = { Text(stringResource(R.string.paper_add_tag)) },
+                    leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+                )
+            }
+        }
+        if (adding) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = newTag,
+                    onValueChange = { newTag = it },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.paper_tag_hint)) },
+                )
+                TextButton(
+                    onClick = {
+                        onAddTag(newTag)
+                        newTag = ""
+                        adding = false
+                    },
+                    enabled = newTag.isNotBlank(),
+                ) { Text(stringResource(R.string.action_add)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotesSection(
+    notes: List<NoteEntity>,
+    onAddNote: (String) -> Unit,
+    onDeleteNote: (Long) -> Unit,
+) {
+    var draft by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(stringResource(R.string.paper_notes_heading), style = MaterialTheme.typography.titleMedium)
+        notes.forEach { note ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Text(
+                    text = note.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { onDeleteNote(note.id) }) {
+                    Icon(Icons.Filled.Close, stringResource(R.string.cd_delete_note))
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = draft,
+                onValueChange = { draft = it },
+                modifier = Modifier.weight(1f),
+                placeholder = { Text(stringResource(R.string.paper_note_hint)) },
+            )
+            TextButton(
+                onClick = {
+                    onAddNote(draft)
+                    draft = ""
+                },
+                enabled = draft.isNotBlank(),
+            ) { Text(stringResource(R.string.action_add)) }
+        }
     }
 }
 
@@ -184,9 +371,7 @@ private fun MetadataSection(paper: Paper) {
         paper.comment?.let { MetadataRow(stringResource(R.string.paper_meta_comment), it) }
         paper.journalRef?.let { MetadataRow(stringResource(R.string.paper_meta_journal), it) }
         paper.doi?.let { MetadataRow(stringResource(R.string.paper_meta_doi), it) }
-        paper.citationCount?.let {
-            MetadataRow(stringResource(R.string.paper_meta_citations), it.toString())
-        }
+        paper.citationCount?.let { MetadataRow(stringResource(R.string.paper_meta_citations), it.toString()) }
     }
 }
 
@@ -207,13 +392,5 @@ private fun MetadataRow(
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.weight(0.65f),
         )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun PaperDetailContentPreview() {
-    ArxiverTheme {
-        PaperDetailContent(paper = PreviewFixtures.paper, onOpenPdf = {})
     }
 }

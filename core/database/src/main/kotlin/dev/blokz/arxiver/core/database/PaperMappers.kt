@@ -16,6 +16,7 @@ fun Paper.toEntity(): PaperEntity =
         publishedAt = publishedAt.toEpochMilli(),
         updatedAt = updatedAt.toEpochMilli(),
         primaryCategory = primaryCategory,
+        authorsLine = authors.joinToString(", "),
         comment = comment,
         journalRef = journalRef,
         doi = doi,
@@ -26,6 +27,30 @@ fun Paper.toEntity(): PaperEntity =
         fetchedAt = fetchedAt.toEpochMilli(),
         embeddedAt = null,
         citationsSyncedAt = null,
+    )
+
+/**
+ * List-row mapping: authors come from the denormalized line, categories carry
+ * only the primary. Detail screens use [PaperWithRelations.toDomain].
+ */
+fun PaperEntity.toListDomain(): Paper =
+    Paper(
+        id = ArxivId(id),
+        latestVersion = latestVersion,
+        title = title,
+        abstract = abstract,
+        publishedAt = Instant.ofEpochMilli(publishedAt),
+        updatedAt = Instant.ofEpochMilli(updatedAt),
+        primaryCategory = primaryCategory,
+        categories = listOf(primaryCategory),
+        authors = authorsLine.split(", ").filter { it.isNotBlank() },
+        comment = comment,
+        journalRef = journalRef,
+        doi = doi,
+        pdfUrl = pdfUrl,
+        citationCount = citationCount,
+        source = runCatching { PaperSource.valueOf(source) }.getOrDefault(PaperSource.SEARCH),
+        fetchedAt = Instant.ofEpochMilli(fetchedAt),
     )
 
 fun PaperWithRelations.toDomain(): Paper =

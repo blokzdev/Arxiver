@@ -79,15 +79,14 @@
 ### related_papers (precompute cache)
 `related_papers(paper_id, neighbor_id, similarity REAL, computed_at, PK(paper_id, neighbor_id))` — top-8 per library paper, refreshed by EmbeddingWorker.
 
-## 3. FTS5
+## 3. Full-text search (FTS4 + computed BM25)
 
-```sql
-CREATE VIRTUAL TABLE papers_fts USING fts5(
-  paper_id UNINDEXED, title, abstract, authors, notes,
-  tokenize = 'unicode61 remove_diacritics 2'
-);
-```
-One row per paper; `authors` is the concatenated name list, `notes` the concatenated note bodies. Maintained by triggers on `papers`/`notes` plus a DAO-level re-index call after author writes (multi-table triggers are brittle). Ranking: `bm25(papers_fts, 10.0, 5.0, 3.0, 2.0)` — title boosted strongest, mirroring ArxivExplorer's 10:1:5 finding.
+> **Implementation note (revised during Phase 2):** FTS5 is not available in the platform/Robolectric SQLite builds we target, so v1 uses Room-native **FTS4 external-content tables** with BM25 computed in Kotlin from `matchinfo(…, 'pcnalx')`. Same weights and behavior as originally specced; FTS5 reconsidered in Phase 3 if we adopt a bundled SQLite for sqlite-vec.
+
+- `papers_fts` = `@Fts4(contentEntity = PaperEntity)` over (title, abstract, authors_line) — Room maintains sync triggers automatically (the denormalized `papers.authors_line` column exists for this and for join-free list rows).
+- `notes_fts` = `@Fts4(contentEntity = NoteEntity)` over (content); hits map note → paper.
+- Ranking: Okapi BM25 from matchinfo with column weights **title 10, abstract 5, authors 3** and notes-hits weighted **2**, merged per paper (best-of). Mirrors ArxivExplorer's title-boost finding.
+- Query building: user terms are quote-escaped and AND-joined; final term gets `*` prefix expansion.
 
 ## 4. Vectors (sqlite-vec)
 

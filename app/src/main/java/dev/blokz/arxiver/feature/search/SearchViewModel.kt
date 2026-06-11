@@ -5,18 +5,28 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
+import dev.blokz.arxiver.core.database.fts.LocalKeywordSearch
+import dev.blokz.arxiver.core.database.toListDomain
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.data.PaperRepository
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+data class LocalHit(val paper: Paper, val score: Double)
+
 data class SearchUiState(
     val query: String = "",
+    /** Local (library/cache) keyword results — live as you type. */
+    val localResults: List<LocalHit> = emptyList(),
+    /** Online arXiv results — explicit submit. */
     val results: List<Paper> = emptyList(),
     val searching: Boolean = false,
     val loadingMore: Boolean = false,
@@ -31,14 +41,41 @@ class SearchViewModel
     @Inject
     constructor(
         private val paperRepository: PaperRepository,
+        private val localKeywordSearch: LocalKeywordSearch,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SearchUiState())
         val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
+        private val queryFlow = MutableStateFlow("")
         private var searchJob: Job? = null
+
+        init {
+            observeLocal()
+        }
+
+        @OptIn(FlowPreview::class)
+        private fun observeLocal() {
+            viewModelScope.launch {
+                queryFlow
+                    .debounce(150)
+                    .distinctUntilChanged()
+                    .collect { query ->
+                        val hits =
+                            if (query.isBlank()) {
+                                emptyList()
+                            } else {
+                                localKeywordSearch.search(query).map {
+                                    LocalHit(paper = it.paper.toListDomain(), score = it.score)
+                                }
+                            }
+                        _uiState.update { it.copy(localResults = hits) }
+                    }
+            }
+        }
 
         fun onQueryChange(query: String) {
             _uiState.update { it.copy(query = query) }
+            queryFlow.value = query
         }
 
         fun submit() {

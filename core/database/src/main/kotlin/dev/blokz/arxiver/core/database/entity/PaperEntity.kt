@@ -21,6 +21,8 @@ data class PaperEntity(
     @ColumnInfo(name = "published_at") val publishedAt: Long,
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
     @ColumnInfo(name = "primary_category") val primaryCategory: String,
+    /** Denormalized "A, B, C" author display line — list rows avoid join fan-out. */
+    @ColumnInfo(name = "authors_line", defaultValue = "") val authorsLine: String,
     @ColumnInfo(name = "comment") val comment: String?,
     @ColumnInfo(name = "journal_ref") val journalRef: String?,
     @ColumnInfo(name = "doi") val doi: String?,

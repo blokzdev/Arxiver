@@ -22,6 +22,7 @@ import androidx.navigation.compose.rememberNavController
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.feature.browse.BrowseScreen
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
+import dev.blokz.arxiver.feature.library.FilteredPapersScreen
 import dev.blokz.arxiver.feature.library.LibraryScreen
 import dev.blokz.arxiver.feature.paper.PaperDetailScreen
 import dev.blokz.arxiver.feature.pdf.PdfViewerScreen
@@ -33,6 +34,7 @@ object Routes {
     const val CATEGORY_FEED = "browse/category/{code}?title={title}"
     const val PAPER_DETAIL = "paper/{id}"
     const val PDF_VIEWER = "paper/{id}/pdf"
+    const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
 
     fun categoryFeed(
         code: String,
@@ -43,6 +45,12 @@ object Routes {
     fun paperDetail(id: ArxivId) = "paper/${Uri.encode(id.value)}"
 
     fun pdfViewer(id: String) = "paper/${Uri.encode(id)}/pdf"
+
+    fun filteredPapers(
+        mode: String,
+        id: Long,
+        title: String,
+    ) = "library/$mode/$id?title=${Uri.encode(title)}"
 }
 
 @Composable
@@ -65,7 +73,18 @@ fun ArxiverApp(deepLinkPaperId: ArxivId? = null) {
             startDestination = TopLevelDestination.Today.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(TopLevelDestination.Today.route) { TodayScreen() }
+            composable(TopLevelDestination.Today.route) {
+                TodayScreen(
+                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                    onGoBrowse = {
+                        navController.navigate(TopLevelDestination.Browse.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
+            }
             composable(TopLevelDestination.Browse.route) {
                 BrowseScreen(
                     onCategoryClick = { code, title ->
@@ -78,7 +97,24 @@ fun ArxiverApp(deepLinkPaperId: ArxivId? = null) {
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                 )
             }
-            composable(TopLevelDestination.Library.route) { LibraryScreen() }
+            composable(TopLevelDestination.Library.route) {
+                LibraryScreen(
+                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                    onCollectionClick = { id, name ->
+                        navController.navigate(Routes.filteredPapers("collection", id, name))
+                    },
+                    onTagClick = { id, name ->
+                        navController.navigate(Routes.filteredPapers("tag", id, "#$name"))
+                    },
+                )
+            }
+
+            composable(Routes.FILTERED_PAPERS) {
+                FilteredPapersScreen(
+                    onBack = { navController.popBackStack() },
+                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                )
+            }
 
             composable(Routes.CATEGORY_FEED) {
                 CategoryFeedScreen(

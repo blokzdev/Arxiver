@@ -41,12 +41,12 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 ## Phase 2 — Library & Index
 
-- [ ] 2.1 Schema: `library_entries`, `collections(+papers)`, `tags(+papers)`, `notes`, `follows`, `inbox_items` + migrations
-- [ ] 2.2 Library feature: save/status/rating, collections, tags, notes (markdown), multi-select bulk actions
-- [ ] 2.3 FTS5: `papers_fts` + triggers + bm25-weighted local search tab (keyword-only at this phase)
-- [ ] 2.4 SyncEngine: `FollowSyncWorker` (cursor-based, per SPEC-DATA follows), Inbox feed with swipe triage
-- [ ] 2.5 Today screen: recency-sorted inbox, sync status, empty states
-- [ ] 2.6 Export: JSON + BibTeX of library
+- [x] 2.1 Schema: `library_entries`, `collections(+papers)`, `tags(+papers)`, `notes`, `follows`, `inbox_items` + migrations
+- [x] 2.2 Library feature: save/status/rating, collections, tags, notes (markdown); multi-select bulk actions deferred to 4.4 where they ship with the dispatch sheet
+- [x] 2.3 FTS5: `papers_fts` + triggers + bm25-weighted local search tab (keyword-only at this phase)
+- [x] 2.4 SyncEngine: `FollowSyncWorker` (cursor-based, per SPEC-DATA follows), Inbox feed with swipe triage
+- [x] 2.5 Today screen: recency-sorted inbox, sync status, empty states
+- [x] 2.6 Export: JSON + BibTeX of library
 - [ ] **CHECKPOINT 2:** follow 2 categories → background sync populates inbox → triage to library → instant offline keyword search incl. notes; CI green
 
 ## Phase 3 — Semantic Engine

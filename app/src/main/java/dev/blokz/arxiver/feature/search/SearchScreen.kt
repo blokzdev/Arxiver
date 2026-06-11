@@ -21,11 +21,16 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
@@ -75,16 +80,67 @@ fun SearchScreen(
                 keyboardActions = KeyboardActions(onSearch = { viewModel.submit() }),
             )
 
+            var tab by rememberSaveable { mutableIntStateOf(0) }
+            TabRow(selectedTabIndex = tab) {
+                Tab(tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.search_tab_library)) })
+                Tab(tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.search_tab_arxiv)) })
+            }
+
             Box(modifier = Modifier.fillMaxSize()) {
-                when {
-                    state.searching -> SearchingState()
-                    state.error != null -> ErrorState(error = state.error, onRetry = viewModel::submit)
-                    state.searched && state.results.isEmpty() -> EmptyResults()
-                    !state.searched -> SearchIntro()
-                    else -> ResultList(state, onPaperClick, viewModel::loadMore)
+                if (tab == 0) {
+                    LocalResultList(state, onPaperClick)
+                } else {
+                    when {
+                        state.searching -> SearchingState()
+                        state.error != null -> ErrorState(error = state.error, onRetry = viewModel::submit)
+                        state.searched && state.results.isEmpty() -> EmptyResults()
+                        !state.searched -> SearchIntro()
+                        else -> ResultList(state, onPaperClick, viewModel::loadMore)
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LocalResultList(
+    state: SearchUiState,
+    onPaperClick: (String) -> Unit,
+) {
+    when {
+        state.query.isBlank() ->
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(R.string.search_local_intro),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        state.localResults.isEmpty() ->
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Text(
+                    text = stringResource(R.string.search_local_no_results),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        else ->
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                itemsIndexed(state.localResults, key = { _, hit -> hit.paper.id.value }) { _, hit ->
+                    PaperListItem(paper = hit.paper, onClick = { onPaperClick(hit.paper.id.value) })
+                }
+            }
     }
 }
 

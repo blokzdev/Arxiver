@@ -42,6 +42,22 @@ object AppModule {
     fun followDao(db: ArxiverDatabase): FollowDao = db.followDao()
 
     @Provides
+    fun libraryDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.LibraryDao = db.libraryDao()
+
+    @Provides
+    fun inboxDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.InboxDao = db.inboxDao()
+
+    @Provides
+    fun searchDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.SearchDao = db.searchDao()
+
+    @Provides
+    @Singleton
+    fun localKeywordSearch(
+        searchDao: dev.blokz.arxiver.core.database.dao.SearchDao,
+    ): dev.blokz.arxiver.core.database.fts.LocalKeywordSearch =
+        dev.blokz.arxiver.core.database.fts.LocalKeywordSearch(searchDao)
+
+    @Provides
     @Singleton
     fun taxonomySeeder(categoryDao: CategoryDao): TaxonomySeeder = TaxonomySeeder(categoryDao)
 
