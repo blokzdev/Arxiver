@@ -69,7 +69,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] 4.5 Action catalog incl. `weekly_review` auto-selection and `literature_scan`
 - [x] 4.6 Dispatch history screen + retry
 - [x] 4.7 "Copy routine starter instructions" generator
-- [!] 4.8 [needs-user] (blocked: awaiting a test routine trigger URL+token from the user — mock-verified meanwhile) End-to-end test against a real Claude routine trigger — **ask the user for a test routine URL+token when reaching this task**
+- [~] 4.8 Real-trigger E2E: user's first live ping returned HTTP 400, revealing the real fire-API contract (anthropic-version + anthropic-beta headers, /fire path, {"text": …} wrapper). RoutineTriggerClient adapted + mock-verified against the recorded contract; **awaiting user re-test on a build containing this fix**
 - [ ] **CHECKPOINT 4:** mock-verified contract + real-routine dispatch produces a successful run; tokens demonstrably absent from logs/backups; CI green
 
 ## Phase 5 — Polish & Release
@@ -113,3 +113,4 @@ Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-pap
 | 2026-06-11 | v1.0.0 released via tag-triggered CI; keystore + credentials held offline by maintainer, CI signs from Actions secrets |
 | 2026-06-11 | In-repo memory harness adopted (`.claude/memory/` + `MEMORY.md` index, protocol in CLAUDE.md) for continuity across local/cloud/mobile sessions; secrets and personal context excluded by rule |
 | 2026-06-11 | Phase 6 added: user-reviewed routine template catalog + guided setup wizard with auto-verification (catalog review precedes implementation) |
+| 2026-06-12 | Live fire-API contract adopted (4.8): POST …/routines/{id}/fire with anthropic-version + anthropic-beta headers, payload wrapped as {"text": json}; URL normalization appends /fire; starter instructions reworded |
