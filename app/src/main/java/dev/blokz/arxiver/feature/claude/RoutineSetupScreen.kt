@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -303,11 +304,7 @@ private fun VerifyStep(
             }
         }
         is VerificationState.Failed -> {
-            Text(
-                stringResource(R.string.setup_failed_title, verification.reason),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
+            TroubleshootingCard(error = verification.error)
             Button(onClick = onVerify, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.setup_retry))
             }
@@ -316,6 +313,70 @@ private fun VerifyStep(
             }
             TextButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.setup_keep_anyway))
+            }
+        }
+    }
+}
+
+/** SPEC-CLAUDE-BRIDGE §8.2: likely cause + actionable fix per error class. */
+@Composable
+private fun TroubleshootingCard(error: VerificationError) {
+    val title: String
+    val body: String
+    when (error) {
+        VerificationError.BadToken -> {
+            title = stringResource(R.string.verify_fail_token_title)
+            body = stringResource(R.string.verify_fail_token_body)
+        }
+        VerificationError.WrongUrl -> {
+            title = stringResource(R.string.verify_fail_url_title)
+            body = stringResource(R.string.verify_fail_url_body)
+        }
+        VerificationError.BadRequest -> {
+            title = stringResource(R.string.verify_fail_badrequest_title)
+            body = stringResource(R.string.verify_fail_badrequest_body)
+        }
+        is VerificationError.Rejected -> {
+            title =
+                error.httpCode
+                    ?.let { stringResource(R.string.verify_fail_rejected_title, it) }
+                    ?: stringResource(R.string.verify_fail_rejected_title_nocode)
+            body = stringResource(R.string.verify_fail_rejected_body)
+        }
+        is VerificationError.ServerError -> {
+            title = stringResource(R.string.verify_fail_server_title, error.httpCode)
+            body = stringResource(R.string.verify_fail_server_body)
+        }
+        VerificationError.Offline -> {
+            // Shown as SkippedOffline, but keep a sane rendering anyway.
+            title = stringResource(R.string.setup_queued_body)
+            body = ""
+        }
+        VerificationError.TokenUnavailable -> {
+            title = stringResource(R.string.verify_fail_vault_title)
+            body = stringResource(R.string.verify_fail_vault_body)
+        }
+    }
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            if (body.isNotEmpty()) {
+                Text(
+                    body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                )
             }
         }
     }

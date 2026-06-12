@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.claude.RoutineTemplate
 import dev.blokz.arxiver.core.claude.RoutineTemplateCatalog
-import dev.blokz.arxiver.data.DispatchSubmission
 import dev.blokz.arxiver.data.RoutineSetupGateway
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,10 +24,10 @@ sealed interface VerificationState {
 
     data object Verified : VerificationState
 
-    /** Ping queued (offline/5xx) — auto-sends later; safe to finish setup. */
+    /** Ping queued offline — auto-sends later; safe to finish setup. */
     data object SkippedOffline : VerificationState
 
-    data class Failed(val reason: String) : VerificationState
+    data class Failed(val error: VerificationError) : VerificationState
 }
 
 data class RoutineSetupUiState(
@@ -120,12 +119,10 @@ class RoutineSetupViewModel
             viewModelScope.launch {
                 _uiState.update { it.copy(verification = VerificationState.Sending) }
                 val verification =
-                    when (val result = gateway.ping(routineId)) {
-                        is DispatchSubmission.Sent -> VerificationState.Verified
-                        is DispatchSubmission.Queued -> VerificationState.SkippedOffline
-                        is DispatchSubmission.AuthRejected -> VerificationState.Failed("token rejected")
-                        is DispatchSubmission.Failed -> VerificationState.Failed(result.reason)
-                        else -> VerificationState.Failed("unexpected")
+                    when (val error = VerificationError.from(gateway.ping(routineId))) {
+                        null -> VerificationState.Verified
+                        VerificationError.Offline -> VerificationState.SkippedOffline
+                        else -> VerificationState.Failed(error)
                     }
                 _uiState.update { it.copy(verification = verification) }
             }

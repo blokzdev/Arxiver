@@ -202,11 +202,24 @@
     <string name="setup_verified_title">Connected!</string>
     <string name="setup_verified_body">Ping accepted — the run in the Claude app should show a one-line acknowledgement.</string>
     <string name="setup_queued_body">You\'re offline — the ping is queued and will send automatically. Your routine is saved.</string>
-    <string name="setup_failed_title">Ping failed: %1$s</string>
     <string name="setup_retry">Retry test</string>
     <string name="setup_edit_connection">Edit URL &amp; token</string>
     <string name="setup_keep_anyway">Keep routine anyway</string>
     <string name="setup_done">Done</string>
+
+    <string name="verify_fail_token_title">Token rejected</string>
+    <string name="verify_fail_token_body">The token was mistyped, revoked, or belongs to another routine. Re-copy it from the routine\'s API trigger settings, then Edit URL &amp; token below.</string>
+    <string name="verify_fail_url_title">Trigger not found (HTTP 404)</string>
+    <string name="verify_fail_url_body">Check the trigger URL — it should look like https://api.anthropic.com/v1/claude_code/routines/… (the /fire ending is added automatically).</string>
+    <string name="verify_fail_badrequest_title">Request rejected (HTTP 400)</string>
+    <string name="verify_fail_badrequest_body">You may have pasted the routine\'s page URL instead of its trigger URL. Re-copy the trigger URL from the API trigger settings.</string>
+    <string name="verify_fail_rejected_title">Rejected (HTTP %1$d)</string>
+    <string name="verify_fail_rejected_title_nocode">Ping rejected</string>
+    <string name="verify_fail_rejected_body">The endpoint refused the ping. Check that the routine still exists and its API trigger is enabled.</string>
+    <string name="verify_fail_server_title">Claude-side trouble (HTTP %1$d)</string>
+    <string name="verify_fail_server_body">Not your fault — the ping is queued and will retry automatically. You can finish setup and test again later.</string>
+    <string name="verify_fail_vault_title">Stored token unavailable</string>
+    <string name="verify_fail_vault_body">The token can\'t be read on this device (this happens after restoring a backup). Edit URL &amp; token below and re-enter it.</string>
 
     <string name="history_title">Dispatch history</string>
     <string name="history_empty">Dispatches you send to Claude appear here.</string>

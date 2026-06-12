@@ -145,23 +145,34 @@ class RoutineSetupViewModelTest {
     }
 
     @Test
-    fun `verify maps queued to skipped-offline`() {
+    fun `verify maps offline queue to skipped-offline but 5xx queue to server error`() {
         val vm = savedViewModel()
-        gateway.pingResult = DispatchSubmission.Queued(dispatchId = 9)
+        gateway.pingResult = DispatchSubmission.Queued(dispatchId = 9, httpCode = null)
         vm.verify()
         assertEquals(VerificationState.SkippedOffline, vm.uiState.value.verification)
+
+        gateway.pingResult = DispatchSubmission.Queued(dispatchId = 9, httpCode = 503)
+        vm.verify()
+        assertEquals(
+            VerificationState.Failed(VerificationError.ServerError(503)),
+            vm.uiState.value.verification,
+        )
     }
 
     @Test
-    fun `verify maps auth rejection and failure to failed`() {
+    fun `verify maps each failure shape to its taxonomy class`() {
         val vm = savedViewModel()
         gateway.pingResult = DispatchSubmission.AuthRejected(dispatchId = 9)
         vm.verify()
-        assertTrue(vm.uiState.value.verification is VerificationState.Failed)
+        assertEquals(VerificationState.Failed(VerificationError.BadToken), vm.uiState.value.verification)
 
-        gateway.pingResult = DispatchSubmission.Failed(dispatchId = 9, reason = "HTTP 404")
+        gateway.pingResult = DispatchSubmission.Failed(dispatchId = 9, reason = "HTTP 404", httpCode = 404)
         vm.verify()
-        assertEquals(VerificationState.Failed("HTTP 404"), vm.uiState.value.verification)
+        assertEquals(VerificationState.Failed(VerificationError.WrongUrl), vm.uiState.value.verification)
+
+        gateway.pingResult = DispatchSubmission.Failed(dispatchId = 9, reason = "HTTP 400", httpCode = 400)
+        vm.verify()
+        assertEquals(VerificationState.Failed(VerificationError.BadRequest), vm.uiState.value.verification)
     }
 
     @Test
