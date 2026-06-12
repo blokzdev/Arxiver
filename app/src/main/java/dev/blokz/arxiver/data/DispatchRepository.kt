@@ -156,7 +156,8 @@ class DispatchRepository
                 tokenVault.retrieve(config.tokenAlias)
                     ?: return fail(dispatchId, null, "token unavailable — re-enter it")
 
-            return when (val outcome = triggerClient.send(config.triggerUrl, token, dispatch.payloadJson)) {
+            val turnText = dev.blokz.arxiver.core.claude.DispatchEnvelope.render(dispatch.payloadJson)
+            return when (val outcome = triggerClient.send(config.triggerUrl, token, turnText)) {
                 is TriggerOutcome.Accepted -> {
                     routineDao.updateDispatchStatus(
                         dispatchId,

@@ -114,3 +114,4 @@ Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-pap
 | 2026-06-11 | In-repo memory harness adopted (`.claude/memory/` + `MEMORY.md` index, protocol in CLAUDE.md) for continuity across local/cloud/mobile sessions; secrets and personal context excluded by rule |
 | 2026-06-11 | Phase 6 added: user-reviewed routine template catalog + guided setup wizard with auto-verification (catalog review precedes implementation) |
 | 2026-06-12 | Live fire-API contract adopted (4.8): POST …/routines/{id}/fire with anthropic-version + anthropic-beta headers, payload wrapped as {"text": json}; URL normalization appends /fire; starter instructions reworded |
+| 2026-06-12 | DispatchEnvelope adopted after live runs: turns are self-describing (header + instruction + paper list + fenced arxiver/v1 JSON); pings carry a stand-down directive + confirm dialog (fire API has no dry-run) |
