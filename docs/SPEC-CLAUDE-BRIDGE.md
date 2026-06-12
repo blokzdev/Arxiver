@@ -18,18 +18,23 @@ Arxiver's job ends at delivering a **well-formed, information-rich payload**. Th
 
 ## 3. Transport
 
+> **Verified against the live endpoint (task 4.8, 2026-06-12).** The fire API wraps a routine session turn; the arxiver/v1 payload travels as the `text` field and the routine's instructions teach Claude to parse it.
+
 ```
-POST <trigger_url>
+POST https://api.anthropic.com/v1/claude_code/routines/{trigger_id}/fire
 Authorization: Bearer <token>
+anthropic-version: 2023-06-01
+anthropic-beta: experimental-cc-routine-2026-04-01
 Content-Type: application/json
 User-Agent: Arxiver/<version>
 
-<payload JSON, ≤ 256 KB>
+{"text": "<arxiver/v1 payload JSON, ≤ 256 KB>"}
 ```
 
+- URL normalization: users may paste the trigger URL with or without the `/fire` suffix; `RoutineTriggerClient.normalizeTriggerUrl` appends it for routine-shaped paths.
 - Success = any 2xx. 401/403 → "token invalid/revoked" state on the routine config. 4xx other → failed, no retry. 5xx/network → exponential backoff retry ×3, then queued for `DispatchWorker` (network-constrained).
 - Offline: dispatch is queued with status `queued` and sent when connectivity returns; user sees queue state in history.
-- If the real trigger contract differs in details (header name, expected wrapper), the transport layer isolates that in `RoutineTriggerClient` — one class to adapt, verified against a real routine before Phase 4 completes.
+- The transport remains isolated in `RoutineTriggerClient` — if the beta header or wrapper evolves, it stays one class to adapt.
 
 ## 4. Payload schema (v1)
 
