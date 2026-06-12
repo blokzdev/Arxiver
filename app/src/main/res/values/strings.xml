@@ -18,6 +18,7 @@
     <string name="cd_clear_query">Clear search query</string>
     <string name="cd_toggle_night_mode">Toggle night mode</string>
     <string name="cd_pdf_page">Page %1$d</string>
+    <string name="cd_scroll_to_top">Scroll to top</string>
     <string name="cd_rating">Rated %1$d of 5</string>
     <string name="cd_relevance">Relevance %1$d%%</string>
 
