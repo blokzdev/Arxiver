@@ -57,6 +57,8 @@
     <string name="today_snackbar_saved">Saved to library</string>
     <string name="today_snackbar_dismissed">Paper dismissed</string>
     <string name="action_undo">Undo</string>
+    <string name="action_more">More</string>
+    <string name="action_less">Less</string>
     <string name="cd_unsave_paper">Remove from library</string>
     <plurals name="cd_rate_star">
         <item quantity="one">Rate %1$d star</item>
