@@ -134,7 +134,8 @@ class DispatchViewModel
                     it.copy(
                         previewJson =
                             when (result) {
-                                is PayloadResult.Ready -> prettify(result.json)
+                                is PayloadResult.Ready ->
+                                    dev.blokz.arxiver.core.claude.DispatchEnvelope.render(prettify(result.json))
                                 is PayloadResult.TooLarge -> "payload too large: ${result.byteSize} bytes"
                             },
                     )

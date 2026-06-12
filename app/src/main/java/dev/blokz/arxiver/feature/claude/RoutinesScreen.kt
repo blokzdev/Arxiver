@@ -119,6 +119,7 @@ fun RoutinesScreen(
     val pingResult by viewModel.pingResult.collectAsState()
     var showAdd by remember { mutableStateOf(false) }
     var reauthRoutine by remember { mutableStateOf<RoutineConfigEntity?>(null) }
+    var pingCandidate by remember { mutableStateOf<RoutineConfigEntity?>(null) }
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -198,13 +199,34 @@ fun RoutinesScreen(
                 items(routines, key = { it.id }) { routine ->
                     RoutineRow(
                         routine = routine,
-                        onPing = { viewModel.ping(routine.id) },
+                        onPing = { pingCandidate = routine },
                         onReauth = { reauthRoutine = routine },
                         onDelete = { viewModel.delete(routine.id) },
                     )
                 }
             }
         }
+    }
+
+    pingCandidate?.let { routine ->
+        AlertDialog(
+            onDismissRequest = { pingCandidate = null },
+            title = { Text(stringResource(R.string.routine_ping_confirm_title)) },
+            text = { Text(stringResource(R.string.routine_ping_confirm_body, routine.name)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.ping(routine.id)
+                        pingCandidate = null
+                    },
+                ) { Text(stringResource(R.string.routine_ping_confirm_action)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pingCandidate = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 
     if (showAdd) {
