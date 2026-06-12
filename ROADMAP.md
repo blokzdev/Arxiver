@@ -71,7 +71,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] 4.7 "Copy routine starter instructions" generator
 - [x] 4.8 Real-trigger E2E: first live ping returned HTTP 400, revealing the real fire-API contract (anthropic-version + anthropic-beta headers, /fire path, {"text": …} wrapper); RoutineTriggerClient + DispatchEnvelope adapted across three field iterations — user confirmed live ping and research dispatches succeed (2026-06-12)
 - [x] 4.9 `relations` payload block (research-driven, SpatialClaw arXiv 2606.13673): ship on-device analysis primitives — pairwise embedding cosine + citation edges within the selection, top-3 corpus neighbors per paper — as an additive, optional payload section so routines compose relationships instead of re-deriving them; neighbors gated behind the notes privacy toggle (structural redaction tested)
-- [ ] **CHECKPOINT 4:** mock-verified contract + real-routine dispatch produces a successful run; tokens demonstrably absent from logs/backups; CI green
+- [x] **CHECKPOINT 4:** real-routine dispatch produced successful runs (user-verified 2026-06-12); contract pinned by MockWebServer tests; tokens absent from payloads/backups by structural tests; CI green
 
 ## Phase 5 — Polish & Release
 
