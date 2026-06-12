@@ -1,53 +1,71 @@
 package dev.blokz.arxiver.feature.library
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Tag
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
+import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.PaperListItem
+import dev.blokz.arxiver.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,12 +79,31 @@ fun LibraryScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val exportContent by viewModel.exportContent.collectAsState()
+    val collectionDeleted by viewModel.collectionDeleted.collectAsState()
     var tab by remember { mutableIntStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
     var showNewCollection by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showDispatch by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val snackbar = remember { SnackbarHostState() }
+
+    // System back leaves selection mode before leaving the screen.
+    BackHandler(enabled = selectedIds.isNotEmpty()) { selectedIds = emptySet() }
+
+    val deletedMessage = stringResource(R.string.library_collection_deleted, collectionDeleted?.name ?: "")
+    val undoLabel = stringResource(R.string.action_undo)
+    LaunchedEffect(collectionDeleted) {
+        val event = collectionDeleted ?: return@LaunchedEffect
+        val result =
+            snackbar.showSnackbar(
+                message = deletedMessage,
+                actionLabel = undoLabel,
+                duration = SnackbarDuration.Short,
+            )
+        if (result == SnackbarResult.ActionPerformed) viewModel.undoDeleteCollection(event)
+        viewModel.consumeCollectionDeleted()
+    }
 
     exportContent?.let { export ->
         val send =
@@ -80,16 +117,27 @@ fun LibraryScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
+                colors =
+                    if (selectedIds.isEmpty()) {
+                        TopAppBarDefaults.topAppBarColors()
+                    } else {
+                        TopAppBarDefaults.topAppBarColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        )
+                    },
                 title = {
-                    Text(
-                        if (selectedIds.isEmpty()) {
-                            stringResource(R.string.nav_library)
-                        } else {
-                            pluralStringResource(R.plurals.library_selected_count, selectedIds.size, selectedIds.size)
-                        },
-                    )
+                    AnimatedContent(targetState = selectedIds.size, label = "selection-title") { count ->
+                        Text(
+                            if (count == 0) {
+                                stringResource(R.string.nav_library)
+                            } else {
+                                pluralStringResource(R.plurals.library_selected_count, count, count)
+                            },
+                        )
+                    }
                 },
                 actions = {
                     if (selectedIds.isNotEmpty()) {
@@ -164,7 +212,7 @@ fun LibraryScreen(
                         state = state,
                         onCollectionClick = onCollectionClick,
                         onNewCollection = { showNewCollection = true },
-                        onDeleteCollection = viewModel::deleteCollection,
+                        onDeleteCollection = { id, name -> viewModel.deleteCollection(id, name) },
                     )
                 else -> TagsTab(state, onTagClick)
             }
@@ -209,8 +257,9 @@ private fun PapersTab(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             val filters =
                 listOf(
@@ -228,7 +277,11 @@ private fun PapersTab(
             }
         }
         if (state.papers.isEmpty()) {
-            EmptyHint(stringResource(R.string.library_empty))
+            EmptyState(
+                title = stringResource(R.string.library_filtered_empty),
+                body = stringResource(R.string.library_empty),
+                icon = Icons.AutoMirrored.Outlined.LibraryBooks,
+            )
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 items(state.papers, key = { it.paper.id.value }) { row ->
@@ -255,94 +308,86 @@ private fun CollectionsTab(
     state: LibraryUiState,
     onCollectionClick: (Long, String) -> Unit,
     onNewCollection: () -> Unit,
-    onDeleteCollection: (Long) -> Unit,
+    onDeleteCollection: (Long, String) -> Unit,
 ) {
+    if (state.collections.isEmpty()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            NewCollectionRow(onNewCollection)
+            EmptyState(
+                title = stringResource(R.string.library_no_collections),
+                body = stringResource(R.string.library_empty),
+                icon = Icons.Outlined.Folder,
+            )
+        }
+        return
+    }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onNewCollection)
-                        .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null)
-                Text(
-                    stringResource(R.string.library_new_collection),
-                    modifier = Modifier.padding(start = 12.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-        }
+        item { NewCollectionRow(onNewCollection) }
         items(state.collections, key = { it.id }) { collection ->
-            Row(
+            ListItem(
+                headlineContent = { Text(collection.name) },
+                leadingContent = { Icon(Icons.Outlined.Folder, contentDescription = null) },
+                trailingContent = {
+                    IconButton(onClick = { onDeleteCollection(collection.id, collection.name) }) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            stringResource(R.string.cd_delete_collection, collection.name),
+                        )
+                    }
+                },
                 modifier =
                     Modifier
-                        .fillMaxWidth()
                         .clickable { onCollectionClick(collection.id, collection.name) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    collection.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { onDeleteCollection(collection.id) }) {
-                    Icon(
-                        Icons.Filled.Delete,
-                        stringResource(R.string.cd_delete_collection, collection.name),
-                    )
-                }
-            }
-        }
-        if (state.collections.isEmpty()) {
-            item { EmptyHint(stringResource(R.string.library_no_collections)) }
+                        .animateItem(),
+            )
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NewCollectionRow(onNewCollection: () -> Unit) {
+    ListItem(
+        headlineContent = {
+            Text(
+                stringResource(R.string.library_new_collection),
+                color = MaterialTheme.colorScheme.primary,
+            )
+        },
+        leadingContent = {
+            Icon(Icons.Filled.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        },
+        modifier = Modifier.clickable(onClick = onNewCollection),
+    )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TagsTab(
     state: LibraryUiState,
     onTagClick: (Long, String) -> Unit,
 ) {
     if (state.tags.isEmpty()) {
-        EmptyHint(stringResource(R.string.library_no_tags))
+        EmptyState(
+            title = stringResource(R.string.library_no_tags),
+            body = stringResource(R.string.paper_tags_heading),
+            icon = Icons.Outlined.Tag,
+        )
         return
     }
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(state.tags, key = { it.id }) { tag ->
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { onTagClick(tag.id, tag.name) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-            ) {
-                Text("#${tag.name}", style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyHint(text: String) {
-    Column(
+    FlowRow(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
+                .verticalScroll(rememberScrollState())
+                .padding(Spacing.lg),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        state.tags.forEach { tag ->
+            AssistChip(
+                onClick = { onTagClick(tag.id, tag.name) },
+                label = { Text("#${tag.name}") },
+            )
+        }
     }
 }
 
