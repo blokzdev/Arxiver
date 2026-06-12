@@ -69,9 +69,9 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] 4.5 Action catalog incl. `weekly_review` auto-selection and `literature_scan`
 - [x] 4.6 Dispatch history screen + retry
 - [x] 4.7 "Copy routine starter instructions" generator
-- [~] 4.8 Real-trigger E2E: user's first live ping returned HTTP 400, revealing the real fire-API contract (anthropic-version + anthropic-beta headers, /fire path, {"text": …} wrapper). RoutineTriggerClient adapted + mock-verified against the recorded contract; **awaiting user re-test on a build containing this fix**
+- [x] 4.8 Real-trigger E2E: first live ping returned HTTP 400, revealing the real fire-API contract (anthropic-version + anthropic-beta headers, /fire path, {"text": …} wrapper); RoutineTriggerClient + DispatchEnvelope adapted across three field iterations — user confirmed live ping and research dispatches succeed (2026-06-12)
 - [x] 4.9 `relations` payload block (research-driven, SpatialClaw arXiv 2606.13673): ship on-device analysis primitives — pairwise embedding cosine + citation edges within the selection, top-3 corpus neighbors per paper — as an additive, optional payload section so routines compose relationships instead of re-deriving them; neighbors gated behind the notes privacy toggle (structural redaction tested)
-- [ ] **CHECKPOINT 4:** mock-verified contract + real-routine dispatch produces a successful run; tokens demonstrably absent from logs/backups; CI green
+- [x] **CHECKPOINT 4:** real-routine dispatch produced successful runs (user-verified 2026-06-12); contract pinned by MockWebServer tests; tokens absent from payloads/backups by structural tests; CI green
 
 ## Phase 5 — Polish & Release
 
@@ -89,13 +89,13 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 > Goal: a curated catalog of Claude routine templates plus an in-app guided setup flow, so a non-expert goes from template → verified working routine without guesswork. The catalog design is reviewed by the user **before** implementation. 4.8/CHECKPOINT 4 (real-trigger E2E) gates only the verification tasks (6.6), not the design ones.
 
-- [ ] 6.1 [needs-user] Routine template catalog proposal: 6–10 paper-centric use cases, each with name, purpose, optimal instruction text, trigger type + config, minimal connector set (see memory: claude-routines-ui-contract), and payload/action mapping — drafted as `docs/SPEC-ROUTINES-CATALOG.md` and presented for user review
-- [ ] 6.2 Spec finalization: fold review feedback into SPEC-ROUTINES-CATALOG; extend SPEC-CLAUDE-BRIDGE with the guided-setup + verification contract (test-dispatch semantics, error taxonomy)
-- [ ] 6.3 Catalog in app: bundled versioned template data + browse/detail UI (what each template does, what it needs); per-template "copy instructions" built on the 4.7 generator
-- [ ] 6.4 Guided setup wizard: stepper walking the user through creating the routine at claude.ai/code/routines (API trigger) → copying URL + token → pasting into Arxiver; input validation at entry; tokens only via TokenVault
-- [ ] 6.5 Auto-verification: test dispatch on save with success confirmation; graceful failure handling + troubleshooting per error class (401 bad token, 404 wrong URL, 5xx, rate-limit, offline) with actionable fixes
-- [ ] 6.6 (depends on 4.8) Real-trigger validation: run ≥2 catalog templates end-to-end against live routines; adapt `RoutineTriggerClient` if the contract differs from Bearer-POST; record findings in SPEC-CLAUDE-BRIDGE
-- [ ] **CHECKPOINT 6:** user-reviewed catalog shipped in-app; wizard takes a fresh user from template to verified working routine; all error paths covered by tests; tokens absent from logs/exports; CI green
+- [x] 6.1 Routine template catalog proposal: 8 paper-centric templates (name, purpose, instruction preamble + shared recognition core, API-trigger config, minimal connector set, action mapping) — drafted as `docs/SPEC-ROUTINES-CATALOG.md`; user reviewed & approved via the Phase 6 plan, 2026-06-12, no edits requested
+- [x] 6.2 Spec finalization: SPEC-ROUTINES-CATALOG approved as drafted; SPEC-CLAUDE-BRIDGE extended with §8 guided-setup + verification contract (opt-in test-dispatch semantics, save-before-verify, error taxonomy table)
+- [x] 6.3 Catalog in app: `RoutineTemplateCatalog` (versioned Kotlin object in `:core:claude`, invariant-tested) + browse/detail screens with per-template "copy instructions" via shared recognition core (`RoutineStarterInstructions.generateFor`); entry points: routines empty state + Settings → Claude
+- [x] 6.4 Guided setup wizard: 3-step `RoutineSetupScreen` (create on claude.ai → connect URL+token with live validation → opt-in verify), save-before-verify per SPEC §8.1, template-prefilled via optional nav arg; `RoutineSetupGateway` seam keeps the ViewModel unit-tested; tokens flow only through the existing TokenVault path
+- [x] 6.5 Verification + troubleshooting: opt-in test ping in the wizard (consented — fire API has no dry-run, so "auto" became opt-in per SPEC §8.1), typed `VerificationError` taxonomy (bad token / wrong URL 404 / bad request 400 / rejected / 5xx-queued / offline-queued / vault miss) with cause+fix cards and Retry / Edit / Keep-anyway actions; mapper + ViewModel covered per error class
+- [!] 6.6 [needs-user] Real-trigger validation: set up ≥2 catalog templates via the wizard against live routines and confirm end-to-end runs (contract itself already live-verified in 4.8); record findings in SPEC-CLAUDE-BRIDGE — blocked: needs the user's Claude routines + device
+- [ ] **CHECKPOINT 6:** catalog + wizard + error taxonomy shipped and test-covered; tokens absent from logs/exports (structural tests); CI green — remaining: the live-validation leg rides 6.6 (user-bound, mirrors CHECKPOINT 5 handling)
 
 ---
 
@@ -117,3 +117,5 @@ Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-pap
 | 2026-06-12 | Live fire-API contract adopted (4.8): POST …/routines/{id}/fire with anthropic-version + anthropic-beta headers, payload wrapped as {"text": json}; URL normalization appends /fire; starter instructions reworded |
 | 2026-06-12 | DispatchEnvelope adopted after live runs: turns are self-describing (header + instruction + paper list + fenced arxiver/v1 JSON); pings carry a stand-down directive + confirm dialog (fire API has no dry-run) |
 | 2026-06-12 | `relations` payload block added (4.9), non-breaking within arxiver/v1 — design transfer from SpatialClaw (arXiv 2606.13673, delivered via the self-improvement routine): expose composable on-device perception primitives (similarity/citations/neighbors) at the routine action interface; library-revealing neighbors ride the include_notes gate |
+| 2026-06-12 | Routine catalog (Phase 6) = versioned Kotlin object in `:core:claude` (à la ArxivTaxonomy): no DB rows/migrations, no template↔routine link; instruction text canonical in code (content destined for claude.ai, exempt from strings.xml like taxonomy names), golden-tested against SPEC-ROUTINES-CATALOG |
+| 2026-06-12 | Wizard verification is opt-in, never automatic (fire API has no dry-run): routine saved before any ping, stand-down ping is the verification, failures map to typed `VerificationError` taxonomy with per-class troubleshooting (SPEC-CLAUDE-BRIDGE §8) |

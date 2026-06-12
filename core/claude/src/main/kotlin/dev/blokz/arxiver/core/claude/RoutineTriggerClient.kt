@@ -109,11 +109,12 @@ class RoutineTriggerClient(
 }
 
 /**
- * Paste-ready instruction block for the user's routine (SPEC-CLAUDE-BRIDGE §2
- * "copy routine starter instructions").
+ * Paste-ready instruction blocks for the user's routine (SPEC-CLAUDE-BRIDGE §2,
+ * SPEC-ROUTINES-CATALOG §1). Generic copy and per-template copy share the same
+ * recognition core verbatim so the two paths never diverge.
  */
 object RoutineStarterInstructions {
-    fun generate(): String =
+    private val recognitionCore: String =
         """
         |You may receive messages from Arxiver, a local-first arXiv research app, via this
         |routine's API trigger. They are easy to recognize:
@@ -140,4 +141,10 @@ object RoutineStarterInstructions {
         |- Deliver results the way this routine is configured to (e.g. email, Drive doc).
         |- Keep digests structured: TL;DR, contributions, methods, limitations.
         """.trimMargin()
+
+    /** Generic block for routines built without a catalog template. */
+    fun generate(): String = recognitionCore
+
+    /** Template block: the template's role preamble, then the shared core. */
+    fun generateFor(template: RoutineTemplate): String = template.instructionPreamble + "\n\n" + recognitionCore
 }

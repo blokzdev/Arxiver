@@ -32,9 +32,10 @@ import kotlin.math.roundToInt
 sealed interface DispatchSubmission {
     data class Sent(val dispatchId: Long) : DispatchSubmission
 
-    data class Queued(val dispatchId: Long) : DispatchSubmission
+    /** [httpCode] present for 5xx-queued, null for offline/transport. */
+    data class Queued(val dispatchId: Long, val httpCode: Int? = null) : DispatchSubmission
 
-    data class Failed(val dispatchId: Long, val reason: String) : DispatchSubmission
+    data class Failed(val dispatchId: Long, val reason: String, val httpCode: Int? = null) : DispatchSubmission
 
     data class AuthRejected(val dispatchId: Long) : DispatchSubmission
 
@@ -53,12 +54,12 @@ class DispatchRepository
         private val paperDao: PaperDao,
         private val citationDao: CitationDao,
         private val embeddingDao: EmbeddingDao,
-    ) {
+    ) : RoutineSetupGateway {
         // --- routine configs ---
 
         fun observeRoutines(): Flow<List<RoutineConfigEntity>> = routineDao.observeConfigs()
 
-        suspend fun addRoutine(
+        override suspend fun addRoutine(
             name: String,
             triggerUrl: String,
             token: String,
@@ -74,7 +75,16 @@ class DispatchRepository
             )
         }
 
-        suspend fun replaceToken(
+        override suspend fun updateRoutine(
+            routineId: Long,
+            name: String,
+            triggerUrl: String,
+        ) {
+            val config = routineDao.configById(routineId) ?: return
+            routineDao.updateConfig(config.copy(name = name.trim(), triggerUrl = triggerUrl.trim()))
+        }
+
+        override suspend fun replaceToken(
             routineId: Long,
             token: String,
         ) {
@@ -134,7 +144,7 @@ class DispatchRepository
 
         fun observeHistory(): Flow<List<RoutineDispatchEntity>> = routineDao.observeDispatches()
 
-        suspend fun ping(routineId: Long): DispatchSubmission {
+        override suspend fun ping(routineId: Long): DispatchSubmission {
             val payload =
                 payloadBuilder.build(
                     action = RoutineAction.PING,
@@ -166,7 +176,7 @@ class DispatchRepository
                     ?: return fail(dispatchId, null, "routine deleted")
             val token =
                 tokenVault.retrieve(config.tokenAlias)
-                    ?: return fail(dispatchId, null, "token unavailable — re-enter it")
+                    ?: return fail(dispatchId, null, REASON_TOKEN_UNAVAILABLE)
 
             val turnText = dev.blokz.arxiver.core.claude.DispatchEnvelope.render(dispatch.payloadJson)
             return when (val outcome = triggerClient.send(config.triggerUrl, token, turnText)) {
@@ -188,7 +198,7 @@ class DispatchRepository
                 }
                 is TriggerOutcome.Rejected -> {
                     fail(dispatchId, outcome.httpCode, "rejected by endpoint")
-                    DispatchSubmission.Failed(dispatchId, "HTTP ${outcome.httpCode}")
+                    DispatchSubmission.Failed(dispatchId, "HTTP ${outcome.httpCode}", outcome.httpCode)
                 }
                 is TriggerOutcome.Retryable -> {
                     // Stays queued; DispatchWorker picks it up when network allows.
@@ -199,7 +209,7 @@ class DispatchRepository
                         outcome.message,
                         null,
                     )
-                    DispatchSubmission.Queued(dispatchId)
+                    DispatchSubmission.Queued(dispatchId, outcome.httpCode)
                 }
             }
         }
@@ -215,7 +225,7 @@ class DispatchRepository
             error: String,
         ): DispatchSubmission {
             routineDao.updateDispatchStatus(dispatchId, RoutineDispatchEntity.STATUS_FAILED, httpCode, error, null)
-            return DispatchSubmission.Failed(dispatchId, error)
+            return DispatchSubmission.Failed(dispatchId, error, httpCode)
         }
 
         private suspend fun buildPayload(
@@ -294,5 +304,8 @@ class DispatchRepository
         companion object {
             private const val HISTORY_RETENTION_S = 90L * 24 * 3600
             private const val NEIGHBORS_PER_PAPER = 3
+
+            /** Vault miss — referenced by the verification error mapper. */
+            const val REASON_TOKEN_UNAVAILABLE = "token unavailable — re-enter it"
         }
     }

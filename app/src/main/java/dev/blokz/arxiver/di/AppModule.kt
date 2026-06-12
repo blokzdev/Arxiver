@@ -116,6 +116,11 @@ object AppModule {
         )
 
     @Provides
+    fun routineSetupGateway(
+        repository: dev.blokz.arxiver.data.DispatchRepository,
+    ): dev.blokz.arxiver.data.RoutineSetupGateway = repository
+
+    @Provides
     fun citationDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.CitationDao = db.citationDao()
 
     @Provides

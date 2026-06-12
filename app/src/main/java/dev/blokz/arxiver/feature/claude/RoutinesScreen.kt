@@ -1,7 +1,5 @@
 package dev.blokz.arxiver.feature.claude
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,6 +16,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -113,6 +112,7 @@ class RoutinesViewModel
 @Composable
 fun RoutinesScreen(
     onBack: () -> Unit,
+    onOpenTemplates: () -> Unit,
     viewModel: RoutinesViewModel = hiltViewModel(),
 ) {
     val routines by viewModel.routines.collectAsState()
@@ -188,6 +188,12 @@ fun RoutinesScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                FilledTonalButton(
+                    onClick = onOpenTemplates,
+                    modifier = Modifier.padding(top = 16.dp),
+                ) {
+                    Text(stringResource(R.string.template_browse_action))
+                }
             }
         } else {
             LazyColumn(
@@ -258,10 +264,7 @@ fun RoutinesScreen(
 }
 
 private fun copyStarterInstructions(context: Context) {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-    clipboard.setPrimaryClip(
-        ClipData.newPlainText("Arxiver routine instructions", RoutineStarterInstructions.generate()),
-    )
+    copyInstructionsToClipboard(context, RoutineStarterInstructions.generate())
 }
 
 @Composable
