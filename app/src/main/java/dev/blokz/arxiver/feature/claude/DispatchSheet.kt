@@ -172,13 +172,4 @@ fun DispatchSheet(
 }
 
 @Composable
-private fun RoutineAction.label(): String =
-    when (this) {
-        RoutineAction.DIGEST -> stringResource(R.string.action_digest)
-        RoutineAction.DEEP_DIVE -> stringResource(R.string.action_deep_dive)
-        RoutineAction.COMPARE -> stringResource(R.string.action_compare)
-        RoutineAction.WEEKLY_REVIEW -> stringResource(R.string.action_weekly_review)
-        RoutineAction.LITERATURE_SCAN -> stringResource(R.string.action_literature_scan)
-        RoutineAction.CUSTOM -> stringResource(R.string.action_custom)
-        RoutineAction.PING -> "ping"
-    }
+private fun RoutineAction.label(): String = stringResource(labelRes())

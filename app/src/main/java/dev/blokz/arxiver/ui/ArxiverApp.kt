@@ -24,6 +24,8 @@ import dev.blokz.arxiver.feature.browse.BrowseScreen
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
 import dev.blokz.arxiver.feature.claude.DispatchHistoryScreen
 import dev.blokz.arxiver.feature.claude.RoutinesScreen
+import dev.blokz.arxiver.feature.claude.TemplateCatalogScreen
+import dev.blokz.arxiver.feature.claude.TemplateDetailScreen
 import dev.blokz.arxiver.feature.library.FilteredPapersScreen
 import dev.blokz.arxiver.feature.library.LibraryScreen
 import dev.blokz.arxiver.feature.onboarding.OnboardingScreen
@@ -41,6 +43,8 @@ object Routes {
     const val PDF_VIEWER = "paper/{id}/pdf"
     const val CONNECTIONS = "paper/{id}/graph"
     const val ROUTINES = "claude/routines"
+    const val TEMPLATE_CATALOG = "claude/templates"
+    const val TEMPLATE_DETAIL = "claude/templates/{templateId}"
     const val SETTINGS = "settings"
     const val ONBOARDING = "onboarding"
     const val DISPATCH_HISTORY = "claude/history"
@@ -63,6 +67,8 @@ object Routes {
         id: Long,
         title: String,
     ) = "library/$mode/$id?title=${Uri.encode(title)}"
+
+    fun templateDetail(templateId: String) = "claude/templates/$templateId"
 }
 
 @Composable
@@ -102,6 +108,7 @@ fun ArxiverApp(
                     onBack = { navController.popBackStack() },
                     onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                     onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
+                    onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
                 )
             }
             composable(TopLevelDestination.Today.route) {
@@ -170,7 +177,22 @@ fun ArxiverApp(
                 PdfViewerScreen(onBack = { navController.popBackStack() })
             }
             composable(Routes.ROUTINES) {
-                RoutinesScreen(onBack = { navController.popBackStack() })
+                RoutinesScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
+                )
+            }
+            composable(Routes.TEMPLATE_CATALOG) {
+                TemplateCatalogScreen(
+                    onBack = { navController.popBackStack() },
+                    onTemplateClick = { id -> navController.navigate(Routes.templateDetail(id)) },
+                )
+            }
+            composable(Routes.TEMPLATE_DETAIL) { entry ->
+                TemplateDetailScreen(
+                    templateId = entry.arguments?.getString("templateId").orEmpty(),
+                    onBack = { navController.popBackStack() },
+                )
             }
             composable(Routes.DISPATCH_HISTORY) {
                 DispatchHistoryScreen(onBack = { navController.popBackStack() })

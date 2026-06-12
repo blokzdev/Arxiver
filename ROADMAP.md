@@ -91,7 +91,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 - [x] 6.1 Routine template catalog proposal: 8 paper-centric templates (name, purpose, instruction preamble + shared recognition core, API-trigger config, minimal connector set, action mapping) — drafted as `docs/SPEC-ROUTINES-CATALOG.md`; user reviewed & approved via the Phase 6 plan, 2026-06-12, no edits requested
 - [x] 6.2 Spec finalization: SPEC-ROUTINES-CATALOG approved as drafted; SPEC-CLAUDE-BRIDGE extended with §8 guided-setup + verification contract (opt-in test-dispatch semantics, save-before-verify, error taxonomy table)
-- [ ] 6.3 Catalog in app: bundled versioned template data + browse/detail UI (what each template does, what it needs); per-template "copy instructions" built on the 4.7 generator
+- [x] 6.3 Catalog in app: `RoutineTemplateCatalog` (versioned Kotlin object in `:core:claude`, invariant-tested) + browse/detail screens with per-template "copy instructions" via shared recognition core (`RoutineStarterInstructions.generateFor`); entry points: routines empty state + Settings → Claude
 - [ ] 6.4 Guided setup wizard: stepper walking the user through creating the routine at claude.ai/code/routines (API trigger) → copying URL + token → pasting into Arxiver; input validation at entry; tokens only via TokenVault
 - [ ] 6.5 Auto-verification: test dispatch on save with success confirmation; graceful failure handling + troubleshooting per error class (401 bad token, 404 wrong URL, 5xx, rate-limit, offline) with actionable fixes
 - [ ] 6.6 (depends on 4.8) Real-trigger validation: run ≥2 catalog templates end-to-end against live routines; adapt `RoutineTriggerClient` if the contract differs from Bearer-POST; record findings in SPEC-CLAUDE-BRIDGE

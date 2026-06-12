@@ -167,6 +167,18 @@
     <string name="routine_ping_failed">Ping failed: %1$s</string>
     <string name="routine_instructions_copied">Starter instructions copied — paste into your routine</string>
 
+    <string name="template_catalog_title">Routine templates</string>
+    <string name="template_catalog_intro">Curated routines for paper work. Each template gives you paste-ready instructions and tells you exactly what to set up in the Claude app — most need no connectors at all.</string>
+    <string name="template_browse_action">Browse routine templates</string>
+    <string name="template_needs_heading">What it needs</string>
+    <string name="template_connectors_none">Connectors: none — results appear in the routine\'s run log in the Claude app. Connectors run without permission prompts, so add them deliberately.</string>
+    <string name="template_connectors_required">Connectors: %1$s</string>
+    <string name="template_connectors_optional">Optional delivery upgrades: %1$s</string>
+    <string name="template_copy_instructions">Copy instructions</string>
+    <string name="template_show_instructions">Show full instructions</string>
+    <string name="template_hide_instructions">Hide full instructions</string>
+    <string name="template_not_found">Template unavailable.</string>
+
     <string name="history_title">Dispatch history</string>
     <string name="history_empty">Dispatches you send to Claude appear here.</string>
     <string name="history_row_title">%1$s · papers: %2$d</string>

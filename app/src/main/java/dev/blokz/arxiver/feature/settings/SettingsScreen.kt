@@ -49,6 +49,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenRoutines: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenTemplates: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -202,6 +203,7 @@ fun SettingsScreen(
 
             SectionTitle(stringResource(R.string.settings_claude_section))
             SettingsLink(stringResource(R.string.library_menu_routines), onOpenRoutines)
+            SettingsLink(stringResource(R.string.template_catalog_title), onOpenTemplates)
             SettingsLink(stringResource(R.string.library_menu_history), onOpenHistory)
 
             HorizontalDivider()
