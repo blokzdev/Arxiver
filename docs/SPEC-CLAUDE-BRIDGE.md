@@ -60,6 +60,24 @@ Versioned envelope; `schema` bumps on breaking change. Routine authors can rely 
     "library_size": 412,
     "user_tags_in_selection": ["ssm", "efficiency"]
   },
+  "relations": {
+    "similarity": [
+      {"a": "2403.01234", "b": "2405.06789", "cosine": 0.831}
+    ],
+    "citations": [
+      {"citing": "2405.06789", "cited": "2403.01234"}
+    ],
+    "library_neighbors": [
+      {
+        "arxiv_id": "2402.00007",
+        "near": "2403.01234",
+        "title": "…",
+        "cosine": 0.792,
+        "in_library": true,
+        "abs_url": "https://arxiv.org/abs/2402.00007v1"
+      }
+    ]
+  },
   "papers": [
     {
       "arxiv_id": "2403.01234",
@@ -87,6 +105,10 @@ Versioned envelope; `schema` bumps on breaking change. Routine authors can rely 
 ```
 
 - `papers[].user` present only when `include_notes` is toggled on for the dispatch (per-dispatch toggle, defaulting to the routine config's setting). Privacy: the confirm sheet always previews exactly what leaves the device.
+- `relations` (optional, additive — absent when there is nothing to report) ships the device's precomputed analysis primitives so the routine can *compose* relationships instead of re-deriving them from raw text (interface design informed by SpatialClaw, arXiv 2606.13673: agents reason better over composable perception primitives than over flat inputs behind a rigid interface):
+  - `similarity`: pairwise embedding cosine between selected papers (only pairs where both embeddings exist; rounded to 3 decimals).
+  - `citations`: citation edges whose *both* endpoints are in the selection.
+  - `library_neighbors`: each selected paper's top-3 precomputed semantic neighbors from the local corpus (`near` names the anchor). These reveal what's on the user's device, so they ride the `include_notes` privacy gate — with notes off the key is structurally absent.
 - Abstract always included (Claude shouldn't need to re-fetch); PDFs never uploaded — links suffice, routines can fetch.
 - Size guard: > 256 KB (≈ >40 papers with notes) → app refuses with "split the selection" message.
 
@@ -112,5 +134,5 @@ List of `routine_dispatches`: action, routine name, paper count, status chip (qu
 
 - `PayloadBuilder`: golden-file JSON tests per action (kotlinx.serialization output vs committed fixtures).
 - `RoutineTriggerClient`: MockWebServer — 200/401/500/timeout/offline-queue paths.
-- Size guard and notes-toggle redaction unit-tested (a payload with `include_notes=false` must contain no `user` keys anywhere — asserted structurally).
+- Size guard and notes-toggle redaction unit-tested (a payload with `include_notes=false` must contain no `user` keys anywhere — asserted structurally; likewise no `library_neighbors` key in `relations`).
 - End-to-end against a real routine trigger: manual checklist item before Phase 4 sign-off (requires user-provided routine; see ROADMAP).

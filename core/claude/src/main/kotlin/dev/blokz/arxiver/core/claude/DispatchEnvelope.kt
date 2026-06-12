@@ -69,6 +69,11 @@ object DispatchEnvelope {
             appendLine("The complete research payload follows as JSON. It contains, per paper: title,")
             appendLine("authors, abstract, categories, links (abs_url, and pdf_url for full text),")
             appendLine("citation counts, and optionally my own tags/status/rating/notes under \"user\".")
+            if (payload.relations != null && !payload.relations.isEmpty()) {
+                appendLine("It also includes \"relations\" — analysis precomputed on my device (embedding")
+                appendLine("similarity, citation edges, library neighbors): compose these instead of")
+                appendLine("re-deriving relationships from the text.")
+            }
             appendLine("Work from this payload; fetch PDFs from pdf_url when full text is needed.")
             appendLine()
             appendLine("```json")

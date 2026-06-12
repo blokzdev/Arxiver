@@ -129,6 +129,12 @@ object RoutineStarterInstructions {
         |For research dispatches:
         |- Follow the "MY INSTRUCTION FOR THIS RUN" section first.
         |- Actions: digest, deep_dive, compare, weekly_review, literature_scan, custom.
+        |- The payload may include "relations": analysis primitives computed on my
+        |  device — "similarity" (pairwise embedding cosine between the selected
+        |  papers), "citations" (citation edges within the selection), and
+        |  "library_neighbors" (papers from my local corpus semantically nearest to
+        |  each selection, with "near" naming the anchor). Compose these to ground
+        |  comparisons and spot clusters instead of re-deriving them from text.
         |- For deep_dive, fetch the PDF from pdf_url and analyze the full text.
         |- Use my notes and tags (when present) to match my framing and interests.
         |- Deliver results the way this routine is configured to (e.g. email, Drive doc).

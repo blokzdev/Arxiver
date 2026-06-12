@@ -100,6 +100,32 @@ class DispatchEnvelopeTest {
     }
 
     @Test
+    fun `relations mention appears only when the payload carries relations`() {
+        val without = DispatchEnvelope.render(payloadJson(RoutineAction.DIGEST, "x", listOf(paper("2401.00001", "T"))))
+        assertFalse("\"relations\"" in without.substringBefore("```json"))
+
+        val withRelations =
+            (
+                builder.build(
+                    action = RoutineAction.COMPARE,
+                    instruction = "x",
+                    papers = listOf(paper("2401.00001", "A"), paper("2401.00002", "B")),
+                    includeNotes = false,
+                    librarySize = 2,
+                    relations =
+                        PayloadRelations(
+                            similarity =
+                                listOf(
+                                    PayloadSimilarityEdge(a = "2401.00001", b = "2401.00002", cosine = 0.83),
+                                ),
+                        ),
+                ) as PayloadResult.Ready
+            ).json
+        val text = DispatchEnvelope.render(withRelations)
+        assertTrue("analysis precomputed on my device" in text)
+    }
+
+    @Test
     fun `unparseable payload falls back to framed json`() {
         val text = DispatchEnvelope.render("{not json at all")
         assertTrue(text.startsWith("ARXIVER RESEARCH DISPATCH"))

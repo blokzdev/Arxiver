@@ -132,7 +132,7 @@
     <string name="dispatch_action_label">Action</string>
     <string name="dispatch_instruction_label">Instruction</string>
     <string name="dispatch_include_notes">Include my notes &amp; tags</string>
-    <string name="dispatch_include_notes_hint">Sends your annotations with the papers — preview shows exactly what leaves the device</string>
+    <string name="dispatch_include_notes_hint">Sends your annotations and related-library context with the papers — preview shows exactly what leaves the device</string>
     <string name="dispatch_show_preview">Show payload preview</string>
     <string name="dispatch_hide_preview">Hide payload preview</string>
     <string name="dispatch_preview_loading">Building preview…</string>

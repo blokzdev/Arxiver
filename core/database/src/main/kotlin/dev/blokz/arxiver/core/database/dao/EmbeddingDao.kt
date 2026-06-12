@@ -16,6 +16,12 @@ data class RelatedRow(
     val similarity: Double,
 )
 
+data class NeighborRow(
+    @Embedded val paper: PaperEntity,
+    val similarity: Double,
+    val in_library: Boolean,
+)
+
 @Dao
 interface EmbeddingDao {
     @Upsert
@@ -79,4 +85,21 @@ interface EmbeddingDao {
         """,
     )
     fun observeRelated(paperId: String): Flow<List<RelatedRow>>
+
+    /** Top precomputed neighbors with library membership — dispatch relations context. */
+    @Query(
+        """
+        SELECT p.*, r.similarity,
+            EXISTS(SELECT 1 FROM library_entries le WHERE le.paper_id = p.id) AS in_library
+        FROM related_papers r
+        JOIN papers p ON p.id = r.neighbor_id
+        WHERE r.paper_id = :paperId
+        ORDER BY r.similarity DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun neighborsFor(
+        paperId: String,
+        limit: Int,
+    ): List<NeighborRow>
 }

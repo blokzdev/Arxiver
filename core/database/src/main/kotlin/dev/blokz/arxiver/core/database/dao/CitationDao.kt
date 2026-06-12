@@ -46,6 +46,10 @@ interface CitationDao {
     )
     fun observeCitations(paperId: String): Flow<List<ConnectionRow>>
 
+    /** Edges with both endpoints inside the id set — dispatch relations context. */
+    @Query("SELECT * FROM citation_edges WHERE citing_id IN (:ids) AND cited_id IN (:ids)")
+    suspend fun edgesAmong(ids: List<String>): List<CitationEdgeEntity>
+
     @Query("SELECT COUNT(*) FROM citation_edges WHERE citing_id = :paperId")
     fun observeReferenceCount(paperId: String): Flow<Int>
 

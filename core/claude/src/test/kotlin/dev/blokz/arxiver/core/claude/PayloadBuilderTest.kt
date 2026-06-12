@@ -40,6 +40,23 @@ class PayloadBuilderTest {
             notes = listOf("Compare with S4."),
         )
 
+    private val relations =
+        PayloadRelations(
+            similarity = listOf(PayloadSimilarityEdge(a = "2403.01234", b = "2405.06789", cosine = 0.831)),
+            citations = listOf(PayloadCitationEdge(citing = "2405.06789", cited = "2403.01234")),
+            libraryNeighbors =
+                listOf(
+                    PayloadNeighbor(
+                        arxivId = "2402.00007",
+                        near = "2403.01234",
+                        title = "Neighboring Work",
+                        cosine = 0.792,
+                        inLibrary = true,
+                        absUrl = "https://arxiv.org/abs/2402.00007v1",
+                    ),
+                ),
+        )
+
     /** Golden contract test (SPEC-CLAUDE-BRIDGE §4) — routine authors rely on this shape. */
     @Test
     fun `digest payload matches the documented contract`() {
@@ -94,6 +111,77 @@ class PayloadBuilderTest {
         assertTrue("\"user\"" !in ready.json)
         assertTrue("secret thought" !in ready.json)
         assertTrue("ssm" !in ready.json) // tags also redacted, incl. context aggregation
+    }
+
+    /** SPEC-CLAUDE-BRIDGE §4 `relations` — on-device primitives ride along. */
+    @Test
+    fun `relations block matches the documented contract`() {
+        val result =
+            builder.build(
+                action = RoutineAction.COMPARE,
+                instruction = "Compare.",
+                papers = listOf(paper),
+                includeNotes = true,
+                librarySize = 412,
+                relations = relations,
+            )
+
+        val ready = assertIs<PayloadResult.Ready>(result)
+        val rel = Json.parseToJsonElement(ready.json).jsonObject.getValue("relations").jsonObject
+
+        val sim = rel.getValue("similarity").jsonArray[0].jsonObject
+        assertEquals("2403.01234", sim.str("a"))
+        assertEquals("2405.06789", sim.str("b"))
+        assertEquals("0.831", sim.str("cosine"))
+
+        val cite = rel.getValue("citations").jsonArray[0].jsonObject
+        assertEquals("2405.06789", cite.str("citing"))
+        assertEquals("2403.01234", cite.str("cited"))
+
+        val neighbor = rel.getValue("library_neighbors").jsonArray[0].jsonObject
+        assertEquals("2402.00007", neighbor.str("arxiv_id"))
+        assertEquals("2403.01234", neighbor.str("near"))
+        assertEquals("Neighboring Work", neighbor.str("title"))
+        assertEquals("true", neighbor.str("in_library"))
+        assertEquals("https://arxiv.org/abs/2402.00007v1", neighbor.str("abs_url"))
+    }
+
+    /** Neighbors reveal the local corpus — they ride the notes privacy gate. */
+    @Test
+    fun `notes off strips library neighbors but keeps selection relations`() {
+        val result =
+            builder.build(
+                action = RoutineAction.COMPARE,
+                instruction = "x",
+                papers = listOf(paper),
+                includeNotes = false,
+                librarySize = 1,
+                relations = relations,
+            )
+        val ready = assertIs<PayloadResult.Ready>(result)
+        assertTrue("\"library_neighbors\"" !in ready.json)
+        assertTrue("Neighboring Work" !in ready.json)
+
+        val rel = Json.parseToJsonElement(ready.json).jsonObject.getValue("relations").jsonObject
+        assertEquals(1, rel.getValue("similarity").jsonArray.size)
+        assertEquals(1, rel.getValue("citations").jsonArray.size)
+    }
+
+    @Test
+    fun `empty relations are structurally absent`() {
+        listOf(null, PayloadRelations()).forEach { empty ->
+            val result =
+                builder.build(
+                    action = RoutineAction.DIGEST,
+                    instruction = "x",
+                    papers = listOf(paper),
+                    includeNotes = true,
+                    librarySize = 1,
+                    relations = empty,
+                )
+            val ready = assertIs<PayloadResult.Ready>(result)
+            assertTrue("\"relations\"" !in ready.json)
+        }
     }
 
     @Test

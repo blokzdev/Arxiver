@@ -52,6 +52,48 @@ data class PayloadContext(
     @SerialName("user_tags_in_selection") val userTagsInSelection: List<String> = emptyList(),
 )
 
+/** Pairwise embedding cosine between two selected papers. */
+@Serializable
+data class PayloadSimilarityEdge(
+    val a: String,
+    val b: String,
+    val cosine: Double,
+)
+
+/** Citation edge where both endpoints are in the selection. */
+@Serializable
+data class PayloadCitationEdge(
+    val citing: String,
+    val cited: String,
+)
+
+/** A semantically near paper from the local corpus, anchored to a selected paper. */
+@Serializable
+data class PayloadNeighbor(
+    @SerialName("arxiv_id") val arxivId: String,
+    val near: String,
+    val title: String,
+    val cosine: Double,
+    @SerialName("in_library") val inLibrary: Boolean,
+    @SerialName("abs_url") val absUrl: String,
+)
+
+/**
+ * SPEC-CLAUDE-BRIDGE §4 `relations` block: the device's precomputed analysis
+ * primitives (embedding similarity, citation edges, corpus neighbors) shipped
+ * alongside the papers so the routine can compose them instead of re-deriving
+ * relationships from raw text. Additive and optional — absent when empty.
+ */
+@Serializable
+data class PayloadRelations(
+    val similarity: List<PayloadSimilarityEdge> = emptyList(),
+    val citations: List<PayloadCitationEdge> = emptyList(),
+    // Nullable so redaction leaves the key structurally absent, never [].
+    @SerialName("library_neighbors") val libraryNeighbors: List<PayloadNeighbor>? = null,
+) {
+    fun isEmpty(): Boolean = similarity.isEmpty() && citations.isEmpty() && libraryNeighbors.isNullOrEmpty()
+}
+
 /** SPEC-CLAUDE-BRIDGE §4 envelope — `schema` bumps on breaking change. */
 @Serializable
 data class ArxiverPayload(
@@ -61,6 +103,7 @@ data class ArxiverPayload(
     @SerialName("sent_at") val sentAt: String,
     val instruction: String,
     val context: PayloadContext,
+    val relations: PayloadRelations? = null,
     val papers: List<PayloadPaper>,
 ) {
     companion object {
@@ -104,6 +147,7 @@ class PayloadBuilder(
         papers: List<PaperWithAnnotations>,
         includeNotes: Boolean,
         librarySize: Int,
+        relations: PayloadRelations? = null,
     ): PayloadResult {
         val payload =
             ArxiverPayload(
@@ -117,6 +161,12 @@ class PayloadBuilder(
                         librarySize = librarySize,
                         userTagsInSelection = papers.flatMap { it.tags }.distinct().takeIf { includeNotes }.orEmpty(),
                     ),
+                // Neighbors reveal what's in the local corpus, so they ride the
+                // same privacy gate as notes; redaction stays structural.
+                relations =
+                    relations
+                        ?.let { if (includeNotes) it else it.copy(libraryNeighbors = null) }
+                        ?.takeUnless { it.isEmpty() },
                 papers = papers.map { it.toPayloadPaper(includeNotes) },
             )
         val encoded = json.encodeToString(ArxiverPayload.serializer(), payload)

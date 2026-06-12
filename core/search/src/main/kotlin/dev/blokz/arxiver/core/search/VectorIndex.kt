@@ -26,7 +26,7 @@ class VectorIndex(private val embeddingDao: EmbeddingDao) {
                 if (row.paperId == excludeId) continue
                 val vector = PaperEmbeddingEntity.blobToFloats(row.vector)
                 if (vector.size != query.size) continue // stale model dims — skip
-                val similarity = dot(query, vector)
+                val similarity = dotSimilarity(query, vector)
                 if (heap.size < k) {
                     heap.add(VectorHit(row.paperId, similarity))
                 } else if (heap.peek().similarity < similarity) {
@@ -39,16 +39,17 @@ class VectorIndex(private val embeddingDao: EmbeddingDao) {
         return heap.sortedByDescending { it.similarity }
     }
 
-    private fun dot(
-        a: FloatArray,
-        b: FloatArray,
-    ): Double {
-        var sum = 0.0
-        for (i in a.indices) sum += a[i] * b[i]
-        return sum
-    }
-
     companion object {
         private const val CHUNK_SIZE = 512
     }
+}
+
+/** Dot product = cosine for vectors L2-normalized at write time (SPEC-DATA §4). */
+fun dotSimilarity(
+    a: FloatArray,
+    b: FloatArray,
+): Double {
+    var sum = 0.0
+    for (i in a.indices) sum += a[i] * b[i]
+    return sum
 }

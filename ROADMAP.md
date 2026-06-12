@@ -70,6 +70,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] 4.6 Dispatch history screen + retry
 - [x] 4.7 "Copy routine starter instructions" generator
 - [~] 4.8 Real-trigger E2E: user's first live ping returned HTTP 400, revealing the real fire-API contract (anthropic-version + anthropic-beta headers, /fire path, {"text": …} wrapper). RoutineTriggerClient adapted + mock-verified against the recorded contract; **awaiting user re-test on a build containing this fix**
+- [x] 4.9 `relations` payload block (research-driven, SpatialClaw arXiv 2606.13673): ship on-device analysis primitives — pairwise embedding cosine + citation edges within the selection, top-3 corpus neighbors per paper — as an additive, optional payload section so routines compose relationships instead of re-deriving them; neighbors gated behind the notes privacy toggle (structural redaction tested)
 - [ ] **CHECKPOINT 4:** mock-verified contract + real-routine dispatch produces a successful run; tokens demonstrably absent from logs/backups; CI green
 
 ## Phase 5 — Polish & Release
@@ -115,3 +116,4 @@ Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-pap
 | 2026-06-11 | Phase 6 added: user-reviewed routine template catalog + guided setup wizard with auto-verification (catalog review precedes implementation) |
 | 2026-06-12 | Live fire-API contract adopted (4.8): POST …/routines/{id}/fire with anthropic-version + anthropic-beta headers, payload wrapped as {"text": json}; URL normalization appends /fire; starter instructions reworded |
 | 2026-06-12 | DispatchEnvelope adopted after live runs: turns are self-describing (header + instruction + paper list + fenced arxiver/v1 JSON); pings carry a stand-down directive + confirm dialog (fire API has no dry-run) |
+| 2026-06-12 | `relations` payload block added (4.9), non-breaking within arxiver/v1 — design transfer from SpatialClaw (arXiv 2606.13673, delivered via the self-improvement routine): expose composable on-device perception primitives (similarity/citations/neighbors) at the routine action interface; library-revealing neighbors ride the include_notes gate |
