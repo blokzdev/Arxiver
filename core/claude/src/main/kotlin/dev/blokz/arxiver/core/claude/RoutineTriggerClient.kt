@@ -115,25 +115,27 @@ class RoutineTriggerClient(
 object RoutineStarterInstructions {
     fun generate(): String =
         """
-        |You receive messages from Arxiver, a local-first arXiv research app, via this
-        |routine's API trigger. Each fired message is a JSON document with schema
-        |"arxiver/v1":
+        |You may receive messages from Arxiver, a local-first arXiv research app, via this
+        |routine's API trigger. They are easy to recognize:
         |
-        |- "action": one of digest, deep_dive, compare, weekly_review, literature_scan, custom, ping
-        |- "instruction": what I want you to do this run (always read this first)
-        |- "papers": arXiv papers with title, authors, abstract, categories, links
-        |  (abs_url / pdf_url), and optionally "user" with my tags, status, rating, and notes
-        |- "context.library_size": how many papers are in my library overall
-        |- "relations" (when present): analysis primitives computed on my device —
-        |  "similarity" (pairwise embedding cosine between the selected papers),
-        |  "citations" (citation edges within the selection), and "library_neighbors"
-        |  (papers from my local corpus semantically nearest to each selection, with
-        |  "near" naming the anchor paper). Compose these to ground comparisons,
-        |  spot clusters, and decide what else to look at.
+        |- "ARXIVER CONNECTIVITY TEST" — a ping from the app's Test button. Skip your
+        |  normal instructions, reply with one short acknowledgement, and stop.
+        |- "ARXIVER RESEARCH DISPATCH" — a real task. The message states the action and
+        |  my instruction, lists the papers, and includes the full research payload as
+        |  fenced JSON (schema "arxiver/v1") with per-paper title, authors, abstract,
+        |  categories, links (abs_url / pdf_url), and optionally my tags/status/rating/
+        |  notes under "user".
         |
-        |Guidelines:
-        |- For "ping", reply with a short acknowledgement and do nothing else.
-        |- For "deep_dive", fetch the PDF from pdf_url and analyze the full text.
+        |For research dispatches:
+        |- Follow the "MY INSTRUCTION FOR THIS RUN" section first.
+        |- Actions: digest, deep_dive, compare, weekly_review, literature_scan, custom.
+        |- The payload may include "relations": analysis primitives computed on my
+        |  device — "similarity" (pairwise embedding cosine between the selected
+        |  papers), "citations" (citation edges within the selection), and
+        |  "library_neighbors" (papers from my local corpus semantically nearest to
+        |  each selection, with "near" naming the anchor). Compose these to ground
+        |  comparisons and spot clusters instead of re-deriving them from text.
+        |- For deep_dive, fetch the PDF from pdf_url and analyze the full text.
         |- Use my notes and tags (when present) to match my framing and interests.
         |- Deliver results the way this routine is configured to (e.g. email, Drive doc).
         |- Keep digests structured: TL;DR, contributions, methods, limitations.

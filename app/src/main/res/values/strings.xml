@@ -158,7 +158,10 @@
     <string name="routine_ping">Test</string>
     <string name="routine_reauth">Token</string>
     <string name="routine_auth_invalid">Token rejected — re-enter it</string>
-    <string name="routine_ping_ok">Ping accepted — the routine is running</string>
+    <string name="routine_ping_confirm_title">Send test ping?</string>
+    <string name="routine_ping_confirm_body">This starts a real run of “%1$s” (there is no dry-run). The ping tells Claude to skip the routine\'s instructions, acknowledge, and stop — but it still consumes a run.</string>
+    <string name="routine_ping_confirm_action">Send ping</string>
+    <string name="routine_ping_ok">Ping accepted — check the run in the Claude app; it should just acknowledge and stop</string>
     <string name="routine_ping_auth">Token rejected</string>
     <string name="routine_ping_queued">Offline — ping queued</string>
     <string name="routine_ping_failed">Ping failed: %1$s</string>

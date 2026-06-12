@@ -13,7 +13,7 @@ Arxiver's job ends at delivering a **well-formed, information-rich payload**. Th
 ## 2. Routine configuration (in-app)
 
 - Add routine: **name** (user label), **trigger URL**, **token**. Optional: default action association.
-- Validation on save: URL must be HTTPS; a **test ping** (payload `{"action":"ping", ...}` per schema below) is offered but optional — some users won't want to burn a routine run to test. Note: a live test triggers a real routine run; the UI says so.
+- Validation on save: URL must be HTTPS; a **test ping** is offered but optional. The fire API has no dry-run, so a test always starts a real run — the UI shows a confirmation dialog saying so, and the ping turn itself instructs Claude to skip the routine's instructions, acknowledge, and stop (§3.1).
 - Token storage: `EncryptedSharedPreferences` (Keystore master key). DB row stores `token_alias` only. Tokens are write-only in the UI (re-enter to change), excluded from backups/exports, never logged. If decryption fails (restore to new device), the routine shows "re-authentication needed".
 
 ## 3. Transport
@@ -35,6 +35,14 @@ User-Agent: Arxiver/<version>
 - Success = any 2xx. 401/403 → "token invalid/revoked" state on the routine config. 4xx other → failed, no retry. 5xx/network → exponential backoff retry ×3, then queued for `DispatchWorker` (network-constrained).
 - Offline: dispatch is queued with status `queued` and sent when connectivity returns; user sees queue state in history.
 - The transport remains isolated in `RoutineTriggerClient` — if the beta header or wrapper evolves, it stays one class to adapt.
+
+### 3.1 Dispatch envelope (field-verified revision, 2026-06-12)
+
+Live testing showed two failure modes of sending bare payload JSON as the turn: (1) routines with their own instructions don't recognize the blob as research content, and (2) test pings start a real run (the fire API has no dry-run) and the routine just executes its configured instructions. The turn text is therefore rendered by `DispatchEnvelope` and is **self-describing**:
+
+- **Research dispatches** open with `ARXIVER RESEARCH DISPATCH (schema arxiver/v1)`, state the action, the user's instruction, and a short paper list, then embed the canonical arxiver/v1 JSON in a ` ```json ` fence with a note on how to use it (incl. fetching `pdf_url` for full text). Works with zero routine setup; starter instructions remain a quality upgrade, not a requirement.
+- **Pings** open with `ARXIVER CONNECTIVITY TEST` and contain only a stand-down directive: skip the routine's normal instructions, acknowledge in one line, end the run. A ping still consumes a run — the UI confirms before sending and says so.
+- The dispatch sheet preview renders the full envelope — exactly the text that leaves the device.
 
 ## 4. Payload schema (v1)
 
