@@ -6,8 +6,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.data.InboxRepository
 import dev.blokz.arxiver.sync.SyncScheduler
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -18,6 +20,15 @@ data class TodayUiState(
     val items: List<InboxPaper> = emptyList(),
     val syncing: Boolean = false,
     val hasFollows: Boolean = true,
+)
+
+enum class TriageKind { SAVED, DISMISSED }
+
+/** One completed swipe — carries everything undo needs to restore it. */
+data class TriageEvent(
+    val paperId: String,
+    val kind: TriageKind,
+    val previousState: String,
 )
 
 @HiltViewModel
@@ -55,11 +66,34 @@ class TodayViewModel
             return (library + inbox).distinct().take(20)
         }
 
-        fun save(paperId: String) {
-            viewModelScope.launch { inboxRepository.saveToLibrary(paperId) }
+        private val _triageEvent = MutableStateFlow<TriageEvent?>(null)
+
+        /** Latest swipe action awaiting its undo snackbar; consume after showing. */
+        val triageEvent: StateFlow<TriageEvent?> = _triageEvent.asStateFlow()
+
+        fun save(item: InboxPaper) {
+            viewModelScope.launch {
+                inboxRepository.saveToLibrary(item.paper.id.value)
+                _triageEvent.value = TriageEvent(item.paper.id.value, TriageKind.SAVED, item.state)
+            }
         }
 
-        fun dismiss(paperId: String) {
-            viewModelScope.launch { inboxRepository.dismiss(paperId) }
+        fun dismiss(item: InboxPaper) {
+            viewModelScope.launch {
+                inboxRepository.dismiss(item.paper.id.value)
+                _triageEvent.value = TriageEvent(item.paper.id.value, TriageKind.DISMISSED, item.state)
+            }
+        }
+
+        /** Reverses a triage swipe exactly: library entry and inbox state. */
+        fun undo(event: TriageEvent) {
+            viewModelScope.launch {
+                if (event.kind == TriageKind.SAVED) libraryRepository.unsave(event.paperId)
+                inboxRepository.restoreState(event.paperId, event.previousState)
+            }
+        }
+
+        fun consumeTriageEvent() {
+            _triageEvent.value = null
         }
     }

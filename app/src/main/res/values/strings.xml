@@ -52,6 +52,10 @@
     <string name="cd_refresh_inbox">Refresh inbox</string>
     <string name="cd_weekly_review">Send weekly review to Claude</string>
     <string name="cd_save_paper">Save to library</string>
+    <string name="cd_dismiss_paper">Dismiss</string>
+    <string name="today_snackbar_saved">Saved to library</string>
+    <string name="today_snackbar_dismissed">Paper dismissed</string>
+    <string name="action_undo">Undo</string>
     <string name="cd_unsave_paper">Remove from library</string>
     <plurals name="cd_rate_star">
         <item quantity="one">Rate %1$d star</item>
