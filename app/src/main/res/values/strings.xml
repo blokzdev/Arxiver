@@ -235,6 +235,10 @@
     <string name="history_title">Dispatch history</string>
     <string name="history_empty">Dispatches you send to Claude appear here.</string>
     <string name="history_row_title">%1$s · papers: %2$d</string>
+    <string name="history_detail_title">%1$s · %2$s</string>
+    <string name="history_status_sent">sent</string>
+    <string name="history_status_queued">queued</string>
+    <string name="history_status_failed">failed</string>
     <string name="action_delete">Delete</string>
     <string name="action_save">Save</string>
 

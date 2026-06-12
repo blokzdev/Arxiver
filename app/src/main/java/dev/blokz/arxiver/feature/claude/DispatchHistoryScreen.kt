@@ -1,7 +1,6 @@
 package dev.blokz.arxiver.feature.claude
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,13 +13,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -42,6 +42,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.data.DispatchRepository
+import dev.blokz.arxiver.ui.components.EmptyState
+import dev.blokz.arxiver.ui.components.StatusChip
+import dev.blokz.arxiver.ui.components.StatusTone
+import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -94,21 +98,12 @@ fun DispatchHistoryScreen(
         },
     ) { padding ->
         if (dispatches.isEmpty()) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    stringResource(R.string.history_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            EmptyState(
+                title = stringResource(R.string.history_title),
+                body = stringResource(R.string.history_empty),
+                icon = Icons.Outlined.History,
+                modifier = Modifier.padding(padding),
+            )
         } else {
             LazyColumn(
                 modifier =
@@ -126,16 +121,24 @@ fun DispatchHistoryScreen(
     selected?.let { dispatch ->
         AlertDialog(
             onDismissRequest = { selected = null },
-            title = { Text("${dispatch.action} · ${dispatch.status}") },
+            title = {
+                Text(stringResource(R.string.history_detail_title, dispatch.action, statusLabel(dispatch.status)))
+            },
             text = {
-                Text(
-                    text = dispatch.payloadJson,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    modifier =
-                        Modifier
-                            .heightIn(max = 320.dp)
-                            .verticalScroll(rememberScrollState()),
-                )
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = MaterialTheme.shapes.small,
+                ) {
+                    Text(
+                        text = dispatch.payloadJson,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        modifier =
+                            Modifier
+                                .heightIn(max = 320.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(Spacing.sm),
+                    )
+                }
             },
             confirmButton = {
                 if (dispatch.status != RoutineDispatchEntity.STATUS_SENT) {
@@ -194,14 +197,24 @@ private fun DispatchRow(
                 )
             }
         }
-        AssistChip(
-            onClick = onClick,
-            label = {
-                Text(
-                    dispatch.status + (dispatch.httpCode?.let { " $it" } ?: ""),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-            },
+        StatusChip(
+            text = statusLabel(dispatch.status) + (dispatch.httpCode?.let { " · $it" } ?: ""),
+            tone =
+                when (dispatch.status) {
+                    RoutineDispatchEntity.STATUS_SENT -> StatusTone.Positive
+                    RoutineDispatchEntity.STATUS_FAILED -> StatusTone.Error
+                    else -> StatusTone.Neutral
+                },
         )
     }
 }
+
+/** Raw dispatch status values mapped to localized labels. */
+@Composable
+private fun statusLabel(status: String): String =
+    when (status) {
+        RoutineDispatchEntity.STATUS_SENT -> stringResource(R.string.history_status_sent)
+        RoutineDispatchEntity.STATUS_QUEUED -> stringResource(R.string.history_status_queued)
+        RoutineDispatchEntity.STATUS_FAILED -> stringResource(R.string.history_status_failed)
+        else -> status
+    }
