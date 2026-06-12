@@ -124,6 +124,12 @@ object RoutineStarterInstructions {
         |- "papers": arXiv papers with title, authors, abstract, categories, links
         |  (abs_url / pdf_url), and optionally "user" with my tags, status, rating, and notes
         |- "context.library_size": how many papers are in my library overall
+        |- "relations" (when present): analysis primitives computed on my device —
+        |  "similarity" (pairwise embedding cosine between the selected papers),
+        |  "citations" (citation edges within the selection), and "library_neighbors"
+        |  (papers from my local corpus semantically nearest to each selection, with
+        |  "near" naming the anchor paper). Compose these to ground comparisons,
+        |  spot clusters, and decide what else to look at.
         |
         |Guidelines:
         |- For "ping", reply with a short acknowledgement and do nothing else.

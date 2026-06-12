@@ -2,22 +2,32 @@ package dev.blokz.arxiver.data
 
 import dev.blokz.arxiver.core.claude.PaperWithAnnotations
 import dev.blokz.arxiver.core.claude.PayloadBuilder
+import dev.blokz.arxiver.core.claude.PayloadCitationEdge
+import dev.blokz.arxiver.core.claude.PayloadNeighbor
+import dev.blokz.arxiver.core.claude.PayloadRelations
 import dev.blokz.arxiver.core.claude.PayloadResult
+import dev.blokz.arxiver.core.claude.PayloadSimilarityEdge
 import dev.blokz.arxiver.core.claude.RoutineAction
 import dev.blokz.arxiver.core.claude.RoutineTriggerClient
 import dev.blokz.arxiver.core.claude.TokenVault
 import dev.blokz.arxiver.core.claude.TriggerOutcome
+import dev.blokz.arxiver.core.database.dao.CitationDao
+import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.database.dao.LibraryDao
 import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.dao.RoutineDao
+import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.toDomain
+import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.search.dotSimilarity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToInt
 
 sealed interface DispatchSubmission {
     data class Sent(val dispatchId: Long) : DispatchSubmission
@@ -41,6 +51,8 @@ class DispatchRepository
         private val triggerClient: RoutineTriggerClient,
         private val libraryDao: LibraryDao,
         private val paperDao: PaperDao,
+        private val citationDao: CitationDao,
+        private val embeddingDao: EmbeddingDao,
     ) {
         // --- routine configs ---
 
@@ -228,10 +240,58 @@ class DispatchRepository
                 papers = annotated,
                 includeNotes = includeNotes,
                 librarySize = libraryDao.count(),
+                relations = relationsFor(annotated.map { it.paper.id.value }),
             )
         }
 
+        /**
+         * On-device analysis primitives for the routine to compose
+         * (SPEC-CLAUDE-BRIDGE §4 `relations`): pairwise embedding cosine and
+         * citation edges within the selection, plus each paper's precomputed
+         * corpus neighbors. The builder gates neighbors behind the notes toggle.
+         */
+        private suspend fun relationsFor(paperIds: List<String>): PayloadRelations? {
+            if (paperIds.isEmpty()) return null
+            val vectors =
+                paperIds.mapNotNull { id ->
+                    embeddingDao.byPaperId(id)?.let { id to PaperEmbeddingEntity.blobToFloats(it.vector) }
+                }
+            val similarity =
+                buildList {
+                    for (i in vectors.indices) {
+                        for (j in i + 1 until vectors.size) {
+                            val (idA, a) = vectors[i]
+                            val (idB, b) = vectors[j]
+                            if (a.size == b.size) add(PayloadSimilarityEdge(idA, idB, dotSimilarity(a, b).round3()))
+                        }
+                    }
+                }
+            val citations =
+                citationDao.edgesAmong(paperIds).map { PayloadCitationEdge(it.citingId, it.citedId) }
+            val selection = paperIds.toSet()
+            val neighbors =
+                paperIds.flatMap { id ->
+                    embeddingDao.neighborsFor(id, NEIGHBORS_PER_PAPER)
+                        .filter { it.paper.id !in selection }
+                        .map {
+                            PayloadNeighbor(
+                                arxivId = it.paper.id,
+                                near = id,
+                                title = it.paper.title,
+                                cosine = it.similarity.round3(),
+                                inLibrary = it.in_library,
+                                absUrl = ArxivId(it.paper.id).absUrl(it.paper.latestVersion),
+                            )
+                        }
+                }
+            return PayloadRelations(similarity, citations, neighbors.takeIf { it.isNotEmpty() })
+                .takeUnless { it.isEmpty() }
+        }
+
+        private fun Double.round3(): Double = (this * 1000).roundToInt() / 1000.0
+
         companion object {
             private const val HISTORY_RETENTION_S = 90L * 24 * 3600
+            private const val NEIGHBORS_PER_PAPER = 3
         }
     }

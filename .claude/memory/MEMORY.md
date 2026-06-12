@@ -6,3 +6,4 @@
 - [Release engineering state](release-engineering-state.md) — v1.0.0 shipped; CI signs from Actions secrets; gh-release@v3 unexercised until next tag
 - [gh secret CRLF gotcha](gh-secret-crlf-gotcha.md) — set secrets byte-exact from Windows; a stray \r breaks base64 -d on runners
 - [Claude Routines UI contract](claude-routines-ui-contract.md) — observed routine-creation fields/triggers; connectors run without permission prompts
+- [Self-improvement routine state](self-improvement-routine-state.md) — live routine fires research payloads at cloud sessions; ledger of shipped augmentations
