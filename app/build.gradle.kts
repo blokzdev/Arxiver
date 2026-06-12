@@ -15,8 +15,8 @@ android {
         applicationId = "dev.blokz.arxiver"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     // CI release signing: keystore + credentials arrive via environment

@@ -109,7 +109,7 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] UX.4 PaperListItem v2: badge/score/status/rating slots, animated selection, all call sites
 - [x] UX.5 Screen passes: Today (pull-to-refresh, undo triage, haptics, a11y actions) · Browse (animated groups) · CategoryFeed (skeletons, refresh, scroll-to-top) · Search (pill field, segmented tabs, skeletons) · Library (selection UX, undo delete, tag cloud) · PaperDetail (scroll-aware bar, expandable abstract, animated save/rating) · Connections+PDF (chips, page pill) · Settings (ListItem anatomy) · Onboarding (brand moment) · Claude surfaces (status tones, sheet polish, hardcoded-string fix)
 - [x] UX.6 DoD sweep: light/dark preview pairs across all screens (DispatchSheet excepted — modal sheets don't render in previews; PDF is renderer-bound); decorative icons null-described, actionables labeled; detail hero wraps rather than ellipsizing
-- [ ] UX.7 Release prep: versionName 1.1.0 / versionCode 2 (fixes stale 0.1.0 identity)
+- [x] UX.7 Release prep: versionName 1.1.0 / versionCode 2 (fixes stale 0.1.0 identity that v1.0.0 shipped with)
 
 ## v2 candidate backlog (do not work on these)
 
@@ -131,3 +131,4 @@ Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-pap
 | 2026-06-12 | `relations` payload block added (4.9), non-breaking within arxiver/v1 — design transfer from SpatialClaw (arXiv 2606.13673, delivered via the self-improvement routine): expose composable on-device perception primitives (similarity/citations/neighbors) at the routine action interface; library-revealing neighbors ride the include_notes gate |
 | 2026-06-12 | Routine catalog (Phase 6) = versioned Kotlin object in `:core:claude` (à la ArxivTaxonomy): no DB rows/migrations, no template↔routine link; instruction text canonical in code (content destined for claude.ai, exempt from strings.xml like taxonomy names), golden-tested against SPEC-ROUTINES-CATALOG |
 | 2026-06-12 | Wizard verification is opt-in, never automatic (fire API has no dry-run): routine saved before any ping, stand-down ping is the verification, failures map to typed `VerificationError` taxonomy with per-class troubleshooting (SPEC-CLAUDE-BRIDGE §8) |
+| 2026-06-12 | UX elevation sweep (Phase UX, user-directed): teal tertiary = machine-signal accent with documented color-role semantics, motion/spacing/shape tokens, shared SectionHeader/EmptyState/StatusChip/skeleton components, skeletons replace spinners per SPEC-UI §4, triage/collection deletes gain undo, swipe actions gain TalkBack equivalents per §5; versionName fixed to 1.1.0 (v1.0.0 APK had shipped self-identifying as 0.1.0) |
