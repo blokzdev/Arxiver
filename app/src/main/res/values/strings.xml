@@ -45,6 +45,7 @@
 
     <string name="pdf_title">PDF</string>
     <string name="pdf_downloading">Downloading PDF…</string>
+    <string name="pdf_page_indicator">%1$d / %2$d</string>
 
     <string name="action_retry">Retry</string>
     <string name="action_share">Share</string>
