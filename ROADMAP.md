@@ -105,8 +105,8 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 - [x] UX.1 Foundation: complete fallback palette (teal tertiary = machine-signal accent, surface-container tiers), custom shapes, motion + spacing tokens; SPEC-UI §1 color-semantics + motion/spacing spec
 - [x] UX.2 Shared components: SectionHeader, EmptyState, skeleton set, StatusChip (ScoreBar lands with the cell); richer preview fixtures
-- [~] UX.3 App shell: splash screen, nav transitions (fade-through tabs, slide pushes), predictive back
-- [ ] UX.4 PaperListItem v2: badge/score/status/rating slots, animated selection, all call sites
+- [x] UX.3 App shell: splash screen, nav transitions (fade-through tabs, slide pushes), predictive back
+- [~] UX.4 PaperListItem v2: badge/score/status/rating slots, animated selection, all call sites
 - [ ] UX.5 Screen passes: Today (pull-to-refresh, undo triage, haptics, a11y actions) · Browse (animated groups) · CategoryFeed (skeletons, refresh, scroll-to-top) · Search (pill field, segmented tabs, skeletons) · Library (selection UX, undo delete, tag cloud) · PaperDetail (scroll-aware bar, expandable abstract, animated save/rating) · Connections+PDF (chips, page pill) · Settings (ListItem anatomy) · Onboarding (brand moment) · Claude surfaces (status tones, sheet polish, hardcoded-string fix)
 - [ ] UX.6 DoD sweep: light/dark previews on every screen, contentDescription audit, font-scale resilience
 - [ ] UX.7 Release prep: versionName 1.1.0 / versionCode 2 (fixes stale 0.1.0 identity)
