@@ -1,29 +1,30 @@
 package dev.blokz.arxiver.feature.search
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -31,19 +32,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.feature.browse.ErrorState
+import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.PaperBadge
 import dev.blokz.arxiver.ui.components.PaperListItem
+import dev.blokz.arxiver.ui.components.SkeletonList
+import dev.blokz.arxiver.ui.components.SkeletonPaperItem
 import dev.blokz.arxiver.ui.components.StatusTone
+import dev.blokz.arxiver.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,14 +66,16 @@ fun SearchScreen(
                     .fillMaxSize()
                     .padding(padding),
         ) {
-            OutlinedTextField(
+            // Pill search field (deliberately not M3 SearchBar — its
+            // full-screen expansion fights the tabbed result layout).
+            TextField(
                 value = state.query,
                 onValueChange = viewModel::onQueryChange,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text(stringResource(R.string.search_hint)) },
+                        .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+                placeholder = { Text(stringResource(R.string.search_hint), maxLines = 1) },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 trailingIcon = {
                     if (state.query.isNotEmpty()) {
@@ -79,27 +85,57 @@ fun SearchScreen(
                     }
                 },
                 singleLine = true,
+                shape = CircleShape,
+                colors =
+                    TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { viewModel.submit() }),
             )
 
             var tab by rememberSaveable { mutableIntStateOf(0) }
-            TabRow(selectedTabIndex = tab) {
-                Tab(tab == 0, onClick = { tab = 0 }, text = { Text(stringResource(R.string.search_tab_library)) })
-                Tab(tab == 1, onClick = { tab = 1 }, text = { Text(stringResource(R.string.search_tab_arxiv)) })
+            SingleChoiceSegmentedButtonRow(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+            ) {
+                SegmentedButton(
+                    selected = tab == 0,
+                    onClick = { tab = 0 },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                ) { Text(stringResource(R.string.search_tab_library)) }
+                SegmentedButton(
+                    selected = tab == 1,
+                    onClick = { tab = 1 },
+                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                ) { Text(stringResource(R.string.search_tab_arxiv)) }
             }
 
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (tab == 0) {
-                    LocalResultList(state, onPaperClick)
-                } else {
-                    when {
-                        state.searching -> SearchingState()
-                        state.error != null -> ErrorState(error = state.error, onRetry = viewModel::submit)
-                        state.searched && state.results.isEmpty() -> EmptyResults()
-                        !state.searched -> SearchIntro()
-                        else -> ResultList(state, onPaperClick, viewModel::loadMore)
-                    }
+            if (tab == 0) {
+                LocalResultList(state, onPaperClick)
+            } else {
+                when {
+                    state.searching -> SearchingState()
+                    state.error != null -> ErrorState(error = state.error, onRetry = viewModel::submit)
+                    state.searched && state.results.isEmpty() ->
+                        EmptyState(
+                            title = stringResource(R.string.search_no_results),
+                            body = stringResource(R.string.search_intro_body),
+                            icon = Icons.Outlined.SearchOff,
+                        )
+                    !state.searched ->
+                        EmptyState(
+                            title = stringResource(R.string.search_intro_title),
+                            body = stringResource(R.string.search_intro_body),
+                            icon = Icons.Filled.Search,
+                        )
+                    else -> ResultList(state, onPaperClick, viewModel::loadMore)
                 }
             }
         }
@@ -113,41 +149,36 @@ private fun LocalResultList(
 ) {
     when {
         state.query.isBlank() ->
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = stringResource(R.string.search_local_intro),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            EmptyState(
+                title = stringResource(R.string.search_tab_library),
+                body = stringResource(R.string.search_local_intro),
+                icon = Icons.Filled.Search,
+            )
         state.localResults.isEmpty() ->
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = stringResource(R.string.search_local_no_results),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
+            EmptyState(
+                title = stringResource(R.string.search_local_no_results),
+                body = stringResource(R.string.search_local_intro),
+                icon = Icons.Outlined.SearchOff,
+            )
         else ->
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 if (!state.semanticActive) {
                     item {
-                        Text(
-                            text = stringResource(R.string.search_semantic_pending),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                        )
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            shape = MaterialTheme.shapes.small,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+                        ) {
+                            Text(
+                                text = stringResource(R.string.search_semantic_pending),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(Spacing.sm),
+                            )
+                        }
                     }
                 }
                 itemsIndexed(state.localResults, key = { _, hit -> hit.paper.id.value }) { _, hit ->
@@ -181,7 +212,7 @@ private fun ResultList(
                     text = pluralStringResource(R.plurals.search_result_count, total, total),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs),
                 )
             }
         }
@@ -192,69 +223,21 @@ private fun ResultList(
             }
         }
         if (state.loadingMore) {
-            item {
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                    horizontalArrangement = Arrangement.Center,
-                ) { CircularProgressIndicator(modifier = Modifier.padding(4.dp)) }
-            }
+            item { SkeletonPaperItem() }
         }
     }
 }
 
 @Composable
 private fun SearchingState() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        CircularProgressIndicator()
+    // Content-shaped skeletons with the rate-limit-aware caption kept.
+    Column(modifier = Modifier.fillMaxSize()) {
         Text(
             text = stringResource(R.string.search_querying_arxiv),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 12.dp),
+            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
         )
-    }
-}
-
-@Composable
-private fun SearchIntro() {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxSize()
-                .padding(32.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(R.string.search_intro_title),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            text = stringResource(R.string.search_intro_body),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    }
-}
-
-@Composable
-private fun EmptyResults() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text = stringResource(R.string.search_no_results),
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        SkeletonList(itemCount = 6)
     }
 }
