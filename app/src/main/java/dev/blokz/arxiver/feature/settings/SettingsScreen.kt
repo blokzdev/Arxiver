@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.feature.settings
 
+import android.content.res.Configuration
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -8,11 +9,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Psychology
+import androidx.compose.material.icons.outlined.SettingsBackupRestore
+import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -32,15 +42,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.BuildConfig
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.data.SettingsRepository
+import dev.blokz.arxiver.ui.components.StatusChip
+import dev.blokz.arxiver.ui.components.StatusTone
+import dev.blokz.arxiver.ui.theme.ArxiverTheme
+import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -112,125 +128,172 @@ fun SettingsScreen(
             )
         },
     ) { padding ->
-        Column(
+        SettingsContent(
+            state = state,
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            SectionTitle(stringResource(R.string.settings_sync_section))
-            Text(
-                stringResource(R.string.settings_sync_interval),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingsRepository.SYNC_INTERVAL_CHOICES.forEach { hours ->
-                    FilterChip(
-                        selected = state.syncIntervalHours == hours,
-                        onClick = { viewModel.setSyncInterval(hours) },
-                        label = { Text(stringResource(R.string.settings_hours, hours)) },
-                    )
-                }
-            }
-
-            HorizontalDivider()
-
-            SectionTitle(stringResource(R.string.settings_semantic_section))
-            val modelLabel =
-                when (val model = state.modelState) {
-                    is ModelState.Ready -> stringResource(R.string.settings_model_ready)
-                    is ModelState.Downloading ->
-                        stringResource(R.string.settings_model_downloading, model.progressPercent)
-                    is ModelState.Failed -> stringResource(R.string.settings_model_failed)
-                    ModelState.NotDownloaded -> stringResource(R.string.settings_model_absent)
-                }
-            Text(modelLabel, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                pluralStringResource(R.plurals.settings_embedded_count, state.embeddedCount, state.embeddedCount),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (state.modelState !is ModelState.Ready) {
-                    TextButton(onClick = viewModel::downloadModel) {
-                        Text(stringResource(R.string.settings_model_download))
-                    }
-                } else {
-                    TextButton(onClick = viewModel::reindex) {
-                        Text(stringResource(R.string.settings_model_reindex))
-                    }
-                    TextButton(onClick = viewModel::deleteModel) {
-                        Text(stringResource(R.string.settings_model_delete))
-                    }
-                }
-            }
-
-            HorizontalDivider()
-
-            SectionTitle(stringResource(R.string.settings_storage_section))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.settings_pdf_cache, state.pdfCacheMb),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = viewModel::clearPdfCache) {
-                    Text(stringResource(R.string.settings_clear))
-                }
-            }
-
-            HorizontalDivider()
-
-            SectionTitle(stringResource(R.string.settings_backup_section))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = viewModel::exportBackup) {
-                    Text(stringResource(R.string.settings_backup_export))
-                }
-                TextButton(onClick = { importPicker.launch(arrayOf("application/json", "text/*")) }) {
-                    Text(stringResource(R.string.settings_backup_import))
-                }
-            }
-            Text(
-                stringResource(R.string.settings_backup_hint),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            HorizontalDivider()
-
-            SectionTitle(stringResource(R.string.settings_claude_section))
-            SettingsLink(stringResource(R.string.library_menu_routines), onOpenRoutines)
-            SettingsLink(stringResource(R.string.template_catalog_title), onOpenTemplates)
-            SettingsLink(stringResource(R.string.library_menu_history), onOpenHistory)
-
-            HorizontalDivider()
-
-            SectionTitle(stringResource(R.string.settings_about_section))
-            Text(
-                stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                stringResource(R.string.settings_about_blurb),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp),
-            )
-        }
+                    .padding(padding),
+            onSyncInterval = viewModel::setSyncInterval,
+            onDownloadModel = viewModel::downloadModel,
+            onReindex = viewModel::reindex,
+            onDeleteModel = viewModel::deleteModel,
+            onClearPdfCache = viewModel::clearPdfCache,
+            onExportBackup = viewModel::exportBackup,
+            onImportBackup = { importPicker.launch(arrayOf("application/json", "text/*")) },
+            onOpenRoutines = onOpenRoutines,
+            onOpenTemplates = onOpenTemplates,
+            onOpenHistory = onOpenHistory,
+        )
     }
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp),
-    )
+private fun SettingsContent(
+    state: SettingsUiState,
+    modifier: Modifier = Modifier,
+    onSyncInterval: (Int) -> Unit,
+    onDownloadModel: () -> Unit,
+    onReindex: () -> Unit,
+    onDeleteModel: () -> Unit,
+    onClearPdfCache: () -> Unit,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
+    onOpenRoutines: () -> Unit,
+    onOpenTemplates: () -> Unit,
+    onOpenHistory: () -> Unit,
+) {
+    Column(
+        modifier =
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(Spacing.md),
+    ) {
+        SectionTitle(stringResource(R.string.settings_sync_section), icon = Icons.Outlined.Sync)
+        Text(
+            stringResource(R.string.settings_sync_interval),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            SettingsRepository.SYNC_INTERVAL_CHOICES.forEach { hours ->
+                FilterChip(
+                    selected = state.syncIntervalHours == hours,
+                    onClick = { onSyncInterval(hours) },
+                    label = { Text(stringResource(R.string.settings_hours, hours)) },
+                )
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        SectionTitle(stringResource(R.string.settings_semantic_section), icon = Icons.Outlined.Psychology)
+        val (modelLabel, modelTone) =
+            when (val model = state.modelState) {
+                is ModelState.Ready -> stringResource(R.string.settings_model_ready) to StatusTone.Positive
+                is ModelState.Downloading ->
+                    stringResource(R.string.settings_model_downloading, model.progressPercent) to StatusTone.Machine
+                is ModelState.Failed -> stringResource(R.string.settings_model_failed) to StatusTone.Error
+                ModelState.NotDownloaded ->
+                    stringResource(R.string.settings_model_absent) to StatusTone.Neutral
+            }
+        StatusChip(text = modelLabel, tone = modelTone)
+        Text(
+            pluralStringResource(R.plurals.settings_embedded_count, state.embeddedCount, state.embeddedCount),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            if (state.modelState !is ModelState.Ready) {
+                TextButton(onClick = onDownloadModel) {
+                    Text(stringResource(R.string.settings_model_download))
+                }
+            } else {
+                TextButton(onClick = onReindex) {
+                    Text(stringResource(R.string.settings_model_reindex))
+                }
+                TextButton(onClick = onDeleteModel) {
+                    Text(stringResource(R.string.settings_model_delete))
+                }
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        SectionTitle(stringResource(R.string.settings_storage_section), icon = Icons.Outlined.Storage)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.settings_pdf_cache, state.pdfCacheMb),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onClearPdfCache) {
+                Text(stringResource(R.string.settings_clear))
+            }
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        SectionTitle(stringResource(R.string.settings_backup_section), icon = Icons.Outlined.SettingsBackupRestore)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            TextButton(onClick = onExportBackup) {
+                Text(stringResource(R.string.settings_backup_export))
+            }
+            TextButton(onClick = onImportBackup) {
+                Text(stringResource(R.string.settings_backup_import))
+            }
+        }
+        Text(
+            stringResource(R.string.settings_backup_hint),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        SectionTitle(stringResource(R.string.settings_claude_section), icon = Icons.Outlined.AutoAwesome)
+        SettingsLink(stringResource(R.string.library_menu_routines), onOpenRoutines)
+        SettingsLink(stringResource(R.string.template_catalog_title), onOpenTemplates)
+        SettingsLink(stringResource(R.string.library_menu_history), onOpenHistory)
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        SectionTitle(stringResource(R.string.settings_about_section), icon = Icons.Outlined.Info)
+        Text(
+            stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            stringResource(R.string.settings_about_blurb),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = Spacing.xl),
+        )
+    }
+}
+
+@Composable
+private fun SectionTitle(
+    text: String,
+    icon: ImageVector,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(top = Spacing.sm),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = Spacing.sm),
+        )
+    }
 }
 
 @Composable
@@ -238,13 +301,49 @@ private fun SettingsLink(
     label: String,
     onClick: () -> Unit,
 ) {
-    Text(
-        text = label,
-        style = MaterialTheme.typography.bodyLarge,
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(vertical = 10.dp),
-    )
+                .heightIn(min = 48.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SettingsContentPreview() {
+    ArxiverTheme {
+        SettingsContent(
+            state =
+                SettingsUiState(
+                    modelState = ModelState.Ready(java.io.File("model.onnx")),
+                    embeddedCount = 412,
+                    pdfCacheMb = 96,
+                ),
+            onSyncInterval = {},
+            onDownloadModel = {},
+            onReindex = {},
+            onDeleteModel = {},
+            onClearPdfCache = {},
+            onExportBackup = {},
+            onImportBackup = {},
+            onOpenRoutines = {},
+            onOpenTemplates = {},
+            onOpenHistory = {},
+        )
+    }
 }

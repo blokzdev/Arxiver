@@ -1,5 +1,8 @@
 package dev.blokz.arxiver.feature.claude
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,14 +10,21 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -24,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -31,6 +42,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.claude.RoutineAction
+import dev.blokz.arxiver.ui.theme.ArxiverMotion
+import dev.blokz.arxiver.ui.theme.Spacing
 
 /**
  * SPEC-CLAUDE-BRIDGE §5 confirm sheet: routine → action → instruction →
@@ -131,23 +144,40 @@ fun DispatchSheet(
                 Switch(checked = state.includeNotes, onCheckedChange = viewModel::setIncludeNotes)
             }
 
+            val chevronRotation by animateFloatAsState(
+                targetValue = if (state.previewExpanded) 180f else 0f,
+                animationSpec = tween(ArxiverMotion.DURATION_MEDIUM),
+                label = "preview-chevron",
+            )
             TextButton(onClick = viewModel::togglePreview) {
                 Text(
                     stringResource(
                         if (state.previewExpanded) R.string.dispatch_hide_preview else R.string.dispatch_show_preview,
                     ),
                 )
-            }
-            if (state.previewExpanded) {
-                Text(
-                    text = state.previewJson ?: stringResource(R.string.dispatch_preview_loading),
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 260.dp)
-                            .verticalScroll(rememberScrollState()),
+                Icon(
+                    Icons.Filled.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier.rotate(chevronRotation),
                 )
+            }
+            AnimatedVisibility(visible = state.previewExpanded) {
+                // The exact text that leaves the device (SPEC §3.1).
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = MaterialTheme.shapes.medium,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = state.previewJson ?: stringResource(R.string.dispatch_preview_loading),
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                        modifier =
+                            Modifier
+                                .heightIn(max = 260.dp)
+                                .verticalScroll(rememberScrollState())
+                                .padding(Spacing.sm),
+                    )
+                }
             }
 
             state.error?.let {
@@ -158,11 +188,20 @@ fun DispatchSheet(
                 )
             }
 
-            FilledTonalButton(
+            Button(
                 onClick = viewModel::send,
                 enabled = !state.sending && state.selectedRoutineId != null,
                 modifier = Modifier.fillMaxWidth(),
             ) {
+                if (state.sending) {
+                    CircularProgressIndicator(
+                        modifier =
+                            Modifier
+                                .padding(end = Spacing.sm)
+                                .size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                }
                 Text(
                     stringResource(if (state.sending) R.string.dispatch_sending else R.string.dispatch_send),
                 )

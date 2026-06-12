@@ -1,17 +1,18 @@
 package dev.blokz.arxiver.feature.paper
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.SavedStateHandle
@@ -35,6 +37,12 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.dao.CitationDao
 import dev.blokz.arxiver.core.database.dao.ConnectionRow
+import dev.blokz.arxiver.core.database.toEntity
+import dev.blokz.arxiver.ui.components.EmptyState
+import dev.blokz.arxiver.ui.components.SectionHeader
+import dev.blokz.arxiver.ui.components.StatusChip
+import dev.blokz.arxiver.ui.components.StatusTone
+import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -90,21 +98,12 @@ fun ConnectionsScreen(
         },
     ) { padding ->
         if (state.references.isEmpty() && state.citations.isEmpty()) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(32.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    text = stringResource(R.string.connections_empty),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            EmptyState(
+                title = stringResource(R.string.connections_title),
+                body = stringResource(R.string.connections_empty),
+                icon = Icons.Filled.Hub,
+                modifier = Modifier.padding(padding),
+            )
             return@Scaffold
         }
         LazyColumn(
@@ -115,7 +114,7 @@ fun ConnectionsScreen(
         ) {
             if (state.references.isNotEmpty()) {
                 item(key = "refs-header") {
-                    ConnectionHeader(stringResource(R.string.connections_references, state.references.size))
+                    SectionHeader(stringResource(R.string.connections_references, state.references.size))
                 }
                 items(state.references, key = { "ref-" + it.paper.id }) { row ->
                     ConnectionItem(row, onClick = { onPaperClick(row.paper.id) })
@@ -123,7 +122,7 @@ fun ConnectionsScreen(
             }
             if (state.citations.isNotEmpty()) {
                 item(key = "cites-header") {
-                    ConnectionHeader(stringResource(R.string.connections_cited_by, state.citations.size))
+                    SectionHeader(stringResource(R.string.connections_cited_by, state.citations.size))
                 }
                 items(state.citations, key = { "cite-" + it.paper.id }) { row ->
                     ConnectionItem(row, onClick = { onPaperClick(row.paper.id) })
@@ -131,15 +130,6 @@ fun ConnectionsScreen(
             }
         }
     }
-}
-
-@Composable
-private fun ConnectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-    )
 }
 
 @Composable
@@ -152,7 +142,8 @@ private fun ConnectionItem(
             Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onClick)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .heightIn(min = 48.dp)
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -170,11 +161,30 @@ private fun ConnectionItem(
             }
         }
         if (row.in_library) {
-            Icon(
-                imageVector = Icons.Filled.Bookmark,
-                contentDescription = stringResource(R.string.connections_in_library),
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 8.dp),
+            StatusChip(
+                text = stringResource(R.string.connections_in_library),
+                tone = StatusTone.Positive,
+                icon = Icons.Filled.Bookmark,
+                modifier = Modifier.padding(start = Spacing.sm),
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ConnectionItemPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        Column {
+            SectionHeader("References (2)")
+            ConnectionItem(
+                row =
+                    ConnectionRow(
+                        paper = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.paper.toEntity(),
+                        in_library = true,
+                    ),
+                onClick = {},
             )
         }
     }

@@ -42,5 +42,11 @@ class InboxRepository
 
         suspend fun dismiss(paperId: String) = inboxDao.setState(paperId, InboxItemEntity.STATE_DISMISSED)
 
+        /** Undo support: put a triaged item back into its pre-swipe state. */
+        suspend fun restoreState(
+            paperId: String,
+            state: String,
+        ) = inboxDao.setState(paperId, state)
+
         suspend fun markSeen(paperId: String) = inboxDao.setState(paperId, InboxItemEntity.STATE_SEEN)
     }

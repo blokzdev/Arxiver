@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <style name="Theme.Arxiver" parent="android:Theme.Material.NoActionBar" />
+
+    <!-- Cold-start splash (androidx.core splashscreen); hands off to the
+         Compose theme via postSplashScreenTheme. -->
+    <style name="Theme.Arxiver.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.Arxiver</item>
+    </style>
 </resources>

@@ -20,11 +20,23 @@ private val LightColors =
         onSecondary = Neutral99,
         secondaryContainer = Amber90,
         onSecondaryContainer = Amber10,
+        tertiary = Teal40,
+        onTertiary = Neutral100,
+        tertiaryContainer = Teal90,
+        onTertiaryContainer = Teal10,
         background = Neutral99,
         onBackground = Neutral10,
         surface = Neutral99,
         onSurface = Neutral10,
         surfaceVariant = Neutral95,
+        onSurfaceVariant = Neutral30,
+        surfaceDim = Neutral87,
+        surfaceBright = Neutral99,
+        surfaceContainerLowest = Neutral100,
+        surfaceContainerLow = Neutral96,
+        surfaceContainer = Neutral94,
+        surfaceContainerHigh = Neutral92,
+        surfaceContainerHighest = Neutral90,
     )
 
 private val DarkColors =
@@ -37,10 +49,23 @@ private val DarkColors =
         onSecondary = Amber20,
         secondaryContainer = Amber30,
         onSecondaryContainer = Amber90,
+        tertiary = Teal80,
+        onTertiary = Teal20,
+        tertiaryContainer = Teal30,
+        onTertiaryContainer = Teal90,
         background = Neutral10,
         onBackground = Neutral90,
         surface = Neutral10,
         onSurface = Neutral90,
+        surfaceVariant = Neutral22,
+        onSurfaceVariant = Neutral80,
+        surfaceDim = Neutral6,
+        surfaceBright = Neutral24,
+        surfaceContainerLowest = Neutral4,
+        surfaceContainerLow = Neutral10,
+        surfaceContainer = Neutral12,
+        surfaceContainerHigh = Neutral17,
+        surfaceContainerHighest = Neutral22,
     )
 
 @Composable
@@ -62,6 +87,7 @@ fun ArxiverTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = ArxiverTypography,
+        shapes = ArxiverShapes,
         content = content,
     )
 }

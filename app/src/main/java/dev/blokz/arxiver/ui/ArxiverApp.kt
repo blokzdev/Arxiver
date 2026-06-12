@@ -1,6 +1,14 @@
 package dev.blokz.arxiver.ui
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -12,6 +20,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -39,6 +48,13 @@ import dev.blokz.arxiver.feature.search.SearchScreen
 import dev.blokz.arxiver.feature.settings.SettingsScreen
 import dev.blokz.arxiver.feature.today.TodayScreen
 import dev.blokz.arxiver.ui.navigation.TopLevelDestination
+import dev.blokz.arxiver.ui.theme.ArxiverMotion
+
+/** Bottom-tab switches have no direction — fade through, never slide. */
+private val fadeThroughEnter: AnimatedContentTransitionScope<NavBackStackEntry>.() -> EnterTransition =
+    { fadeIn(tween(ArxiverMotion.DURATION_MEDIUM)) }
+private val fadeThroughExit: AnimatedContentTransitionScope<NavBackStackEntry>.() -> ExitTransition =
+    { fadeOut(tween(ArxiverMotion.DURATION_SHORT)) }
 
 object Routes {
     const val CATEGORY_FEED = "browse/category/{code}?title={title}"
@@ -95,10 +111,26 @@ fun ArxiverApp(
     Scaffold(
         bottomBar = { if (showBottomBar) ArxiverBottomBar(navController) },
     ) { innerPadding ->
+        // Motion grammar (SPEC-UI §1): stacked pushes slide in gently, pops
+        // mirror them; bottom-tab switches fade through (no direction).
         NavHost(
             navController = navController,
             startDestination = if (startOnboarding) Routes.ONBOARDING else TopLevelDestination.Today.route,
             modifier = Modifier.padding(innerPadding),
+            enterTransition = {
+                fadeIn(tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.DecelerateEasing)) +
+                    slideInHorizontally(
+                        tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.DecelerateEasing),
+                    ) { it / 10 }
+            },
+            exitTransition = { fadeOut(tween(ArxiverMotion.DURATION_SHORT)) },
+            popEnterTransition = { fadeIn(tween(ArxiverMotion.DURATION_LONG)) },
+            popExitTransition = {
+                fadeOut(tween(ArxiverMotion.DURATION_SHORT)) +
+                    slideOutHorizontally(
+                        tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.AccelerateEasing),
+                    ) { it / 10 }
+            },
         ) {
             composable(Routes.ONBOARDING) {
                 OnboardingScreen(
@@ -117,7 +149,13 @@ fun ArxiverApp(
                     onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
                 )
             }
-            composable(TopLevelDestination.Today.route) {
+            composable(
+                route = TopLevelDestination.Today.route,
+                enterTransition = fadeThroughEnter,
+                exitTransition = fadeThroughExit,
+                popEnterTransition = fadeThroughEnter,
+                popExitTransition = fadeThroughExit,
+            ) {
                 TodayScreen(
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                     onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
@@ -131,19 +169,37 @@ fun ArxiverApp(
                     },
                 )
             }
-            composable(TopLevelDestination.Browse.route) {
+            composable(
+                route = TopLevelDestination.Browse.route,
+                enterTransition = fadeThroughEnter,
+                exitTransition = fadeThroughExit,
+                popEnterTransition = fadeThroughEnter,
+                popExitTransition = fadeThroughExit,
+            ) {
                 BrowseScreen(
                     onCategoryClick = { code, title ->
                         navController.navigate(Routes.categoryFeed(code, title))
                     },
                 )
             }
-            composable(TopLevelDestination.Search.route) {
+            composable(
+                route = TopLevelDestination.Search.route,
+                enterTransition = fadeThroughEnter,
+                exitTransition = fadeThroughExit,
+                popEnterTransition = fadeThroughEnter,
+                popExitTransition = fadeThroughExit,
+            ) {
                 SearchScreen(
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                 )
             }
-            composable(TopLevelDestination.Library.route) {
+            composable(
+                route = TopLevelDestination.Library.route,
+                enterTransition = fadeThroughEnter,
+                exitTransition = fadeThroughExit,
+                popEnterTransition = fadeThroughEnter,
+                popExitTransition = fadeThroughExit,
+            ) {
                 LibraryScreen(
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                     onOpenRoutines = { navController.navigate(Routes.ROUTINES) },

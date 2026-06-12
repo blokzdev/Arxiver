@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -60,8 +61,33 @@ class LibraryViewModel
             viewModelScope.launch { libraryRepository.createCollection(name) }
         }
 
-        fun deleteCollection(id: Long) {
-            viewModelScope.launch { libraryRepository.deleteCollection(id) }
+        private val _collectionDeleted = MutableStateFlow<CollectionDeleteEvent?>(null)
+
+        /** Latest collection deletion awaiting its undo snackbar. */
+        val collectionDeleted: StateFlow<CollectionDeleteEvent?> = _collectionDeleted.asStateFlow()
+
+        fun deleteCollection(
+            id: Long,
+            name: String,
+        ) {
+            viewModelScope.launch {
+                // Capture membership first so undo can restore it exactly.
+                val memberIds = libraryRepository.observeCollectionPapers(id).first().map { it.paper.id.value }
+                libraryRepository.deleteCollection(id)
+                _collectionDeleted.value = CollectionDeleteEvent(name = name, memberIds = memberIds)
+            }
+        }
+
+        /** Recreates the collection and its memberships (new row id). */
+        fun undoDeleteCollection(event: CollectionDeleteEvent) {
+            viewModelScope.launch {
+                val newId = libraryRepository.createCollection(event.name)
+                event.memberIds.forEach { libraryRepository.addToCollection(newId, it) }
+            }
+        }
+
+        fun consumeCollectionDeleted() {
+            _collectionDeleted.value = null
         }
 
         fun exportJson() {
@@ -82,3 +108,6 @@ class LibraryViewModel
     }
 
 data class ExportContent(val fileName: String, val mimeType: String, val content: String)
+
+/** A deleted collection, held just long enough for undo. */
+data class CollectionDeleteEvent(val name: String, val memberIds: List<String>)

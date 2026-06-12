@@ -18,6 +18,9 @@
     <string name="cd_clear_query">Clear search query</string>
     <string name="cd_toggle_night_mode">Toggle night mode</string>
     <string name="cd_pdf_page">Page %1$d</string>
+    <string name="cd_scroll_to_top">Scroll to top</string>
+    <string name="cd_rating">Rated %1$d of 5</string>
+    <string name="cd_relevance">Relevance %1$d%%</string>
 
     <string name="feed_loading_queued">Querying arXiv… requests are spaced to respect arXiv\'s rate limits</string>
 
@@ -42,6 +45,7 @@
 
     <string name="pdf_title">PDF</string>
     <string name="pdf_downloading">Downloading PDF…</string>
+    <string name="pdf_page_indicator">%1$d / %2$d</string>
 
     <string name="action_retry">Retry</string>
     <string name="action_share">Share</string>
@@ -50,6 +54,12 @@
     <string name="cd_refresh_inbox">Refresh inbox</string>
     <string name="cd_weekly_review">Send weekly review to Claude</string>
     <string name="cd_save_paper">Save to library</string>
+    <string name="cd_dismiss_paper">Dismiss</string>
+    <string name="today_snackbar_saved">Saved to library</string>
+    <string name="today_snackbar_dismissed">Paper dismissed</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_more">More</string>
+    <string name="action_less">Less</string>
     <string name="cd_unsave_paper">Remove from library</string>
     <plurals name="cd_rate_star">
         <item quantity="one">Rate %1$d star</item>
@@ -91,6 +101,7 @@
     <string name="library_export_json">Export JSON</string>
     <string name="library_export_bibtex">Export BibTeX</string>
     <string name="library_filtered_empty">Nothing here yet.</string>
+    <string name="library_collection_deleted">Collection “%1$s” deleted</string>
 
     <string name="paper_related_heading">Related papers</string>
     <string name="paper_tags_heading">Tags</string>
@@ -224,6 +235,10 @@
     <string name="history_title">Dispatch history</string>
     <string name="history_empty">Dispatches you send to Claude appear here.</string>
     <string name="history_row_title">%1$s · papers: %2$d</string>
+    <string name="history_detail_title">%1$s · %2$s</string>
+    <string name="history_status_sent">sent</string>
+    <string name="history_status_queued">queued</string>
+    <string name="history_status_failed">failed</string>
     <string name="action_delete">Delete</string>
     <string name="action_save">Save</string>
 
@@ -258,7 +273,6 @@
     <string name="settings_version">Arxiver %1$s</string>
     <string name="settings_about_blurb">Local-first arXiv explorer. No accounts, no telemetry — your library lives on this device. Thank you to arXiv for use of its open access interoperability.</string>
 
-    <string name="onboarding_title">Welcome to Arxiver</string>
     <string name="onboarding_pitch">Your personal arXiv engine: follow fields, triage daily papers, build a deeply-indexed local library, and dispatch anything to your Claude.</string>
     <string name="onboarding_pick_categories">Pick a few fields to follow</string>
     <string name="onboarding_more_in_browse">The full category directory lives in Browse.</string>

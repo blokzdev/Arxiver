@@ -8,6 +8,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import dagger.hilt.android.AndroidEntryPoint
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.ui.ArxiverApp
@@ -23,6 +24,8 @@ class MainActivity : ComponentActivity() {
     private var deepLinkPaperId by mutableStateOf<ArxivId?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Must precede super.onCreate — hands the system splash to Compose.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         deepLinkPaperId = intent?.extractArxivId()
