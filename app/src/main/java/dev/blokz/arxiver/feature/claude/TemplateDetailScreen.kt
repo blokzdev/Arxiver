@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -52,6 +53,7 @@ import kotlinx.coroutines.launch
 fun TemplateDetailScreen(
     templateId: String,
     onBack: () -> Unit,
+    onStartSetup: (String) -> Unit,
 ) {
     val template = RoutineTemplateCatalog.byId(templateId)
     val snackbar = remember { SnackbarHostState() }
@@ -81,6 +83,7 @@ fun TemplateDetailScreen(
             TemplateDetailContent(
                 template = template,
                 snackbar = snackbar,
+                onStartSetup = { onStartSetup(template.id) },
                 modifier =
                     Modifier
                         .fillMaxSize()
@@ -94,6 +97,7 @@ fun TemplateDetailScreen(
 private fun TemplateDetailContent(
     template: RoutineTemplate,
     snackbar: SnackbarHostState,
+    onStartSetup: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -136,6 +140,9 @@ private fun TemplateDetailContent(
             )
         }
 
+        Button(onClick = onStartSetup, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.template_set_up))
+        }
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth(),
@@ -184,6 +191,6 @@ private fun TemplateDetailContent(
 @Composable
 private fun TemplateDetailPreview() {
     ArxiverTheme {
-        TemplateDetailScreen(templateId = "paper_digest", onBack = {})
+        TemplateDetailScreen(templateId = "paper_digest", onBack = {}, onStartSetup = {})
     }
 }

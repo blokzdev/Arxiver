@@ -53,12 +53,12 @@ class DispatchRepository
         private val paperDao: PaperDao,
         private val citationDao: CitationDao,
         private val embeddingDao: EmbeddingDao,
-    ) {
+    ) : RoutineSetupGateway {
         // --- routine configs ---
 
         fun observeRoutines(): Flow<List<RoutineConfigEntity>> = routineDao.observeConfigs()
 
-        suspend fun addRoutine(
+        override suspend fun addRoutine(
             name: String,
             triggerUrl: String,
             token: String,
@@ -74,7 +74,16 @@ class DispatchRepository
             )
         }
 
-        suspend fun replaceToken(
+        override suspend fun updateRoutine(
+            routineId: Long,
+            name: String,
+            triggerUrl: String,
+        ) {
+            val config = routineDao.configById(routineId) ?: return
+            routineDao.updateConfig(config.copy(name = name.trim(), triggerUrl = triggerUrl.trim()))
+        }
+
+        override suspend fun replaceToken(
             routineId: Long,
             token: String,
         ) {
@@ -134,7 +143,7 @@ class DispatchRepository
 
         fun observeHistory(): Flow<List<RoutineDispatchEntity>> = routineDao.observeDispatches()
 
-        suspend fun ping(routineId: Long): DispatchSubmission {
+        override suspend fun ping(routineId: Long): DispatchSubmission {
             val payload =
                 payloadBuilder.build(
                     action = RoutineAction.PING,

@@ -15,14 +15,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.feature.browse.BrowseScreen
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
 import dev.blokz.arxiver.feature.claude.DispatchHistoryScreen
+import dev.blokz.arxiver.feature.claude.RoutineSetupScreen
 import dev.blokz.arxiver.feature.claude.RoutinesScreen
 import dev.blokz.arxiver.feature.claude.TemplateCatalogScreen
 import dev.blokz.arxiver.feature.claude.TemplateDetailScreen
@@ -45,6 +48,7 @@ object Routes {
     const val ROUTINES = "claude/routines"
     const val TEMPLATE_CATALOG = "claude/templates"
     const val TEMPLATE_DETAIL = "claude/templates/{templateId}"
+    const val ROUTINE_SETUP = "claude/setup?templateId={templateId}"
     const val SETTINGS = "settings"
     const val ONBOARDING = "onboarding"
     const val DISPATCH_HISTORY = "claude/history"
@@ -69,6 +73,8 @@ object Routes {
     ) = "library/$mode/$id?title=${Uri.encode(title)}"
 
     fun templateDetail(templateId: String) = "claude/templates/$templateId"
+
+    fun routineSetup(templateId: String?) = templateId?.let { "claude/setup?templateId=$it" } ?: "claude/setup"
 }
 
 @Composable
@@ -192,6 +198,30 @@ fun ArxiverApp(
                 TemplateDetailScreen(
                     templateId = entry.arguments?.getString("templateId").orEmpty(),
                     onBack = { navController.popBackStack() },
+                    onStartSetup = { id -> navController.navigate(Routes.routineSetup(id)) },
+                )
+            }
+            composable(
+                route = Routes.ROUTINE_SETUP,
+                arguments =
+                    listOf(
+                        navArgument("templateId") {
+                            type = NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                    ),
+            ) {
+                RoutineSetupScreen(
+                    onExit = { navController.popBackStack() },
+                    onDone = {
+                        // Land on the routines list, where the new routine now shows.
+                        if (!navController.popBackStack(Routes.ROUTINES, inclusive = false)) {
+                            navController.navigate(Routes.ROUTINES) {
+                                popUpTo(Routes.TEMPLATE_CATALOG) { inclusive = true }
+                            }
+                        }
+                    },
                 )
             }
             composable(Routes.DISPATCH_HISTORY) {

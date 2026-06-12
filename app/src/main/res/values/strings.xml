@@ -178,6 +178,35 @@
     <string name="template_show_instructions">Show full instructions</string>
     <string name="template_hide_instructions">Hide full instructions</string>
     <string name="template_not_found">Template unavailable.</string>
+    <string name="template_set_up">Set up this routine</string>
+
+    <string name="setup_title">Guided setup</string>
+    <string name="setup_step_indicator">Step %1$d of 3</string>
+    <string name="setup_create_title">Create the routine in the Claude app</string>
+    <string name="setup_create_step1">Copy the instructions with the button below</string>
+    <string name="setup_create_step2">At claude.ai/code/routines, create a new routine and paste them as its instructions</string>
+    <string name="setup_create_step3">Choose the API trigger</string>
+    <string name="setup_create_step4_none">Attach no connectors — results appear in the run log</string>
+    <string name="setup_create_step4_connectors">Attach only these connectors: %1$s</string>
+    <string name="setup_open_claude">Open claude.ai</string>
+    <string name="setup_continue">Continue</string>
+    <string name="setup_connect_title">Connect it to Arxiver</string>
+    <string name="setup_connect_body">From the routine\'s API trigger settings, copy the trigger URL and token and paste them here. The token is stored encrypted on this device only.</string>
+    <string name="setup_url_shape_warning">Doesn\'t look like a trigger URL (expected …/routines/…) — double-check the copy</string>
+    <string name="setup_save_continue">Save &amp; continue</string>
+    <string name="setup_verify_title">Verify the connection</string>
+    <string name="setup_verify_body">Your routine is saved. A test ping starts a real run (there\'s no dry-run) — the ping tells Claude to acknowledge and stop. You can also skip this and test later.</string>
+    <string name="setup_send_test">Send test ping</string>
+    <string name="setup_skip_test">Skip for now</string>
+    <string name="setup_verifying">Pinging your routine…</string>
+    <string name="setup_verified_title">Connected!</string>
+    <string name="setup_verified_body">Ping accepted — the run in the Claude app should show a one-line acknowledgement.</string>
+    <string name="setup_queued_body">You\'re offline — the ping is queued and will send automatically. Your routine is saved.</string>
+    <string name="setup_failed_title">Ping failed: %1$s</string>
+    <string name="setup_retry">Retry test</string>
+    <string name="setup_edit_connection">Edit URL &amp; token</string>
+    <string name="setup_keep_anyway">Keep routine anyway</string>
+    <string name="setup_done">Done</string>
 
     <string name="history_title">Dispatch history</string>
     <string name="history_empty">Dispatches you send to Claude appear here.</string>
@@ -220,7 +249,7 @@
     <string name="onboarding_pitch">Your personal arXiv engine: follow fields, triage daily papers, build a deeply-indexed local library, and dispatch anything to your Claude.</string>
     <string name="onboarding_pick_categories">Pick a few fields to follow</string>
     <string name="onboarding_more_in_browse">The full category directory lives in Browse.</string>
-    <string name="onboarding_claude_note">Optional: connect a Claude routine later from Library → Claude routines to digest and deep-dive papers with your own connectors.</string>
+    <string name="onboarding_claude_note">Optional: connect Claude later — pick a routine template under Library → Claude routines and the guided setup takes you the rest of the way.</string>
     <string name="onboarding_start">Start reading</string>
 
     <string name="action_add">Add</string>
