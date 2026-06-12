@@ -253,7 +253,7 @@ private fun SwipeableInboxRow(
         },
     ) {
         Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-            PaperListItem(paper = item.paper, onClick = onClick)
+            PaperListItem(paper = item.paper, onClick = onClick, score = item.score)
         }
     }
 }

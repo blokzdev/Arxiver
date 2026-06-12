@@ -41,7 +41,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.feature.browse.ErrorState
+import dev.blokz.arxiver.ui.components.PaperBadge
 import dev.blokz.arxiver.ui.components.PaperListItem
+import dev.blokz.arxiver.ui.components.StatusTone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -154,8 +156,10 @@ private fun LocalResultList(
                         onClick = { onPaperClick(hit.paper.id.value) },
                         badge =
                             when (hit.provenance) {
-                                Provenance.BOTH -> stringResource(R.string.search_badge_both)
-                                Provenance.SEMANTIC -> stringResource(R.string.search_badge_semantic)
+                                Provenance.BOTH ->
+                                    PaperBadge(stringResource(R.string.search_badge_both), StatusTone.Machine)
+                                Provenance.SEMANTIC ->
+                                    PaperBadge(stringResource(R.string.search_badge_semantic), StatusTone.Machine)
                                 Provenance.KEYWORD -> null
                             },
                     )

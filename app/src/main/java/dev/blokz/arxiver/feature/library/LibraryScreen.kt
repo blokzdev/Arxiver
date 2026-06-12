@@ -239,6 +239,9 @@ private fun PapersTab(
                             if (selectedIds.isEmpty()) onPaperClick(id) else onToggleSelect(id)
                         },
                         onLongClick = { onToggleSelect(id) },
+                        status = row.status,
+                        rating = row.rating,
+                        selectionMode = selectedIds.isNotEmpty(),
                         selected = id in selectedIds,
                     )
                 }
