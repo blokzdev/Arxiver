@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -218,3 +219,16 @@ private fun statusLabel(status: String): String =
         RoutineDispatchEntity.STATUS_FAILED -> stringResource(R.string.history_status_failed)
         else -> status
     }
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun DispatchRowPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        Column {
+            dev.blokz.arxiver.ui.fixtures.PreviewFixtures.dispatches.forEach { dispatch ->
+                DispatchRow(dispatch, onClick = {})
+            }
+        }
+    }
+}

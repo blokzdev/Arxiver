@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -368,4 +369,41 @@ private fun RoutineDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun RoutineRowPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        Column {
+            RoutineRow(
+                routine =
+                    RoutineConfigEntity(
+                        id = 1,
+                        name = "Paper Digest",
+                        triggerUrl = "https://api.anthropic.com/v1/claude_code/routines/example",
+                        tokenAlias = "alias",
+                        createdAt = 0,
+                    ),
+                onPing = {},
+                onReauth = {},
+                onDelete = {},
+            )
+            RoutineRow(
+                routine =
+                    RoutineConfigEntity(
+                        id = 2,
+                        name = "Deep-Dive Analyst",
+                        triggerUrl = "https://api.anthropic.com/v1/claude_code/routines/other",
+                        tokenAlias = "alias2",
+                        createdAt = 0,
+                        authInvalid = true,
+                    ),
+                onPing = {},
+                onReauth = {},
+                onDelete = {},
+            )
+        }
+    }
 }

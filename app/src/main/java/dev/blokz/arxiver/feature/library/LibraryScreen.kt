@@ -60,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
@@ -417,4 +418,19 @@ private fun NewCollectionDialog(
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
         },
     )
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun LibraryPapersPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        PapersTab(
+            state = LibraryUiState(papers = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.libraryPapers),
+            selectedIds = emptySet(),
+            onFilter = {},
+            onPaperClick = {},
+            onToggleSelect = {},
+        )
+    }
 }

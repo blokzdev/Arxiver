@@ -37,6 +37,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.common.AppError
@@ -171,5 +172,23 @@ internal fun ErrorState(
             style = MaterialTheme.typography.bodyMedium,
         )
         TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun CategoryFeedPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        PaperList(
+            state =
+                CategoryFeedUiState(
+                    code = "cs.LG",
+                    title = "Machine Learning",
+                    papers = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.papers,
+                ),
+            onPaperClick = {},
+            onLoadMore = {},
+        )
     }
 }

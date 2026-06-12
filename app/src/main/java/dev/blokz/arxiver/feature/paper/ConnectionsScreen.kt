@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.SavedStateHandle
@@ -36,6 +37,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.dao.CitationDao
 import dev.blokz.arxiver.core.database.dao.ConnectionRow
+import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.SectionHeader
 import dev.blokz.arxiver.ui.components.StatusChip
@@ -164,6 +166,25 @@ private fun ConnectionItem(
                 tone = StatusTone.Positive,
                 icon = Icons.Filled.Bookmark,
                 modifier = Modifier.padding(start = Spacing.sm),
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ConnectionItemPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        Column {
+            SectionHeader("References (2)")
+            ConnectionItem(
+                row =
+                    ConnectionRow(
+                        paper = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.paper.toEntity(),
+                        in_library = true,
+                    ),
+                onClick = {},
             )
         }
     }

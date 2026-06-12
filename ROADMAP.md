@@ -107,8 +107,8 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 - [x] UX.2 Shared components: SectionHeader, EmptyState, skeleton set, StatusChip (ScoreBar lands with the cell); richer preview fixtures
 - [x] UX.3 App shell: splash screen, nav transitions (fade-through tabs, slide pushes), predictive back
 - [x] UX.4 PaperListItem v2: badge/score/status/rating slots, animated selection, all call sites
-- [~] UX.5 Screen passes: Today (pull-to-refresh, undo triage, haptics, a11y actions) · Browse (animated groups) · CategoryFeed (skeletons, refresh, scroll-to-top) · Search (pill field, segmented tabs, skeletons) · Library (selection UX, undo delete, tag cloud) · PaperDetail (scroll-aware bar, expandable abstract, animated save/rating) · Connections+PDF (chips, page pill) · Settings (ListItem anatomy) · Onboarding (brand moment) · Claude surfaces (status tones, sheet polish, hardcoded-string fix)
-- [ ] UX.6 DoD sweep: light/dark previews on every screen, contentDescription audit, font-scale resilience
+- [x] UX.5 Screen passes: Today (pull-to-refresh, undo triage, haptics, a11y actions) · Browse (animated groups) · CategoryFeed (skeletons, refresh, scroll-to-top) · Search (pill field, segmented tabs, skeletons) · Library (selection UX, undo delete, tag cloud) · PaperDetail (scroll-aware bar, expandable abstract, animated save/rating) · Connections+PDF (chips, page pill) · Settings (ListItem anatomy) · Onboarding (brand moment) · Claude surfaces (status tones, sheet polish, hardcoded-string fix)
+- [x] UX.6 DoD sweep: light/dark preview pairs across all screens (DispatchSheet excepted — modal sheets don't render in previews; PDF is renderer-bound); decorative icons null-described, actionables labeled; detail hero wraps rather than ellipsizing
 - [ ] UX.7 Release prep: versionName 1.1.0 / versionCode 2 (fixes stale 0.1.0 identity)
 
 ## v2 candidate backlog (do not work on these)

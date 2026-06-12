@@ -41,6 +41,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
@@ -182,5 +183,47 @@ private fun CategoryRow(
             },
             modifier = Modifier.semantics { contentDescription = followDescription },
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun BrowseGroupPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        Column {
+            GroupHeader(
+                group =
+                    CategoryGroup(
+                        name = "Computer Science",
+                        categories =
+                            listOf(
+                                CategoryWithFollowState(
+                                    dev.blokz.arxiver.core.model.ArxivCategory(
+                                        code = "cs.LG",
+                                        name = "Machine Learning",
+                                        group = "Computer Science",
+                                    ),
+                                    followed = true,
+                                ),
+                            ),
+                    ),
+                expanded = true,
+                onToggle = {},
+            )
+            CategoryRow(
+                item =
+                    CategoryWithFollowState(
+                        dev.blokz.arxiver.core.model.ArxivCategory(
+                            code = "cs.LG",
+                            name = "Machine Learning",
+                            group = "Computer Science",
+                        ),
+                        followed = true,
+                    ),
+                onClick = {},
+                onFollowToggle = {},
+            )
+        }
     }
 }

@@ -273,7 +273,6 @@
     <string name="settings_version">Arxiver %1$s</string>
     <string name="settings_about_blurb">Local-first arXiv explorer. No accounts, no telemetry — your library lives on this device. Thank you to arXiv for use of its open access interoperability.</string>
 
-    <string name="onboarding_title">Welcome to Arxiver</string>
     <string name="onboarding_pitch">Your personal arXiv engine: follow fields, triage daily papers, build a deeply-indexed local library, and dispatch anything to your Claude.</string>
     <string name="onboarding_pick_categories">Pick a few fields to follow</string>
     <string name="onboarding_more_in_browse">The full category directory lives in Browse.</string>
