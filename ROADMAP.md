@@ -89,8 +89,8 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 > Goal: a curated catalog of Claude routine templates plus an in-app guided setup flow, so a non-expert goes from template → verified working routine without guesswork. The catalog design is reviewed by the user **before** implementation. 4.8/CHECKPOINT 4 (real-trigger E2E) gates only the verification tasks (6.6), not the design ones.
 
-- [ ] 6.1 [needs-user] Routine template catalog proposal: 6–10 paper-centric use cases, each with name, purpose, optimal instruction text, trigger type + config, minimal connector set (see memory: claude-routines-ui-contract), and payload/action mapping — drafted as `docs/SPEC-ROUTINES-CATALOG.md` and presented for user review
-- [ ] 6.2 Spec finalization: fold review feedback into SPEC-ROUTINES-CATALOG; extend SPEC-CLAUDE-BRIDGE with the guided-setup + verification contract (test-dispatch semantics, error taxonomy)
+- [x] 6.1 Routine template catalog proposal: 8 paper-centric templates (name, purpose, instruction preamble + shared recognition core, API-trigger config, minimal connector set, action mapping) — drafted as `docs/SPEC-ROUTINES-CATALOG.md`; user reviewed & approved via the Phase 6 plan, 2026-06-12, no edits requested
+- [x] 6.2 Spec finalization: SPEC-ROUTINES-CATALOG approved as drafted; SPEC-CLAUDE-BRIDGE extended with §8 guided-setup + verification contract (opt-in test-dispatch semantics, save-before-verify, error taxonomy table)
 - [ ] 6.3 Catalog in app: bundled versioned template data + browse/detail UI (what each template does, what it needs); per-template "copy instructions" built on the 4.7 generator
 - [ ] 6.4 Guided setup wizard: stepper walking the user through creating the routine at claude.ai/code/routines (API trigger) → copying URL + token → pasting into Arxiver; input validation at entry; tokens only via TokenVault
 - [ ] 6.5 Auto-verification: test dispatch on save with success confirmation; graceful failure handling + troubleshooting per error class (401 bad token, 404 wrong URL, 5xx, rate-limit, offline) with actionable fixes
