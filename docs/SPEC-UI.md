@@ -4,8 +4,19 @@
 
 ## 1. Design language
 
-- **Material 3**, dynamic color (Monet) with a fallback brand scheme: deep indigo primary `#3F51B5`-family, warm paper-white surfaces; dark theme first-class (researchers read at night).
+- **Material 3**, dynamic color (Monet) with a fallback brand scheme: deep indigo primary `#3F51B5`-family, warm paper-white surfaces; dark theme first-class (researchers read at night). Both fallback schemes define the full surface-container tier (`surfaceDim/Bright`, `surfaceContainerLowest…Highest`) so depth hierarchy survives without dynamic color.
+- **Color-role semantics** (consistent across every surface):
+
+  | Role | Meaning | Examples |
+  |---|---|---|
+  | primary (indigo) | identity, navigation, in-library | section headers, nav selection, bookmark/in-library markers, authors |
+  | secondary (amber) | the user's annotation layer | ratings, tags, reading status, category chips |
+  | tertiary (teal) | machine-intelligence signals | semantic/keyword provenance badges, similarity & relevance scores, dispatch-sent state |
+  | error | destructive + failed only | delete affordances, failed dispatches, auth errors |
+
+  Rate-limit and offline states are informative (`onSurfaceVariant` on plain surfaces), never error-styled.
 - Typography: Material 3 type scale; paper titles in a serif-accented style (e.g. `Lora`/platform serif) to evoke print; everything else sans.
+- Shapes: gently rounder than M3 defaults (8/12/16/20/28dp) — `extraSmall` chips/badges, `small` inline surfaces/skeletons, `medium` cards, `extraLarge` sheets.
 - Density: list-first app; compact list items, generous tap targets (≥48dp), swipe actions where they earn their keep (inbox triage).
 - LaTeX in titles/abstracts: best-effort inline rendering of common math via lightweight mapping (subset: super/subscripts, greek, common symbols); raw LaTeX shown as-is when unmapped. No WebView-MathJax in v1 (cost/benefit).
 - Motion: standard M3 transitions; no gratuitous animation.

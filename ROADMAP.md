@@ -99,6 +99,18 @@ Legend: `[ ]` todo · `[x]` done · `[~]` in progress · `[!]` blocked (reason n
 
 ---
 
+## Phase UX — Design & UX elevation sweep (side-phase, pre-v1.1.0)
+
+> User-directed (2026-06-12): elevate design/UI/UX across all surfaces to a world-class modern sleek experience. One PR, dependency-ordered commits, every commit green. Honors the existing SPEC-UI promises that were never built (skeletons §4, swipe a11y alternatives §5, score bar §3, expandable abstract §3).
+
+- [~] UX.1 Foundation: complete fallback palette (teal tertiary = machine-signal accent, surface-container tiers), custom shapes, motion + spacing tokens; SPEC-UI §1 color-semantics table
+- [ ] UX.2 Shared components: SectionHeader, EmptyState, skeleton set, StatusChip/ScoreBar; richer preview fixtures
+- [ ] UX.3 App shell: splash screen, nav transitions (fade-through tabs, slide pushes), predictive back
+- [ ] UX.4 PaperListItem v2: badge/score/status/rating slots, animated selection, all call sites
+- [ ] UX.5 Screen passes: Today (pull-to-refresh, undo triage, haptics, a11y actions) · Browse (animated groups) · CategoryFeed (skeletons, refresh, scroll-to-top) · Search (pill field, segmented tabs, skeletons) · Library (selection UX, undo delete, tag cloud) · PaperDetail (scroll-aware bar, expandable abstract, animated save/rating) · Connections+PDF (chips, page pill) · Settings (ListItem anatomy) · Onboarding (brand moment) · Claude surfaces (status tones, sheet polish, hardcoded-string fix)
+- [ ] UX.6 DoD sweep: light/dark previews on every screen, contentDescription audit, font-scale resilience
+- [ ] UX.7 Release prep: versionName 1.1.0 / versionCode 2 (fixes stale 0.1.0 identity)
+
 ## v2 candidate backlog (do not work on these)
 
 Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-paper · full-text PDF indexing · visual graph canvas · Play Store · tablet layouts · per-user preference learning beyond centroids (SVM à la arxiv-sanity) · HTML paper rendering (ar5iv)
