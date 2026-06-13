@@ -82,10 +82,16 @@ class OnboardingViewModel
             viewModelScope.launch { categoryRepository.setFollowed(category, followed) }
         }
 
-        fun finish() {
+        /**
+         * Persists the onboarded flag and kicks the first sync, THEN hands
+         * control back for navigation — navigating first would pop this
+         * ViewModel and cancel the writes mid-flight.
+         */
+        fun finish(onComplete: () -> Unit) {
             viewModelScope.launch {
                 settingsRepository.setOnboarded()
                 syncScheduler.syncNow()
+                onComplete()
             }
         }
 
@@ -110,10 +116,7 @@ fun OnboardingScreen(
     OnboardingContent(
         state = state,
         onToggle = viewModel::toggle,
-        onStart = {
-            viewModel.finish()
-            onDone()
-        },
+        onStart = { viewModel.finish(onComplete = onDone) },
     )
 }
 
