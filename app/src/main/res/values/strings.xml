@@ -283,6 +283,11 @@
     <string name="action_create">Create</string>
     <string name="action_cancel">Cancel</string>
 
+    <string name="crash_dialog_title">Arxiver crashed last time</string>
+    <string name="crash_dialog_body">A crash report was saved on this device (it never leaves your phone). Copy it and share it with the developer to help fix the issue.</string>
+    <string name="crash_copy">Copy trace</string>
+    <string name="crash_dismiss">Dismiss</string>
+
     <string name="error_offline">You\'re offline. Cached papers remain available.</string>
     <string name="error_rate_limited">arXiv is throttling requests — trying again shortly.</string>
     <string name="error_generic">Something went wrong talking to arXiv.</string>
