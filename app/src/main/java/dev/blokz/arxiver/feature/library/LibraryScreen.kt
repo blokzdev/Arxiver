@@ -423,6 +423,15 @@ private fun NewCollectionDialog(
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
+private fun NewCollectionDialogPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        NewCollectionDialog(onConfirm = {}, onDismiss = {})
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
 private fun LibraryPapersPreview() {
     dev.blokz.arxiver.ui.theme.ArxiverTheme {
         PapersTab(

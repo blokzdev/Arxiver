@@ -19,6 +19,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -81,22 +82,50 @@ fun FilteredPapersScreen(
                     .fillMaxSize()
                     .padding(padding),
         ) {
-            val rows = papers
-            when {
-                rows == null -> SkeletonList()
-                rows.isEmpty() ->
-                    EmptyState(
-                        title = stringResource(R.string.library_filtered_empty),
-                        body = stringResource(R.string.library_filtered_empty_body),
-                        icon = Icons.Outlined.FolderOpen,
-                    )
-                else ->
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(rows, key = { it.paper.id.value }) { row ->
-                            PaperListItem(paper = row.paper, onClick = { onPaperClick(row.paper.id.value) })
-                        }
-                    }
-            }
+            FilteredPapersContent(rows = papers, onPaperClick = onPaperClick)
         }
+    }
+}
+
+@Composable
+private fun FilteredPapersContent(
+    rows: List<LibraryPaper>?,
+    onPaperClick: (String) -> Unit,
+) {
+    when {
+        rows == null -> SkeletonList()
+        rows.isEmpty() ->
+            EmptyState(
+                title = stringResource(R.string.library_filtered_empty),
+                body = stringResource(R.string.library_filtered_empty_body),
+                icon = Icons.Outlined.FolderOpen,
+            )
+        else ->
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(rows, key = { it.paper.id.value }) { row ->
+                    PaperListItem(paper = row.paper, onClick = { onPaperClick(row.paper.id.value) })
+                }
+            }
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun FilteredPapersEmptyPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        FilteredPapersContent(rows = emptyList(), onPaperClick = {})
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun FilteredPapersListPreview() {
+    dev.blokz.arxiver.ui.theme.ArxiverTheme {
+        FilteredPapersContent(
+            rows = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.libraryPapers,
+            onPaperClick = {},
+        )
     }
 }

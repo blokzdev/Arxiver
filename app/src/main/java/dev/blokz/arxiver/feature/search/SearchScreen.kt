@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.search.Provenance
@@ -47,6 +48,8 @@ import dev.blokz.arxiver.ui.components.PaperListItem
 import dev.blokz.arxiver.ui.components.SkeletonList
 import dev.blokz.arxiver.ui.components.SkeletonPaperItem
 import dev.blokz.arxiver.ui.components.StatusTone
+import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
+import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -239,5 +242,38 @@ private fun SearchingState() {
             modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
         )
         SkeletonList(itemCount = 6)
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun LocalResultsPreview() {
+    ArxiverTheme {
+        LocalResultList(
+            state =
+                SearchUiState(
+                    query = "diffusion models",
+                    semanticActive = true,
+                    localResults =
+                        PreviewFixtures.papers.mapIndexed { i, paper ->
+                            LocalHit(
+                                paper = paper,
+                                score = 0.9 - i * 0.1,
+                                provenance = if (i == 0) Provenance.BOTH else Provenance.KEYWORD,
+                            )
+                        },
+                ),
+            onPaperClick = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun LocalResultsEmptyPreview() {
+    ArxiverTheme {
+        LocalResultList(state = SearchUiState(query = ""), onPaperClick = {})
     }
 }

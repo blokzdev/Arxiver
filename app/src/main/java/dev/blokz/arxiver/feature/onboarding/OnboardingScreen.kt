@@ -255,3 +255,29 @@ private fun OnboardingPreview() {
         )
     }
 }
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun OnboardingLoadingPreview() {
+    ArxiverTheme {
+        OnboardingContent(
+            state = OnboardingUiState(loading = true),
+            onToggle = { _, _ -> },
+            onStart = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun OnboardingErrorPreview() {
+    ArxiverTheme {
+        OnboardingContent(
+            state = OnboardingUiState(loading = false, error = true),
+            onToggle = { _, _ -> },
+            onStart = {},
+        )
+    }
+}
