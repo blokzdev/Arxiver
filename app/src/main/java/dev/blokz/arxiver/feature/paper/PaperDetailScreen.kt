@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -100,6 +101,8 @@ fun PaperDetailScreen(
     val entry by viewModel.entry.collectAsState()
     val notes by viewModel.notes.collectAsState()
     val tags by viewModel.tags.collectAsState()
+    val collections by viewModel.collections.collectAsState()
+    val memberCollectionIds by viewModel.memberCollectionIds.collectAsState()
     val related by viewModel.related.collectAsState()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
@@ -188,6 +191,8 @@ fun PaperDetailScreen(
                             entry = entry,
                             notes = notes,
                             tags = tags,
+                            collections = collections,
+                            memberCollectionIds = memberCollectionIds,
                             related = related,
                             scrollState = scrollState,
                             onOpenPdf = onOpenPdf,
@@ -199,6 +204,9 @@ fun PaperDetailScreen(
                             onDeleteNote = viewModel::deleteNote,
                             onAddTag = viewModel::addTag,
                             onRemoveTag = viewModel::removeTag,
+                            onAddToCollection = viewModel::addToCollection,
+                            onRemoveFromCollection = viewModel::removeFromCollection,
+                            onCreateCollection = viewModel::createCollectionWithPaper,
                         )
                     }
             }
@@ -226,6 +234,8 @@ private fun PaperDetailContent(
     entry: LibraryEntryEntity?,
     notes: List<NoteEntity>,
     tags: List<TagEntity>,
+    collections: List<dev.blokz.arxiver.core.database.entity.CollectionEntity>,
+    memberCollectionIds: Set<Long>,
     related: List<RelatedPaper>,
     scrollState: androidx.compose.foundation.ScrollState,
     onOpenPdf: (String) -> Unit,
@@ -237,6 +247,9 @@ private fun PaperDetailContent(
     onDeleteNote: (Long) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (Long) -> Unit,
+    onAddToCollection: (Long) -> Unit,
+    onRemoveFromCollection: (Long) -> Unit,
+    onCreateCollection: (String) -> Unit,
 ) {
     Column(
         modifier =
@@ -298,6 +311,13 @@ private fun PaperDetailContent(
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         if (entry != null) {
+            CollectionsSection(
+                collections = collections,
+                memberIds = memberCollectionIds,
+                onAdd = onAddToCollection,
+                onRemove = onRemoveFromCollection,
+                onCreate = onCreateCollection,
+            )
             TagsSection(tags, onAddTag, onRemoveTag)
             NotesSection(notes, onAddNote, onDeleteNote)
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -438,6 +458,66 @@ private fun TagsSection(
                     },
                     enabled = newTag.isNotBlank(),
                 ) { Text(stringResource(R.string.action_add)) }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun CollectionsSection(
+    collections: List<dev.blokz.arxiver.core.database.entity.CollectionEntity>,
+    memberIds: Set<Long>,
+    onAdd: (Long) -> Unit,
+    onRemove: (Long) -> Unit,
+    onCreate: (String) -> Unit,
+) {
+    var creating by remember { mutableStateOf(false) }
+    var newName by remember { mutableStateOf("") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        DetailHeading(stringResource(R.string.paper_collections_heading))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            collections.forEach { collection ->
+                val selected = collection.id in memberIds
+                FilterChip(
+                    selected = selected,
+                    onClick = { if (selected) onRemove(collection.id) else onAdd(collection.id) },
+                    label = { Text(collection.name) },
+                    leadingIcon =
+                        if (selected) {
+                            { Icon(Icons.Filled.Check, contentDescription = null) }
+                        } else {
+                            null
+                        },
+                )
+            }
+            AssistChip(
+                onClick = { creating = true },
+                label = { Text(stringResource(R.string.paper_new_collection)) },
+                leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null) },
+            )
+        }
+        if (creating) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text(stringResource(R.string.library_collection_name_hint)) },
+                )
+                TextButton(
+                    onClick = {
+                        onCreate(newName)
+                        newName = ""
+                        creating = false
+                    },
+                    enabled = newName.isNotBlank(),
+                ) { Text(stringResource(R.string.action_create)) }
             }
         }
     }
@@ -620,6 +700,8 @@ private fun PaperDetailContentPreview() {
                 ),
             notes = emptyList(),
             tags = emptyList(),
+            collections = emptyList(),
+            memberCollectionIds = emptySet(),
             related = emptyList(),
             scrollState = rememberScrollState(),
             onOpenPdf = {},
@@ -631,6 +713,9 @@ private fun PaperDetailContentPreview() {
             onDeleteNote = {},
             onAddTag = {},
             onRemoveTag = {},
+            onAddToCollection = {},
+            onRemoveFromCollection = {},
+            onCreateCollection = {},
         )
     }
 }

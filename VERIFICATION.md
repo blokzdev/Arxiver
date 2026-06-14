@@ -20,24 +20,23 @@ dated log of what's actually been observed.
 Legend: `[ ]` pending · `[x]` verified on device (build/date) · `[~]` partial ·
 `[!]` failed (with pointer) · `[-]` superseded / n/a
 
-**Current target build: v1.2.0 (versionCode 4) — staged on `main`, tag not yet cut.**
-No clean first-run has ever succeeded on a device (v1.1.0 and v1.1.1 both crashed at
-onboarding); v1.2.0 is the first build expected to get past it.
+**Current target build: v1.2.1 (versionCode 5) — staged.** v1.2.0 was verified working
+end-to-end on device (2026-06-14): onboarding, fetching, PDF, tagging, search all pass.
+v1.2.1 adds three field fixes to re-verify (section I).
 
 ---
 
 ## A. Release smoke / first run
-- [ ] **A1 Install from scratch** — sideload the signed `arxiver-v<x>.apk` on a clean device (no prior data). Installs and launches to onboarding. _(was ROADMAP 5.8)_
-- [ ] **A2 Onboarding → Today** — follow ≥2 categories, tap "Start reading", land on **Today** with no crash. _Never succeeded on device yet (crashed v1.1.0/v1.1.1)._
-- [ ] **A3 Onboarded flag persists** — kill and reopen; app opens on Today, not onboarding.
+- [x] **A1 Install from scratch** — sideload the signed APK on a clean device. _Verified v1.2.0 (2026-06-14)._
+- [x] **A2 Onboarding → Today** — follow ≥2 categories, tap "Start reading", land on **Today** with no crash. _Verified v1.2.0 (2026-06-14) — first build to clear the R8 crashes._
+- [x] **A3 Onboarded flag persists** — reopen stays on Today, not onboarding. _Verified v1.2.0 (2026-06-14)._
 - [x] **A4 Crash reporter** — an uncaught exception saves a trace; next launch shows a copyable dialog. _Verified v1.1.1 (2026-06-14): user copied the protobuf trace. From v1.2.0 traces are de-obfuscated (real names)._
-- [ ] **A5 Zero crashes in normal flows** — exercise each tab without a crash. _(PRD §7.4)_
+- [ ] **A5 Zero crashes in normal flows** — exercise each tab without a crash. _(PRD §7.4)_ _Largely holds in v1.2.0 use; keep open until a full pass._
 
 ## B. Background sync & workers
-> Critical and never verified on any installed release: all four `@HiltWorker` factories were
-> R8-stripped from v1.0.0–v1.1.1, so background work was uninstantiable. v1.2.0 (minify off)
-> is the first build where these can actually run.
-- [ ] **B1 FollowSyncWorker** — followed categories populate the Today inbox after first sync.
+> The `@HiltWorker` factories were R8-stripped v1.0.0–v1.1.1; v1.2.0 (minify off) is the
+> first build where they run — confirmed by B1.
+- [x] **B1 FollowSyncWorker** — followed categories populate the Today inbox after first sync. _Verified v1.2.0 (2026-06-14): fetching new articles works._
 - [ ] **B2 EmbeddingWorker** — runs on unmetered network; un-embedded papers get embedded (Settings shows the embedded count climbing).
 - [ ] **B3 CitationSyncWorker** — nightly citation fetch fills a saved paper's Connections (references/citations).
 - [ ] **B4 DispatchQueueWorker** — a dispatch queued while offline sends once back online.
@@ -60,13 +59,21 @@ onboarding); v1.2.0 is the first build expected to get past it.
 - [ ] **E3 Color-blind check** — StatusChip tones are distinguishable (each already carries a text label; confirm visually).
 
 ## F. Reader & content
-- [ ] **F1 PDF** — download + in-app reader: night invert, paging, page pill.
+- [x] **F1 PDF** — download + in-app reader, light and dark. _Verified v1.2.0 (2026-06-14)._
 - [ ] **F2 Deep links / share-in** — opening or sharing an arxiv.org URL resolves to the paper detail.
+- [x] **F3 Tagging** — add/remove tags on a paper; persists. _Verified v1.2.0 (2026-06-14)._
+- [x] **F4 Search (functional)** — local + arXiv search return results. _Verified v1.2.0 (2026-06-14); relevance/latency targets still pending (C3/D2)._
 
 ## G. Claude dispatch (live — needs the user's routines) _(ROADMAP 6.6)_
 - [ ] **G1 Guided setup wizard** — create on claude.ai → connect URL+token (live validation) → opt-in verify ping against a real routine. (Fire-API contract itself was live-verified in dev, task 4.8.)
 - [ ] **G2 End-to-end** — set up ≥2 catalog templates via the wizard and confirm real runs; record findings in SPEC-CLAUDE-BRIDGE.
 - [ ] **G3 Privacy preview** — the confirm sheet previews exactly what leaves the device; tokens never appear (redaction is structurally tested — confirm visually).
+
+## I. v1.2.1 field fixes — re-verify on the v1.2.1 device run
+- [ ] **I1 Sync spinner clears** — after a sync settles, the Today top-bar spinner stops (reverts to the refresh icon); it does not spin indefinitely even if a follow fails.
+- [ ] **I2 No phantom empty row (lists)** — Today / Library / Search list ends cleanly with no orphan trailing divider/empty row below the last item.
+- [ ] **I3 No phantom empty row (Paper Detail)** — the article view has no empty strip at the bottom. _Code fix deferred — confirm whether it persists; if so, capture where exactly so it can be pinned._
+- [ ] **I4 Add to collection** — from a saved paper's detail, add it to a collection; it appears under that collection (Library → Collections → open); toggling off removes it; survives relaunch; "New collection" from the picker works.
 
 ## H. Success criteria rollup _(PRD §7)_
 - [ ] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1).
@@ -81,6 +88,7 @@ Newest first. One entry per device session; absolute dates.
 
 | Date | Build | Observed |
 |---|---|---|
+| 2026-06-14 | v1.2.0 (vc4) | **First fully-working device run.** Onboarding → Today, fetching new articles (B1), PDF light+dark (F1), tagging (F3), search (F4) all verified. Bugs found → fixed in v1.2.1: Today sync spinner never stops (I1), phantom empty row in lists + detail (I2/I3), and no way to add a paper to a collection (I4). |
 | 2026-06-14 | v1.1.1 (vc3) | "Start reading" crashed again; **crash-reporter dialog worked** (A4 ✅) and the copied trace root-caused the DataStore/protobuf R8 casualty → fixed by disabling minification (ROADMAP UX.9, ships v1.2.0). Onboarding still never reached Today. |
 | 2026-06-13 | v1.1.0 (vc2) | "Start reading" crashed; reopening showed onboarding again. Root-caused (statically, from the R8 mapping) to Hilt-multibinding stripping → R8 compat mode + keep rules (ROADMAP UX.8). |
 | 2026-06-11 | v1.0.0 (vc1, self-IDed 0.1.0) | First signed release published; no device smoke recorded. |

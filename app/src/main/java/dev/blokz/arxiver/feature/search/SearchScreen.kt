@@ -184,10 +184,11 @@ private fun LocalResultList(
                         }
                     }
                 }
-                itemsIndexed(state.localResults, key = { _, hit -> hit.paper.id.value }) { _, hit ->
+                itemsIndexed(state.localResults, key = { _, hit -> hit.paper.id.value }) { index, hit ->
                     PaperListItem(
                         paper = hit.paper,
                         onClick = { onPaperClick(hit.paper.id.value) },
+                        showDivider = index != state.localResults.lastIndex,
                         badge =
                             when (hit.provenance) {
                                 Provenance.BOTH ->
@@ -220,7 +221,11 @@ private fun ResultList(
             }
         }
         itemsIndexed(state.results, key = { _, paper -> paper.id.value }) { index, paper ->
-            PaperListItem(paper = paper, onClick = { onPaperClick(paper.id.value) })
+            PaperListItem(
+                paper = paper,
+                onClick = { onPaperClick(paper.id.value) },
+                showDivider = index != state.results.lastIndex,
+            )
             if (index >= state.results.lastIndex - 5 && state.nextStart != null) {
                 onLoadMore()
             }

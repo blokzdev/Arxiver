@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
@@ -197,13 +197,15 @@ private fun InboxList(
         if (scored.isNotEmpty()) {
             item(key = "header-relevant") { SectionHeader(stringResource(R.string.today_likely_relevant)) }
         }
-        items(scored, key = { it.paper.id.value }) { item ->
+        itemsIndexed(scored, key = { _, it -> it.paper.id.value }) { index, item ->
             key(item.paper.id.value) {
                 SwipeableInboxRow(
                     item = item,
                     onClick = { onPaperClick(item.paper.id.value) },
                     onSave = { onSave(item) },
                     onDismiss = { onDismiss(item) },
+                    // No trailing divider on the final row (unless the rest-list follows).
+                    showDivider = index != scored.lastIndex || unscored.isNotEmpty(),
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -211,13 +213,14 @@ private fun InboxList(
         if (scored.isNotEmpty() && unscored.isNotEmpty()) {
             item(key = "header-rest") { SectionHeader(stringResource(R.string.today_more_from_follows)) }
         }
-        items(unscored, key = { it.paper.id.value }) { item ->
+        itemsIndexed(unscored, key = { _, it -> it.paper.id.value }) { index, item ->
             key(item.paper.id.value) {
                 SwipeableInboxRow(
                     item = item,
                     onClick = { onPaperClick(item.paper.id.value) },
                     onSave = { onSave(item) },
                     onDismiss = { onDismiss(item) },
+                    showDivider = index != unscored.lastIndex,
                     modifier = Modifier.animateItem(),
                 )
             }
@@ -235,6 +238,7 @@ private fun SwipeableInboxRow(
     onSave: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    showDivider: Boolean = true,
 ) {
     val haptics = LocalHapticFeedback.current
     val dismissState =
@@ -304,7 +308,7 @@ private fun SwipeableInboxRow(
         },
     ) {
         Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
-            PaperListItem(paper = item.paper, onClick = onClick, score = item.score)
+            PaperListItem(paper = item.paper, onClick = onClick, score = item.score, showDivider = showDivider)
         }
     }
 }

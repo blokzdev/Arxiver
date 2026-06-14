@@ -107,7 +107,11 @@ private fun PaperList(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             itemsIndexed(state.papers, key = { _, paper -> paper.id.value }) { index, paper ->
-                PaperListItem(paper = paper, onClick = { onPaperClick(paper.id.value) })
+                PaperListItem(
+                    paper = paper,
+                    onClick = { onPaperClick(paper.id.value) },
+                    showDivider = index != state.papers.lastIndex,
+                )
                 // Infinite scroll: kick off the next page as the tail approaches.
                 if (index >= state.papers.lastIndex - 5 && state.nextStart != null) {
                     onLoadMore()

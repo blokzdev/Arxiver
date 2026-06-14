@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -285,7 +286,7 @@ private fun PapersTab(
             )
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(state.papers, key = { it.paper.id.value }) { row ->
+                itemsIndexed(state.papers, key = { _, row -> row.paper.id.value }) { index, row ->
                     val id = row.paper.id.value
                     PaperListItem(
                         paper = row.paper,
@@ -297,6 +298,7 @@ private fun PapersTab(
                         rating = row.rating,
                         selectionMode = selectedIds.isNotEmpty(),
                         selected = id in selectedIds,
+                        showDivider = index != state.papers.lastIndex,
                     )
                 }
             }

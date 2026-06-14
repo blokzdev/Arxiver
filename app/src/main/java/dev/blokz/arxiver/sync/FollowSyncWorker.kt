@@ -48,8 +48,15 @@ class FollowSyncWorker
             }
             inboxDao.pruneDismissed(cutoff = Instant.now().minusSeconds(DISMISSED_RETENTION_S).toEpochMilli())
 
-            // Per-follow cursors make retry cheap: only failed follows refetch.
-            return if (anyFailure) Result.retry() else Result.success()
+            // Per-follow cursors make retry cheap: only failed follows refetch. But bound
+            // the retries — a persistently failing follow (rate limit, dead category) must
+            // not keep this one-shot ENQUEUED forever (that pinned the Today sync spinner).
+            // After the cap we report success; the periodic sync picks the follow up later.
+            return if (anyFailure && runAttemptCount < MAX_RETRY_ATTEMPTS) {
+                Result.retry()
+            } else {
+                Result.success()
+            }
         }
 
         private suspend fun syncFollow(follow: FollowEntity): Boolean {
@@ -89,6 +96,7 @@ class FollowSyncWorker
         companion object {
             const val UNIQUE_PERIODIC = "follow_sync_periodic"
             const val UNIQUE_ONESHOT = "follow_sync_now"
+            private const val MAX_RETRY_ATTEMPTS = 3
             private const val PAGE_SIZE = 50
             private const val FIRST_SYNC_LIMIT = 20
             private const val DISMISSED_RETENTION_S = 30L * 24 * 3600

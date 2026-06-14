@@ -125,14 +125,37 @@ Sweep findings from a three-lens app-wide audit (deferred/stub inventory, conven
 - [x] M.6 Docs/process + v1.2.0 release prep: documented the payload schema-version bump process (SPEC-CLAUDE-BRIDGE §4.1: bump `ArxiverPayload.SCHEMA` + regenerate goldens + edit spec, guarded by `PayloadBuilderTest`); set `versionName = "1.2.0"` (reuses the unreleased versionCode 4); Decision log + release-engineering memory updated
 - [x] **CHECKPOINT M:** clean `./gradlew build` green (lint flake gone), all new core + ViewModel suites pass, first-run logic covered headlessly (`OnboardingViewModelTest`; Compose `OnboardingFlowTest` stays a documented manual diagnostic), `:app:assembleRelease` APK verified unobfuscated (real `dev.blokz.arxiver.*` / `PreferencesProto` / `value_`, no mapping dir), versionName 1.2.0
 
-## v2 candidate backlog (do not work on these)
+## Phase F1 — v1.2.1 field fixes (post-v1.2.0 device run, ships v1.2.1)
 
-Routine **result round-trip** (webhook inbox) · in-app Claude API chat-with-paper · full-text PDF indexing · visual graph canvas · Play Store · tablet layouts · per-user preference learning beyond centroids (SVM à la arxiv-sanity) · HTML paper rendering (ar5iv) · **re-enable R8 code/resource shrinking** behind audited keep rules for every reflection-based lib (Hilt, DataStore/protobuf, Room, Retrofit, ONNX) with an on-device smoke test before release (disabled in v1.1.2 after two obfuscation casualties) · **VM tests for the heavy-dependency ViewModels** (Search, Settings, Dispatch, DispatchHistory) — needs either MockWebServer/WorkManager scaffolding for their full graphs or a small interface seam; their logic is currently covered at the repo/service layer (M.5 deferred these)
+First on-device session (2026-06-14) confirmed v1.2.0 works end-to-end and surfaced three issues (tracked in `VERIFICATION.md` §I).
+
+- [x] F1.1 Sync spinner never stops: `observeSyncRunning()` flagged `RUNNING || ENQUEUED`, and `FollowSyncWorker` retried forever on any per-follow failure → perpetually ENQUEUED. Fix: indicator reflects `RUNNING` only; worker caps retries (`runAttemptCount`) and reports success at the cap (periodic sync retries later). Worker test added.
+- [x] F1.2 Phantom empty row: trailing `HorizontalDivider` on the last `PaperListItem` across Today/Library/Search/CategoryFeed lists → pass `showDivider = index != lastIndex`. PaperDetail trailing-strip fix deferred to device confirmation (`VERIFICATION.md` I3).
+- [x] F1.3 Add-to-collection: data layer existed; wired `CollectionsSection` in PaperDetail (FilterChip toggle + "new collection") mirroring `TagsSection`, new `observeCollectionMemberships` DAO query, VM add/remove/create. DAO + ViewModel tests added. (Bulk add from Library multi-select → backlog.)
+- [x] F1.4 `VERIFICATION.md` updated (v1.2.0 verified items + §I re-checks); versionName 1.2.1 / versionCode 5.
+- [ ] **CHECKPOINT F1:** `./gradlew build` green; release APK unobfuscated; v1.2.1 cut and the §I items re-verified on device.
+
+## Phase v2 — Richer experience (drafted 2026-06-14; not yet scheduled)
+
+Research-informed (see Decision log). Themes, dependency-ordered within each:
+
+- **Reader depth:** in-app PDF highlight/annotation anchored to text + margin notes (new DB migration); TTS read-aloud (`TextToSpeech`); full-text PDF indexing (extract → FTS + embeddings, feeds RAG below).
+- **Smarter discovery:** per-user recommendation beyond centroids — on-device logistic-regression/linear-SVM over embeddings (à la arxiv-sanity) trained on saved/dismissed; "more like this" from any paper (reuse `VectorStore`); author following; trending within follows.
+- **Visual & home:** visual citation-graph canvas (replaces list Connections); home-screen widgets via **Glance**; reading queue + streaks; relevance-ranked Today.
+- **Claude-powered understanding** (research-corrected):
+  - **Chat-with-paper / chat-with-knowledge-base** — **BYOK Anthropic Messages API** (key in `TokenVault`), *separate from the repo-scoped Routines bridge*. On-device **RAG**: reuse bge embeddings + `VectorStore` to retrieve from a user-curated **knowledge base** (flagged papers' abstract+notes, later full text); only retrieved chunks + question leave the device, behind an explicit confirm. Anthropic has no embeddings API, so retrieval stays on-device (privacy-preserving) — only generation calls Claude.
+  - **On-device summaries** via the same BYOK path.
+  - **Routine result round-trip — out of scope (research):** Claude Code routines are repo-scoped cloud sessions; the fire API returns only a session id/URL, not results (surfaced at claude.ai/code as diffs/PRs). An in-app inbox would need the routine to POST to a user-hosted webhook relay the app polls. Routines stay the outbound dispatch bridge as-is.
+
+## v2 infra backlog (do not work on these)
+
+**Re-enable R8 shrinking** behind audited keep rules + on-device smoke (disabled in v1.1.2) · **VM tests for heavy-dep ViewModels** (Search/Settings/Dispatch/DispatchHistory) · Play Store · tablet layouts · HTML paper rendering (ar5iv) · sqlite-vec.
 
 ## Decision log
 
 | Date | Decision |
 |---|---|
+| 2026-06-14 | v1.2.0 verified working on device; v1.2.1 fixes the three issues found (sync spinner, empty row, add-to-collection). v2 roadmap drafted (Phase v2). **Research correction:** Claude Code routines are repo-scoped cloud sessions and the fire API returns only a session id/URL (not results) — so the long-planned "routine result round-trip / webhook inbox" is impractical without a user-hosted relay and is dropped. v2 chat-with-paper will instead be **BYOK Anthropic Messages API + on-device RAG over a user-curated knowledge base**, separate from the Routines bridge. Sources in the plan file / SPEC-CLAUDE-BRIDGE. |
 | 2026-06-11 | Stack: Kotlin/Compose; on-device embeddings only; Claude scope = routines trigger only; sideload-first (user-approved) |
 | 2026-06-11 | Single SQLite engine for relational/FTS/vector/graph; orbit-indexing not full mirror; features as packages in `:app` |
 | 2026-06-11 | bge-small-en-v1.5 (384d) ONNX, downloaded not bundled; sqlite-vec with BLOB fallback behind `VectorStore` |

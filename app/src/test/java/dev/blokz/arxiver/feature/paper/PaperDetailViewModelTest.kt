@@ -132,4 +132,31 @@ class PaperDetailViewModelTest {
 
             assertEquals(listOf("a thought"), library.observeNotesFor("2403.00001").first().map { it.content })
         }
+
+    @Test
+    fun `add and remove collection membership round-trips`() =
+        runBlocking {
+            cachePaper("2403.00001")
+            val cid = library.createCollection("Reading")
+            val vm = vmFor("2403.00001")
+
+            vm.addToCollection(cid)
+            assertTrue(cid in vm.memberCollectionIds.first { it.contains(cid) })
+
+            vm.removeFromCollection(cid)
+            assertEquals(emptySet(), vm.memberCollectionIds.first { it.isEmpty() })
+        }
+
+    @Test
+    fun `createCollectionWithPaper makes a collection and adds the paper`() =
+        runBlocking {
+            cachePaper("2403.00001")
+            val vm = vmFor("2403.00001")
+
+            vm.createCollectionWithPaper("Robotics")
+
+            val created = library.observeCollections().first { it.isNotEmpty() }.single()
+            assertEquals("Robotics", created.name)
+            assertTrue(created.id in vm.memberCollectionIds.first { it.contains(created.id) })
+        }
 }
