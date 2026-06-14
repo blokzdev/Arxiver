@@ -20,9 +20,10 @@ dated log of what's actually been observed.
 Legend: `[ ]` pending · `[x]` verified on device (build/date) · `[~]` partial ·
 `[!]` failed (with pointer) · `[-]` superseded / n/a
 
-**Current target build: v1.2.1 (versionCode 5) — staged.** v1.2.0 was verified working
-end-to-end on device (2026-06-14): onboarding, fetching, PDF, tagging, search all pass.
-v1.2.1 adds three field fixes to re-verify (section I).
+**Current target build: v1.2.2 (versionCode 6) — staged.** v1.2.0 verified working
+end-to-end on device (2026-06-14). v1.2.1 fixed the sync spinner (I1 ✅ confirmed) and
+added add-to-collection; v1.2.2 fixes the bottom blank strip at its real root (nested-
+Scaffold inset double-apply). §I tracks the device re-checks.
 
 ---
 
@@ -69,10 +70,10 @@ v1.2.1 adds three field fixes to re-verify (section I).
 - [ ] **G2 End-to-end** — set up ≥2 catalog templates via the wizard and confirm real runs; record findings in SPEC-CLAUDE-BRIDGE.
 - [ ] **G3 Privacy preview** — the confirm sheet previews exactly what leaves the device; tokens never appear (redaction is structurally tested — confirm visually).
 
-## I. v1.2.1 field fixes — re-verify on the v1.2.1 device run
-- [ ] **I1 Sync spinner clears** — after a sync settles, the Today top-bar spinner stops (reverts to the refresh icon); it does not spin indefinitely even if a follow fails.
-- [ ] **I2 No phantom empty row (lists)** — Today / Library / Search list ends cleanly with no orphan trailing divider/empty row below the last item.
-- [ ] **I3 No phantom empty row (Paper Detail)** — the article view has no empty strip at the bottom. _Code fix deferred — confirm whether it persists; if so, capture where exactly so it can be pinned._
+## I. v1.2.1 / v1.2.2 field fixes — re-verify on device
+- [x] **I1 Sync spinner clears** — Today top-bar spinner stops (reverts to refresh icon). _Verified v1.2.1 (2026-06-14): screenshot shows the refresh icon, no perpetual spinner._
+- [ ] **I2 No phantom empty row (lists)** — Today/Library/Search list ends cleanly. _v1.2.1 removed the trailing divider; the larger blank strip was the inset bug (I3), fixed in v1.2.2 — re-verify together._
+- [ ] **I3 No bottom blank strip (app-wide)** — **root-caused v1.2.2:** nested Scaffolds double-applied the bottom nav inset → blank strip above the bottom bar on Today/list screens (and the gesture-bar clearance on detail screens). Fixed via `consumeWindowInsets` on the NavHost + trimmed PaperDetail's redundant trailing padding. Confirm the strip is gone on Today AND Paper Detail; note that a small inset above the gesture nav bar on detail screens is correct (content must clear the system bar).
 - [ ] **I4 Add to collection** — from a saved paper's detail, add it to a collection; it appears under that collection (Library → Collections → open); toggling off removes it; survives relaunch; "New collection" from the picker works.
 
 ## H. Success criteria rollup _(PRD §7)_
@@ -88,6 +89,7 @@ Newest first. One entry per device session; absolute dates.
 
 | Date | Build | Observed |
 |---|---|---|
+| 2026-06-14 | v1.2.1 (vc5) | Sync spinner now clears (I1 ✅ — refresh icon shown). Bottom blank strip above the nav bar **still present** on Today (and Paper Detail) — divider fix wasn't the cause. Root-caused to nested-Scaffold inset double-apply → fixed in v1.2.2. |
 | 2026-06-14 | v1.2.0 (vc4) | **First fully-working device run.** Onboarding → Today, fetching new articles (B1), PDF light+dark (F1), tagging (F3), search (F4) all verified. Bugs found → fixed in v1.2.1: Today sync spinner never stops (I1), phantom empty row in lists + detail (I2/I3), and no way to add a paper to a collection (I4). |
 | 2026-06-14 | v1.1.1 (vc3) | "Start reading" crashed again; **crash-reporter dialog worked** (A4 ✅) and the copied trace root-caused the DataStore/protobuf R8 casualty → fixed by disabling minification (ROADMAP UX.9, ships v1.2.0). Onboarding still never reached Today. |
 | 2026-06-13 | v1.1.0 (vc2) | "Start reading" crashed; reopening showed onboarding again. Root-caused (statically, from the R8 mapping) to Hilt-multibinding stripping → R8 compat mode + keep rules (ROADMAP UX.8). |
