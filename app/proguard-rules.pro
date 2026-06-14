@@ -18,3 +18,12 @@
 -keep class **_HiltModule { *; }
 -keep class * implements androidx.hilt.work.WorkerAssistedFactory { *; }
 -keep @androidx.hilt.work.HiltWorker class * { *; }
+
+# Jetpack DataStore Preferences embeds protobuf-javalite, which resolves its own
+# generated message fields BY NAME via reflection at runtime. R8 renaming breaks
+# PreferencesProto serialization ("Field value_ for ... not found" — the v1.1.1
+# onboarding-write crash). Inert while minification is off (see build.gradle.kts)
+# — kept so re-enabling shrinking is safe by default.
+-keep class androidx.datastore.preferences.protobuf.** { *; }
+-keep class androidx.datastore.preferences.PreferencesProto** { *; }
+-keepclassmembers class androidx.datastore.preferences.** { <fields>; }

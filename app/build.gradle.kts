@@ -15,8 +15,8 @@ android {
         applicationId = "dev.blokz.arxiver"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.1.1"
+        versionCode = 4
+        versionName = "1.1.2"
     }
 
     // CI release signing: keystore + credentials arrive via environment
@@ -35,8 +35,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            // Code/resource shrinking is intentionally OFF for sideload (see
+            // Decision log 2026-06-14): R8 obfuscation broke two reflection-based
+            // libs in signed builds we can't device-test in CI (Hilt multibindings,
+            // then DataStore's bundled protobuf). Shrinking buys ~nothing for a
+            // single-user sideloaded app; re-enabling it is a deliberate, device-
+            // tested task. proguardFiles + keep rules stay so re-enabling is one flag.
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (releaseKeystore != null) {
                 signingConfig = signingConfigs.getByName("release")
