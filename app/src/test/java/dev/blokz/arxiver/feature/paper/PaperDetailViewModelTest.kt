@@ -17,9 +17,9 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -100,7 +100,7 @@ class PaperDetailViewModelTest {
 
     @Test
     fun `loads a cached paper without hitting the network`() =
-        runTest {
+        runBlocking {
             cachePaper("2403.00001")
 
             val state = vmFor("2403.00001").uiState.first { !it.loading }
@@ -112,7 +112,7 @@ class PaperDetailViewModelTest {
 
     @Test
     fun `unknown paper that is neither cached nor upstream is notFound`() =
-        runTest {
+        runBlocking {
             server.enqueue(MockResponse().setResponseCode(404))
 
             val state = vmFor("9999.99999").uiState.first { !it.loading }
@@ -123,7 +123,7 @@ class PaperDetailViewModelTest {
 
     @Test
     fun `addNote persists through the library repository`() =
-        runTest {
+        runBlocking {
             cachePaper("2403.00001")
             val vm = vmFor("2403.00001")
             vm.uiState.first { !it.loading }

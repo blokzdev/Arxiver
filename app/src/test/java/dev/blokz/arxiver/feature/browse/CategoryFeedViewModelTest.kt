@@ -14,9 +14,9 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
-import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
@@ -78,7 +78,7 @@ class CategoryFeedViewModelTest {
 
     @Test
     fun `loads the first page on init`() =
-        runTest {
+        runBlocking {
             server.enqueue(MockResponse().setBody(fixtureXml()))
 
             val state = vm().uiState.first { !it.loading && it.papers.isNotEmpty() }
@@ -89,7 +89,7 @@ class CategoryFeedViewModelTest {
 
     @Test
     fun `upstream failure surfaces an error state`() =
-        runTest {
+        runBlocking {
             server.enqueue(MockResponse().setResponseCode(404))
 
             val state = vm().uiState.first { !it.loading && it.error != null }
