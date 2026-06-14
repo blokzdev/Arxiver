@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -116,7 +117,13 @@ fun ArxiverApp(
         NavHost(
             navController = navController,
             startDestination = if (startOnboarding) Routes.ONBOARDING else TopLevelDestination.Today.route,
-            modifier = Modifier.padding(innerPadding),
+            // Consume the insets the outer Scaffold already applied so each screen's own
+            // Scaffold doesn't re-pad for the status/navigation bars (the double-applied
+            // bottom nav inset showed as a blank strip above the bottom bar).
+            modifier =
+                Modifier
+                    .padding(innerPadding)
+                    .consumeWindowInsets(innerPadding),
             enterTransition = {
                 fadeIn(tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.DecelerateEasing)) +
                     slideInHorizontally(
