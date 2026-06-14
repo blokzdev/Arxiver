@@ -155,6 +155,7 @@ Research-informed (see Decision log). Themes, dependency-ordered within each:
 
 | Date | Decision |
 |---|---|
+| 2026-06-14 | CI flakiness root-caused & fixed: rare merge-commit failures (#42 release-variant, #46 debug-variant; never reproduced locally) were cross-class leakage of process-global singletons (WorkManager via `WorkManagerTestInitHelper`, the DataStore-by-name instance) — same-`@Config` Robolectric classes share one sandbox. Fix: `unitTests.all { setForkEvery(1) }` in `:app` (one JVM per test class). Slower app tests, but deterministic; doesn't mask real failures. |
 | 2026-06-14 | v1.2.0 verified working on device; v1.2.1 fixes the three issues found (sync spinner, empty row, add-to-collection). v2 roadmap drafted (Phase v2). **Research correction:** Claude Code routines are repo-scoped cloud sessions and the fire API returns only a session id/URL (not results) — so the long-planned "routine result round-trip / webhook inbox" is impractical without a user-hosted relay and is dropped. v2 chat-with-paper will instead be **BYOK Anthropic Messages API + on-device RAG over a user-curated knowledge base**, separate from the Routines bridge. Sources in the plan file / SPEC-CLAUDE-BRIDGE. |
 | 2026-06-11 | Stack: Kotlin/Compose; on-device embeddings only; Claude scope = routines trigger only; sideload-first (user-approved) |
 | 2026-06-11 | Single SQLite engine for relational/FTS/vector/graph; orbit-indexing not full mirror; features as packages in `:app` |
