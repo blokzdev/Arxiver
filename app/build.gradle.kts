@@ -60,6 +60,13 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // One JVM per test class. Several Robolectric tests touch process-global
+            // singletons (WorkManager via WorkManagerTestInitHelper, the DataStore-by-name
+            // instance); same-@Config classes otherwise share a sandbox, so that state
+            // leaked across classes and caused rare order-dependent CI failures on merge
+            // commits (CI #42 release-variant, #46 debug-variant) that never reproduced
+            // locally. Per-class isolation removes the cross-class contamination.
+            all { it.setForkEvery(1) }
         }
     }
     lint {
