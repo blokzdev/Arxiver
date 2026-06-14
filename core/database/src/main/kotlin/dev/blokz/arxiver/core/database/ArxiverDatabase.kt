@@ -57,7 +57,7 @@ import dev.blokz.arxiver.core.database.entity.TagEntity
         RoutineConfigEntity::class,
         RoutineDispatchEntity::class,
     ],
-    version = 1,
+    version = ArxiverDatabase.VERSION,
     exportSchema = true,
 )
 abstract class ArxiverDatabase : RoomDatabase() {
@@ -81,6 +81,9 @@ abstract class ArxiverDatabase : RoomDatabase() {
 
     companion object {
         const val NAME = "arxiver.db"
+
+        /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
+        const val VERSION = 1
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema

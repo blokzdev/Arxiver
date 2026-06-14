@@ -85,7 +85,8 @@ interface LibraryDao {
 
     @Query(
         """
-        SELECT p.*, le.added_at, le.status, le.rating FROM papers p
+        SELECT p.*, COALESCE(le.added_at, cp.added_at) AS added_at,
+               COALESCE(le.status, 'to_read') AS status, le.rating FROM papers p
         JOIN collection_papers cp ON cp.paper_id = p.id
         LEFT JOIN library_entries le ON le.paper_id = p.id
         WHERE cp.collection_id = :collectionId
@@ -129,7 +130,8 @@ interface LibraryDao {
 
     @Query(
         """
-        SELECT p.*, le.added_at, le.status, le.rating FROM papers p
+        SELECT p.*, COALESCE(le.added_at, 0) AS added_at,
+               COALESCE(le.status, 'to_read') AS status, le.rating FROM papers p
         JOIN paper_tags pt ON pt.paper_id = p.id
         LEFT JOIN library_entries le ON le.paper_id = p.id
         WHERE pt.tag_id = :tagId
