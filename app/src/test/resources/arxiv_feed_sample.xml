@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <link href="http://arxiv.org/api/query?search_query%3Dcat%3Acs.LG%26id_list%3D%26start%3D0%26max_results%3D2" rel="self" type="application/atom+xml"/>
+  <title type="html">ArXiv Query: search_query=cat:cs.LG&amp;id_list=&amp;start=0&amp;max_results=2</title>
+  <id>http://arxiv.org/api/cHxbiOdZaP56ODnBPIenZhzg5f8</id>
+  <updated>2026-06-11T00:00:00-04:00</updated>
+  <opensearch:totalResults xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">217776</opensearch:totalResults>
+  <opensearch:startIndex xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">0</opensearch:startIndex>
+  <opensearch:itemsPerPage xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/">2</opensearch:itemsPerPage>
+  <entry>
+    <id>http://arxiv.org/abs/2403.01234v2</id>
+    <updated>2024-03-15T17:59:59Z</updated>
+    <published>2024-03-02T18:00:01Z</published>
+    <title>Efficient State Space Models for Long-Context
+  Sequence Modeling</title>
+    <summary>  We study state space models as an alternative to attention for long
+sequences. Our approach reduces memory usage while matching quality on
+standard benchmarks.
+</summary>
+    <author>
+      <name>Ada Researcher</name>
+      <arxiv:affiliation xmlns:arxiv="http://arxiv.org/schemas/atom">Example University</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Boris Scholar</name>
+    </author>
+    <arxiv:doi xmlns:arxiv="http://arxiv.org/schemas/atom">10.1000/example.doi</arxiv:doi>
+    <link title="doi" href="http://dx.doi.org/10.1000/example.doi" rel="related"/>
+    <arxiv:comment xmlns:arxiv="http://arxiv.org/schemas/atom">24 pages, 7 figures. Accepted at
+  ExampleConf 2024</arxiv:comment>
+    <arxiv:journal_ref xmlns:arxiv="http://arxiv.org/schemas/atom">Journal of Examples 12 (2024) 34-56</arxiv:journal_ref>
+    <link href="http://arxiv.org/abs/2403.01234v2" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2403.01234v2" rel="related" type="application/pdf"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="stat.ML" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/math/0211159v1</id>
+    <updated>2002-11-11T16:11:49Z</updated>
+    <published>2002-11-11T16:11:49Z</published>
+    <title>The entropy formula for the Ricci flow and its geometric applications</title>
+    <summary>We present a monotonic expression for the Ricci flow.</summary>
+    <author>
+      <name>Grisha Perelman</name>
+    </author>
+    <link href="http://arxiv.org/abs/math/0211159v1" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/math/0211159v1" rel="related" type="application/pdf"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="math.DG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.DG" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+</feed>
