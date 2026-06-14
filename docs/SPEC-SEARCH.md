@@ -59,3 +59,11 @@ Inbox score = max cosine similarity between the inbox paper and the user's **lib
 - FTS: Robolectric DB tests — tokenization edge cases (hyphenated terms, unicode, LaTeX fragments in titles).
 - Vector: `VectorStore` contract tests run against both sqlite-vec and the BLOB fallback implementation.
 - Golden relevance set: ~20 hand-written (query → expected-paper) cases over a fixture corpus of ~100 real arXiv abstracts; hybrid must hit expected paper in top 5 for ≥ 80% of cases. Guards tuning regressions.
+
+## v2 — RAG retrieval (forward note)
+
+The v2.2 chat/RAG subphase reuses this engine: query embedding via `EmbeddingService`,
+`VectorIndex.topK` (+ `HybridFusion`) for retrieval, scoped to a user-curated knowledge base.
+It adds **text chunking** and a **chunk-embedding** index (papers' abstract+notes, later
+full PDF text from v2.3) — specified when v2.2 is planned. Retrieval stays fully on-device;
+only retrieved chunks + the question reach a cloud provider. Architecture: `docs/SPEC-AI-PROVIDERS.md`.
