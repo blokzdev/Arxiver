@@ -45,7 +45,8 @@ class TodayViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val context = ApplicationProvider.getApplicationContext<Context>()
-        WorkManagerTestInitHelper.initializeTestWorkManager(context)
+        // Idempotent across test classes in a shared JVM — re-init throws otherwise.
+        runCatching { WorkManagerTestInitHelper.initializeTestWorkManager(context) }
         db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
         library = LibraryRepository(db.libraryDao(), db.inboxDao())
         inbox = InboxRepository(db.inboxDao(), library)

@@ -10,7 +10,7 @@ Local-first Android arXiv explorer (Kotlin + Jetpack Compose) with on-device hyb
 
 Every working session, and repeatedly within a session:
 
-1. **Orient:** read `ROADMAP.md` and the memory index `.claude/memory/MEMORY.md` (see Memory harness below); find the first `[~]` or `[ ]` task. Never skip ahead across an unmet CHECKPOINT.
+1. **Orient:** read `ROADMAP.md` and the memory index `.claude/memory/MEMORY.md` (see Memory harness below); find the first `[~]` or `[ ]` task. Never skip ahead across an unmet CHECKPOINT. Also skim `VERIFICATION.md` (the on-device ledger) when touching anything device-observable — release behavior, workers, ML, performance, a11y, PDF, live dispatch.
 2. **Mark:** set the task `[~]` (in progress).
 3. **Read the spec** section governing the task before writing code. Specs are the source of truth; if implementation must deviate, update the spec in the same commit and note it in the Decision log (ROADMAP bottom).
 4. **Implement** with tests per the spec's testing section.
@@ -19,8 +19,9 @@ Every working session, and repeatedly within a session:
 7. **Commit & push:** one commit per task (or tight task cluster), descriptive message, push to the designated branch (`git push -u origin <branch>`; on network failure retry ×4 with 2/4/8/16s backoff).
 8. **Checkpoint gates:** at a phase CHECKPOINT, run the full phase verification listed in ROADMAP, fix anything failing, then check the checkpoint box in its own commit titled `checkpoint: phase N`.
 9. Tasks tagged `[needs-user]` (e.g. real routine token): ask the user, mark `[!] blocked` with reason if no answer, and continue with the next non-dependent task.
+10. **Device-bound work → `VERIFICATION.md`:** if a task's only remaining verification needs real hardware (signed-APK behavior, background workers, on-device ML, performance, TalkBack, PDF, live routine dispatch), the task can still go `[x]` on a green build — but add/refresh its concrete check in `VERIFICATION.md` (mirroring any `[needs-user/device]` ROADMAP item) in the same commit. When the user reports a device session, update the matching item's status and append a dated Verification-log row, again in the same commit.
 
-Rules: no `[x]` without green build · ROADMAP edits travel in the same commit as the work · blocked ≠ stopped (find the next unblocked task) · when context is summarized mid-session, re-orient from step 1.
+Rules: no `[x]` without green build · ROADMAP edits travel in the same commit as the work · device-only verification never blocks `[x]` but must be tracked in `VERIFICATION.md` · blocked ≠ stopped (find the next unblocked task) · when context is summarized mid-session, re-orient from step 1.
 
 ## Memory harness (continuity across environments)
 
@@ -74,7 +75,7 @@ Environment note: cloud sessions need the Android SDK; if `sdkmanager` is absent
 
 ## Definition of done (any task)
 
-Code + tests written → spec honored (or spec updated deliberately) → `./gradlew build` green → ROADMAP updated → committed & pushed. For UI tasks additionally: light/dark previews exist, TalkBack labels on actionables, empty/loading/error states handled.
+Code + tests written → spec honored (or spec updated deliberately) → `./gradlew build` green → ROADMAP updated → committed & pushed. For UI tasks additionally: light/dark previews exist, TalkBack labels on actionables, empty/loading/error states handled. If the change has a device-observable surface that CI can't exercise, its check is recorded in `VERIFICATION.md` (not silently assumed).
 
 ## Git
 
