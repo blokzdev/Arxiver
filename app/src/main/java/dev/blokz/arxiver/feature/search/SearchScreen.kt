@@ -40,8 +40,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.search.Provenance
-import dev.blokz.arxiver.feature.browse.ErrorState
 import dev.blokz.arxiver.ui.components.EmptyState
+import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.PaperBadge
 import dev.blokz.arxiver.ui.components.PaperListItem
 import dev.blokz.arxiver.ui.components.SkeletonList

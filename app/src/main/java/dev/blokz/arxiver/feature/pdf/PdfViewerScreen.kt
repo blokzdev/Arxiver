@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
-import dev.blokz.arxiver.feature.browse.ErrorState
+import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay

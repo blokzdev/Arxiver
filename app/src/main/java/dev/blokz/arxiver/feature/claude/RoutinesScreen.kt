@@ -14,9 +14,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +51,7 @@ import dev.blokz.arxiver.core.claude.RoutineStarterInstructions
 import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.data.DispatchRepository
 import dev.blokz.arxiver.data.DispatchSubmission
+import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.StatusChip
 import dev.blokz.arxiver.ui.components.StatusTone
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -173,32 +174,14 @@ fun RoutinesScreen(
         },
     ) { padding ->
         if (routines.isEmpty()) {
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .padding(padding)
-                        .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text(
-                    stringResource(R.string.routines_empty_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(
-                    stringResource(R.string.routines_empty_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-                FilledTonalButton(
-                    onClick = onOpenTemplates,
-                    modifier = Modifier.padding(top = 16.dp),
-                ) {
-                    Text(stringResource(R.string.template_browse_action))
-                }
-            }
+            EmptyState(
+                title = stringResource(R.string.routines_empty_title),
+                body = stringResource(R.string.routines_empty_body),
+                icon = Icons.Outlined.AutoAwesome,
+                actionLabel = stringResource(R.string.template_browse_action),
+                onAction = onOpenTemplates,
+                modifier = Modifier.padding(padding),
+            )
         } else {
             LazyColumn(
                 modifier =

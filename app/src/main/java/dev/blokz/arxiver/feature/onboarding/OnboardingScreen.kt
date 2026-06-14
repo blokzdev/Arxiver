@@ -3,6 +3,7 @@ package dev.blokz.arxiver.feature.onboarding
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -13,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -38,10 +40,12 @@ import dev.blokz.arxiver.core.model.ArxivCategory
 import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.SettingsRepository
 import dev.blokz.arxiver.sync.SyncScheduler
+import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,6 +54,8 @@ import javax.inject.Inject
 data class OnboardingUiState(
     val popular: List<Pair<ArxivCategory, Boolean>> = emptyList(),
     val followedCount: Int = 0,
+    val loading: Boolean = true,
+    val error: Boolean = false,
 )
 
 @HiltViewModel
@@ -71,8 +77,10 @@ class OnboardingViewModel
                                 byCode[code]?.let { it.category to it.followed }
                             },
                         followedCount = all.count { it.followed },
+                        loading = false,
                     )
                 }
+                .catch { emit(OnboardingUiState(loading = false, error = true)) }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), OnboardingUiState())
 
         fun toggle(
@@ -123,6 +131,23 @@ fun OnboardingScreen(
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun OnboardingContent(
+    state: OnboardingUiState,
+    onToggle: (ArxivCategory, Boolean) -> Unit,
+    onStart: () -> Unit,
+) {
+    when {
+        state.error -> ErrorState(message = stringResource(R.string.error_generic))
+        state.loading ->
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        else -> OnboardingReady(state, onToggle, onStart)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun OnboardingReady(
     state: OnboardingUiState,
     onToggle: (ArxivCategory, Boolean) -> Unit,
     onStart: () -> Unit,
@@ -223,6 +248,7 @@ private fun OnboardingPreview() {
                             ArxivCategory("quant-ph", "Quantum Physics", "Physics") to false,
                         ),
                     followedCount = 1,
+                    loading = false,
                 ),
             onToggle = { _, _ -> },
             onStart = {},
