@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -102,8 +102,12 @@ private fun FilteredPapersContent(
             )
         else ->
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(rows, key = { it.paper.id.value }) { row ->
-                    PaperListItem(paper = row.paper, onClick = { onPaperClick(row.paper.id.value) })
+                itemsIndexed(rows, key = { _, row -> row.paper.id.value }) { index, row ->
+                    PaperListItem(
+                        paper = row.paper,
+                        onClick = { onPaperClick(row.paper.id.value) },
+                        showDivider = index != rows.lastIndex,
+                    )
                 }
             }
     }

@@ -112,9 +112,12 @@ class SyncScheduler
             )
         }
 
+        // RUNNING only — never ENQUEUED. A one-shot waiting on retry backoff (or the
+        // always-ENQUEUED periodic worker) is not "syncing now", and surfacing those as a
+        // spinner left it spinning forever (a failing follow keeps the one-shot enqueued).
         fun observeSyncRunning(): Flow<Boolean> =
             workManager.getWorkInfosForUniqueWorkFlow(FollowSyncWorker.UNIQUE_ONESHOT)
                 .map { infos ->
-                    infos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }
+                    infos.any { it.state == WorkInfo.State.RUNNING }
                 }
     }

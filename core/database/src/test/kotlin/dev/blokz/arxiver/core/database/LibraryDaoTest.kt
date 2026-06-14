@@ -135,4 +135,19 @@ class LibraryDaoTest {
             dao.deleteNote(id)
             assertTrue(dao.observeNotesFor("2403.00001").first().isEmpty())
         }
+
+    @Test
+    fun `collection memberships reflect add and remove`() =
+        runTest {
+            insertPaper("2403.00001")
+            val a = dao.createCollection(CollectionEntity(name = "A", createdAt = 0))
+            val b = dao.createCollection(CollectionEntity(name = "B", createdAt = 0))
+
+            dao.addToCollection(CollectionPaperCrossRef(a, "2403.00001", addedAt = 0))
+            dao.addToCollection(CollectionPaperCrossRef(b, "2403.00001", addedAt = 0))
+            assertEquals(setOf(a, b), dao.observeCollectionMemberships("2403.00001").first().toSet())
+
+            dao.removeFromCollection(a, "2403.00001")
+            assertEquals(listOf(b), dao.observeCollectionMemberships("2403.00001").first())
+        }
 }

@@ -105,6 +105,8 @@
     <string name="library_collection_deleted">Collection “%1$s” deleted</string>
 
     <string name="paper_related_heading">Related papers</string>
+    <string name="paper_collections_heading">Collections</string>
+    <string name="paper_new_collection">New collection</string>
     <string name="paper_tags_heading">Tags</string>
     <string name="paper_add_tag">Add tag</string>
     <string name="paper_tag_hint">tag name</string>

@@ -70,6 +70,10 @@ class LibraryRepository
 
         fun observeCollections(): Flow<List<CollectionEntity>> = libraryDao.observeCollections()
 
+        /** Ids of the collections a paper belongs to (for the detail-screen picker). */
+        fun observeCollectionMembershipsFor(paperId: String): Flow<List<Long>> =
+            libraryDao.observeCollectionMemberships(paperId)
+
         fun observeCollectionPapers(collectionId: Long): Flow<List<LibraryPaper>> =
             libraryDao.observeCollectionPapers(collectionId).map { rows ->
                 rows.map {

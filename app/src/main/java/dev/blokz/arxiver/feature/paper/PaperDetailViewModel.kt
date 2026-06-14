@@ -56,6 +56,15 @@ class PaperDetailViewModel
             libraryRepository.observeTagsFor(paperId.value)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+        val collections: StateFlow<List<dev.blokz.arxiver.core.database.entity.CollectionEntity>> =
+            libraryRepository.observeCollections()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+        val memberCollectionIds: StateFlow<Set<Long>> =
+            libraryRepository.observeCollectionMembershipsFor(paperId.value)
+                .map { it.toSet() }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
         val related: StateFlow<List<RelatedPaper>> =
             embeddingDao.observeRelated(paperId.value)
                 .map { rows ->
@@ -107,6 +116,23 @@ class PaperDetailViewModel
 
         fun addTag(name: String) {
             viewModelScope.launch { libraryRepository.addTag(paperId.value, name) }
+        }
+
+        fun addToCollection(collectionId: Long) {
+            viewModelScope.launch { libraryRepository.addToCollection(collectionId, paperId.value) }
+        }
+
+        fun removeFromCollection(collectionId: Long) {
+            viewModelScope.launch { libraryRepository.removeFromCollection(collectionId, paperId.value) }
+        }
+
+        /** Create a collection and immediately add this paper to it (picker "new collection" path). */
+        fun createCollectionWithPaper(name: String) {
+            if (name.isBlank()) return
+            viewModelScope.launch {
+                val id = libraryRepository.createCollection(name)
+                libraryRepository.addToCollection(id, paperId.value)
+            }
         }
 
         fun removeTag(tagId: Long) {

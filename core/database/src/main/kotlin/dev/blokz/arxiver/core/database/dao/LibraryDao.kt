@@ -98,6 +98,10 @@ interface LibraryDao {
     @Query("SELECT COUNT(*) FROM collection_papers WHERE collection_id = :collectionId")
     fun observeCollectionSize(collectionId: Long): Flow<Int>
 
+    /** Collections this paper currently belongs to — drives the detail-screen picker. */
+    @Query("SELECT collection_id FROM collection_papers WHERE paper_id = :paperId")
+    fun observeCollectionMemberships(paperId: String): Flow<List<Long>>
+
     // --- tags ---
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
