@@ -5,7 +5,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,7 +24,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -40,7 +38,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
-import dev.blokz.arxiver.core.common.AppError
+import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.PaperListItem
 import dev.blokz.arxiver.ui.components.SkeletonList
 import dev.blokz.arxiver.ui.components.SkeletonPaperItem
@@ -149,29 +147,6 @@ private fun LoadingState() {
             modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
         )
         SkeletonList()
-    }
-}
-
-@Composable
-internal fun ErrorState(
-    error: AppError?,
-    onRetry: () -> Unit,
-) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            text =
-                when (error) {
-                    is AppError.Offline -> stringResource(R.string.error_offline)
-                    is AppError.RateLimited -> stringResource(R.string.error_rate_limited)
-                    else -> stringResource(R.string.error_generic)
-                },
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        TextButton(onClick = onRetry) { Text(stringResource(R.string.action_retry)) }
     }
 }
 

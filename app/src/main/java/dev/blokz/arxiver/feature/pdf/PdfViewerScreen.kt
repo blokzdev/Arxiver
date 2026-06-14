@@ -50,9 +50,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
-import dev.blokz.arxiver.feature.browse.ErrorState
+import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.theme.Spacing
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -110,7 +110,10 @@ fun PdfViewerScreen(
                         )
                     }
                 state.error != null -> ErrorState(error = state.error, onRetry = viewModel::retry)
-                else -> state.file?.let { PdfPages(file = it, nightMode = state.nightMode) }
+                else ->
+                    state.file?.let {
+                        PdfPages(file = it, nightMode = state.nightMode, ioDispatcher = viewModel.ioDispatcher)
+                    }
             }
         }
     }
@@ -135,8 +138,9 @@ private val invertFilter =
 private fun PdfPages(
     file: File,
     nightMode: Boolean,
+    ioDispatcher: CoroutineDispatcher,
 ) {
-    val rendererState = remember(file) { PdfRendererHolder(file) }
+    val rendererState = remember(file, ioDispatcher) { PdfRendererHolder(file, ioDispatcher) }
     DisposableEffect(rendererState) {
         onDispose { rendererState.close() }
     }
@@ -221,7 +225,10 @@ private fun PdfPage(
  * PdfRenderer is single-threaded and page-exclusive; all access funnels
  * through one mutex.
  */
-private class PdfRendererHolder(file: File) {
+private class PdfRendererHolder(
+    file: File,
+    private val ioDispatcher: CoroutineDispatcher,
+) {
     private val fd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
     private val renderer = PdfRenderer(fd)
     private val mutex = Mutex()
@@ -232,7 +239,7 @@ private class PdfRendererHolder(file: File) {
         index: Int,
         targetWidth: Int = 1080,
     ): Bitmap? =
-        withContext(Dispatchers.IO) {
+        withContext(ioDispatcher) {
             mutex.withLock {
                 runCatching {
                     renderer.openPage(index).use { page ->

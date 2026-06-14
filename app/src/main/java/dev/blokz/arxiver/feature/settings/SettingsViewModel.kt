@@ -5,12 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.data.SettingsRepository
 import dev.blokz.arxiver.sync.SyncScheduler
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +38,7 @@ class SettingsViewModel
         private val embeddingDao: EmbeddingDao,
         private val syncScheduler: SyncScheduler,
         private val backupManager: dev.blokz.arxiver.data.BackupManager,
+        private val dispatchers: DispatcherProvider,
     ) : ViewModel() {
         private val pdfCacheMb = MutableStateFlow(0L)
 
@@ -85,7 +86,7 @@ class SettingsViewModel
 
         fun deleteModel() {
             viewModelScope.launch {
-                withContext(Dispatchers.IO) { modelDownloader.delete() }
+                withContext(dispatchers.io) { modelDownloader.delete() }
                 embeddingDao.deleteAll()
                 embeddingDao.clearEmbeddedMarks()
             }
@@ -116,7 +117,7 @@ class SettingsViewModel
 
         fun clearPdfCache() {
             viewModelScope.launch {
-                withContext(Dispatchers.IO) {
+                withContext(dispatchers.io) {
                     File(context.filesDir, "pdfs").deleteRecursively()
                 }
                 refreshPdfCacheSize()
@@ -126,7 +127,7 @@ class SettingsViewModel
         private fun refreshPdfCacheSize() {
             viewModelScope.launch {
                 pdfCacheMb.value =
-                    withContext(Dispatchers.IO) {
+                    withContext(dispatchers.io) {
                         val dir = File(context.filesDir, "pdfs")
                         (dir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }) / (1024 * 1024)
                     }

@@ -49,4 +49,24 @@ class ArxivQueryTest {
         val params = ArxivQuery.category("cs.LG", maxResults = 5000).toQueryParameters()
         assertEquals("100", params["max_results"])
     }
+
+    @Test
+    fun `max results is clamped to at least one`() {
+        assertEquals("1", ArxivQuery.category("cs.LG", maxResults = 0).toQueryParameters()["max_results"])
+    }
+
+    @Test
+    fun `start offset is emitted for paging`() {
+        val params = ArxivQuery.category("cs.LG", start = 50, maxResults = 25).toQueryParameters()
+        assertEquals("50", params["start"])
+        assertEquals("25", params["max_results"])
+    }
+
+    @Test
+    fun `byIds with empty list still emits a valid page size`() {
+        val params = ArxivQuery.byIds(emptyList()).toQueryParameters()
+        assertEquals("1", params["max_results"])
+        assertEquals(null, params["id_list"])
+        assertEquals(null, params["search_query"])
+    }
 }

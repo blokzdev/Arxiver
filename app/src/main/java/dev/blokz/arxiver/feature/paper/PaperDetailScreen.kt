@@ -73,6 +73,7 @@ import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.feature.claude.DispatchSheet
+import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.ScoreBar
 import dev.blokz.arxiver.ui.components.SkeletonLine
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
@@ -179,11 +180,7 @@ fun PaperDetailScreen(
         ) {
             when {
                 state.loading -> DetailSkeleton()
-                state.notFound ->
-                    Text(
-                        text = stringResource(R.string.paper_not_found),
-                        modifier = Modifier.align(Alignment.Center),
-                    )
+                state.notFound -> ErrorState(message = stringResource(R.string.paper_not_found))
                 else ->
                     state.paper?.let { paper ->
                         PaperDetailContent(

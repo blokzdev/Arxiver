@@ -32,10 +32,15 @@ import javax.inject.Inject
  * TodayViewModel's HiltModules\$BindsModule — see proguard-rules.pro).
  *
  * Run standalone: `./gradlew :app:testDebugUnitTest --tests "*.OnboardingFlowTest"`.
- * Ignored in the suite: order-flaky when sharing a Robolectric sandbox with
- * other DB/DataStore tests (singleton state across same-config classes).
+ * Stays a manual diagnostic (not in the CI suite): this full Compose + Hilt +
+ * MainActivity test is order-flaky under a shared Robolectric sandbox (the
+ * process-wide DataStore-by-name singleton leaks `onboarded` across classes), and
+ * forcing it into CI would make the suite flaky. The first-run *logic* it proved —
+ * finish() persists onboarded + enqueues sync before navigating — is now covered
+ * reliably and headlessly by OnboardingViewModelTest; the R8 effects it guards are
+ * only observable on a real release APK anyway.
  */
-@Ignore("manual diagnostic — run standalone; order-flaky in the full suite")
+@Ignore("manual diagnostic — logic covered by OnboardingViewModelTest; this Compose+Hilt run is order-flaky in-suite")
 @HiltAndroidTest
 @RunWith(RobolectricTestRunner::class)
 @Config(application = HiltTestApplication::class)

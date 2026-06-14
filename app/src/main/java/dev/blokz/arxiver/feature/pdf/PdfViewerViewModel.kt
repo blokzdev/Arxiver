@@ -8,9 +8,11 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
+import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.network.pdf.PdfDownloader
 import dev.blokz.arxiver.data.PaperRepository
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,8 +36,12 @@ class PdfViewerViewModel
         @ApplicationContext private val context: Context,
         private val pdfDownloader: PdfDownloader,
         private val paperRepository: PaperRepository,
+        dispatchers: DispatcherProvider,
     ) : ViewModel() {
         private val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
+
+        /** Exposed so the page renderer (Compose-side) honors the injected dispatcher. */
+        val ioDispatcher: CoroutineDispatcher = dispatchers.io
 
         private val _uiState = MutableStateFlow(PdfViewerUiState())
         val uiState: StateFlow<PdfViewerUiState> = _uiState.asStateFlow()

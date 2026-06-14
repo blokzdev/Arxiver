@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -98,5 +99,27 @@ class ArxivApiClientTest {
             val failure = assertIs<AppResult.Failure>(result)
             assertEquals(AppError.Upstream(400), failure.error)
             assertEquals(1, server.requestCount)
+        }
+
+    @Test
+    fun `connection failure surfaces Offline after exhausting retries`() =
+        runTest {
+            // Two retries (delays 1,2) → three attempts, each a dropped connection.
+            repeat(3) { server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START)) }
+
+            val result = client().fetch(ArxivQuery.category("cs.LG"))
+
+            assertEquals(AppError.Offline, assertIs<AppResult.Failure>(result).error)
+        }
+
+    @Test
+    fun `429 is retried then surfaces as upstream`() =
+        runTest {
+            repeat(3) { server.enqueue(MockResponse().setResponseCode(429)) }
+
+            val result = client().fetch(ArxivQuery.category("cs.LG"))
+
+            assertEquals(AppError.Upstream(429), assertIs<AppResult.Failure>(result).error)
+            assertEquals(3, server.requestCount)
         }
 }

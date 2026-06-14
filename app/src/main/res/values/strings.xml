@@ -101,6 +101,7 @@
     <string name="library_export_json">Export JSON</string>
     <string name="library_export_bibtex">Export BibTeX</string>
     <string name="library_filtered_empty">Nothing here yet.</string>
+    <string name="library_filtered_empty_body">Add papers to this collection or tag from any paper\'s detail screen.</string>
     <string name="library_collection_deleted">Collection “%1$s” deleted</string>
 
     <string name="paper_related_heading">Related papers</string>
