@@ -113,6 +113,17 @@ Versioned envelope; `schema` bumps on breaking change. Routine authors can rely 
 - Abstract always included (Claude shouldn't need to re-fetch); PDFs never uploaded — links suffice, routines can fetch.
 - Size guard: > 256 KB (≈ >40 papers with notes) → app refuses with "split the selection" message.
 
+### 4.1 Versioning & breaking changes
+
+`schema` (`arxiver/v1`) is the contract routine authors parse, so its evolution is governed:
+
+- **Additive, non-breaking changes** (new optional keys, e.g. the `relations` block) keep `arxiver/v1`. Routines that ignore unknown keys keep working.
+- **Breaking changes** (renaming/removing a field, changing a type or meaning) require, in the *same* commit:
+  1. Bump `ArxiverPayload.SCHEMA` (`core/claude/.../Payload.kt`) to the next `arxiver/vN`.
+  2. Update the golden fixtures so the change is reviewable as a diff.
+  3. Update this section (the example + the field notes).
+- The guard: `PayloadBuilderTest` (`:core:claude`) golden-tests the serialized payload against the committed shape and asserts token/user redaction is structural (absent keys, not nulls). A breaking change fails that test until the golden files are regenerated — that failure is the prompt to do the three steps above, not to weaken the test.
+
 ## 5. Action catalog
 
 | action | selection | instruction template (user-editable before send) |

@@ -16,7 +16,7 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 4
-        versionName = "1.1.2"
+        versionName = "1.2.0"
     }
 
     // CI release signing: keystore + credentials arrive via environment
