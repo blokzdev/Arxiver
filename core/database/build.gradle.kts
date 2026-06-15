@@ -26,6 +26,14 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    // Expose the exported Room schemas to Robolectric so MigrationTestHelper
+    // (Migration1To2Test) can recreate old versions from the committed JSONs.
+    sourceSets {
+        getByName("test") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
 }
 
 kotlin {

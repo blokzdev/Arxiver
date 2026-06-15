@@ -100,8 +100,8 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 > left for hardware: real on-device generation, streaming feel, privacy-preview fidelity,
 > retrieval relevance over a real library, and history persistence. Seeded for P2; each item
 > activates when its subphase ships.
-- [ ] **K1 Chunk embedding on device** — asked/KB papers get chunk-embedded on unmetered network; re-embed is skipped when the model guard matches. _(P2.1)_
-- [ ] **K2 Retrieval relevance** — per-paper / per-collection top-K returns on-topic chunks for a real library question (sanity, not a golden set). _(P2.1)_
+- [ ] **K1 Chunk embedding on device** — `EmbeddingWorker` chunk-indexes library papers on the unmetered job (eager backfill, bounded per run); `chunk_embeddings` fills (observable via `observeIndexedPaperCount`); a model change wipes mismatched chunks and re-indexes; the v1→v2 migration applies cleanly on an upgraded install. _(P2.1)_
+- [ ] **K2 Retrieval relevance** — `RagRetriever` returns on-topic chunks for a real library question, scoped to a paper and to a collection; the hybrid blend (semantic cosine + `chunk_fts` BM25) beats either leg alone on a keyword-y vs paraphrase query (sanity, not a golden set). _(P2.1)_
 - [ ] **K3 Streaming render** — Ask sheet renders tokens incrementally as they arrive (no freeze-then-dump); cancel mid-stream stops cleanly. _(P2.3)_
 - [ ] **K4 Privacy preview fidelity** — before a **cloud** call the "what leaves the device" confirm shows exactly the messages + retrieved chunks sent; **no provider key**, no gated notes; on-device generation shows **no preview and emits no network traffic** (confirm in airplane mode). _(P2.2/P2.3)_
 - [ ] **K5 Provider resolution + fallback** — on-device used when ready; with no on-device model the selected cloud provider is used; clearing the key surfaces a clear "configure a provider" state. _(P2.2)_

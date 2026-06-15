@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import dev.blokz.arxiver.core.database.dao.CategoryDao
+import dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao
 import dev.blokz.arxiver.core.database.dao.CitationDao
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.database.dao.FollowDao
@@ -15,6 +16,8 @@ import dev.blokz.arxiver.core.database.dao.RoutineDao
 import dev.blokz.arxiver.core.database.dao.SearchDao
 import dev.blokz.arxiver.core.database.entity.AuthorEntity
 import dev.blokz.arxiver.core.database.entity.CategoryEntity
+import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
+import dev.blokz.arxiver.core.database.entity.ChunkFtsEntity
 import dev.blokz.arxiver.core.database.entity.CitationEdgeEntity
 import dev.blokz.arxiver.core.database.entity.CollectionEntity
 import dev.blokz.arxiver.core.database.entity.CollectionPaperCrossRef
@@ -33,6 +36,7 @@ import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
 import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
+import dev.blokz.arxiver.core.database.migration.MIGRATION_1_2
 
 @Database(
     entities = [
@@ -52,6 +56,8 @@ import dev.blokz.arxiver.core.database.entity.TagEntity
         PaperFtsEntity::class,
         NoteFtsEntity::class,
         PaperEmbeddingEntity::class,
+        ChunkEmbeddingEntity::class,
+        ChunkFtsEntity::class,
         RelatedPaperEntity::class,
         CitationEdgeEntity::class,
         RoutineConfigEntity::class,
@@ -75,6 +81,8 @@ abstract class ArxiverDatabase : RoomDatabase() {
 
     abstract fun embeddingDao(): EmbeddingDao
 
+    abstract fun chunkEmbeddingDao(): ChunkEmbeddingDao
+
     abstract fun citationDao(): CitationDao
 
     abstract fun routineDao(): RoutineDao
@@ -83,7 +91,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
         const val NAME = "arxiver.db"
 
         /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
-        const val VERSION = 1
+        const val VERSION = 2
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema
@@ -91,6 +99,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
          */
         fun build(context: Context): ArxiverDatabase =
             Room.databaseBuilder(context, ArxiverDatabase::class.java, NAME)
+                .addMigrations(MIGRATION_1_2)
                 .build()
     }
 }

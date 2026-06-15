@@ -60,12 +60,30 @@ Inbox score = max cosine similarity between the inbox paper and the user's **lib
 - Vector: `VectorStore` contract tests run against both sqlite-vec and the BLOB fallback implementation.
 - Golden relevance set: ~20 hand-written (query → expected-paper) cases over a fixture corpus of ~100 real arXiv abstracts; hybrid must hit expected paper in top 5 for ≥ 80% of cases. Guards tuning regressions.
 
-## v2 — RAG retrieval (forward note)
+## 8. RAG retrieval (P2)
 
-The P2 chat/RAG subphase reuses this engine: query embedding via `EmbeddingService`,
-`VectorIndex.topK` (+ `HybridFusion`) for retrieval, scoped to a single paper or a user-curated
-knowledge base (= a **Collection**). It adds **text chunking** and a **chunk-embedding** index
-(papers' abstract+notes, later full PDF text from P3) — the detailed contract lands here as
-**§8** when **P2.1** is built. Retrieval stays fully on-device; only retrieved chunks + the
-question reach a cloud provider (behind a "what leaves the device" confirm). Plan:
-`docs/P2-PLAN.md`. Architecture: `docs/SPEC-AI-PROVIDERS.md`.
+Chat-with-paper / KB chat (P2) grounds generation in the library via **on-device** retrieval.
+Implemented in P2.1 (`:core:search` + `:core:database`); reuses the embedding model and
+`HybridFusion`. Only the retrieved chunks + the question ever leave the device (and only for a
+cloud provider, behind a "what leaves the device" confirm — SPEC-AI-PROVIDERS §5). Plan:
+`docs/P2-PLAN.md`.
+
+- **Chunking** (`TextChunker`, pure): `title + "\n" + abstract` and each note body are split into
+  sentence-aware chunks under a character budget (a tokenizer-free proxy for bge's 512-token
+  window) with small overlap, so passages past the window stay retrievable. Abstract chunks carry
+  `source_kind = abstract`; note chunks `source_kind = note`, numbered continuously per paper.
+  (Full PDF text becomes a third source once P3 lands.)
+- **Chunk index** (`chunk_embeddings`, SPEC-DATA §4): one row per chunk — text + L2-normalized
+  float32 embedding (`EmbeddingService.embedPassages`, no query prefix) + per-row `model`/`dim`
+  guard. An external-content FTS4 `chunk_fts` mirrors `chunk_text` for the keyword leg.
+- **Indexing** (`RagIndexer`): re-chunk + re-embed a paper, delete-then-insert (idempotent;
+  model-guarded). **Eager backfill**: `EmbeddingWorker` chunk-indexes library papers lacking
+  current-model chunks on the unmetered job, bounded per run; ad-hoc (non-library) papers index
+  on demand.
+- **Retrieval** (`RagRetriever`, scoped to a `Paper` or a `Collection`): semantic leg = cosine
+  top-K over the scope's chunk vectors (chunked scan, like `VectorIndex`); keyword leg = `chunk_fts`
+  BM25; fused by the shared `HybridFusion` (25/75, 0.70 gate) keyed on chunk id, returning
+  `RetrievedChunk(text, paperId, score, provenance)`. The caller embeds the query
+  (`EmbeddingService.embedQuery`); a null query vector degrades to keyword-only.
+
+Architecture: `docs/SPEC-AI-PROVIDERS.md`.

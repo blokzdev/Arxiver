@@ -297,6 +297,37 @@ object AppModule {
     ): dev.blokz.arxiver.core.search.VectorIndex = dev.blokz.arxiver.core.search.VectorIndex(embeddingDao)
 
     @Provides
+    fun chunkEmbeddingDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao =
+        db.chunkEmbeddingDao()
+
+    @Provides
+    @Singleton
+    fun ragRetriever(
+        chunkEmbeddingDao: dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao,
+    ): dev.blokz.arxiver.core.search.RagRetriever =
+        dev.blokz.arxiver.core.search.RagRetriever(
+            vectorSource = dev.blokz.arxiver.core.search.DaoChunkVectorSource(chunkEmbeddingDao),
+            keywordSource = dev.blokz.arxiver.core.search.DaoChunkKeywordSource(chunkEmbeddingDao),
+        )
+
+    @Provides
+    @Singleton
+    fun ragIndexer(
+        paperDao: PaperDao,
+        libraryDao: dev.blokz.arxiver.core.database.dao.LibraryDao,
+        chunkEmbeddingDao: dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao,
+        embeddingService: dev.blokz.arxiver.core.ml.EmbeddingService,
+    ): dev.blokz.arxiver.rag.RagIndexer =
+        dev.blokz.arxiver.rag.RagIndexer(
+            paperDao = paperDao,
+            libraryDao = libraryDao,
+            chunkDao = chunkEmbeddingDao,
+            chunker = dev.blokz.arxiver.core.search.TextChunker(),
+            modelName = dev.blokz.arxiver.sync.EmbeddingWorker.MODEL_NAME,
+            embed = embeddingService::embedPassages,
+        )
+
+    @Provides
     @Singleton
     fun pdfDownloader(
         httpClient: OkHttpClient,
