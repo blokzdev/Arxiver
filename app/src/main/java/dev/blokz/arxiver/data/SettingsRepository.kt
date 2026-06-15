@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.blokz.arxiver.core.ai.InferenceTier
 import dev.blokz.arxiver.core.ai.ProviderId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -24,6 +25,7 @@ class SettingsRepository
         private val syncIntervalKey = intPreferencesKey("sync_interval_hours")
         private val onboardedKey = booleanPreferencesKey("onboarded")
         private val selectedAiProviderKey = stringPreferencesKey("selected_ai_provider")
+        private val preferredOnDeviceTierKey = stringPreferencesKey("preferred_ondevice_tier")
 
         val syncIntervalHours: Flow<Int> =
             context.dataStore.data.map { it[syncIntervalKey] ?: DEFAULT_SYNC_HOURS }
@@ -49,6 +51,25 @@ class SettingsRepository
 
         override suspend fun setSelectedAiProvider(provider: ProviderId) {
             context.dataStore.edit { it[selectedAiProviderKey] = provider.name }
+        }
+
+        override val preferredOnDeviceTier: Flow<InferenceTier?> =
+            context.dataStore.data.map { prefs ->
+                prefs[preferredOnDeviceTierKey]?.let { name ->
+                    runCatching { InferenceTier.valueOf(name) }.getOrNull()
+                }
+            }
+
+        override suspend fun setPreferredOnDeviceTier(tier: InferenceTier?) {
+            context.dataStore.edit { prefs ->
+                if (tier == null) {
+                    prefs.remove(
+                        preferredOnDeviceTierKey,
+                    )
+                } else {
+                    prefs[preferredOnDeviceTierKey] = tier.name
+                }
+            }
         }
 
         companion object {

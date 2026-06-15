@@ -97,4 +97,39 @@ class OnDeviceProviderTest {
             assertTrue(!nano.generated)
             assertTrue(gemma.generated)
         }
+
+    @Test
+    fun `preferred tier overrides default order when ready`() =
+        runBlocking {
+            val gemma = FakeEngine(InferenceTier.GEMMA, ready = true, reply = "gemma")
+            val nano = FakeEngine(InferenceTier.NANO, ready = true, reply = "nano")
+            // Default order is Gemma-first, but the user prefers Nano.
+            val provider = OnDeviceProvider(listOf(gemma, nano), dispatchers, preferredTier = { InferenceTier.NANO })
+
+            val text =
+                provider.chat(
+                    request(),
+                ).toList().filterIsInstance<ChatChunk.Delta>().joinToString("") { it.text }
+
+            assertEquals("nano", text)
+            assertTrue(nano.generated)
+            assertTrue(!gemma.generated)
+        }
+
+    @Test
+    fun `preferred but unready tier falls back to default order`() =
+        runBlocking {
+            val gemma = FakeEngine(InferenceTier.GEMMA, ready = true, reply = "gemma")
+            val nano = FakeEngine(InferenceTier.NANO, ready = false, reply = "nano")
+            val provider = OnDeviceProvider(listOf(gemma, nano), dispatchers, preferredTier = { InferenceTier.NANO })
+
+            val text =
+                provider.chat(
+                    request(),
+                ).toList().filterIsInstance<ChatChunk.Delta>().joinToString("") { it.text }
+
+            assertEquals("gemma", text)
+            assertTrue(gemma.generated)
+            assertTrue(!nano.generated)
+        }
 }

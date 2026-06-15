@@ -11,6 +11,8 @@ import dev.blokz.arxiver.core.ai.ChatRole
 import dev.blokz.arxiver.core.ai.DeviceCapability
 import dev.blokz.arxiver.core.ai.DeviceCapabilityProbe
 import dev.blokz.arxiver.core.ai.InferenceTier
+import dev.blokz.arxiver.core.ai.NanoAvailability
+import dev.blokz.arxiver.core.ai.NanoDownloadProgress
 import dev.blokz.arxiver.core.ai.NanoStatus
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderRegistry
@@ -19,6 +21,7 @@ import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.data.AiProviderStore
 import dev.blokz.arxiver.data.OnDeviceModelController
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -39,6 +42,8 @@ data class OnDeviceInfo(
     val gemmaEligible: Boolean,
     val gemmaState: ModelState,
     val nanoStatus: NanoStatus,
+    val preferredTier: InferenceTier? = null,
+    val nanoDownload: NanoDownloadProgress? = null,
 )
 
 data class ProviderRow(
@@ -55,10 +60,10 @@ data class AiProviderSettingsUiState(
 
 /**
  * "AI providers" settings (SPEC-AI-PROVIDERS §4). Cloud providers: connect a
- * BYOK key (write-only — the UI only learns whether one is present), test it,
- * pick the default. On-device (P1.2): shows device capability + the recommended
- * tier and drives the Gemma model download/delete. A test connection fires a
- * tiny prompt through the provider — for on-device it runs entirely locally.
+ * BYOK key (write-only), test, pick the default. On-device (P1.2): shows device
+ * capability + the recommended tier, drives the Gemma download/delete and the
+ * Nano enable, and lets the user pick the preferred on-device engine when more
+ * than one is ready. A test connection runs entirely locally for on-device.
  */
 @HiltViewModel
 class AiProviderSettingsViewModel
@@ -69,23 +74,43 @@ class AiProviderSettingsViewModel
         private val store: AiProviderStore,
         private val capabilityProbe: DeviceCapabilityProbe,
         private val modelController: OnDeviceModelController,
+        private val nanoAvailability: NanoAvailability,
     ) : ViewModel() {
         private val testStates = MutableStateFlow<Map<ProviderId, ConnectionTest>>(emptyMap())
 
-        // Bumped whenever a key is stored/cleared so the configured flags recompute
-        // (the vault is a synchronous read, not a Flow).
+        // Bumped whenever a key is stored/cleared so the configured flags recompute.
         private val configuredRevision = MutableStateFlow(0)
 
         private val capability = MutableStateFlow<DeviceCapability?>(null)
+        private val nanoDownload = MutableStateFlow<NanoDownloadProgress?>(null)
+
+        private val onDeviceInfo: Flow<OnDeviceInfo?> =
+            combine(
+                modelController.state,
+                capability,
+                store.preferredOnDeviceTier,
+                nanoDownload,
+            ) { gemmaState, deviceCapability, preferred, download ->
+                deviceCapability?.let {
+                    OnDeviceInfo(
+                        recommendedTier = TierSelector.recommend(it),
+                        totalRamMb = it.totalRamMb,
+                        gemmaEligible = it.gemmaEligible,
+                        gemmaState = gemmaState,
+                        nanoStatus = it.nanoStatus,
+                        preferredTier = preferred,
+                        nanoDownload = download,
+                    )
+                }
+            }
 
         val uiState: StateFlow<AiProviderSettingsUiState> =
             combine(
                 testStates,
                 configuredRevision,
                 store.selectedAiProvider,
-                modelController.state,
-                capability,
-            ) { tests, _, selected, gemmaState, deviceCapability ->
+                onDeviceInfo,
+            ) { tests, _, selected, onDevice ->
                 AiProviderSettingsUiState(
                     rows =
                         registry.all().map { provider ->
@@ -93,18 +118,7 @@ class AiProviderSettingsViewModel
                                 id = provider.id,
                                 configured = registry.isConfigured(provider.id),
                                 test = tests[provider.id] ?: ConnectionTest.Idle,
-                                onDevice =
-                                    if (provider.id == ProviderId.ON_DEVICE && deviceCapability != null) {
-                                        OnDeviceInfo(
-                                            recommendedTier = TierSelector.recommend(deviceCapability),
-                                            totalRamMb = deviceCapability.totalRamMb,
-                                            gemmaEligible = deviceCapability.gemmaEligible,
-                                            gemmaState = gemmaState,
-                                            nanoStatus = deviceCapability.nanoStatus,
-                                        )
-                                    } else {
-                                        null
-                                    },
+                                onDevice = if (provider.id == ProviderId.ON_DEVICE) onDevice else null,
                             )
                         },
                     selectedDefault = selected,
@@ -142,11 +156,27 @@ class AiProviderSettingsViewModel
             viewModelScope.launch { store.setSelectedAiProvider(id) }
         }
 
+        fun setPreferredOnDeviceTier(tier: InferenceTier?) {
+            viewModelScope.launch { store.setPreferredOnDeviceTier(tier) }
+        }
+
         fun downloadOnDeviceModel() = modelController.download()
 
         fun deleteOnDeviceModel() {
             modelController.delete()
             viewModelScope.launch { refreshCapability() }
+        }
+
+        fun downloadNano() {
+            viewModelScope.launch {
+                nanoAvailability.download().collect { progress ->
+                    nanoDownload.value = progress
+                    if (progress is NanoDownloadProgress.Done) {
+                        refreshCapability()
+                        nanoDownload.value = null
+                    }
+                }
+            }
         }
 
         fun testConnection(id: ProviderId) {

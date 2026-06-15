@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.ai.InferenceTier
+import dev.blokz.arxiver.core.ai.NanoDownloadProgress
 import dev.blokz.arxiver.core.ai.NanoStatus
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ml.ModelState
@@ -80,6 +82,8 @@ fun AiProviderSettingsScreen(
             onSelectDefault = viewModel::selectDefault,
             onDownloadModel = viewModel::downloadOnDeviceModel,
             onDeleteModel = viewModel::deleteOnDeviceModel,
+            onDownloadNano = viewModel::downloadNano,
+            onSetPreferredTier = viewModel::setPreferredOnDeviceTier,
         )
     }
 }
@@ -94,6 +98,8 @@ private fun AiProviderSettingsContent(
     onSelectDefault: (ProviderId) -> Unit,
     onDownloadModel: () -> Unit,
     onDeleteModel: () -> Unit,
+    onDownloadNano: () -> Unit,
+    onSetPreferredTier: (InferenceTier?) -> Unit,
 ) {
     Column(
         modifier =
@@ -119,6 +125,8 @@ private fun AiProviderSettingsContent(
                 onSelectDefault = { onSelectDefault(row.id) },
                 onDownloadModel = onDownloadModel,
                 onDeleteModel = onDeleteModel,
+                onDownloadNano = onDownloadNano,
+                onSetPreferredTier = onSetPreferredTier,
             )
         }
         Text(
@@ -140,6 +148,8 @@ private fun ProviderCard(
     onSelectDefault: () -> Unit,
     onDownloadModel: () -> Unit,
     onDeleteModel: () -> Unit,
+    onDownloadNano: () -> Unit,
+    onSetPreferredTier: (InferenceTier?) -> Unit,
 ) {
     val onDevice = row.onDevice
     val usable = if (onDevice != null) onDevice.isUsable else row.configured
@@ -163,6 +173,8 @@ private fun ProviderCard(
                 onTestConnection = onTestConnection,
                 onDownloadModel = onDownloadModel,
                 onDeleteModel = onDeleteModel,
+                onDownloadNano = onDownloadNano,
+                onSetPreferredTier = onSetPreferredTier,
             )
         } else {
             CloudKeySection(
@@ -235,6 +247,8 @@ private fun OnDeviceSection(
     onTestConnection: () -> Unit,
     onDownloadModel: () -> Unit,
     onDeleteModel: () -> Unit,
+    onDownloadNano: () -> Unit,
+    onSetPreferredTier: (InferenceTier?) -> Unit,
 ) {
     Text(
         stringResource(R.string.ai_ondevice_ram, info.totalRamMb),
@@ -246,6 +260,8 @@ private fun OnDeviceSection(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+
+    Text(stringResource(R.string.ai_tier_gemma), style = MaterialTheme.typography.labelLarge)
     when (val state = info.gemmaState) {
         ModelState.NotDownloaded ->
             if (info.gemmaEligible) {
@@ -291,6 +307,77 @@ private fun OnDeviceSection(
                 }
             }
     }
+
+    NanoSection(info = info, onDownloadNano = onDownloadNano)
+
+    // Choose which on-device engine to use when both Gemma and Nano are ready.
+    if (info.gemmaState is ModelState.Ready && info.nanoStatus == NanoStatus.AVAILABLE) {
+        Text(stringResource(R.string.ai_ondevice_prefer), style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            PreferChip(R.string.ai_prefer_auto, info.preferredTier == null) { onSetPreferredTier(null) }
+            PreferChip(R.string.ai_tier_gemma, info.preferredTier == InferenceTier.GEMMA) {
+                onSetPreferredTier(InferenceTier.GEMMA)
+            }
+            PreferChip(R.string.ai_tier_nano, info.preferredTier == InferenceTier.NANO) {
+                onSetPreferredTier(InferenceTier.NANO)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NanoSection(
+    info: OnDeviceInfo,
+    onDownloadNano: () -> Unit,
+) {
+    Text(stringResource(R.string.ai_tier_nano), style = MaterialTheme.typography.labelLarge)
+    info.nanoDownload?.let { progress ->
+        when (progress) {
+            is NanoDownloadProgress.Downloading ->
+                Text(
+                    progress.percent?.let { stringResource(R.string.ai_nano_downloading_pct, it) }
+                        ?: stringResource(R.string.ai_nano_downloading),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            is NanoDownloadProgress.Failed ->
+                Text(
+                    stringResource(R.string.ai_nano_failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            NanoDownloadProgress.Done -> Unit
+        }
+        return
+    }
+    when (info.nanoStatus) {
+        NanoStatus.AVAILABLE ->
+            StatusChip(stringResource(R.string.ai_nano_ready), tone = StatusTone.Positive)
+        NanoStatus.DOWNLOADABLE ->
+            Button(onClick = onDownloadNano) {
+                Text(stringResource(R.string.ai_nano_enable))
+            }
+        NanoStatus.DOWNLOADING ->
+            Text(stringResource(R.string.ai_nano_downloading), style = MaterialTheme.typography.bodySmall)
+        NanoStatus.UNAVAILABLE ->
+            Text(
+                stringResource(R.string.ai_nano_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+    }
+}
+
+@Composable
+private fun PreferChip(
+    labelRes: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(stringResource(labelRes)) },
+    )
 }
 
 @Composable
@@ -375,6 +462,8 @@ private fun AiProviderSettingsContentPreview() {
             onSelectDefault = {},
             onDownloadModel = {},
             onDeleteModel = {},
+            onDownloadNano = {},
+            onSetPreferredTier = {},
         )
     }
 }
