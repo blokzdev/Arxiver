@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import dev.blokz.arxiver.core.database.dao.CategoryDao
+import dev.blokz.arxiver.core.database.dao.ChatDao
 import dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao
 import dev.blokz.arxiver.core.database.dao.CitationDao
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
@@ -16,6 +17,8 @@ import dev.blokz.arxiver.core.database.dao.RoutineDao
 import dev.blokz.arxiver.core.database.dao.SearchDao
 import dev.blokz.arxiver.core.database.entity.AuthorEntity
 import dev.blokz.arxiver.core.database.entity.CategoryEntity
+import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
+import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
 import dev.blokz.arxiver.core.database.entity.ChunkFtsEntity
 import dev.blokz.arxiver.core.database.entity.CitationEdgeEntity
@@ -37,6 +40,7 @@ import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.database.migration.MIGRATION_1_2
+import dev.blokz.arxiver.core.database.migration.MIGRATION_2_3
 
 @Database(
     entities = [
@@ -53,6 +57,8 @@ import dev.blokz.arxiver.core.database.migration.MIGRATION_1_2
         PaperTagCrossRef::class,
         NoteEntity::class,
         InboxItemEntity::class,
+        ChatSessionEntity::class,
+        ChatMessageEntity::class,
         PaperFtsEntity::class,
         NoteFtsEntity::class,
         PaperEmbeddingEntity::class,
@@ -83,6 +89,8 @@ abstract class ArxiverDatabase : RoomDatabase() {
 
     abstract fun chunkEmbeddingDao(): ChunkEmbeddingDao
 
+    abstract fun chatDao(): ChatDao
+
     abstract fun citationDao(): CitationDao
 
     abstract fun routineDao(): RoutineDao
@@ -91,7 +99,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
         const val NAME = "arxiver.db"
 
         /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
-        const val VERSION = 2
+        const val VERSION = 3
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema
@@ -99,7 +107,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
          */
         fun build(context: Context): ArxiverDatabase =
             Room.databaseBuilder(context, ArxiverDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build()
     }
 }

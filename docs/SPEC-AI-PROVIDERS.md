@@ -57,28 +57,46 @@ backups, or fixtures; the structural-redaction tests stay green. Key entry mirro
 `RoutineSetupScreen`'s write-only `PasswordVisualTransformation` field; keys are never read
 back to the UI.
 
-## 5. Privacy — "what leaves the device"
+## 5. Privacy — "what leaves the device" (realized in P2.2)
 
-- On-device tiers (Nano, Gemma) send **nothing** off the device — that's the privacy default.
-- Before any **cloud** call, show a "what leaves the device" preview (reuse the `DispatchSheet`
-  pattern + `PayloadBuilder`'s structural redaction, `explicitNulls=false` → absent keys, not
-  nulls): the exact messages + retrieved chunks that will be sent. Notes/annotations are gated
-  the same way dispatch gates them.
+- On-device tiers (Nano, Gemma) send **nothing** off the device — that's the privacy default;
+  `ChatRepository.prepare` flags `isCloud` so the UI skips the preview for on-device.
+- Before any **cloud** call, the `ChatPreviewBuilder` produces the exact body — the system
+  instruction + messages (retrieved chunks already folded in) — for a confirm sheet, using the
+  `explicitNulls = false` structural-redaction config (mirrors `PayloadBuilder`). The provider key
+  travels only in the HTTP header, so it is **structurally absent** from this body; note-derived
+  chunks are gated by `includeNotes` in `ChatContextAssembler`, the same way dispatch gates notes.
+  A golden test (`ChatPreviewBuilderTest`) asserts the body carries exactly the intended context
+  and no key / no gated note content.
 - No-telemetry red line holds. Allowed network hosts extend only to: `api.anthropic.com`,
   `generativelanguage.googleapis.com`, and the pinned Gemma 4 model download URL (in addition
   to the existing export.arxiv.org / api.semanticscholar.org / routine URLs / pinned bge URL).
 
 ## 6. RAG integration (feeds P2)
 
-Retrieval is **provider-agnostic and on-device**: embed the query with the existing bge
-`EmbeddingService`, retrieve top-K with `VectorIndex.topK` (+ `HybridFusion` for keyword blend)
-over a single paper or a user-curated **knowledge base** (= an existing **Collection**;
+Retrieval is **provider-agnostic and on-device** (SPEC-SEARCH §8): embed the query with the bge
+`EmbeddingService.embedQuery`, then `RagRetriever.retrieve` blends a cosine leg + a chunk-FTS BM25
+leg over a single paper or a user-curated **knowledge base** (= an existing **Collection**;
 abstract+notes now, full PDF text once P3 lands). Only the retrieved chunks + the question are
 placed in the `ChatRequest` context and sent to the chosen provider. (No provider offers an
 embeddings API we depend on — retrieval never leaves the device, only generation may.) Chunking
-+ a chunk-embedding schema are defined in the P2 subphase specs (SPEC-SEARCH §8 / SPEC-DATA);
-the §5 "what leaves the device" preview is **deferred from P1.1 and realized in P2** (P2.2/P2.3).
-Plan: `docs/P2-PLAN.md`.
++ the chunk-embedding schema are in the P2.1 specs (SPEC-SEARCH §8 / SPEC-DATA). Plan: `docs/P2-PLAN.md`.
+
+## 6a. Chat orchestration (P2.2)
+
+`ChatRepository` turns a question into a grounded, streamed answer and is the seam P2.3/P2.4 wrap:
+- **prepare** (read-only): embed query → `RagRetriever.retrieve` → `ChatContextAssembler` folds
+  chunks + prior turns + the question under the provider's `contextTokens` budget (char/4 proxy;
+  oldest history dropped first, then lowest-scored chunks; the question is never dropped) → resolve
+  the provider → build the §5 preview. Declining the preview persists nothing.
+- **provider resolution** (`ProviderResolver`): respect the user's `selectedAiProvider` by default;
+  a **`preferOnDeviceWhenReady`** opt-in (Settings) makes an on-device engine win whenever ready
+  (privacy/cost). On-device readiness comes from the engines (`isReady()`), not `isConfigured`
+  (a key-less provider always reports configured). No usable provider → `NotConfigured` ("configure
+  a provider" UI state).
+- **stream**: persist the user turn, stream `AiProvider.chat`, persist the assistant turn with a
+  `status` (`incomplete` while streaming → `complete` on done; `error` on `AiException`; cancellation
+  leaves the partial `incomplete`).
 
 ## 7. Testing
 

@@ -26,6 +26,7 @@ class SettingsRepository
         private val onboardedKey = booleanPreferencesKey("onboarded")
         private val selectedAiProviderKey = stringPreferencesKey("selected_ai_provider")
         private val preferredOnDeviceTierKey = stringPreferencesKey("preferred_ondevice_tier")
+        private val preferOnDeviceWhenReadyKey = booleanPreferencesKey("prefer_ondevice_when_ready")
 
         val syncIntervalHours: Flow<Int> =
             context.dataStore.data.map { it[syncIntervalKey] ?: DEFAULT_SYNC_HOURS }
@@ -70,6 +71,13 @@ class SettingsRepository
                     prefs[preferredOnDeviceTierKey] = tier.name
                 }
             }
+        }
+
+        override val preferOnDeviceWhenReady: Flow<Boolean> =
+            context.dataStore.data.map { it[preferOnDeviceWhenReadyKey] ?: false }
+
+        override suspend fun setPreferOnDeviceWhenReady(prefer: Boolean) {
+            context.dataStore.edit { it[preferOnDeviceWhenReadyKey] = prefer }
         }
 
         companion object {

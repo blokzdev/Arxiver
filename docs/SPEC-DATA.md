@@ -104,6 +104,9 @@ CREATE VIRTUAL TABLE paper_embeddings USING vec0(
 ### chunk_embeddings (P2.1, RAG)
 `chunk_embeddings(id INTEGER PK AUTOINCREMENT, paper_id → papers ON DELETE CASCADE, chunk_text TEXT, vector BLOB /* L2-normalized float32, same layout as paper_embeddings */, model TEXT, dim INTEGER, source_kind TEXT /* abstract | note */, ordinal INTEGER, embedded_at INTEGER, UNIQUE(paper_id, source_kind, ordinal))`. One row per text chunk for on-device RAG retrieval (SPEC-SEARCH §8). Per-row `model`/`dim` is the guard (model change ⇒ `deleteByModelMismatch` + re-index); re-indexing a paper is delete-then-insert. The synthetic `id` is the rowid that the FTS index (`chunk_fts`, §3) maps to. Cosine top-K is a chunked Kotlin scan scoped to a paper or a collection's papers.
 
+### chat_sessions / chat_messages (P2.2, chat history)
+`chat_sessions(id INTEGER PK AUTOINCREMENT, scope TEXT /* PAPER | COLLECTION */, scope_id TEXT /* paperId or collectionId */, provider_id TEXT /* ProviderId name — never a key */, created_at INTEGER, last_message_at INTEGER)` indexed on `(scope, scope_id)`; `chat_messages(id INTEGER PK AUTOINCREMENT, session_id → chat_sessions ON DELETE CASCADE, role TEXT /* user | assistant */, content TEXT, status TEXT /* complete | incomplete | error */, created_at INTEGER)` indexed on `session_id`. Backs grounded Q&A (SPEC-AI-PROVIDERS chat orchestration); the KB is an existing Collection (no membership table). `status` lets a cancelled/failed streamed answer survive as a partial turn. Chat history is local conversation — **excluded from exports/backups** (red line; keys/tokens never touch it). Added by the v2→v3 migration.
+
 ## 5. arXiv Atom → schema mapping
 
 | Atom element | Destination |
@@ -122,14 +125,15 @@ Client behavior contract: ≥3s between requests (global queue), `max_results �
 ## 6. Migrations & backup
 
 - Room `fallbackToDestructiveMigration` is **forbidden**; every schema change ships a tested `Migration`. Schema JSONs exported to `core/database/schemas/` and committed.
-- Backup/export (Phase 5): single zip = serialized JSON of all relational tables (sans `routine_configs` tokens — aliases exported, tokens never) + notes; PDFs and embeddings excluded (re-derivable). Import = transactional upsert, then embedding backfill job.
+- Backup/export (Phase 5): single zip = serialized JSON of all relational tables (sans `routine_configs` tokens — aliases exported, tokens never) + notes; PDFs, embeddings (`paper_embeddings`/`chunk_embeddings`), and chat history (`chat_sessions`/`chat_messages`) excluded (re-derivable / local conversation). Import = transactional upsert, then embedding backfill job.
+- Realized migrations: **v1→v2** (P2.1) added `chunk_embeddings` + `chunk_fts`; **v2→v3** (P2.2) added `chat_sessions` + `chat_messages`. Each is additive, schema-JSON-committed, and validated by a `MigrationTestHelper` test under Robolectric.
 
 ## v2 — chat, knowledge base & AI keys (forward note)
 
 The v2 AI platform adds: a **chunk-embedding** table + FTS (`chunk_embeddings` / `chunk_fts`,
 RAG over abstract+notes/full text — **shipped in P2.1**, §4/§3 above; first real Room migration
 v1→v2), a **chat-history** table/DAO (`chat_sessions`/`chat_messages`, scoped `PAPER` |
-`COLLECTION`; P2.2), and **per-provider API keys** in `EncryptedSharedPreferences` (already shipped in P1's
+`COLLECTION` — **shipped in P2.2**, §4 above; migration v2→v3), and **per-provider API keys** in `EncryptedSharedPreferences` (already shipped in P1's
 `AiKeyVault` — never in the DB, exports, or backups; same red line as routine tokens). The
 **knowledge base = an existing Collection** (membership reuses `collection_papers`; no new
 table) — a library-wide KB flag (`library_entries.in_kb`) is backlogged, not in the v2 first

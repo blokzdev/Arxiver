@@ -18,4 +18,13 @@ interface AiProviderStore {
     val preferredOnDeviceTier: Flow<InferenceTier?>
 
     suspend fun setPreferredOnDeviceTier(tier: InferenceTier?)
+
+    /**
+     * Prefer an on-device engine for chat whenever one is ready, over the selected
+     * cloud provider (default false = respect the explicit selection). The
+     * privacy/cost opt-in surfaced in Settings; consumed by `ProviderResolver`.
+     */
+    val preferOnDeviceWhenReady: Flow<Boolean>
+
+    suspend fun setPreferOnDeviceWhenReady(prefer: Boolean)
 }
