@@ -95,8 +95,13 @@ class LibraryViewModelTest {
             vm.createCollection("   ")
             assertTrue(repo.observeCollections().first().isEmpty())
 
+            // createCollection launches on viewModelScope; await the insert's emission
+            // rather than reading immediately (the Room write completes asynchronously).
             vm.createCollection("Reading")
-            assertEquals(listOf("Reading"), repo.observeCollections().first().map { it.name })
+            assertEquals(
+                listOf("Reading"),
+                repo.observeCollections().first { it.isNotEmpty() }.map { it.name },
+            )
         }
 
     @Test
@@ -113,12 +118,15 @@ class LibraryViewModelTest {
             assertEquals(listOf("2401.00001"), event.memberIds)
             assertTrue(repo.observeCollections().first().isEmpty())
 
+            // undo recreates the collection asynchronously; await the re-creation and
+            // its restored membership rather than reading immediately.
             vm.undoDeleteCollection(event)
-            val restored = repo.observeCollections().first()
+            val restored = repo.observeCollections().first { it.isNotEmpty() }
             assertEquals(listOf("Temp"), restored.map { it.name })
             assertEquals(
                 listOf("2401.00001"),
-                repo.observeCollectionPapers(restored.single().id).first().map { it.paper.id.value },
+                repo.observeCollectionPapers(restored.single().id).first { it.isNotEmpty() }
+                    .map { it.paper.id.value },
             )
         }
 }
