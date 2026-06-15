@@ -76,6 +76,14 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 - [ ] **I3 No bottom blank strip (app-wide)** — **root-caused v1.2.2:** nested Scaffolds double-applied the bottom nav inset → blank strip above the bottom bar on Today/list screens (and the gesture-bar clearance on detail screens). Fixed via `consumeWindowInsets` on the NavHost + trimmed PaperDetail's redundant trailing padding. Confirm the strip is gone on Today AND Paper Detail; note that a small inset above the gesture nav bar on detail screens is correct (content must clear the system bar).
 - [ ] **I4 Add to collection** — from a saved paper's detail, add it to a collection; it appears under that collection (Library → Collections → open); toggling off removes it; survives relaunch; "New collection" from the picker works.
 
+## J. AI providers (v2 / P1) _(SPEC-AI-PROVIDERS)_
+> CI covers the transports (MockWebServer SSE) and the key-vault contract (Robolectric).
+> What's left for hardware: the **hardware-backed Keystore** path and **real provider keys**.
+- [ ] **J1 Key vault on hardware Keystore** — a saved provider key survives app restart on a real device (Robolectric uses a software keystore; confirm the AndroidKeyStore-backed `EncryptedSharedPreferences` round-trips on device). _(P1.1a)_
+- [ ] **J2 Claude test connection** — paste a real Anthropic key in Settings → AI providers; Test connection streams a reply (success); a wrong key shows a clear auth-failed message; offline shows offline. _(needs P1.1b UI + a user-provided key)_
+- [ ] **J3 Gemini test connection** — same with a real Gemini Developer API key. _(needs P1.1b)_
+- [ ] **J4 Default provider persists** — selected default survives relaunch. _(P1.1b)_
+
 ## H. Success criteria rollup _(PRD §7)_
 - [ ] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1).
 - [ ] **H2** Hybrid search returns relevant results < 300ms, fully offline (§7.2 — C3/D2).

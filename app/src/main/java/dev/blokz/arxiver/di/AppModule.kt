@@ -125,6 +125,25 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun aiKeyVault(
+        @ApplicationContext context: Context,
+    ): dev.blokz.arxiver.core.ai.AiKeyVault = dev.blokz.arxiver.core.ai.AiKeyVault(context)
+
+    @Provides
+    @Singleton
+    fun anthropicProvider(
+        httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+        aiKeyVault: dev.blokz.arxiver.core.ai.AiKeyVault,
+    ): dev.blokz.arxiver.core.ai.AnthropicProvider =
+        dev.blokz.arxiver.core.ai.AnthropicProvider(
+            httpClient = httpClient,
+            dispatchers = dispatchers,
+            apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.CLAUDE) },
+        )
+
+    @Provides
+    @Singleton
     fun semanticScholarClient(
         httpClient: OkHttpClient,
         dispatchers: DispatcherProvider,

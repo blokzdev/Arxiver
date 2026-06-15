@@ -95,6 +95,7 @@ dependencies {
     implementation(project(":core:ml"))
     implementation(project(":core:search"))
     implementation(project(":core:claude"))
+    implementation(project(":core:ai"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
