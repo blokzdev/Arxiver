@@ -59,10 +59,13 @@ engine.close()                          // release resources
   free-form chat-with-paper needs.
 - Limits: input < ~4000 tokens; avoid output > 256 tokens; validated languages EN/KO.
 
-**Dependency:**
+**Dependency (wired in P1.2c):**
 ```kotlin
 implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
 ```
+Confirmed via AAR inspection: `Generation.getClient(): GenerativeModel`; `suspend checkStatus(): @FeatureStatus Int` (constants on `com.google.mlkit.genai.common.FeatureStatus`); `download(): Flow<DownloadStatus>` (`DownloadStarted.bytesToDownload` / `DownloadProgress.totalBytesDownloaded` / `DownloadCompleted` / `DownloadFailed`); `generateContentStream(String): Flow<GenerateContentResponse>` with text at `response.candidates.first().text`. Safe on non-flagships (checkStatus → UNAVAILABLE → degrade).
+
+**Order decision (P1.2c):** default on-device order is **Gemma → Nano** (Nano's ~256-token output cap makes it the zero-download fallback, not the default); users can override (Auto/Gemma/Nano).
 
 **Kotlin API:**
 ```kotlin

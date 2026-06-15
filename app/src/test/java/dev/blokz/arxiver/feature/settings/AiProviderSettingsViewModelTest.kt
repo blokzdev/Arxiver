@@ -5,6 +5,9 @@ import dev.blokz.arxiver.core.ai.AnthropicProvider
 import dev.blokz.arxiver.core.ai.DeviceCapability
 import dev.blokz.arxiver.core.ai.DeviceCapabilityProbe
 import dev.blokz.arxiver.core.ai.GeminiProvider
+import dev.blokz.arxiver.core.ai.InferenceTier
+import dev.blokz.arxiver.core.ai.NanoAvailability
+import dev.blokz.arxiver.core.ai.NanoDownloadProgress
 import dev.blokz.arxiver.core.ai.NanoStatus
 import dev.blokz.arxiver.core.ai.OnDeviceProvider
 import dev.blokz.arxiver.core.ai.ProviderId
@@ -17,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -79,6 +83,19 @@ class AiProviderSettingsViewModelTest {
         override suspend fun setSelectedAiProvider(provider: ProviderId) {
             selected.value = provider
         }
+
+        val preferred = MutableStateFlow<InferenceTier?>(null)
+        override val preferredOnDeviceTier: Flow<InferenceTier?> = preferred
+
+        override suspend fun setPreferredOnDeviceTier(tier: InferenceTier?) {
+            preferred.value = tier
+        }
+    }
+
+    private class FakeNano(var nanoStatus: NanoStatus = NanoStatus.UNAVAILABLE) : NanoAvailability {
+        override suspend fun status(): NanoStatus = nanoStatus
+
+        override fun download(): Flow<NanoDownloadProgress> = flowOf(NanoDownloadProgress.Done)
     }
 
     private class FakeProbe(var ramMb: Long = 8192) : DeviceCapabilityProbe {
@@ -112,6 +129,7 @@ class AiProviderSettingsViewModelTest {
 
     private lateinit var probe: FakeProbe
     private lateinit var modelController: FakeModelController
+    private lateinit var nano: FakeNano
 
     @Before
     fun setUp() {
@@ -122,6 +140,7 @@ class AiProviderSettingsViewModelTest {
         store = FakeStore()
         probe = FakeProbe()
         modelController = FakeModelController()
+        nano = FakeNano()
         val client = OkHttpClient()
         val claude =
             AnthropicProvider(
@@ -147,7 +166,7 @@ class AiProviderSettingsViewModelTest {
         server.shutdown()
     }
 
-    private fun vm() = AiProviderSettingsViewModel(registry, keyStore, store, probe, modelController)
+    private fun vm() = AiProviderSettingsViewModel(registry, keyStore, store, probe, modelController, nano)
 
     private fun claudeStream(): MockResponse =
         MockResponse()
@@ -304,6 +323,22 @@ class AiProviderSettingsViewModelTest {
 
             assertEquals(1, modelController.downloads)
             assertEquals(1, modelController.deletes)
+            job.cancel()
+        }
+
+    @Test
+    fun `setting preferred on-device tier persists and surfaces in the row`() =
+        runBlocking {
+            probe.gemmaReady = true
+            probe.nano = NanoStatus.AVAILABLE
+            modelController.state.value = ModelState.Ready(java.io.File("m.litertlm"))
+            val vm = vm()
+            val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
+
+            vm.setPreferredOnDeviceTier(InferenceTier.NANO)
+
+            assertEquals(InferenceTier.NANO, store.preferred.value)
+            assertEquals(InferenceTier.NANO, row(vm.uiState.value, ProviderId.ON_DEVICE).onDevice!!.preferredTier)
             job.cancel()
         }
 }

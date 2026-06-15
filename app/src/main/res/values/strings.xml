@@ -308,6 +308,15 @@
     <string name="ai_tier_gemma">Gemma (downloaded)</string>
     <string name="ai_tier_cloud">Cloud (your key)</string>
     <string name="ai_tier_none">none yet — connect a provider</string>
+    <!-- Nano + on-device preference (P1.2c) -->
+    <string name="ai_nano_ready">Nano ready</string>
+    <string name="ai_nano_enable">Enable Nano</string>
+    <string name="ai_nano_downloading">Enabling Nano…</string>
+    <string name="ai_nano_downloading_pct">Enabling Nano… %1$d%%</string>
+    <string name="ai_nano_failed">Couldn\'t enable Nano.</string>
+    <string name="ai_nano_unavailable">Not supported on this device.</string>
+    <string name="ai_ondevice_prefer">Preferred engine</string>
+    <string name="ai_prefer_auto">Auto</string>
 
     <string name="settings_about_section">About</string>
     <string name="settings_version">Arxiver %1$s</string>

@@ -7,13 +7,15 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 
 /**
- * The on-device [AiProvider] (SPEC-AI-PROVIDERS §3). Delegates to the first
- * **ready** engine in priority order — Nano before Gemma once P1.2c adds it —
- * so the device uses the best local back-end available. No key, no network.
+ * The on-device [AiProvider] (SPEC-AI-PROVIDERS §3). Among the engines that are
+ * **ready**, it uses the user's [preferredTier] if that engine is ready,
+ * otherwise the first in default priority order (DI registers them Gemma-first,
+ * Nano second). No key, no network.
  */
 class OnDeviceProvider(
     private val engines: List<OnDeviceEngine>,
     @Suppress("unused") private val dispatchers: DispatcherProvider,
+    private val preferredTier: suspend () -> InferenceTier? = { null },
 ) : AiProvider {
     override val id: ProviderId = ProviderId.ON_DEVICE
 
@@ -27,14 +29,17 @@ class OnDeviceProvider(
 
     override fun chat(request: ChatRequest): Flow<ChatChunk> =
         flow {
-            val engine = engines.firstReadyOrNull() ?: throw AiException(AppError.Unexpected())
+            val ready = engines.filter { it.isReady() }
+            val preferred = preferredTier()
+            val engine =
+                ready.firstOrNull { it.tier == preferred }
+                    ?: ready.firstOrNull()
+                    ?: throw AiException(AppError.Unexpected())
             emitAll(engine.generate(request))
         }
 
-    private suspend fun List<OnDeviceEngine>.firstReadyOrNull(): OnDeviceEngine? = firstOrNull { it.isReady() }
-
     companion object {
-        /** Gemma E2B context window (kept modest; on-device favours short prompts). */
+        /** Gemma E2B / Nano context window (kept modest; on-device favours short prompts). */
         private const val CONTEXT_TOKENS = 4096
     }
 }
