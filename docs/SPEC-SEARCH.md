@@ -62,8 +62,8 @@ Inbox score = max cosine similarity between the inbox paper and the user's **lib
 
 ## v2 — RAG retrieval (forward note)
 
-The v2.2 chat/RAG subphase reuses this engine: query embedding via `EmbeddingService`,
+The P2 chat/RAG subphase reuses this engine: query embedding via `EmbeddingService`,
 `VectorIndex.topK` (+ `HybridFusion`) for retrieval, scoped to a user-curated knowledge base.
 It adds **text chunking** and a **chunk-embedding** index (papers' abstract+notes, later
-full PDF text from v2.3) — specified when v2.2 is planned. Retrieval stays fully on-device;
+full PDF text from P3) — specified when P2 is planned. Retrieval stays fully on-device;
 only retrieved chunks + the question reach a cloud provider. Architecture: `docs/SPEC-AI-PROVIDERS.md`.

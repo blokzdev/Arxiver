@@ -1,7 +1,7 @@
-# SPEC-AI-PROVIDERS — multi-provider + on-device AI platform (v2.1)
+# SPEC-AI-PROVIDERS — multi-provider + on-device AI platform (P1)
 
-> Status: **architecture spec, drafted 2026-06-14.** Grounds the v2.1 (AI Provider Platform)
-> and v2.2 (chat / RAG) subphases; each subphase is planned individually before building.
+> Status: **architecture spec, drafted 2026-06-14.** Grounds the P1 (AI Provider Platform)
+> and P2 (chat / RAG) subphases; each subphase is planned individually before building.
 > This is distinct from the Claude **Routines** dispatch bridge (SPEC-CLAUDE-BRIDGE) — that
 > is an *outbound* trigger to a repo-scoped cloud agent; this is *conversational* inference.
 
@@ -68,15 +68,15 @@ back to the UI.
   `generativelanguage.googleapis.com`, and the pinned Gemma 4 model download URL (in addition
   to the existing export.arxiv.org / api.semanticscholar.org / routine URLs / pinned bge URL).
 
-## 6. RAG integration (feeds v2.2)
+## 6. RAG integration (feeds P2)
 
 Retrieval is **provider-agnostic and on-device**: embed the query with the existing bge
 `EmbeddingService`, retrieve top-K with `VectorIndex.topK` (+ `HybridFusion` for keyword blend)
 over a user-curated **knowledge base** (a flagged subset of library papers; abstract+notes
-now, full PDF text once v2.3 lands). Only the retrieved chunks + the question are placed in the
+now, full PDF text once P3 lands). Only the retrieved chunks + the question are placed in the
 `ChatRequest` context and sent to the chosen provider. (No provider offers an embeddings API we
 depend on — retrieval never leaves the device, only generation may.) Chunking + a
-`ChunkEmbeddingEntity` schema are defined in the v2.2 subphase spec (SPEC-SEARCH / SPEC-DATA).
+`ChunkEmbeddingEntity` schema are defined in the P2 subphase spec (SPEC-SEARCH / SPEC-DATA).
 
 ## 7. Testing
 
@@ -90,4 +90,4 @@ depend on — retrieval never leaves the device, only generation may.) Chunking 
 Adding a provider = implement `AiProvider` + register it in `AppModule`; the chat UI and RAG
 are unchanged. Per-provider wire formats and model ids are pinned in the provider impl. Any
 breaking change to the chat-history or knowledge-base schema follows the Room migration red
-line (migration + committed schema JSON), specified in the v2.2 subphase.
+line (migration + committed schema JSON), specified in the P2 subphase.
