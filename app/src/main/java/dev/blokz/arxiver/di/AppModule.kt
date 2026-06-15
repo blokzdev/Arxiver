@@ -160,12 +160,77 @@ object AppModule {
 
     @Provides
     @Singleton
+    @GemmaModel
+    fun gemmaModelDownloader(
+        @ApplicationContext context: Context,
+        httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ml.ModelDownloader =
+        dev.blokz.arxiver.core.ml.ModelDownloader(
+            httpClient = httpClient,
+            dispatchers = dispatchers,
+            modelDir = java.io.File(context.filesDir, "models"),
+            spec = dev.blokz.arxiver.core.ai.GemmaEngine.SPEC,
+        )
+
+    @Provides
+    @Singleton
+    fun gemmaEngine(
+        @GemmaModel gemmaDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
+        dispatchers: DispatcherProvider,
+        @ApplicationContext context: Context,
+    ): dev.blokz.arxiver.core.ai.GemmaEngine =
+        dev.blokz.arxiver.core.ai.GemmaEngine(
+            modelDownloader = gemmaDownloader,
+            dispatchers = dispatchers,
+            cacheDir = context.cacheDir,
+        )
+
+    @Provides
+    @Singleton
+    fun nanoAvailability(): dev.blokz.arxiver.core.ai.NanoAvailability =
+        dev.blokz.arxiver.core.ai.StubNanoAvailability()
+
+    @Provides
+    @Singleton
+    fun onDeviceProvider(
+        gemmaEngine: dev.blokz.arxiver.core.ai.GemmaEngine,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ai.OnDeviceProvider =
+        dev.blokz.arxiver.core.ai.OnDeviceProvider(listOf(gemmaEngine), dispatchers)
+
+    @Provides
+    @Singleton
+    fun deviceCapabilityProbe(
+        @ApplicationContext context: Context,
+        nanoAvailability: dev.blokz.arxiver.core.ai.NanoAvailability,
+        @GemmaModel gemmaDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
+        aiKeyStore: dev.blokz.arxiver.core.ai.AiKeyStore,
+    ): dev.blokz.arxiver.core.ai.DeviceCapabilityProbe =
+        dev.blokz.arxiver.core.ai.AndroidDeviceCapabilityProbe(
+            context = context,
+            nanoAvailability = nanoAvailability,
+            gemmaDownloader = gemmaDownloader,
+            keyStore = aiKeyStore,
+        )
+
+    @Provides
+    @Singleton
+    fun onDeviceModelController(
+        @GemmaModel gemmaDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
+        syncScheduler: dev.blokz.arxiver.sync.SyncScheduler,
+    ): dev.blokz.arxiver.data.OnDeviceModelController =
+        dev.blokz.arxiver.data.DefaultOnDeviceModelController(gemmaDownloader, syncScheduler)
+
+    @Provides
+    @Singleton
     fun providerRegistry(
         anthropic: dev.blokz.arxiver.core.ai.AnthropicProvider,
         gemini: dev.blokz.arxiver.core.ai.GeminiProvider,
+        onDevice: dev.blokz.arxiver.core.ai.OnDeviceProvider,
         aiKeyStore: dev.blokz.arxiver.core.ai.AiKeyStore,
     ): dev.blokz.arxiver.core.ai.ProviderRegistry =
-        dev.blokz.arxiver.core.ai.ProviderRegistry(listOf(anthropic, gemini), aiKeyStore)
+        dev.blokz.arxiver.core.ai.ProviderRegistry(listOf(anthropic, gemini, onDevice), aiKeyStore)
 
     @Provides
     fun aiProviderStore(settings: dev.blokz.arxiver.data.SettingsRepository): dev.blokz.arxiver.data.AiProviderStore =

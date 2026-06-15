@@ -85,6 +85,11 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 - [ ] **J2 Claude test connection** — Settings → AI → AI providers, paste a real Anthropic key, Save, Test connection → "Connection OK"; a wrong key → "key rejected"; airplane mode → "offline". _(P1.1b UI built; needs a user-provided key)_
 - [ ] **J3 Gemini test connection** — same with a real Gemini Developer API key. _(P1.1b UI built; needs a key)_
 - [ ] **J4 Default provider persists** — connect two providers, pick a default (radio), relaunch → selection holds. _(P1.1b UI built)_
+- [ ] **J5 Gemma model download** — Settings → AI → AI providers → on-device card → Download model: runs on Wi-Fi only (unmetered), shows progress %, SHA-256 verifies, survives relaunch; Delete removes it. ~1.87 GB. _(P1.2b)_
+- [ ] **J6 Gemma loads + generates** — after download, Test connection returns a reply. **Validate the text-only `gemma-4-E2B-it-web.litertlm` (WebGPU-tuned) actually loads on Android CPU via LiteRT-LM; if `Engine.initialize()` fails, switch `GemmaEngine.SPEC` to the standard `gemma-4-E2B-it.litertlm` (2.59 GB).** _(P1.2b)_
+- [ ] **J7 On-device works offline** — with the model installed, Test connection (and later chat) returns a reply in airplane mode; confirm **no network traffic** during on-device generation. _(P1.2b)_
+- [ ] **J8 RAM-floor gating** — on a <4 GB-RAM device the on-device card shows the "not enough memory" note and hides Download; on a ≥4 GB device Download is offered. Recommended-tier line reflects capability. _(P1.2b)_
+- [ ] **J9 Tier degradation** — delete the Gemma model (or clear keys) → recommended tier falls back down Nano→Gemma→cloud→none with the card updating live. _(P1.2b)_
 
 ## H. Success criteria rollup _(PRD §7)_
 - [ ] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1).

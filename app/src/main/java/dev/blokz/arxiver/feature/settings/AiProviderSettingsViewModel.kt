@@ -8,10 +8,17 @@ import dev.blokz.arxiver.core.ai.AiKeyStore
 import dev.blokz.arxiver.core.ai.ChatMessage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ChatRole
+import dev.blokz.arxiver.core.ai.DeviceCapability
+import dev.blokz.arxiver.core.ai.DeviceCapabilityProbe
+import dev.blokz.arxiver.core.ai.InferenceTier
+import dev.blokz.arxiver.core.ai.NanoStatus
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderRegistry
+import dev.blokz.arxiver.core.ai.TierSelector
 import dev.blokz.arxiver.core.common.AppError
+import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.data.AiProviderStore
+import dev.blokz.arxiver.data.OnDeviceModelController
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,10 +32,20 @@ import javax.inject.Inject
 /** Outcome of a "Test connection" ping against a provider. */
 enum class ConnectionTest { Idle, Testing, Success, AuthFailed, Offline, Error }
 
+/** On-device tier detail for the `ON_DEVICE` row (null while still probing). */
+data class OnDeviceInfo(
+    val recommendedTier: InferenceTier,
+    val totalRamMb: Long,
+    val gemmaEligible: Boolean,
+    val gemmaState: ModelState,
+    val nanoStatus: NanoStatus,
+)
+
 data class ProviderRow(
     val id: ProviderId,
     val configured: Boolean,
     val test: ConnectionTest = ConnectionTest.Idle,
+    val onDevice: OnDeviceInfo? = null,
 )
 
 data class AiProviderSettingsUiState(
@@ -37,12 +54,11 @@ data class AiProviderSettingsUiState(
 )
 
 /**
- * "AI providers" settings (SPEC-AI-PROVIDERS §4). Connect a BYOK key per
- * provider, test it, and pick the default. Keys flow straight into the
- * [AiKeyVault] and are never read back here — the UI only learns whether a key
- * is present (`configured`). A test connection fires a tiny prompt through the
- * provider, so it does reach the network with the user's key (the only data
- * sent in P1.1 — no paper content; that gate arrives with the P2 chat path).
+ * "AI providers" settings (SPEC-AI-PROVIDERS §4). Cloud providers: connect a
+ * BYOK key (write-only — the UI only learns whether one is present), test it,
+ * pick the default. On-device (P1.2): shows device capability + the recommended
+ * tier and drives the Gemma model download/delete. A test connection fires a
+ * tiny prompt through the provider — for on-device it runs entirely locally.
  */
 @HiltViewModel
 class AiProviderSettingsViewModel
@@ -51,6 +67,8 @@ class AiProviderSettingsViewModel
         private val registry: ProviderRegistry,
         private val keyStore: AiKeyStore,
         private val store: AiProviderStore,
+        private val capabilityProbe: DeviceCapabilityProbe,
+        private val modelController: OnDeviceModelController,
     ) : ViewModel() {
         private val testStates = MutableStateFlow<Map<ProviderId, ConnectionTest>>(emptyMap())
 
@@ -58,8 +76,16 @@ class AiProviderSettingsViewModel
         // (the vault is a synchronous read, not a Flow).
         private val configuredRevision = MutableStateFlow(0)
 
+        private val capability = MutableStateFlow<DeviceCapability?>(null)
+
         val uiState: StateFlow<AiProviderSettingsUiState> =
-            combine(testStates, configuredRevision, store.selectedAiProvider) { tests, _, selected ->
+            combine(
+                testStates,
+                configuredRevision,
+                store.selectedAiProvider,
+                modelController.state,
+                capability,
+            ) { tests, _, selected, gemmaState, deviceCapability ->
                 AiProviderSettingsUiState(
                     rows =
                         registry.all().map { provider ->
@@ -67,11 +93,29 @@ class AiProviderSettingsViewModel
                                 id = provider.id,
                                 configured = registry.isConfigured(provider.id),
                                 test = tests[provider.id] ?: ConnectionTest.Idle,
+                                onDevice =
+                                    if (provider.id == ProviderId.ON_DEVICE && deviceCapability != null) {
+                                        OnDeviceInfo(
+                                            recommendedTier = TierSelector.recommend(deviceCapability),
+                                            totalRamMb = deviceCapability.totalRamMb,
+                                            gemmaEligible = deviceCapability.gemmaEligible,
+                                            gemmaState = gemmaState,
+                                            nanoStatus = deviceCapability.nanoStatus,
+                                        )
+                                    } else {
+                                        null
+                                    },
                             )
                         },
                     selectedDefault = selected,
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AiProviderSettingsUiState())
+
+        init {
+            // Re-probe device capability whenever the model state changes (download
+            // progress / completion / deletion), which also seeds the initial value.
+            viewModelScope.launch { modelController.state.collect { refreshCapability() } }
+        }
 
         fun saveKey(
             id: ProviderId,
@@ -81,9 +125,9 @@ class AiProviderSettingsViewModel
             keyStore.put(id, key.trim())
             testStates.update { it - id }
             configuredRevision.update { it + 1 }
-            // First provider connected becomes the default automatically.
             viewModelScope.launch {
                 if (store.selectedAiProvider.first() == null) store.setSelectedAiProvider(id)
+                refreshCapability()
             }
         }
 
@@ -91,10 +135,18 @@ class AiProviderSettingsViewModel
             keyStore.clear(id)
             testStates.update { it - id }
             configuredRevision.update { it + 1 }
+            viewModelScope.launch { refreshCapability() }
         }
 
         fun selectDefault(id: ProviderId) {
             viewModelScope.launch { store.setSelectedAiProvider(id) }
+        }
+
+        fun downloadOnDeviceModel() = modelController.download()
+
+        fun deleteOnDeviceModel() {
+            modelController.delete()
+            viewModelScope.launch { refreshCapability() }
         }
 
         fun testConnection(id: ProviderId) {
@@ -120,6 +172,10 @@ class AiProviderSettingsViewModel
                     ),
                 )
             }
+        }
+
+        private suspend fun refreshCapability() {
+            capability.value = capabilityProbe.probe()
         }
 
         private fun setTest(

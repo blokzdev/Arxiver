@@ -18,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -39,7 +40,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.core.ai.InferenceTier
+import dev.blokz.arxiver.core.ai.NanoStatus
 import dev.blokz.arxiver.core.ai.ProviderId
+import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.ui.components.StatusChip
 import dev.blokz.arxiver.ui.components.StatusTone
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
@@ -74,6 +78,8 @@ fun AiProviderSettingsScreen(
             onClearKey = viewModel::clearKey,
             onTestConnection = viewModel::testConnection,
             onSelectDefault = viewModel::selectDefault,
+            onDownloadModel = viewModel::downloadOnDeviceModel,
+            onDeleteModel = viewModel::deleteOnDeviceModel,
         )
     }
 }
@@ -86,6 +92,8 @@ private fun AiProviderSettingsContent(
     onClearKey: (ProviderId) -> Unit,
     onTestConnection: (ProviderId) -> Unit,
     onSelectDefault: (ProviderId) -> Unit,
+    onDownloadModel: () -> Unit,
+    onDeleteModel: () -> Unit,
 ) {
     Column(
         modifier =
@@ -109,6 +117,8 @@ private fun AiProviderSettingsContent(
                 onClearKey = { onClearKey(row.id) },
                 onTestConnection = { onTestConnection(row.id) },
                 onSelectDefault = { onSelectDefault(row.id) },
+                onDownloadModel = onDownloadModel,
+                onDeleteModel = onDeleteModel,
             )
         }
         Text(
@@ -128,8 +138,11 @@ private fun ProviderCard(
     onClearKey: () -> Unit,
     onTestConnection: () -> Unit,
     onSelectDefault: () -> Unit,
+    onDownloadModel: () -> Unit,
+    onDeleteModel: () -> Unit,
 ) {
-    var keyInput by remember(row.id) { mutableStateOf("") }
+    val onDevice = row.onDevice
+    val usable = if (onDevice != null) onDevice.isUsable else row.configured
 
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -138,45 +151,31 @@ private fun ProviderCard(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
-            if (row.configured) {
-                StatusChip(stringResource(R.string.ai_provider_connected), tone = StatusTone.Positive)
-            } else {
-                StatusChip(stringResource(R.string.ai_provider_not_connected), tone = StatusTone.Neutral)
-            }
+            StatusChip(
+                stringResource(if (usable) R.string.ai_provider_connected else R.string.ai_provider_not_connected),
+                tone = if (usable) StatusTone.Positive else StatusTone.Neutral,
+            )
         }
 
-        // Keys are write-only (SPEC-AI-PROVIDERS §4): masked, never shown back.
-        OutlinedTextField(
-            value = keyInput,
-            onValueChange = { keyInput = it },
-            label = { Text(stringResource(R.string.ai_provider_key_label)) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            Button(
-                onClick = {
-                    onSaveKey(keyInput)
-                    keyInput = ""
-                },
-                enabled = keyInput.isNotBlank(),
-            ) {
-                Text(stringResource(R.string.ai_provider_save_key))
-            }
-            if (row.configured) {
-                TextButton(onClick = onTestConnection) {
-                    Text(stringResource(R.string.ai_provider_test))
-                }
-                TextButton(onClick = onClearKey) {
-                    Text(stringResource(R.string.ai_provider_clear_key))
-                }
-            }
+        if (onDevice != null) {
+            OnDeviceSection(
+                info = onDevice,
+                onTestConnection = onTestConnection,
+                onDownloadModel = onDownloadModel,
+                onDeleteModel = onDeleteModel,
+            )
+        } else {
+            CloudKeySection(
+                configured = row.configured,
+                onSaveKey = onSaveKey,
+                onClearKey = onClearKey,
+                onTestConnection = onTestConnection,
+            )
         }
 
         TestResult(row.test)
 
-        if (row.configured) {
+        if (usable) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth(),
@@ -189,6 +188,108 @@ private fun ProviderCard(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun CloudKeySection(
+    configured: Boolean,
+    onSaveKey: (String) -> Unit,
+    onClearKey: () -> Unit,
+    onTestConnection: () -> Unit,
+) {
+    var keyInput by remember { mutableStateOf("") }
+    // Keys are write-only (SPEC-AI-PROVIDERS §4): masked, never shown back.
+    OutlinedTextField(
+        value = keyInput,
+        onValueChange = { keyInput = it },
+        label = { Text(stringResource(R.string.ai_provider_key_label)) },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Button(
+            onClick = {
+                onSaveKey(keyInput)
+                keyInput = ""
+            },
+            enabled = keyInput.isNotBlank(),
+        ) {
+            Text(stringResource(R.string.ai_provider_save_key))
+        }
+        if (configured) {
+            TextButton(onClick = onTestConnection) {
+                Text(stringResource(R.string.ai_provider_test))
+            }
+            TextButton(onClick = onClearKey) {
+                Text(stringResource(R.string.ai_provider_clear_key))
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnDeviceSection(
+    info: OnDeviceInfo,
+    onTestConnection: () -> Unit,
+    onDownloadModel: () -> Unit,
+    onDeleteModel: () -> Unit,
+) {
+    Text(
+        stringResource(R.string.ai_ondevice_ram, info.totalRamMb),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        stringResource(R.string.ai_ondevice_tier, tierLabel(info.recommendedTier)),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    when (val state = info.gemmaState) {
+        ModelState.NotDownloaded ->
+            if (info.gemmaEligible) {
+                Button(onClick = onDownloadModel) {
+                    Text(stringResource(R.string.ai_ondevice_download))
+                }
+            } else {
+                Text(
+                    stringResource(R.string.ai_ondevice_ineligible),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        is ModelState.Downloading ->
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Text(
+                    stringResource(R.string.ai_ondevice_downloading, state.progressPercent),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                LinearProgressIndicator(
+                    progress = { state.progressPercent / 100f },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        is ModelState.Ready ->
+            Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+                TextButton(onClick = onTestConnection) {
+                    Text(stringResource(R.string.ai_provider_test))
+                }
+                TextButton(onClick = onDeleteModel) {
+                    Text(stringResource(R.string.ai_ondevice_delete))
+                }
+            }
+        is ModelState.Failed ->
+            Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                Text(
+                    stringResource(R.string.ai_ondevice_failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Button(onClick = onDownloadModel) {
+                    Text(stringResource(R.string.ai_ondevice_retry))
+                }
+            }
     }
 }
 
@@ -218,6 +319,21 @@ private fun TestResult(test: ConnectionTest) {
     }
 }
 
+/** Usable = a model is installed (Gemma) or Nano is available on this device. */
+private val OnDeviceInfo.isUsable: Boolean
+    get() = gemmaState is ModelState.Ready || nanoStatus == NanoStatus.AVAILABLE
+
+@Composable
+private fun tierLabel(tier: InferenceTier): String =
+    stringResource(
+        when (tier) {
+            InferenceTier.NANO -> R.string.ai_tier_nano
+            InferenceTier.GEMMA -> R.string.ai_tier_gemma
+            InferenceTier.CLOUD -> R.string.ai_tier_cloud
+            InferenceTier.NONE -> R.string.ai_tier_none
+        },
+    )
+
 @Composable
 private fun providerName(id: ProviderId): String =
     when (id) {
@@ -238,6 +354,18 @@ private fun AiProviderSettingsContentPreview() {
                         listOf(
                             ProviderRow(ProviderId.CLAUDE, configured = true, test = ConnectionTest.Success),
                             ProviderRow(ProviderId.GEMINI, configured = false),
+                            ProviderRow(
+                                ProviderId.ON_DEVICE,
+                                configured = true,
+                                onDevice =
+                                    OnDeviceInfo(
+                                        recommendedTier = InferenceTier.CLOUD,
+                                        totalRamMb = 7900,
+                                        gemmaEligible = true,
+                                        gemmaState = ModelState.NotDownloaded,
+                                        nanoStatus = NanoStatus.UNAVAILABLE,
+                                    ),
+                            ),
                         ),
                     selectedDefault = ProviderId.CLAUDE,
                 ),
@@ -245,6 +373,8 @@ private fun AiProviderSettingsContentPreview() {
             onClearKey = {},
             onTestConnection = {},
             onSelectDefault = {},
+            onDownloadModel = {},
+            onDeleteModel = {},
         )
     }
 }

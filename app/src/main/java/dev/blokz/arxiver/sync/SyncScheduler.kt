@@ -112,6 +112,17 @@ class SyncScheduler
             )
         }
 
+        /** User-triggered Gemma 4 E2B model download (~1.87 GB) — unmetered only. */
+        fun downloadOnDeviceModel() {
+            workManager.enqueueUniqueWork(
+                OnDeviceModelWorker.UNIQUE_ONESHOT,
+                ExistingWorkPolicy.KEEP,
+                OneTimeWorkRequestBuilder<OnDeviceModelWorker>()
+                    .setConstraints(unmetered)
+                    .build(),
+            )
+        }
+
         // RUNNING only — never ENQUEUED. A one-shot waiting on retry backoff (or the
         // always-ENQUEUED periodic worker) is not "syncing now", and surfacing those as a
         // spinner left it spinning forever (a failing follow keeps the one-shot enqueued).

@@ -16,9 +16,9 @@ encoder for a smaller footprint.
   exists; the full `it` `.litertlm` is ~2.0–2.6 GB on disk. In-memory **weights as low as
   ~0.8 GB** (text-only). Android **CPU runtime memory ≈ 1.36–1.73 GB**.
 - Download URL pattern: `https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/<file>.litertlm`.
-- Pin the exact filename + SHA-256 by inspecting the repo at P1.2b time (mirror how the
-  BGE model's SHA is pinned in `ModelDownloader.ModelSpec`).
-- RAM floor decision: offer Gemma only when total device RAM ≥ ~4 GB (recommend ≥ 6 GB).
+- **Pinned in `GemmaEngine.SPEC` (P1.2b):** `gemma-4-E2B-it-web.litertlm`, **2,008,432,640 bytes (~1.87 GB)**, SHA-256 `3a08e8d94e23b814ae5414469c370c503813949acb8ceaa17e4ebf8a35af35b5`. This is the text-only variant (vision-free). It is **WebGPU-tuned** — Android CPU loadability via LiteRT-LM is unverified; if `Engine.initialize()` fails on device, switch to the standard multimodal `gemma-4-E2B-it.litertlm` (2.59 GB). Repo file list also has chipset NPU builds (Tensor G5 / Qualcomm / Intel, 2.9–4.0 GB).
+- RAM floor decision: offer Gemma only when total device RAM ≥ ~4 GB (`GEMMA_RAM_FLOOR_MB`).
+- **Dependency: `litertlm-android:0.13.1` ships Kotlin 2.3.0 metadata** — consume it from a module built with `-Xskip-metadata-version-check` until the project's Kotlin reaches ≥ 2.2 (compiler that reads 2.3.0 metadata natively).
 
 **Dependency** (`com.google.ai.edge.litertlm:litertlm-android`):
 ```kotlin

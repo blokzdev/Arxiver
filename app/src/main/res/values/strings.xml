@@ -295,6 +295,20 @@
     <string name="ai_provider_test_error">Couldn\'t reach the provider</string>
     <string name="ai_provider_use_default">Use as default</string>
 
+    <!-- On-device tier (P1.2b) -->
+    <string name="ai_ondevice_ram">Device memory: %1$d MB</string>
+    <string name="ai_ondevice_tier">Recommended: %1$s</string>
+    <string name="ai_ondevice_download">Download model (~1.9 GB, Wi-Fi only)</string>
+    <string name="ai_ondevice_downloading">Downloading model… %1$d%%</string>
+    <string name="ai_ondevice_delete">Delete model</string>
+    <string name="ai_ondevice_retry">Retry download</string>
+    <string name="ai_ondevice_failed">Download failed.</string>
+    <string name="ai_ondevice_ineligible">This device doesn\'t have enough memory to run the on-device model.</string>
+    <string name="ai_tier_nano">Gemini Nano (system)</string>
+    <string name="ai_tier_gemma">Gemma (downloaded)</string>
+    <string name="ai_tier_cloud">Cloud (your key)</string>
+    <string name="ai_tier_none">none yet — connect a provider</string>
+
     <string name="settings_about_section">About</string>
     <string name="settings_version">Arxiver %1$s</string>
     <string name="settings_about_blurb">Local-first arXiv explorer. No accounts, no telemetry — your library lives on this device. Thank you to arXiv for use of its open access interoperability.</string>
