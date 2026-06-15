@@ -8,7 +8,7 @@ The Claude app's **Routines** feature lets a user define an agentic routine (ins
 
 Arxiver's job ends at delivering a **well-formed, information-rich payload**. The routine's instructions, connectors, model, and output destination are entirely the user's. This keeps the app free of LLM costs and lets users leverage every connector they have (Gmail, Drive, Notion-likes, etc.).
 
-**Non-goal (v1 and v2):** consuming routine *output* in Arxiver. Results land wherever the user's routine puts them (Claude app, email, Drive…). A result round-trip was once the top v2 candidate, but research (2026-06-14) confirmed Claude Code routines are repo-scoped cloud sessions and the fire API returns only a session id/URL — not results — so an in-app inbox would need a user-hosted webhook relay the app polls. Out of scope. The v2 conversational direction is instead **chat-with-paper via a BYOK Anthropic Messages API + on-device RAG** (separate from this Routines bridge); see ROADMAP Phase v2.
+**Non-goal (v1 and v2):** consuming routine *output* in Arxiver. Results land wherever the user's routine puts them (Claude app, email, Drive…). A result round-trip was once the top v2 candidate, but research (2026-06-14) confirmed Claude Code routines are repo-scoped cloud sessions and the fire API returns only a session id/URL — not results — so an in-app inbox would need a user-hosted webhook relay the app polls. Out of scope. The v2 conversational direction is instead **chat-with-paper via BYOK (Claude + Gemini) + on-device RAG** (separate from this Routines bridge); see ROADMAP phases P1–P2 and `docs/SPEC-AI-PROVIDERS.md`.
 
 ## 2. Routine configuration (in-app)
 
