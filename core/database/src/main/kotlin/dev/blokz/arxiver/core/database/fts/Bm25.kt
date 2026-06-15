@@ -64,6 +64,9 @@ object Bm25 {
 
     /** notes_fts column weights: content. */
     val NOTE_WEIGHTS = doubleArrayOf(2.0)
+
+    /** chunk_fts column weights: chunk_text (single column, SPEC-SEARCH §8 keyword leg). */
+    val CHUNK_WEIGHTS = doubleArrayOf(1.0)
 }
 
 /**

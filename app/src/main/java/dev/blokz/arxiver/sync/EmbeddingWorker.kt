@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import dev.blokz.arxiver.core.common.AppResult
+import dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.database.dao.InboxDao
 import dev.blokz.arxiver.core.database.dao.LibraryDao
@@ -16,6 +17,7 @@ import dev.blokz.arxiver.core.ml.EmbeddingService
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.search.KMeans
 import dev.blokz.arxiver.core.search.VectorIndex
+import dev.blokz.arxiver.rag.RagIndexer
 import timber.log.Timber
 import java.time.Instant
 
@@ -36,6 +38,8 @@ class EmbeddingWorker
         private val embeddingService: EmbeddingService,
         private val modelDownloader: ModelDownloader,
         private val vectorIndex: VectorIndex,
+        private val chunkEmbeddingDao: ChunkEmbeddingDao,
+        private val ragIndexer: RagIndexer,
     ) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
             // Model download is bound to this worker's unmetered-network constraint.
@@ -45,9 +49,30 @@ class EmbeddingWorker
             }
 
             embedPending()
+            indexLibraryChunks()
             refreshRelatedPapers()
             scoreInbox()
             return Result.success()
+        }
+
+        /**
+         * Eager RAG backfill (SPEC-SEARCH §8): chunk-embed library papers that have
+         * no current-model chunks yet, bounded per run so a large library spreads
+         * across periodic runs. Stale-model chunks are wiped first (model guard).
+         */
+        private suspend fun indexLibraryChunks() {
+            chunkEmbeddingDao.deleteByModelMismatch(MODEL_NAME)
+            val pending = chunkEmbeddingDao.libraryPapersMissingChunks(MODEL_NAME, CHUNK_BACKFILL_PER_RUN)
+            for (paperId in pending) {
+                if (isStopped) return
+                when (val result = ragIndexer.indexPaper(paperId)) {
+                    is AppResult.Failure -> {
+                        Timber.w("Chunk indexing failed for $paperId: ${result.error}")
+                        return
+                    }
+                    is AppResult.Success -> Unit
+                }
+            }
         }
 
         private suspend fun embedPending() {
@@ -124,6 +149,7 @@ class EmbeddingWorker
             const val UNIQUE_ONESHOT = "embedding_now"
             const val MODEL_NAME = "bge-small-en-v1.5-q8"
             private const val BATCH_SIZE = 8
+            private const val CHUNK_BACKFILL_PER_RUN = 50
             private const val RELATED_COUNT = 8
             private const val CENTROID_COUNT = 5
             private const val COLD_START_MINIMUM = 10
