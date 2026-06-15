@@ -77,12 +77,14 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 - [ ] **I4 Add to collection** — from a saved paper's detail, add it to a collection; it appears under that collection (Library → Collections → open); toggling off removes it; survives relaunch; "New collection" from the picker works.
 
 ## J. AI providers (v2 / P1) _(SPEC-AI-PROVIDERS)_
-> CI covers the transports (MockWebServer SSE) and the key-vault contract (Robolectric).
-> What's left for hardware: the **hardware-backed Keystore** path and **real provider keys**.
+> CI covers the transports (MockWebServer SSE), the registry/settings ViewModel
+> (pure-JVM with fakes), and the key-vault contract (Robolectric, in :core:ai).
+> What's left for hardware: the **hardware-backed Keystore** path and **real keys**.
+> The **Settings → AI → AI providers** screen is built (P1.1b); these need a real key.
 - [ ] **J1 Key vault on hardware Keystore** — a saved provider key survives app restart on a real device (Robolectric uses a software keystore; confirm the AndroidKeyStore-backed `EncryptedSharedPreferences` round-trips on device). _(P1.1a)_
-- [ ] **J2 Claude test connection** — paste a real Anthropic key in Settings → AI providers; Test connection streams a reply (success); a wrong key shows a clear auth-failed message; offline shows offline. _(needs P1.1b UI + a user-provided key)_
-- [ ] **J3 Gemini test connection** — same with a real Gemini Developer API key. _(needs P1.1b)_
-- [ ] **J4 Default provider persists** — selected default survives relaunch. _(P1.1b)_
+- [ ] **J2 Claude test connection** — Settings → AI → AI providers, paste a real Anthropic key, Save, Test connection → "Connection OK"; a wrong key → "key rejected"; airplane mode → "offline". _(P1.1b UI built; needs a user-provided key)_
+- [ ] **J3 Gemini test connection** — same with a real Gemini Developer API key. _(P1.1b UI built; needs a key)_
+- [ ] **J4 Default provider persists** — connect two providers, pick a default (radio), relaunch → selection holds. _(P1.1b UI built)_
 
 ## H. Success criteria rollup _(PRD §7)_
 - [ ] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1).

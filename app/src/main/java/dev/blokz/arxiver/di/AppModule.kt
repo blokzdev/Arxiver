@@ -130,6 +130,9 @@ object AppModule {
     ): dev.blokz.arxiver.core.ai.AiKeyVault = dev.blokz.arxiver.core.ai.AiKeyVault(context)
 
     @Provides
+    fun aiKeyStore(vault: dev.blokz.arxiver.core.ai.AiKeyVault): dev.blokz.arxiver.core.ai.AiKeyStore = vault
+
+    @Provides
     @Singleton
     fun anthropicProvider(
         httpClient: OkHttpClient,
@@ -141,6 +144,32 @@ object AppModule {
             dispatchers = dispatchers,
             apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.CLAUDE) },
         )
+
+    @Provides
+    @Singleton
+    fun geminiProvider(
+        httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+        aiKeyVault: dev.blokz.arxiver.core.ai.AiKeyVault,
+    ): dev.blokz.arxiver.core.ai.GeminiProvider =
+        dev.blokz.arxiver.core.ai.GeminiProvider(
+            httpClient = httpClient,
+            dispatchers = dispatchers,
+            apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.GEMINI) },
+        )
+
+    @Provides
+    @Singleton
+    fun providerRegistry(
+        anthropic: dev.blokz.arxiver.core.ai.AnthropicProvider,
+        gemini: dev.blokz.arxiver.core.ai.GeminiProvider,
+        aiKeyStore: dev.blokz.arxiver.core.ai.AiKeyStore,
+    ): dev.blokz.arxiver.core.ai.ProviderRegistry =
+        dev.blokz.arxiver.core.ai.ProviderRegistry(listOf(anthropic, gemini), aiKeyStore)
+
+    @Provides
+    fun aiProviderStore(settings: dev.blokz.arxiver.data.SettingsRepository): dev.blokz.arxiver.data.AiProviderStore =
+        settings
 
     @Provides
     @Singleton

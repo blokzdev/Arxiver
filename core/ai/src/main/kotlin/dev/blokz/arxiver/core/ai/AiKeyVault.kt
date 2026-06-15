@@ -15,7 +15,7 @@ import androidx.security.crypto.MasterKey
  * backups, or fixtures, and are never read back to the UI (entry is
  * write-only; the UI only learns whether a key [has] been set).
  */
-class AiKeyVault(context: Context) {
+class AiKeyVault(context: Context) : AiKeyStore {
     private val prefs: SharedPreferences by lazy {
         val masterKey =
             MasterKey.Builder(context)
@@ -30,7 +30,7 @@ class AiKeyVault(context: Context) {
         )
     }
 
-    fun put(
+    override fun put(
         provider: ProviderId,
         key: String,
     ) {
@@ -38,11 +38,11 @@ class AiKeyVault(context: Context) {
     }
 
     /** Null when unset or undecryptable (e.g. restored to a new device). */
-    fun get(provider: ProviderId): String? = runCatching { prefs.getString(provider.name, null) }.getOrNull()
+    override fun get(provider: ProviderId): String? = runCatching { prefs.getString(provider.name, null) }.getOrNull()
 
-    fun has(provider: ProviderId): Boolean = get(provider) != null
+    override fun has(provider: ProviderId): Boolean = get(provider) != null
 
-    fun clear(provider: ProviderId) {
+    override fun clear(provider: ProviderId) {
         prefs.edit().remove(provider.name).apply()
     }
 
