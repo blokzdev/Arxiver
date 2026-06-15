@@ -122,8 +122,11 @@ Client behavior contract: ≥3s between requests (global queue), `max_results �
 
 ## v2 — chat, knowledge base & AI keys (forward note)
 
-The v2 AI platform adds: a **knowledge-base** flag (subset of library papers the RAG covers),
-a **chat-history** table/DAO, a **chunk-embedding** table (RAG over abstract+notes/full text),
-and **per-provider API keys** in `EncryptedSharedPreferences` (never in the DB, exports, or
-backups — same red line as routine tokens). Each lands with its subphase under the Room
-migration rule above. Architecture: `docs/SPEC-AI-PROVIDERS.md`.
+The v2 AI platform adds: a **chunk-embedding** table (RAG over abstract+notes/full text; P2.1),
+a **chat-history** table/DAO (`chat_sessions`/`chat_messages`, scoped `PAPER` | `COLLECTION`;
+P2.2), and **per-provider API keys** in `EncryptedSharedPreferences` (already shipped in P1's
+`AiKeyVault` — never in the DB, exports, or backups; same red line as routine tokens). The
+**knowledge base = an existing Collection** (membership reuses `collection_papers`; no new
+table) — a library-wide KB flag (`library_entries.in_kb`) is backlogged, not in the v2 first
+cut. Each table lands with its subphase under the Room migration rule above. Plan:
+`docs/P2-PLAN.md`. Architecture: `docs/SPEC-AI-PROVIDERS.md`.

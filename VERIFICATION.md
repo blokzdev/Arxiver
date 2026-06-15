@@ -94,6 +94,21 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 - [ ] **J11 Enable Nano + generate** — when DOWNLOADABLE, "Enable Nano" downloads the feature (progress), then status → Available; Test connection returns a reply. _(P1.2c)_
 - [ ] **J12 Preferred engine switch** — with BOTH Gemma installed and Nano available, the preferred-engine chips (Auto/Gemma/Nano) appear; switching changes which engine answers Test connection; Auto uses Gemma (default order). Persists across relaunch. _(P1.2c)_
 
+## K. Chat & RAG (v2 / P2) _(SPEC-AI-PROVIDERS §6, docs/P2-PLAN.md)_
+> CI covers the chunker/retriever (pure), chunk + chat DAOs/migrations (Robolectric),
+> `ChatRepository` (fake provider + in-memory DB), and the redaction golden tests. What's
+> left for hardware: real on-device generation, streaming feel, privacy-preview fidelity,
+> retrieval relevance over a real library, and history persistence. Seeded for P2; each item
+> activates when its subphase ships.
+- [ ] **K1 Chunk embedding on device** — asked/KB papers get chunk-embedded on unmetered network; re-embed is skipped when the model guard matches. _(P2.1)_
+- [ ] **K2 Retrieval relevance** — per-paper / per-collection top-K returns on-topic chunks for a real library question (sanity, not a golden set). _(P2.1)_
+- [ ] **K3 Streaming render** — Ask sheet renders tokens incrementally as they arrive (no freeze-then-dump); cancel mid-stream stops cleanly. _(P2.3)_
+- [ ] **K4 Privacy preview fidelity** — before a **cloud** call the "what leaves the device" confirm shows exactly the messages + retrieved chunks sent; **no provider key**, no gated notes; on-device generation shows **no preview and emits no network traffic** (confirm in airplane mode). _(P2.2/P2.3)_
+- [ ] **K5 Provider resolution + fallback** — on-device used when ready; with no on-device model the selected cloud provider is used; clearing the key surfaces a clear "configure a provider" state. _(P2.2)_
+- [ ] **K6 Summaries** — the summarize action returns a useful paper summary grounded in the abstract (and notes if present). _(P2.3)_
+- [ ] **K7 Collection (KB) chat** — chat scoped to a collection retrieves across its papers; adding/removing a paper changes what's retrievable. _(P2.4)_
+- [ ] **K8 Chat history persists** — sessions + turns survive app restart; per-paper and per-collection sessions resume. _(P2.4)_
+
 ## H. Success criteria rollup _(PRD §7)_
 - [ ] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1).
 - [ ] **H2** Hybrid search returns relevant results < 300ms, fully offline (§7.2 — C3/D2).

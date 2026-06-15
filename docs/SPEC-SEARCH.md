@@ -63,7 +63,9 @@ Inbox score = max cosine similarity between the inbox paper and the user's **lib
 ## v2 — RAG retrieval (forward note)
 
 The P2 chat/RAG subphase reuses this engine: query embedding via `EmbeddingService`,
-`VectorIndex.topK` (+ `HybridFusion`) for retrieval, scoped to a user-curated knowledge base.
-It adds **text chunking** and a **chunk-embedding** index (papers' abstract+notes, later
-full PDF text from P3) — specified when P2 is planned. Retrieval stays fully on-device;
-only retrieved chunks + the question reach a cloud provider. Architecture: `docs/SPEC-AI-PROVIDERS.md`.
+`VectorIndex.topK` (+ `HybridFusion`) for retrieval, scoped to a single paper or a user-curated
+knowledge base (= a **Collection**). It adds **text chunking** and a **chunk-embedding** index
+(papers' abstract+notes, later full PDF text from P3) — the detailed contract lands here as
+**§8** when **P2.1** is built. Retrieval stays fully on-device; only retrieved chunks + the
+question reach a cloud provider (behind a "what leaves the device" confirm). Plan:
+`docs/P2-PLAN.md`. Architecture: `docs/SPEC-AI-PROVIDERS.md`.

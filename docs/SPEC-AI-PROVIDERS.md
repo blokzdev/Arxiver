@@ -72,11 +72,13 @@ back to the UI.
 
 Retrieval is **provider-agnostic and on-device**: embed the query with the existing bge
 `EmbeddingService`, retrieve top-K with `VectorIndex.topK` (+ `HybridFusion` for keyword blend)
-over a user-curated **knowledge base** (a flagged subset of library papers; abstract+notes
-now, full PDF text once P3 lands). Only the retrieved chunks + the question are placed in the
-`ChatRequest` context and sent to the chosen provider. (No provider offers an embeddings API we
-depend on — retrieval never leaves the device, only generation may.) Chunking + a
-`ChunkEmbeddingEntity` schema are defined in the P2 subphase spec (SPEC-SEARCH / SPEC-DATA).
+over a single paper or a user-curated **knowledge base** (= an existing **Collection**;
+abstract+notes now, full PDF text once P3 lands). Only the retrieved chunks + the question are
+placed in the `ChatRequest` context and sent to the chosen provider. (No provider offers an
+embeddings API we depend on — retrieval never leaves the device, only generation may.) Chunking
++ a chunk-embedding schema are defined in the P2 subphase specs (SPEC-SEARCH §8 / SPEC-DATA);
+the §5 "what leaves the device" preview is **deferred from P1.1 and realized in P2** (P2.2/P2.3).
+Plan: `docs/P2-PLAN.md`.
 
 ## 7. Testing
 
