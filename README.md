@@ -24,6 +24,8 @@ When you want intelligence on top, Arxiver connects to the **Claude app's Routin
 | [docs/SPEC-SEARCH.md](docs/SPEC-SEARCH.md) | Hybrid keyword+semantic search engine |
 | [docs/SPEC-CLAUDE-BRIDGE.md](docs/SPEC-CLAUDE-BRIDGE.md) | Claude Routines integration contract |
 | [docs/SPEC-UI.md](docs/SPEC-UI.md) | Screens, navigation, design language |
+| [docs/SPEC-AI-PROVIDERS.md](docs/SPEC-AI-PROVIDERS.md) | Multi-provider + on-device AI platform (v2) |
+| [docs/P2-PLAN.md](docs/P2-PLAN.md) | Chat-with-paper & knowledge-base (RAG) plan (v2) |
 | [ROADMAP.md](ROADMAP.md) | Phased build plan & progress tracker |
 | [CLAUDE.md](CLAUDE.md) | Agent workflow & engineering conventions |
 
