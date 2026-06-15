@@ -2,11 +2,17 @@ package dev.blokz.arxiver.feature.settings
 
 import dev.blokz.arxiver.core.ai.AiKeyStore
 import dev.blokz.arxiver.core.ai.AnthropicProvider
+import dev.blokz.arxiver.core.ai.DeviceCapability
+import dev.blokz.arxiver.core.ai.DeviceCapabilityProbe
 import dev.blokz.arxiver.core.ai.GeminiProvider
+import dev.blokz.arxiver.core.ai.NanoStatus
+import dev.blokz.arxiver.core.ai.OnDeviceProvider
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderRegistry
 import dev.blokz.arxiver.core.common.DispatcherProvider
+import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.data.AiProviderStore
+import dev.blokz.arxiver.data.OnDeviceModelController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -75,6 +81,38 @@ class AiProviderSettingsViewModelTest {
         }
     }
 
+    private class FakeProbe(var ramMb: Long = 8192) : DeviceCapabilityProbe {
+        var gemmaReady = false
+        var nano = NanoStatus.UNAVAILABLE
+        var cloud = false
+
+        override suspend fun probe() =
+            DeviceCapability(
+                totalRamMb = ramMb,
+                nanoStatus = nano,
+                gemmaReady = gemmaReady,
+                cloudConfigured = cloud,
+            )
+    }
+
+    private class FakeModelController : OnDeviceModelController {
+        override val state = MutableStateFlow<ModelState>(ModelState.NotDownloaded)
+        var downloads = 0
+        var deletes = 0
+
+        override fun download() {
+            downloads++
+        }
+
+        override fun delete() {
+            deletes++
+            state.value = ModelState.NotDownloaded
+        }
+    }
+
+    private lateinit var probe: FakeProbe
+    private lateinit var modelController: FakeModelController
+
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
@@ -82,6 +120,8 @@ class AiProviderSettingsViewModelTest {
         server.start()
         keyStore = FakeKeyStore()
         store = FakeStore()
+        probe = FakeProbe()
+        modelController = FakeModelController()
         val client = OkHttpClient()
         val claude =
             AnthropicProvider(
@@ -97,7 +137,8 @@ class AiProviderSettingsViewModelTest {
                 apiKey = { keyStore.get(ProviderId.GEMINI) },
                 baseUrl = server.url("/v1beta").toString().trimEnd('/'),
             )
-        registry = ProviderRegistry(listOf(claude, gemini), keyStore)
+        val onDevice = OnDeviceProvider(emptyList(), dispatchers)
+        registry = ProviderRegistry(listOf(claude, gemini, onDevice), keyStore)
     }
 
     @After
@@ -106,7 +147,7 @@ class AiProviderSettingsViewModelTest {
         server.shutdown()
     }
 
-    private fun vm() = AiProviderSettingsViewModel(registry, keyStore, store)
+    private fun vm() = AiProviderSettingsViewModel(registry, keyStore, store, probe, modelController)
 
     private fun claudeStream(): MockResponse =
         MockResponse()
@@ -220,6 +261,49 @@ class AiProviderSettingsViewModelTest {
             vm.testConnection(ProviderId.CLAUDE)
 
             assertEquals(ConnectionTest.Offline, row(vm.uiState.value, ProviderId.CLAUDE).test)
+            job.cancel()
+        }
+
+    @Test
+    fun `on-device row reflects capability and model state`() =
+        runBlocking {
+            probe.ramMb = 7900
+            probe.cloud = true
+            modelController.state.value = ModelState.Downloading(42)
+            val vm = vm()
+            val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
+
+            val onDevice = row(vm.uiState.value, ProviderId.ON_DEVICE).onDevice!!
+            assertEquals(7900, onDevice.totalRamMb)
+            assertTrue(onDevice.gemmaEligible)
+            assertEquals(ModelState.Downloading(42), onDevice.gemmaState)
+            // Cloud key set but no on-device model → recommends CLOUD.
+            assertEquals(dev.blokz.arxiver.core.ai.InferenceTier.CLOUD, onDevice.recommendedTier)
+            job.cancel()
+        }
+
+    @Test
+    fun `low-ram device is not gemma-eligible`() =
+        runBlocking {
+            probe.ramMb = 2048
+            val vm = vm()
+            val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
+
+            assertFalse(row(vm.uiState.value, ProviderId.ON_DEVICE).onDevice!!.gemmaEligible)
+            job.cancel()
+        }
+
+    @Test
+    fun `download and delete drive the model controller`() =
+        runBlocking {
+            val vm = vm()
+            val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
+
+            vm.downloadOnDeviceModel()
+            vm.deleteOnDeviceModel()
+
+            assertEquals(1, modelController.downloads)
+            assertEquals(1, modelController.deletes)
             job.cancel()
         }
 }
