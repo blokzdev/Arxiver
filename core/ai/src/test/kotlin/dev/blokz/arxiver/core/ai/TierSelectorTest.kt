@@ -14,9 +14,17 @@ class TierSelectorTest {
     ) = DeviceCapability(totalRamMb = ramMb, nanoStatus = nano, gemmaReady = gemmaReady, cloudConfigured = cloud)
 
     @Test
-    fun `nano available wins over everything`() {
+    fun `gemma wins over nano when both are ready`() {
         val all = cap(nano = NanoStatus.AVAILABLE, gemmaReady = true, cloud = true)
-        assertEquals(InferenceTier.NANO, TierSelector.recommend(all))
+        assertEquals(InferenceTier.GEMMA, TierSelector.recommend(all))
+    }
+
+    @Test
+    fun `nano recommended when gemma is not installed`() {
+        assertEquals(
+            InferenceTier.NANO,
+            TierSelector.recommend(cap(nano = NanoStatus.AVAILABLE, gemmaReady = false, cloud = true)),
+        )
     }
 
     @Test
@@ -48,7 +56,7 @@ class TierSelectorTest {
     @Test
     fun `fallback order is best-first and always ends in none`() {
         assertEquals(
-            listOf(InferenceTier.NANO, InferenceTier.GEMMA, InferenceTier.CLOUD, InferenceTier.NONE),
+            listOf(InferenceTier.GEMMA, InferenceTier.NANO, InferenceTier.CLOUD, InferenceTier.NONE),
             TierSelector.fallbackOrder(cap(nano = NanoStatus.AVAILABLE, gemmaReady = true, cloud = true)),
         )
         assertEquals(

@@ -38,6 +38,7 @@ dependencies {
     // Gemma via LiteRT-LM. These heavy deps live here (the AI module) and only reach :app.
     implementation(project(":core:ml"))
     implementation(libs.litertlm.android)
+    implementation(libs.mlkit.genai.prompt)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.security.crypto)

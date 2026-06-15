@@ -15,6 +15,7 @@ import dev.blokz.arxiver.core.database.dao.FollowDao
 import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
+import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
@@ -189,15 +190,29 @@ object AppModule {
     @Provides
     @Singleton
     fun nanoAvailability(): dev.blokz.arxiver.core.ai.NanoAvailability =
-        dev.blokz.arxiver.core.ai.StubNanoAvailability()
+        dev.blokz.arxiver.core.ai.MlKitNanoAvailability()
+
+    @Provides
+    @Singleton
+    fun nanoEngine(
+        nanoAvailability: dev.blokz.arxiver.core.ai.NanoAvailability,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ai.NanoEngine = dev.blokz.arxiver.core.ai.NanoEngine(nanoAvailability, dispatchers)
 
     @Provides
     @Singleton
     fun onDeviceProvider(
         gemmaEngine: dev.blokz.arxiver.core.ai.GemmaEngine,
+        nanoEngine: dev.blokz.arxiver.core.ai.NanoEngine,
         dispatchers: DispatcherProvider,
+        aiProviderStore: dev.blokz.arxiver.data.AiProviderStore,
     ): dev.blokz.arxiver.core.ai.OnDeviceProvider =
-        dev.blokz.arxiver.core.ai.OnDeviceProvider(listOf(gemmaEngine), dispatchers)
+        // Default order Gemma-first (more capable); Nano is the zero-download fallback.
+        dev.blokz.arxiver.core.ai.OnDeviceProvider(
+            engines = listOf(gemmaEngine, nanoEngine),
+            dispatchers = dispatchers,
+            preferredTier = { aiProviderStore.preferredOnDeviceTier.first() },
+        )
 
     @Provides
     @Singleton

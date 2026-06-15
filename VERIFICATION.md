@@ -89,7 +89,10 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 - [ ] **J6 Gemma loads + generates** — after download, Test connection returns a reply. **Validate the text-only `gemma-4-E2B-it-web.litertlm` (WebGPU-tuned) actually loads on Android CPU via LiteRT-LM; if `Engine.initialize()` fails, switch `GemmaEngine.SPEC` to the standard `gemma-4-E2B-it.litertlm` (2.59 GB).** _(P1.2b)_
 - [ ] **J7 On-device works offline** — with the model installed, Test connection (and later chat) returns a reply in airplane mode; confirm **no network traffic** during on-device generation. _(P1.2b)_
 - [ ] **J8 RAM-floor gating** — on a <4 GB-RAM device the on-device card shows the "not enough memory" note and hides Download; on a ≥4 GB device Download is offered. Recommended-tier line reflects capability. _(P1.2b)_
-- [ ] **J9 Tier degradation** — delete the Gemma model (or clear keys) → recommended tier falls back down Nano→Gemma→cloud→none with the card updating live. _(P1.2b)_
+- [ ] **J9 Tier degradation** — delete the Gemma model (or clear keys) → recommended tier falls back down Gemma→Nano→cloud→none with the card updating live. _(P1.2b)_
+- [ ] **J10 Nano availability** — on a Nano-capable flagship (Pixel 9/Galaxy S25), the on-device card shows Nano status; on a non-flagship it shows "not supported" and degrades to Gemma/cloud (the `genai-prompt` dep must not crash non-flagships). _(P1.2c)_
+- [ ] **J11 Enable Nano + generate** — when DOWNLOADABLE, "Enable Nano" downloads the feature (progress), then status → Available; Test connection returns a reply. _(P1.2c)_
+- [ ] **J12 Preferred engine switch** — with BOTH Gemma installed and Nano available, the preferred-engine chips (Auto/Gemma/Nano) appear; switching changes which engine answers Test connection; Auto uses Gemma (default order). Persists across relaunch. _(P1.2c)_
 
 ## K. Chat & RAG (v2 / P2) _(SPEC-AI-PROVIDERS §6, docs/P2-PLAN.md)_
 > CI covers the chunker/retriever (pure), chunk + chat DAOs/migrations (Robolectric),
