@@ -272,6 +272,29 @@
     <string name="settings_import_tokens_needed">Re-enter routine tokens in Claude routines.</string>
     <string name="settings_import_failed">Import failed — is this an Arxiver backup file?</string>
     <string name="settings_claude_section">Claude</string>
+    <string name="settings_ai_section">AI</string>
+    <string name="settings_ai_providers_link">AI providers (bring your own key)</string>
+
+    <!-- AI providers (P1.1b) -->
+    <string name="ai_providers_title">AI providers</string>
+    <string name="ai_providers_intro">Connect your own API key to use a cloud AI provider. Arxiver ships with no keys and adds no AI cost — you bring your own. Keys are stored encrypted on this device and never leave it.</string>
+    <string name="ai_providers_privacy_note">Testing a connection sends a tiny prompt to the provider with your key — no paper content. On-device options that send nothing off the device arrive in a later update.</string>
+    <string name="ai_provider_claude">Claude (Anthropic)</string>
+    <string name="ai_provider_gemini">Gemini (Google)</string>
+    <string name="ai_provider_on_device">On-device</string>
+    <string name="ai_provider_connected">connected</string>
+    <string name="ai_provider_not_connected">not connected</string>
+    <string name="ai_provider_key_label">API key</string>
+    <string name="ai_provider_save_key">Save key</string>
+    <string name="ai_provider_clear_key">Clear</string>
+    <string name="ai_provider_test">Test connection</string>
+    <string name="ai_provider_testing">Testing…</string>
+    <string name="ai_provider_test_ok">Connection OK</string>
+    <string name="ai_provider_test_auth">Key rejected — check it and try again</string>
+    <string name="ai_provider_test_offline">Offline — try again when connected</string>
+    <string name="ai_provider_test_error">Couldn\'t reach the provider</string>
+    <string name="ai_provider_use_default">Use as default</string>
+
     <string name="settings_about_section">About</string>
     <string name="settings_version">Arxiver %1$s</string>
     <string name="settings_about_blurb">Local-first arXiv explorer. No accounts, no telemetry — your library lives on this device. Thank you to arXiv for use of its open access interoperability.</string>

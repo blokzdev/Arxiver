@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.blokz.arxiver.core.ai.ProviderId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -18,9 +20,10 @@ class SettingsRepository
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-    ) {
+    ) : AiProviderStore {
         private val syncIntervalKey = intPreferencesKey("sync_interval_hours")
         private val onboardedKey = booleanPreferencesKey("onboarded")
+        private val selectedAiProviderKey = stringPreferencesKey("selected_ai_provider")
 
         val syncIntervalHours: Flow<Int> =
             context.dataStore.data.map { it[syncIntervalKey] ?: DEFAULT_SYNC_HOURS }
@@ -28,12 +31,24 @@ class SettingsRepository
         val onboarded: Flow<Boolean> =
             context.dataStore.data.map { it[onboardedKey] ?: false }
 
+        /** The user's default AI provider (P1 BYOK); null until one is chosen. */
+        override val selectedAiProvider: Flow<ProviderId?> =
+            context.dataStore.data.map { prefs ->
+                prefs[selectedAiProviderKey]?.let { name ->
+                    runCatching { ProviderId.valueOf(name) }.getOrNull()
+                }
+            }
+
         suspend fun setSyncIntervalHours(hours: Int) {
             context.dataStore.edit { it[syncIntervalKey] = hours }
         }
 
         suspend fun setOnboarded() {
             context.dataStore.edit { it[onboardedKey] = true }
+        }
+
+        override suspend fun setSelectedAiProvider(provider: ProviderId) {
+            context.dataStore.edit { it[selectedAiProviderKey] = provider.name }
         }
 
         companion object {

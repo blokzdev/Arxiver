@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -66,6 +67,7 @@ fun SettingsScreen(
     onOpenRoutines: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenTemplates: () -> Unit,
+    onOpenAiProviders: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -144,6 +146,7 @@ fun SettingsScreen(
             onOpenRoutines = onOpenRoutines,
             onOpenTemplates = onOpenTemplates,
             onOpenHistory = onOpenHistory,
+            onOpenAiProviders = onOpenAiProviders,
         )
     }
 }
@@ -162,6 +165,7 @@ private fun SettingsContent(
     onOpenRoutines: () -> Unit,
     onOpenTemplates: () -> Unit,
     onOpenHistory: () -> Unit,
+    onOpenAiProviders: () -> Unit,
 ) {
     Column(
         modifier =
@@ -248,6 +252,11 @@ private fun SettingsContent(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        SectionTitle(stringResource(R.string.settings_ai_section), icon = Icons.Outlined.SmartToy)
+        SettingsLink(stringResource(R.string.settings_ai_providers_link), onOpenAiProviders)
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -344,6 +353,7 @@ private fun SettingsContentPreview() {
             onOpenRoutines = {},
             onOpenTemplates = {},
             onOpenHistory = {},
+            onOpenAiProviders = {},
         )
     }
 }

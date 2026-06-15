@@ -46,6 +46,7 @@ import dev.blokz.arxiver.feature.paper.ConnectionsScreen
 import dev.blokz.arxiver.feature.paper.PaperDetailScreen
 import dev.blokz.arxiver.feature.pdf.PdfViewerScreen
 import dev.blokz.arxiver.feature.search.SearchScreen
+import dev.blokz.arxiver.feature.settings.AiProviderSettingsScreen
 import dev.blokz.arxiver.feature.settings.SettingsScreen
 import dev.blokz.arxiver.feature.today.TodayScreen
 import dev.blokz.arxiver.ui.navigation.TopLevelDestination
@@ -67,6 +68,7 @@ object Routes {
     const val TEMPLATE_DETAIL = "claude/templates/{templateId}"
     const val ROUTINE_SETUP = "claude/setup?templateId={templateId}"
     const val SETTINGS = "settings"
+    const val AI_SETTINGS = "settings/ai"
     const val ONBOARDING = "onboarding"
     const val DISPATCH_HISTORY = "claude/history"
     const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
@@ -154,7 +156,11 @@ fun ArxiverApp(
                     onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                     onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
                     onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
+                    onOpenAiProviders = { navController.navigate(Routes.AI_SETTINGS) },
                 )
+            }
+            composable(Routes.AI_SETTINGS) {
+                AiProviderSettingsScreen(onBack = { navController.popBackStack() })
             }
             composable(
                 route = TopLevelDestination.Today.route,
