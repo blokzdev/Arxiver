@@ -5,6 +5,7 @@ import dev.blokz.arxiver.core.common.map
 import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.toDomain
 import dev.blokz.arxiver.core.database.toEntity
+import dev.blokz.arxiver.core.database.toListDomain
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperSource
@@ -33,6 +34,12 @@ class PaperRepository
             code: String,
             start: Int = 0,
         ): AppResult<PaperPage> = fetchAndCache(ArxivQuery.category(code, start = start), PaperSource.SEARCH)
+
+        /** Locally-cached papers for a category (newest first) — instant Browse, no network. */
+        suspend fun cachedCategory(
+            code: String,
+            limit: Int = CACHED_PAGE,
+        ): List<Paper> = paperDao.papersByCategory(code, limit).map { it.toListDomain() }
 
         /** Online arXiv search (field prefixes and booleans pass through). */
         suspend fun searchArxiv(
@@ -69,5 +76,9 @@ class PaperRepository
             feed.papers.forEach { paper ->
                 paperDao.upsertPaperWithRelations(paper.toEntity(), paper.authors, paper.categories)
             }
+        }
+
+        companion object {
+            private const val CACHED_PAGE = 50
         }
     }

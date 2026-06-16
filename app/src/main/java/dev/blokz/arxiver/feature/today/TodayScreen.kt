@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.TaskAlt
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,7 +48,6 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.claude.RoutineAction
@@ -58,6 +56,7 @@ import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.PaperListItem
 import dev.blokz.arxiver.ui.components.SectionHeader
+import dev.blokz.arxiver.ui.components.SkeletonList
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
@@ -107,15 +106,8 @@ fun TodayScreen(
                     ) {
                         Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_weekly_review))
                     }
-                    if (state.syncing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(end = Spacing.lg),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        IconButton(onClick = viewModel::refresh) {
-                            Icon(Icons.Filled.Refresh, stringResource(R.string.cd_refresh_inbox))
-                        }
+                    IconButton(onClick = viewModel::refresh) {
+                        Icon(Icons.Filled.Refresh, stringResource(R.string.cd_refresh_inbox))
                     }
                     IconButton(onClick = onOpenSettings) {
                         Icon(Icons.Filled.Settings, stringResource(R.string.settings_title))
@@ -125,7 +117,9 @@ fun TodayScreen(
         },
     ) { padding ->
         PullToRefreshBox(
-            isRefreshing = state.syncing,
+            // Skeletons convey the first load; the pull indicator is for background/user refresh
+            // once papers are present — so we never show two spinners at once.
+            isRefreshing = state.syncing && !state.loading,
             onRefresh = viewModel::refresh,
             modifier =
                 Modifier
@@ -141,6 +135,7 @@ fun TodayScreen(
                         actionLabel = stringResource(R.string.today_go_browse),
                         onAction = onGoBrowse,
                     )
+                state.loading -> SkeletonList()
                 state.items.isEmpty() ->
                     EmptyState(
                         title = stringResource(R.string.today_inbox_zero_title),

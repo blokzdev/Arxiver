@@ -81,6 +81,21 @@ interface PaperDao {
     @Query("SELECT * FROM papers WHERE id = :id")
     suspend fun paperById(id: String): PaperEntity?
 
+    /** Cached papers in a category, newest first — the cache-first Browse feed (no network). */
+    @Query(
+        """
+        SELECT p.* FROM papers p
+        JOIN paper_categories pc ON pc.paper_id = p.id
+        WHERE pc.category_code = :code
+        ORDER BY p.published_at DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun papersByCategory(
+        code: String,
+        limit: Int,
+    ): List<PaperEntity>
+
     @Query("SELECT * FROM papers WHERE id = :id")
     fun observePaperById(id: String): Flow<PaperEntity?>
 
