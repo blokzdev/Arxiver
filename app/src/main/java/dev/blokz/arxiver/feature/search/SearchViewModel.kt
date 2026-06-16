@@ -13,6 +13,8 @@ import dev.blokz.arxiver.core.ml.EmbeddingService
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
+import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import dev.blokz.arxiver.core.search.HybridFusion
 import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.core.search.VectorIndex
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import javax.inject.Inject
 
 data class LocalHit(
@@ -33,6 +36,9 @@ data class LocalHit(
     val score: Double,
     val provenance: Provenance,
 )
+
+/** Submitted-date windows offered in the filter sheet (mapped to arXiv submittedDate). */
+enum class DatePreset { ANY, PAST_WEEK, PAST_MONTH, PAST_YEAR }
 
 data class SearchUiState(
     val query: String = "",
@@ -47,7 +53,21 @@ data class SearchUiState(
     val totalResults: Int? = null,
     val error: AppError? = null,
     val searched: Boolean = false,
-)
+    // --- structured arXiv filters (arXiv tab) ---
+    val scope: SearchFilter.Field = SearchFilter.Field.ALL,
+    val categories: List<String> = emptyList(),
+    val datePreset: DatePreset = DatePreset.ANY,
+    val sortBy: ArxivQuery.SortBy = ArxivQuery.SortBy.RELEVANCE,
+    val sortOrder: ArxivQuery.SortOrder = ArxivQuery.SortOrder.DESCENDING,
+) {
+    /** Whether any advanced (beyond the plain box) filter is set — drives the "Filters •" affordance. */
+    val filtersActive: Boolean
+        get() =
+            scope != SearchFilter.Field.ALL ||
+                categories.isNotEmpty() ||
+                datePreset != DatePreset.ANY ||
+                sortBy != ArxivQuery.SortBy.RELEVANCE
+}
 
 @HiltViewModel
 class SearchViewModel
@@ -65,6 +85,7 @@ class SearchViewModel
 
         private val queryFlow = MutableStateFlow("")
         private var searchJob: Job? = null
+        private var submittedFilter: SearchFilter? = null
 
         init {
             observeLocal()
@@ -126,14 +147,51 @@ class SearchViewModel
             queryFlow.value = query
         }
 
+        fun setScope(field: SearchFilter.Field) = _uiState.update { it.copy(scope = field) }
+
+        fun toggleCategory(code: String) =
+            _uiState.update {
+                it.copy(categories = if (code in it.categories) it.categories - code else it.categories + code)
+            }
+
+        fun clearCategories() = _uiState.update { it.copy(categories = emptyList()) }
+
+        fun setDatePreset(preset: DatePreset) = _uiState.update { it.copy(datePreset = preset) }
+
+        fun setSort(
+            sortBy: ArxivQuery.SortBy,
+            sortOrder: ArxivQuery.SortOrder = _uiState.value.sortOrder,
+        ) = _uiState.update { it.copy(sortBy = sortBy, sortOrder = sortOrder) }
+
+        /** The current UI state expressed as a structured arXiv [SearchFilter]. */
+        private fun currentFilter(): SearchFilter {
+            val state = _uiState.value
+            val from =
+                when (state.datePreset) {
+                    DatePreset.ANY -> null
+                    DatePreset.PAST_WEEK -> LocalDate.now().minusWeeks(1)
+                    DatePreset.PAST_MONTH -> LocalDate.now().minusMonths(1)
+                    DatePreset.PAST_YEAR -> LocalDate.now().minusYears(1)
+                }
+            return SearchFilter(
+                term = state.query.trim(),
+                field = state.scope,
+                categories = state.categories,
+                from = from,
+                sortBy = state.sortBy,
+                sortOrder = state.sortOrder,
+            )
+        }
+
         fun submit() {
-            val query = _uiState.value.query.trim()
-            if (query.isEmpty()) return
+            val filter = currentFilter()
+            if (filter.isEmpty) return
+            submittedFilter = filter
             searchJob?.cancel()
             _uiState.update {
                 it.copy(results = emptyList(), searching = true, error = null, searched = true, totalResults = null)
             }
-            searchJob = viewModelScope.launch { runSearch(query, start = 0) }
+            searchJob = viewModelScope.launch { runSearch(start = 0) }
         }
 
         fun loadMore() {
@@ -141,14 +199,12 @@ class SearchViewModel
             val start = state.nextStart ?: return
             if (state.searching || state.loadingMore) return
             _uiState.update { it.copy(loadingMore = true) }
-            searchJob = viewModelScope.launch { runSearch(state.query.trim(), start) }
+            searchJob = viewModelScope.launch { runSearch(start) }
         }
 
-        private suspend fun runSearch(
-            query: String,
-            start: Int,
-        ) {
-            when (val result = paperRepository.searchArxiv(query, start)) {
+        private suspend fun runSearch(start: Int) {
+            val filter = submittedFilter ?: return
+            when (val result = paperRepository.searchArxiv(filter, start)) {
                 is AppResult.Success ->
                     _uiState.update {
                         it.copy(

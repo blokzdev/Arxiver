@@ -70,11 +70,30 @@ data class ArxivQuery(
             maxResults: Int = DEFAULT_PAGE_SIZE,
         ) = ArxivQuery(searchQuery = query, start = start, maxResults = maxResults)
 
-        private val FIELD_PREFIX = Regex("""(^|[\s(])(ti|au|abs|cat|co|jr|rn|all):""")
+        /** Structured search built from UI filters ([SearchFilter] → search_query + sort). */
+        fun fromFilter(
+            filter: SearchFilter,
+            start: Int = 0,
+            maxResults: Int = DEFAULT_PAGE_SIZE,
+        ) = ArxivQuery(
+            searchQuery = filter.toSearchQuery(),
+            start = start,
+            maxResults = maxResults,
+            sortBy = filter.sortBy,
+            sortOrder = filter.sortOrder,
+        )
 
-        private fun String.containsFieldSyntax(): Boolean =
-            FIELD_PREFIX.containsMatchIn(this) || contains(" AND ") || contains(" OR ") || contains(" ANDNOT ")
+        private fun String.containsFieldSyntax(): Boolean = containsArxivFieldSyntax()
 
-        private fun String.quoteIfPhrase(): String = if (contains(' ') && !startsWith("\"")) "\"$this\"" else this
+        private fun String.quoteIfPhrase(): String = quoteIfArxivPhrase()
     }
 }
+
+private val ARXIV_FIELD_PREFIX = Regex("""(^|[\s(])(ti|au|abs|cat|co|jr|rn|all):""")
+
+/** True when the text already uses arXiv field prefixes or boolean operators (raw passthrough). */
+internal fun String.containsArxivFieldSyntax(): Boolean =
+    ARXIV_FIELD_PREFIX.containsMatchIn(this) ||
+        contains(" AND ") || contains(" OR ") || contains(" ANDNOT ")
+
+internal fun String.quoteIfArxivPhrase(): String = if (contains(' ') && !startsWith("\"")) "\"$this\"" else this

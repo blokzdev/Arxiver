@@ -24,7 +24,28 @@
 
     <string name="feed_loading_queued">Querying arXiv… requests are spaced to respect arXiv\'s rate limits</string>
 
-    <string name="search_hint">Search arXiv (try ti:attention AND cat:cs.LG)</string>
+    <string name="search_hint">Search arXiv by keyword</string>
+
+    <!-- Structured search filters (arXiv tab) -->
+    <string name="search_scope_all">All fields</string>
+    <string name="search_scope_title">Title</string>
+    <string name="search_scope_author">Author</string>
+    <string name="search_scope_abstract">Abstract</string>
+    <string name="search_filters">Filters</string>
+    <string name="cd_search_filters">Open search filters</string>
+    <string name="search_filters_title">Search filters</string>
+    <string name="search_filter_categories">Categories</string>
+    <string name="search_filter_date">Submitted</string>
+    <string name="search_date_any">Any time</string>
+    <string name="search_date_week">Past week</string>
+    <string name="search_date_month">Past month</string>
+    <string name="search_date_year">Past year</string>
+    <string name="search_filter_sort">Sort by</string>
+    <string name="search_sort_relevance">Relevance</string>
+    <string name="search_sort_newest">Newest</string>
+    <string name="search_sort_oldest">Oldest</string>
+    <string name="search_filter_apply">Show results</string>
+    <string name="search_filter_clear">Clear</string>
     <string name="search_querying_arxiv">Searching arXiv…</string>
     <plurals name="search_result_count">
         <item quantity="one">%1$d result on arXiv</item>
@@ -32,7 +53,7 @@
     </plurals>
     <string name="search_no_results">No papers matched. Try different terms or field prefixes.</string>
     <string name="search_intro_title">Search all of arXiv</string>
-    <string name="search_intro_body">Bare terms search everything. Use ti:, au:, abs:, cat: prefixes and AND/OR/ANDNOT for precision. Library search arrives with your local index.</string>
+    <string name="search_intro_body">Search arXiv by keyword, then narrow by field, category, date, and sort with Filters.</string>
 
     <string name="paper_not_found">Paper unavailable — check the link or your connection.</string>
     <string name="paper_abstract_heading">Abstract</string>

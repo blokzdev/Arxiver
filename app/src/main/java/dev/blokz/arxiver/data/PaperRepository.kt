@@ -12,6 +12,7 @@ import dev.blokz.arxiver.core.model.PaperSource
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivFeed
 import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
+import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,6 +47,12 @@ class PaperRepository
             query: String,
             start: Int = 0,
         ): AppResult<PaperPage> = fetchAndCache(ArxivQuery.search(query, start = start), PaperSource.SEARCH)
+
+        /** Online arXiv search from structured UI filters (scoped term + categories + date + sort). */
+        suspend fun searchArxiv(
+            filter: SearchFilter,
+            start: Int = 0,
+        ): AppResult<PaperPage> = fetchAndCache(ArxivQuery.fromFilter(filter, start = start), PaperSource.SEARCH)
 
         /**
          * Paper for the detail screen: local cache first, then network refresh.
