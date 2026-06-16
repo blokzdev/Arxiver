@@ -18,6 +18,7 @@ import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import dev.blokz.arxiver.core.search.HybridFusion
 import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.core.search.VectorIndex
+import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -79,6 +80,7 @@ class SearchViewModel
         private val embeddingService: EmbeddingService,
         private val modelDownloader: ModelDownloader,
         private val searchDao: SearchDao,
+        private val libraryRepository: LibraryRepository,
     ) : ViewModel() {
         private val _uiState = MutableStateFlow(SearchUiState())
         val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
@@ -221,6 +223,10 @@ class SearchViewModel
                     }
             }
         }
+
+        fun save(paperId: String) = viewModelScope.launch { libraryRepository.save(paperId) }
+
+        fun saveAll(ids: Collection<String>) = viewModelScope.launch { ids.forEach { libraryRepository.save(it) } }
 
         companion object {
             private const val LOCAL_DEBOUNCE_MS = 350L

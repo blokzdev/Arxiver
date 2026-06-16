@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +32,7 @@ class CategoryFeedViewModel
     constructor(
         savedStateHandle: SavedStateHandle,
         private val paperRepository: PaperRepository,
+        private val libraryRepository: LibraryRepository,
     ) : ViewModel() {
         private val code: String = checkNotNull(savedStateHandle["code"])
         private val title: String = savedStateHandle["title"] ?: code
@@ -83,4 +85,8 @@ class CategoryFeedViewModel
                 }
             }
         }
+
+        fun save(paperId: String) = viewModelScope.launch { libraryRepository.save(paperId) }
+
+        fun saveAll(ids: Collection<String>) = viewModelScope.launch { ids.forEach { libraryRepository.save(it) } }
     }

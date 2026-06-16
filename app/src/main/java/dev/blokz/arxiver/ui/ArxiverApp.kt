@@ -222,6 +222,7 @@ fun ArxiverApp(
                 ) {
                     SearchScreen(
                         onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                     )
                 }
                 composable(
@@ -257,6 +258,7 @@ fun ArxiverApp(
                     CategoryFeedScreen(
                         onBack = { navController.popBackStack() },
                         onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                     )
                 }
                 composable(Routes.PAPER_DETAIL) {
