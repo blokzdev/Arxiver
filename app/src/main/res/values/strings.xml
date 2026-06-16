@@ -167,6 +167,8 @@
     <string name="bg_task_embedding">Indexing your library</string>
     <string name="bg_task_failed">Failed — tap retry</string>
     <string name="settings_background_activity">Background activity</string>
+    <string name="bg_notification_channel_name">Background activity</string>
+    <string name="bg_notification_channel_desc">Progress for model downloads and indexing. Stays on your device.</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
     <string name="cd_delete_routine">Delete routine %1$s</string>

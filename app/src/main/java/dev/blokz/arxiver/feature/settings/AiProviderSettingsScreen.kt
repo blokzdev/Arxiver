@@ -1,6 +1,10 @@
 package dev.blokz.arxiver.feature.settings
 
+import android.Manifest
 import android.content.res.Configuration
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -59,6 +63,22 @@ fun AiProviderSettingsScreen(
     viewModel: AiProviderSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // The model download runs as a foreground service with a progress notification (UX2.8). On
+    // Android 13+ we ask for POST_NOTIFICATIONS first, then download regardless of the answer
+    // (a denial only suppresses the notification — the download still runs).
+    val notifPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            viewModel.downloadOnDeviceModel()
+        }
+    val downloadWithNotifPermission: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.downloadOnDeviceModel()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -81,7 +101,7 @@ fun AiProviderSettingsScreen(
             onClearKey = viewModel::clearKey,
             onTestConnection = viewModel::testConnection,
             onSelectDefault = viewModel::selectDefault,
-            onDownloadModel = viewModel::downloadOnDeviceModel,
+            onDownloadModel = downloadWithNotifPermission,
             onDeleteModel = viewModel::deleteOnDeviceModel,
             onDownloadNano = viewModel::downloadNano,
             onSetPreferredTier = viewModel::setPreferredOnDeviceTier,

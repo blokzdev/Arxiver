@@ -3,6 +3,11 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Foreground service + local progress notification for the long on-device model download
+         (UX2.8). Notifications are local-only — no network, no telemetry. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".ArxiverApplication"
@@ -15,6 +20,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Arxiver"
         tools:ignore="UnusedAttribute">
+
+        <!-- The on-device model download promotes WorkManager's foreground service to dataSync
+             (UX2.8). Merged onto WorkManager's own service declaration. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <!-- Hilt provides the WorkManager configuration (Configuration.Provider). -->
         <provider

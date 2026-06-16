@@ -109,6 +109,18 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 - [ ] **K7 Collection (KB) chat** — the collection screen's "Chat" action opens KB chat that retrieves across the collection's papers (ensure-embedded indexes missing papers on open, shown by the "Preparing this collection…" note); adding/removing a paper changes what's retrievable. _(P2.4)_
 - [ ] **K8 Chat history persists** — the Settings → "Chat history" list shows past sessions (paper title / collection name); sessions + turns survive app restart; tapping resumes the right conversation; delete removes it. _(P2.4)_
 
+## L. Feedback, selection, swipe & background tasks (v2.0-alpha / Phase UX2) _(SPEC-UI §4/§4a/§5)_
+> CI covers the pure/logic pieces: `FeedbackControllerTest`, `SelectionStateTest`,
+> `SwipeablePaperRowTest` (a11y-action builder), `OrganizeViewModelTest` (tri-state/idempotence),
+> `FilteredPapers`/`CategoryFeed` save paths, `BackgroundTaskMonitorTest` (state→task + cancel
+> routing), `DownloadNotificationsTest` (channel/ForegroundInfo). What needs hardware:
+- [ ] **L1 Elevated feedback** — the app-level snackbar shows above the bottom bar with real elevation, a working dismiss "✕", longer dwell for action-bearing messages, and both actions reachable (Undo **and** "Add to…").
+- [ ] **L2 Bulk Organize (the #1 ask)** — multi-select in Library/collection/tag/Search/feed → "Add to collection or tag" files every selected paper; tri-state chips read correctly across a mixed-membership selection; inline new-collection/new-tag adds all; tapping a full (✓) target removes all.
+- [ ] **L3 Swipe everywhere** — swipe-right = save, swipe-left = remove/dismiss on Today/Search/CategoryFeed/Filtered/Library; TalkBack exposes the same actions; swipe is inert in selection mode (no fight with long-press). Save-in-place rows snap back; triaged/removed rows leave the list.
+- [ ] **L4 Background tasks sheet** — Settings → "Background activity" shows live progress for the Gemma download, follow-sync and embedding/indexing; cancel actually stops the worker; retry re-enqueues.
+- [ ] **L5 Foreground-service download** — the ~1.87 GB Gemma download runs as a foreground service with an ongoing local progress notification, survives backgrounding/Doze, completes + SHA-verifies. **Local-only** — confirm no network beyond the pinned model URL (no telemetry).
+- [ ] **L6 POST_NOTIFICATIONS (Android 13+, the S20)** — the permission is requested when the on-device download is first triggered; **denying it still completes the download**, only the notification is suppressed (graceful degradation).
+
 ## H. Success criteria rollup _(PRD §7)_
 - [ ] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1).
 - [ ] **H2** Hybrid search returns relevant results < 300ms, fully offline (§7.2 — C3/D2).
