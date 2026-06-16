@@ -20,7 +20,10 @@ data class TodayUiState(
     val items: List<InboxPaper> = emptyList(),
     val syncing: Boolean = false,
     val hasFollows: Boolean = true,
-)
+) {
+    /** First load: a sync is running and nothing's arrived yet — show skeletons, not "inbox zero". */
+    val loading: Boolean get() = syncing && items.isEmpty() && hasFollows
+}
 
 enum class TriageKind { SAVED, DISMISSED }
 

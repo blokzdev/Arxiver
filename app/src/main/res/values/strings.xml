@@ -75,8 +75,8 @@
     <string name="today_go_browse">Browse categories</string>
     <string name="today_likely_relevant">Likely relevant</string>
     <string name="today_more_from_follows">More from your follows</string>
-    <string name="today_inbox_zero_title">Inbox zero 🎉</string>
-    <string name="today_inbox_zero_body">All caught up. New papers appear after the next sync.</string>
+    <string name="today_inbox_zero_title">You\'re all caught up</string>
+    <string name="today_inbox_zero_body">You\'ve triaged today\'s papers. New ones from your follows arrive with the next sync.</string>
 
     <string name="search_tab_library">Library</string>
     <string name="search_tab_arxiv">arXiv</string>

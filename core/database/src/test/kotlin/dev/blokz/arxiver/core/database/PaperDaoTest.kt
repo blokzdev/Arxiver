@@ -60,6 +60,26 @@ class PaperDaoTest {
         }
 
     @Test
+    fun `papersByCategory returns category papers newest-first, capped`() =
+        runTest {
+            val dao = db.paperDao()
+            val older =
+                paper.copy(id = ArxivId("2401.00001"), publishedAt = Instant.parse("2024-01-01T00:00:00Z"))
+            val newer =
+                paper.copy(id = ArxivId("2402.00002"), publishedAt = Instant.parse("2024-02-01T00:00:00Z"))
+            val other =
+                paper.copy(id = ArxivId("2403.00003"), categories = listOf("hep-th"), primaryCategory = "hep-th")
+            listOf(older, newer, other).forEach {
+                dao.upsertPaperWithRelations(it.toEntity(), it.authors, it.categories)
+            }
+
+            val csLg = dao.papersByCategory("cs.LG", limit = 10).map { it.id }
+            assertEquals(listOf("2402.00002", "2401.00001"), csLg)
+            assertEquals(1, dao.papersByCategory("cs.LG", limit = 1).size)
+            assertEquals(listOf("2403.00003"), dao.papersByCategory("hep-th", limit = 10).map { it.id })
+        }
+
+    @Test
     fun `re-upsert replaces relations without duplicating authors`() =
         runTest {
             val dao = db.paperDao()

@@ -39,7 +39,17 @@ class CategoryFeedViewModel
         val uiState: StateFlow<CategoryFeedUiState> = _uiState.asStateFlow()
 
         init {
-            loadMore()
+            // Cache-first: show locally-cached papers instantly (no network), so Browse never
+            // waits behind the rate-limited sync queue. Fetch from arXiv only when the cache is
+            // empty; pull-to-refresh and scroll-to-load-more still go to the network.
+            viewModelScope.launch {
+                val cached = paperRepository.cachedCategory(code)
+                if (cached.isEmpty()) {
+                    loadMore()
+                } else {
+                    _uiState.update { it.copy(papers = cached, nextStart = cached.size, loading = false) }
+                }
+            }
         }
 
         fun refresh() {
