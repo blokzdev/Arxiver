@@ -39,8 +39,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -77,6 +79,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    var showBackgroundTasks by remember { mutableStateOf(false) }
 
     backupJson?.let { json ->
         val send =
@@ -149,6 +152,13 @@ fun SettingsScreen(
             onOpenHistory = onOpenHistory,
             onOpenAiProviders = onOpenAiProviders,
             onOpenChatHistory = onOpenChatHistory,
+            onOpenBackgroundTasks = { showBackgroundTasks = true },
+        )
+    }
+
+    if (showBackgroundTasks) {
+        dev.blokz.arxiver.feature.background.BackgroundTasksSheet(
+            onDismiss = { showBackgroundTasks = false },
         )
     }
 }
@@ -169,6 +179,7 @@ private fun SettingsContent(
     onOpenHistory: () -> Unit,
     onOpenAiProviders: () -> Unit,
     onOpenChatHistory: () -> Unit,
+    onOpenBackgroundTasks: () -> Unit,
 ) {
     Column(
         modifier =
@@ -178,6 +189,7 @@ private fun SettingsContent(
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         SectionTitle(stringResource(R.string.settings_sync_section), icon = Icons.Outlined.Sync)
+        SettingsLink(stringResource(R.string.settings_background_activity), onOpenBackgroundTasks)
         Text(
             stringResource(R.string.settings_sync_interval),
             style = MaterialTheme.typography.bodyMedium,
@@ -359,6 +371,7 @@ private fun SettingsContentPreview() {
             onOpenHistory = {},
             onOpenAiProviders = {},
             onOpenChatHistory = {},
+            onOpenBackgroundTasks = {},
         )
     }
 }

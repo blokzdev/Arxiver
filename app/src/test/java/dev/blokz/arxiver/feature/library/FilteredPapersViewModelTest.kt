@@ -100,4 +100,47 @@ class FilteredPapersViewModelTest {
             val rows = vm.papers.first { it != null }!!
             assertEquals(listOf("2401.00002"), rows.map { it.paper.id.value })
         }
+
+    @Test
+    fun `saveAll puts every selected paper into the library`() =
+        runTest {
+            insertPaper("2401.00001")
+            insertPaper("2401.00002")
+            val cid = repo.createCollection("C")
+            repo.addToCollection(cid, "2401.00001")
+            repo.addToCollection(cid, "2401.00002")
+            val vm = collectionVm(cid)
+
+            vm.saveAll(listOf("2401.00001", "2401.00002"))
+
+            assertEquals(
+                setOf("2401.00001", "2401.00002"),
+                repo.observeLibrary().first { it.size == 2 }.map { it.paper.id.value }.toSet(),
+            )
+        }
+
+    @Test
+    fun `removeFromScope drops the paper from the collection, not the library`() =
+        runTest {
+            insertPaper("2401.00001")
+            val cid = repo.createCollection("C")
+            repo.addToCollection(cid, "2401.00001")
+            repo.save("2401.00001")
+            val vm = collectionVm(cid)
+
+            vm.removeFromScope("2401.00001")
+
+            assertEquals(emptyList(), repo.observeCollectionPapers(cid).first { it.isEmpty() })
+            // Still in the library.
+            assertEquals(
+                listOf("2401.00001"),
+                repo.observeLibrary().first { it.isNotEmpty() }.map { it.paper.id.value },
+            )
+        }
+
+    private fun collectionVm(cid: Long) =
+        FilteredPapersViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("mode" to "collection", "id" to cid.toString(), "title" to "C")),
+            libraryRepository = repo,
+        )
 }

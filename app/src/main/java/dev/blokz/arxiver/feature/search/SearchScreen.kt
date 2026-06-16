@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.feature.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.SearchOff
@@ -63,10 +67,15 @@ import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.PaperBadge
-import dev.blokz.arxiver.ui.components.PaperListItem
+import dev.blokz.arxiver.ui.components.SelectionTopBar
 import dev.blokz.arxiver.ui.components.SkeletonList
 import dev.blokz.arxiver.ui.components.SkeletonPaperItem
 import dev.blokz.arxiver.ui.components.StatusTone
+import dev.blokz.arxiver.ui.components.SwipeablePaperRow
+import dev.blokz.arxiver.ui.components.rememberSelectionState
+import dev.blokz.arxiver.ui.feedback.FeedbackAction
+import dev.blokz.arxiver.ui.feedback.FeedbackMessage
+import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
@@ -75,12 +84,59 @@ import dev.blokz.arxiver.ui.theme.Spacing
 @Composable
 fun SearchScreen(
     onPaperClick: (String) -> Unit,
+    onOpenRoutines: () -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val selection = rememberSelectionState()
+    val feedback = LocalFeedbackController.current
+    var organizeIds by remember { mutableStateOf<List<String>?>(null) }
+    var showDispatch by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selection.isActive) { selection.clear() }
+
+    val savedMessage = stringResource(R.string.today_snackbar_saved)
+    val addToLabel = stringResource(R.string.action_add_to_collection)
+    val saveOne: (String) -> Unit = { id ->
+        viewModel.save(id)
+        feedback.show(
+            FeedbackMessage(
+                text = savedMessage,
+                secondary = FeedbackAction(addToLabel) { organizeIds = listOf(id) },
+            ),
+        )
+    }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.nav_search)) }) },
+        topBar = {
+            if (selection.isActive) {
+                SelectionTopBar(count = selection.count, onClear = { selection.clear() }) {
+                    IconButton(onClick = { organizeIds = selection.selected.toList() }) {
+                        Icon(Icons.Filled.CreateNewFolder, stringResource(R.string.cd_add_to_organize))
+                    }
+                    IconButton(
+                        onClick = {
+                            val ids = selection.selected.toList()
+                            viewModel.saveAll(ids)
+                            feedback.show(
+                                FeedbackMessage(
+                                    text = savedMessage,
+                                    secondary = FeedbackAction(addToLabel) { organizeIds = ids },
+                                ),
+                            )
+                            selection.clear()
+                        },
+                    ) {
+                        Icon(Icons.Filled.BookmarkAdd, stringResource(R.string.cd_save_selected))
+                    }
+                    IconButton(onClick = { showDispatch = true }) {
+                        Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
+                    }
+                }
+            } else {
+                TopAppBar(title = { Text(stringResource(R.string.nav_search)) })
+            }
+        },
     ) { padding ->
         Column(
             modifier =
@@ -140,7 +196,7 @@ fun SearchScreen(
             }
 
             if (tab == 0) {
-                LocalResultList(state, onPaperClick)
+                LocalResultList(state, selection, onPaperClick, saveOne)
             } else {
                 var showFilters by rememberSaveable { mutableStateOf(false) }
                 ArxivFilterBar(
@@ -163,7 +219,7 @@ fun SearchScreen(
                             body = stringResource(R.string.search_intro_body),
                             icon = Icons.Filled.Search,
                         )
-                    else -> ResultList(state, onPaperClick, viewModel::loadMore)
+                    else -> ResultList(state, selection, onPaperClick, saveOne, viewModel::loadMore)
                 }
 
                 if (showFilters) {
@@ -182,6 +238,24 @@ fun SearchScreen(
                 }
             }
         }
+    }
+
+    organizeIds?.let { ids ->
+        dev.blokz.arxiver.feature.organize.OrganizeSheet(paperIds = ids, onDismiss = { organizeIds = null })
+    }
+
+    if (showDispatch) {
+        dev.blokz.arxiver.feature.claude.DispatchSheet(
+            paperIds = selection.selected.toList(),
+            onDismiss = {
+                showDispatch = false
+                selection.clear()
+            },
+            onGoToRoutines = {
+                showDispatch = false
+                onOpenRoutines()
+            },
+        )
     }
 }
 
@@ -337,7 +411,9 @@ private fun DatePreset.labelRes(): Int =
 @Composable
 private fun LocalResultList(
     state: SearchUiState,
+    selection: dev.blokz.arxiver.ui.components.SelectionState,
     onPaperClick: (String) -> Unit,
+    onSave: (String) -> Unit,
 ) {
     when {
         state.query.isBlank() ->
@@ -374,9 +450,14 @@ private fun LocalResultList(
                     }
                 }
                 itemsIndexed(state.localResults, key = { _, hit -> hit.paper.id.value }) { index, hit ->
-                    PaperListItem(
+                    val id = hit.paper.id.value
+                    SwipeablePaperRow(
                         paper = hit.paper,
-                        onClick = { onPaperClick(hit.paper.id.value) },
+                        onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },
+                        onLongClick = { selection.toggle(id) },
+                        onSwipeSave = { onSave(id) },
+                        selectionMode = selection.isActive,
+                        selected = selection.contains(id),
                         showDivider = index != state.localResults.lastIndex,
                         badge =
                             when (hit.provenance) {
@@ -395,7 +476,9 @@ private fun LocalResultList(
 @Composable
 private fun ResultList(
     state: SearchUiState,
+    selection: dev.blokz.arxiver.ui.components.SelectionState,
     onPaperClick: (String) -> Unit,
+    onSave: (String) -> Unit,
     onLoadMore: () -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -410,9 +493,14 @@ private fun ResultList(
             }
         }
         itemsIndexed(state.results, key = { _, paper -> paper.id.value }) { index, paper ->
-            PaperListItem(
+            val id = paper.id.value
+            SwipeablePaperRow(
                 paper = paper,
-                onClick = { onPaperClick(paper.id.value) },
+                onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },
+                onLongClick = { selection.toggle(id) },
+                onSwipeSave = { onSave(id) },
+                selectionMode = selection.isActive,
+                selected = selection.contains(id),
                 showDivider = index != state.results.lastIndex,
             )
             if (index >= state.results.lastIndex - 5 && state.nextStart != null) {
@@ -458,7 +546,9 @@ private fun LocalResultsPreview() {
                             )
                         },
                 ),
+            selection = dev.blokz.arxiver.ui.components.SelectionState(),
             onPaperClick = {},
+            onSave = {},
         )
     }
 }
@@ -468,6 +558,11 @@ private fun LocalResultsPreview() {
 @Composable
 private fun LocalResultsEmptyPreview() {
     ArxiverTheme {
-        LocalResultList(state = SearchUiState(query = ""), onPaperClick = {})
+        LocalResultList(
+            state = SearchUiState(query = ""),
+            selection = dev.blokz.arxiver.ui.components.SelectionState(),
+            onPaperClick = {},
+            onSave = {},
+        )
     }
 }

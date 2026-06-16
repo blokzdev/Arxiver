@@ -17,10 +17,12 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -50,6 +52,9 @@ import dev.blokz.arxiver.feature.search.SearchScreen
 import dev.blokz.arxiver.feature.settings.AiProviderSettingsScreen
 import dev.blokz.arxiver.feature.settings.SettingsScreen
 import dev.blokz.arxiver.feature.today.TodayScreen
+import dev.blokz.arxiver.ui.feedback.FeedbackHost
+import dev.blokz.arxiver.ui.feedback.FeedbackViewModel
+import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.navigation.TopLevelDestination
 import dev.blokz.arxiver.ui.theme.ArxiverMotion
 
@@ -113,205 +118,213 @@ fun ArxiverApp(
 
     val showBottomBar = TopLevelDestination.entries.any { it.route == currentDestination?.route }
 
-    Scaffold(
-        bottomBar = { if (showBottomBar) ArxiverBottomBar(navController) },
-    ) { innerPadding ->
-        // Motion grammar (SPEC-UI §1): stacked pushes slide in gently, pops
-        // mirror them; bottom-tab switches fade through (no direction).
-        NavHost(
-            navController = navController,
-            startDestination = if (startOnboarding) Routes.ONBOARDING else TopLevelDestination.Today.route,
-            // Consume the insets the outer Scaffold already applied so each screen's own
-            // Scaffold doesn't re-pad for the status/navigation bars (the double-applied
-            // bottom nav inset showed as a blank strip above the bottom bar).
-            modifier =
-                Modifier
-                    .padding(innerPadding)
-                    .consumeWindowInsets(innerPadding),
-            enterTransition = {
-                fadeIn(tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.DecelerateEasing)) +
-                    slideInHorizontally(
-                        tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.DecelerateEasing),
-                    ) { it / 10 }
-            },
-            exitTransition = { fadeOut(tween(ArxiverMotion.DURATION_SHORT)) },
-            popEnterTransition = { fadeIn(tween(ArxiverMotion.DURATION_LONG)) },
-            popExitTransition = {
-                fadeOut(tween(ArxiverMotion.DURATION_SHORT)) +
-                    slideOutHorizontally(
-                        tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.AccelerateEasing),
-                    ) { it / 10 }
-            },
-        ) {
-            composable(Routes.ONBOARDING) {
-                OnboardingScreen(
-                    onDone = {
-                        navController.navigate(TopLevelDestination.Today.route) {
-                            popUpTo(Routes.ONBOARDING) { inclusive = true }
-                        }
-                    },
-                )
-            }
-            composable(Routes.SETTINGS) {
-                SettingsScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
-                    onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
-                    onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
-                    onOpenAiProviders = { navController.navigate(Routes.AI_SETTINGS) },
-                    onOpenChatHistory = { navController.navigate(Routes.CHAT_HISTORY) },
-                )
-            }
-            composable(Routes.AI_SETTINGS) {
-                AiProviderSettingsScreen(onBack = { navController.popBackStack() })
-            }
-            composable(Routes.CHAT_HISTORY) {
-                ChatHistoryScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
-                )
-            }
-            composable(
-                route = TopLevelDestination.Today.route,
-                enterTransition = fadeThroughEnter,
-                exitTransition = fadeThroughExit,
-                popEnterTransition = fadeThroughEnter,
-                popExitTransition = fadeThroughExit,
-            ) {
-                TodayScreen(
-                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
-                    onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
-                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
-                    onGoBrowse = {
-                        navController.navigate(TopLevelDestination.Browse.route) {
-                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                )
-            }
-            composable(
-                route = TopLevelDestination.Browse.route,
-                enterTransition = fadeThroughEnter,
-                exitTransition = fadeThroughExit,
-                popEnterTransition = fadeThroughEnter,
-                popExitTransition = fadeThroughExit,
-            ) {
-                BrowseScreen(
-                    onCategoryClick = { code, title ->
-                        navController.navigate(Routes.categoryFeed(code, title))
-                    },
-                )
-            }
-            composable(
-                route = TopLevelDestination.Search.route,
-                enterTransition = fadeThroughEnter,
-                exitTransition = fadeThroughExit,
-                popEnterTransition = fadeThroughEnter,
-                popExitTransition = fadeThroughExit,
-            ) {
-                SearchScreen(
-                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
-                )
-            }
-            composable(
-                route = TopLevelDestination.Library.route,
-                enterTransition = fadeThroughEnter,
-                exitTransition = fadeThroughExit,
-                popEnterTransition = fadeThroughEnter,
-                popExitTransition = fadeThroughExit,
-            ) {
-                LibraryScreen(
-                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
-                    onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
-                    onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
-                    onCollectionClick = { id, name ->
-                        navController.navigate(Routes.filteredPapers("collection", id, name))
-                    },
-                    onTagClick = { id, name ->
-                        navController.navigate(Routes.filteredPapers("tag", id, "#$name"))
-                    },
-                )
-            }
+    val feedbackController = hiltViewModel<FeedbackViewModel>().controller
 
-            composable(Routes.FILTERED_PAPERS) {
-                FilteredPapersScreen(
-                    onBack = { navController.popBackStack() },
-                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
-                    onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
-                )
-            }
-
-            composable(Routes.CATEGORY_FEED) {
-                CategoryFeedScreen(
-                    onBack = { navController.popBackStack() },
-                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
-                )
-            }
-            composable(Routes.PAPER_DETAIL) {
-                PaperDetailScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenPdf = { id -> navController.navigate(Routes.pdfViewer(id)) },
-                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
-                    onOpenConnections = { id -> navController.navigate(Routes.connections(id)) },
-                    onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
-                    onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
-                )
-            }
-            composable(Routes.PDF_VIEWER) {
-                PdfViewerScreen(onBack = { navController.popBackStack() })
-            }
-            composable(Routes.ROUTINES) {
-                RoutinesScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
-                )
-            }
-            composable(Routes.TEMPLATE_CATALOG) {
-                TemplateCatalogScreen(
-                    onBack = { navController.popBackStack() },
-                    onTemplateClick = { id -> navController.navigate(Routes.templateDetail(id)) },
-                )
-            }
-            composable(Routes.TEMPLATE_DETAIL) { entry ->
-                TemplateDetailScreen(
-                    templateId = entry.arguments?.getString("templateId").orEmpty(),
-                    onBack = { navController.popBackStack() },
-                    onStartSetup = { id -> navController.navigate(Routes.routineSetup(id)) },
-                )
-            }
-            composable(
-                route = Routes.ROUTINE_SETUP,
-                arguments =
-                    listOf(
-                        navArgument("templateId") {
-                            type = NavType.StringType
-                            nullable = true
-                            defaultValue = null
-                        },
-                    ),
+    CompositionLocalProvider(LocalFeedbackController provides feedbackController) {
+        Scaffold(
+            bottomBar = { if (showBottomBar) ArxiverBottomBar(navController) },
+            snackbarHost = { FeedbackHost(feedbackController) },
+        ) { innerPadding ->
+            // Motion grammar (SPEC-UI §1): stacked pushes slide in gently, pops
+            // mirror them; bottom-tab switches fade through (no direction).
+            NavHost(
+                navController = navController,
+                startDestination = if (startOnboarding) Routes.ONBOARDING else TopLevelDestination.Today.route,
+                // Consume the insets the outer Scaffold already applied so each screen's own
+                // Scaffold doesn't re-pad for the status/navigation bars (the double-applied
+                // bottom nav inset showed as a blank strip above the bottom bar).
+                modifier =
+                    Modifier
+                        .padding(innerPadding)
+                        .consumeWindowInsets(innerPadding),
+                enterTransition = {
+                    fadeIn(tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.DecelerateEasing)) +
+                        slideInHorizontally(
+                            tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.DecelerateEasing),
+                        ) { it / 10 }
+                },
+                exitTransition = { fadeOut(tween(ArxiverMotion.DURATION_SHORT)) },
+                popEnterTransition = { fadeIn(tween(ArxiverMotion.DURATION_LONG)) },
+                popExitTransition = {
+                    fadeOut(tween(ArxiverMotion.DURATION_SHORT)) +
+                        slideOutHorizontally(
+                            tween(ArxiverMotion.DURATION_LONG, easing = ArxiverMotion.AccelerateEasing),
+                        ) { it / 10 }
+                },
             ) {
-                RoutineSetupScreen(
-                    onExit = { navController.popBackStack() },
-                    onDone = {
-                        // Land on the routines list, where the new routine now shows.
-                        if (!navController.popBackStack(Routes.ROUTINES, inclusive = false)) {
-                            navController.navigate(Routes.ROUTINES) {
-                                popUpTo(Routes.TEMPLATE_CATALOG) { inclusive = true }
+                composable(Routes.ONBOARDING) {
+                    OnboardingScreen(
+                        onDone = {
+                            navController.navigate(TopLevelDestination.Today.route) {
+                                popUpTo(Routes.ONBOARDING) { inclusive = true }
                             }
-                        }
-                    },
-                )
-            }
-            composable(Routes.DISPATCH_HISTORY) {
-                DispatchHistoryScreen(onBack = { navController.popBackStack() })
-            }
-            composable(Routes.CONNECTIONS) {
-                ConnectionsScreen(
-                    onBack = { navController.popBackStack() },
-                    onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
-                )
+                        },
+                    )
+                }
+                composable(Routes.SETTINGS) {
+                    SettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                        onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
+                        onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
+                        onOpenAiProviders = { navController.navigate(Routes.AI_SETTINGS) },
+                        onOpenChatHistory = { navController.navigate(Routes.CHAT_HISTORY) },
+                    )
+                }
+                composable(Routes.AI_SETTINGS) {
+                    AiProviderSettingsScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.CHAT_HISTORY) {
+                    ChatHistoryScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
+                    )
+                }
+                composable(
+                    route = TopLevelDestination.Today.route,
+                    enterTransition = fadeThroughEnter,
+                    exitTransition = fadeThroughExit,
+                    popEnterTransition = fadeThroughEnter,
+                    popExitTransition = fadeThroughExit,
+                ) {
+                    TodayScreen(
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                        onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                        onGoBrowse = {
+                            navController.navigate(TopLevelDestination.Browse.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                    )
+                }
+                composable(
+                    route = TopLevelDestination.Browse.route,
+                    enterTransition = fadeThroughEnter,
+                    exitTransition = fadeThroughExit,
+                    popEnterTransition = fadeThroughEnter,
+                    popExitTransition = fadeThroughExit,
+                ) {
+                    BrowseScreen(
+                        onCategoryClick = { code, title ->
+                            navController.navigate(Routes.categoryFeed(code, title))
+                        },
+                    )
+                }
+                composable(
+                    route = TopLevelDestination.Search.route,
+                    enterTransition = fadeThroughEnter,
+                    exitTransition = fadeThroughExit,
+                    popEnterTransition = fadeThroughEnter,
+                    popExitTransition = fadeThroughExit,
+                ) {
+                    SearchScreen(
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                    )
+                }
+                composable(
+                    route = TopLevelDestination.Library.route,
+                    enterTransition = fadeThroughEnter,
+                    exitTransition = fadeThroughExit,
+                    popEnterTransition = fadeThroughEnter,
+                    popExitTransition = fadeThroughExit,
+                ) {
+                    LibraryScreen(
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                        onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
+                        onCollectionClick = { id, name ->
+                            navController.navigate(Routes.filteredPapers("collection", id, name))
+                        },
+                        onTagClick = { id, name ->
+                            navController.navigate(Routes.filteredPapers("tag", id, "#$name"))
+                        },
+                    )
+                }
+
+                composable(Routes.FILTERED_PAPERS) {
+                    FilteredPapersScreen(
+                        onBack = { navController.popBackStack() },
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                    )
+                }
+
+                composable(Routes.CATEGORY_FEED) {
+                    CategoryFeedScreen(
+                        onBack = { navController.popBackStack() },
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                    )
+                }
+                composable(Routes.PAPER_DETAIL) {
+                    PaperDetailScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenPdf = { id -> navController.navigate(Routes.pdfViewer(id)) },
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenConnections = { id -> navController.navigate(Routes.connections(id)) },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                        onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
+                    )
+                }
+                composable(Routes.PDF_VIEWER) {
+                    PdfViewerScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.ROUTINES) {
+                    RoutinesScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
+                    )
+                }
+                composable(Routes.TEMPLATE_CATALOG) {
+                    TemplateCatalogScreen(
+                        onBack = { navController.popBackStack() },
+                        onTemplateClick = { id -> navController.navigate(Routes.templateDetail(id)) },
+                    )
+                }
+                composable(Routes.TEMPLATE_DETAIL) { entry ->
+                    TemplateDetailScreen(
+                        templateId = entry.arguments?.getString("templateId").orEmpty(),
+                        onBack = { navController.popBackStack() },
+                        onStartSetup = { id -> navController.navigate(Routes.routineSetup(id)) },
+                    )
+                }
+                composable(
+                    route = Routes.ROUTINE_SETUP,
+                    arguments =
+                        listOf(
+                            navArgument("templateId") {
+                                type = NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                ) {
+                    RoutineSetupScreen(
+                        onExit = { navController.popBackStack() },
+                        onDone = {
+                            // Land on the routines list, where the new routine now shows.
+                            if (!navController.popBackStack(Routes.ROUTINES, inclusive = false)) {
+                                navController.navigate(Routes.ROUTINES) {
+                                    popUpTo(Routes.TEMPLATE_CATALOG) { inclusive = true }
+                                }
+                            }
+                        },
+                    )
+                }
+                composable(Routes.DISPATCH_HISTORY) {
+                    DispatchHistoryScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.CONNECTIONS) {
+                    ConnectionsScreen(
+                        onBack = { navController.popBackStack() },
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                    )
+                }
             }
         }
     }

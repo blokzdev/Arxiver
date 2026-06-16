@@ -9,6 +9,7 @@ import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
+import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,7 @@ class CategoryFeedViewModelTest {
     private lateinit var server: MockWebServer
     private lateinit var db: ArxiverDatabase
     private lateinit var paperRepo: PaperRepository
+    private lateinit var libraryRepo: LibraryRepository
 
     private val dispatchers =
         object : DispatcherProvider {
@@ -61,6 +63,7 @@ class CategoryFeedViewModelTest {
                 retryDelaysMs = emptyList(),
             )
         paperRepo = PaperRepository(client, db.paperDao())
+        libraryRepo = LibraryRepository(db.libraryDao(), db.inboxDao())
     }
 
     @After
@@ -74,6 +77,7 @@ class CategoryFeedViewModelTest {
         CategoryFeedViewModel(
             savedStateHandle = SavedStateHandle(mapOf("code" to "cs.LG", "title" to "Machine Learning")),
             paperRepository = paperRepo,
+            libraryRepository = libraryRepo,
         )
 
     @Test
@@ -96,5 +100,20 @@ class CategoryFeedViewModelTest {
 
             assertEquals(AppError.Upstream(404), state.error)
             assertTrue(state.papers.isEmpty())
+        }
+
+    @Test
+    fun `saveAll puts the feed's selected papers into the library`() =
+        runBlocking {
+            server.enqueue(MockResponse().setBody(fixtureXml()))
+            val model = vm()
+            val ids = model.uiState.first { it.papers.isNotEmpty() }.papers.map { it.id.value }
+
+            model.saveAll(ids)
+
+            assertEquals(
+                ids.toSet(),
+                libraryRepo.observeLibrary().first { it.size == ids.size }.map { it.paper.id.value }.toSet(),
+            )
         }
 }

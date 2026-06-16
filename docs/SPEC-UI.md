@@ -92,13 +92,26 @@ Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + li
 ## 4. Component conventions
 
 - `PaperListItem` is THE list cell, with slots for: score bar, provenance badge, swipe actions, selection state. One composable, parameterized — Today/Search/Library/Related all use it.
+- **Selection & swipe (Phase UX2):** multi-select is hoisted ephemeral UI state — `rememberSelectionState()` (a Saveable `SelectionState`, keyed by paper id) plus a shared `SelectionTopBar` (contextual action bar: tonal surface, "N selected", leading ✕, trailing bulk actions). Swipe lives in `SwipeablePaperRow`, a `PaperListItem` wrapper with per-direction opt-in (right = save, left = remove/dismiss) that is **inert while selection mode is on** so the gesture and long-press multi-select coexist. Every list screen composes these rather than re-implementing selection/swipe.
+- **Feedback (Phase UX2):** transient feedback is app-level, not per-screen. A single `FeedbackController` (`@Singleton` bus, reachable from any ViewModel or — via `LocalFeedbackController` — composable) feeds one `FeedbackHost` mounted at the app shell `Scaffold`. The host renders one message at a time as an **elevated, dismissible** snackbar (tonal+shadow elevation, rounded `shapes.small`, explicit "✕") with an optional **primary + secondary action** (e.g. *Undo* and *Add to collection*). Custom durations (M3 exposes only Short/Long/Indefinite) come from racing `withTimeoutOrNull` against the user's tap — action-bearing messages linger longer. Screens must not host their own `SnackbarHostState` for routine feedback.
 - All screens: ViewModel + immutable `UiState` data class + sealed `UiEvent`. No business logic in composables.
 - Loading: content-shaped skeletons for lists; never full-screen spinners after first frame.
 - Errors: inline retry affordances; rate-limit states are *informative*, not error-styled.
 - Previews: every screen gets `@Preview` light/dark with fixture data (fixtures shared with tests).
 
+## 4a. Background-task status (Phase UX2)
+
+A single `BackgroundTaskMonitor` (`@Singleton`) merges the model-downloaders' `ModelState` and
+WorkManager RUNNING state for follow-sync/embedding into one `Flow<List<BackgroundTask>>`. The
+`BackgroundTasksSheet` (opened from Settings → *Background activity*, and surfaced when long downloads
+run) shows each task with live progress and cancel/retry. Long downloads (the Gemma `.litertlm` and the
+bge model) additionally run as a **foreground service with a local progress notification** (UX2.8). All
+of this is **local-only** — it observes on-device state and posts an on-device notification; nothing is
+sent anywhere (no-telemetry red line). `POST_NOTIFICATIONS` is requested lazily on Android 13+, and a
+denial degrades gracefully (the download still runs; only the notification is suppressed).
+
 ## 5. Accessibility & quality bar
 
-- TalkBack labels on all actionables; swipe actions have accessible alternatives (overflow menu).
+- TalkBack labels on all actionables; **every** swipe action (all swipeable lists, not just Today) carries a `CustomAccessibilityAction` equivalent built per enabled direction (`SwipeablePaperRow`). Swipe is disabled in selection mode so it never competes with long-press multi-select.
 - Min text contrast AA; respects system font scale to 1.3× without truncation of titles (wrap, don't ellipsize, in detail views).
 - Baseline profile generated before release for startup performance (Phase 5).

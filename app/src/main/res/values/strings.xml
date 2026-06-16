@@ -147,10 +147,30 @@
 
     <string name="cd_send_to_claude">Send to Claude</string>
     <string name="cd_clear_selection">Clear selection</string>
+    <string name="cd_dismiss_feedback">Dismiss</string>
+    <string name="cd_add_to_organize">Add to collection or tag</string>
+    <string name="cd_save_selected">Save selected to library</string>
+
+    <plurals name="organize_title">
+        <item quantity="one">Add paper to…</item>
+        <item quantity="other">Add %1$d papers to…</item>
+    </plurals>
+    <string name="organize_new_tag">New tag</string>
+    <string name="organize_done">Done</string>
+    <string name="action_add_to_collection">Add to…</string>
+
+    <string name="bg_tasks_title">Background activity</string>
+    <string name="bg_tasks_empty">Nothing running right now.</string>
+    <string name="bg_task_gemma_download">Downloading on-device model</string>
+    <string name="bg_task_model_download">Downloading search model</string>
+    <string name="bg_task_follow_sync">Syncing your follows</string>
+    <string name="bg_task_embedding">Indexing your library</string>
+    <string name="bg_task_failed">Failed — tap retry</string>
+    <string name="settings_background_activity">Background activity</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
     <string name="cd_delete_routine">Delete routine %1$s</string>
-    <plurals name="library_selected_count">
+    <plurals name="selection_count">
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>
     </plurals>

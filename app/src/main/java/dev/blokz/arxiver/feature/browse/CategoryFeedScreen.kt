@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.feature.browse
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,6 +18,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -30,8 +34,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -39,9 +45,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.ui.components.ErrorState
-import dev.blokz.arxiver.ui.components.PaperListItem
+import dev.blokz.arxiver.ui.components.SelectionTopBar
 import dev.blokz.arxiver.ui.components.SkeletonList
 import dev.blokz.arxiver.ui.components.SkeletonPaperItem
+import dev.blokz.arxiver.ui.components.SwipeablePaperRow
+import dev.blokz.arxiver.ui.components.rememberSelectionState
+import dev.blokz.arxiver.ui.feedback.FeedbackAction
+import dev.blokz.arxiver.ui.feedback.FeedbackMessage
+import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
@@ -50,29 +61,74 @@ import kotlinx.coroutines.launch
 fun CategoryFeedScreen(
     onBack: () -> Unit,
     onPaperClick: (String) -> Unit,
+    onOpenRoutines: () -> Unit = {},
     viewModel: CategoryFeedViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val selection = rememberSelectionState()
+    val feedback = LocalFeedbackController.current
+    var organizeIds by remember { mutableStateOf<List<String>?>(null) }
+    var showDispatch by remember { mutableStateOf(false) }
+
+    BackHandler(enabled = selection.isActive) { selection.clear() }
+
+    val savedMessage = stringResource(R.string.today_snackbar_saved)
+    val addToLabel = stringResource(R.string.action_add_to_collection)
+    val saveOne: (String) -> Unit = { id ->
+        viewModel.save(id)
+        feedback.show(
+            FeedbackMessage(
+                text = savedMessage,
+                secondary = FeedbackAction(addToLabel) { organizeIds = listOf(id) },
+            ),
+        )
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(state.title, style = MaterialTheme.typography.titleLarge)
-                        Text(
-                            state.code,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+            if (selection.isActive) {
+                SelectionTopBar(count = selection.count, onClear = { selection.clear() }) {
+                    IconButton(onClick = { organizeIds = selection.selected.toList() }) {
+                        Icon(Icons.Filled.CreateNewFolder, stringResource(R.string.cd_add_to_organize))
                     }
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
+                    IconButton(
+                        onClick = {
+                            val ids = selection.selected.toList()
+                            viewModel.saveAll(ids)
+                            feedback.show(
+                                FeedbackMessage(
+                                    text = savedMessage,
+                                    secondary = FeedbackAction(addToLabel) { organizeIds = ids },
+                                ),
+                            )
+                            selection.clear()
+                        },
+                    ) {
+                        Icon(Icons.Filled.BookmarkAdd, stringResource(R.string.cd_save_selected))
                     }
-                },
-            )
+                    IconButton(onClick = { showDispatch = true }) {
+                        Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
+                    }
+                }
+            } else {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(state.title, style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                state.code,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         PullToRefreshBox(
@@ -87,16 +143,36 @@ fun CategoryFeedScreen(
                 state.loading && state.papers.isEmpty() -> LoadingState()
                 state.error != null && state.papers.isEmpty() ->
                     ErrorState(error = state.error, onRetry = viewModel::refresh)
-                else -> PaperList(state, onPaperClick, viewModel::loadMore)
+                else -> PaperList(state, selection, onPaperClick, saveOne, viewModel::loadMore)
             }
         }
+    }
+
+    organizeIds?.let { ids ->
+        dev.blokz.arxiver.feature.organize.OrganizeSheet(paperIds = ids, onDismiss = { organizeIds = null })
+    }
+
+    if (showDispatch) {
+        dev.blokz.arxiver.feature.claude.DispatchSheet(
+            paperIds = selection.selected.toList(),
+            onDismiss = {
+                showDispatch = false
+                selection.clear()
+            },
+            onGoToRoutines = {
+                showDispatch = false
+                onOpenRoutines()
+            },
+        )
     }
 }
 
 @Composable
 private fun PaperList(
     state: CategoryFeedUiState,
+    selection: dev.blokz.arxiver.ui.components.SelectionState,
     onPaperClick: (String) -> Unit,
+    onSave: (String) -> Unit,
     onLoadMore: () -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -107,9 +183,14 @@ private fun PaperList(
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             itemsIndexed(state.papers, key = { _, paper -> paper.id.value }) { index, paper ->
-                PaperListItem(
+                val id = paper.id.value
+                SwipeablePaperRow(
                     paper = paper,
-                    onClick = { onPaperClick(paper.id.value) },
+                    onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },
+                    onLongClick = { selection.toggle(id) },
+                    onSwipeSave = { onSave(id) },
+                    selectionMode = selection.isActive,
+                    selected = selection.contains(id),
                     showDivider = index != state.papers.lastIndex,
                 )
                 // Infinite scroll: kick off the next page as the tail approaches.
@@ -166,7 +247,9 @@ private fun CategoryFeedPreview() {
                     title = "Machine Learning",
                     papers = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.papers,
                 ),
+            selection = dev.blokz.arxiver.ui.components.SelectionState(),
             onPaperClick = {},
+            onSave = {},
             onLoadMore = {},
         )
     }
