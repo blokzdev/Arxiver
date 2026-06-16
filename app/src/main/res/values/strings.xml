@@ -151,7 +151,7 @@
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
     <string name="cd_delete_routine">Delete routine %1$s</string>
-    <plurals name="library_selected_count">
+    <plurals name="selection_count">
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>
     </plurals>

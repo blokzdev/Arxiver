@@ -2,7 +2,6 @@ package dev.blokz.arxiver.feature.library
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -10,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Folder
@@ -44,7 +43,6 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,7 +53,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -63,6 +60,9 @@ import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.PaperListItem
+import dev.blokz.arxiver.ui.components.SelectionState
+import dev.blokz.arxiver.ui.components.SelectionTopBar
+import dev.blokz.arxiver.ui.components.rememberSelectionState
 import dev.blokz.arxiver.ui.feedback.FeedbackAction
 import dev.blokz.arxiver.ui.feedback.FeedbackMessage
 import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
@@ -84,13 +84,13 @@ fun LibraryScreen(
     var tab by remember { mutableIntStateOf(0) }
     var menuOpen by remember { mutableStateOf(false) }
     var showNewCollection by remember { mutableStateOf(false) }
-    var selectedIds by remember { mutableStateOf(setOf<String>()) }
+    val selection = rememberSelectionState()
     var showDispatch by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val feedback = LocalFeedbackController.current
 
     // System back leaves selection mode before leaving the screen.
-    BackHandler(enabled = selectedIds.isNotEmpty()) { selectedIds = emptySet() }
+    BackHandler(enabled = selection.isActive) { selection.clear() }
 
     val deletedMessage = stringResource(R.string.library_collection_deleted, collectionDeleted?.name ?: "")
     val undoLabel = stringResource(R.string.action_undo)
@@ -118,70 +118,29 @@ fun LibraryScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                colors =
-                    if (selectedIds.isEmpty()) {
-                        TopAppBarDefaults.topAppBarColors()
-                    } else {
-                        TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        )
-                    },
-                title = {
-                    AnimatedContent(targetState = selectedIds.size, label = "selection-title") { count ->
-                        Text(
-                            if (count == 0) {
-                                stringResource(R.string.nav_library)
-                            } else {
-                                pluralStringResource(R.plurals.library_selected_count, count, count)
-                            },
-                        )
+            val overflow: @Composable RowScope.() -> Unit = {
+                LibraryOverflow(
+                    menuOpen = menuOpen,
+                    onMenuOpenChange = { menuOpen = it },
+                    onExportJson = viewModel::exportJson,
+                    onExportBibtex = viewModel::exportBibtex,
+                    onOpenRoutines = onOpenRoutines,
+                    onOpenHistory = onOpenHistory,
+                )
+            }
+            if (selection.isActive) {
+                SelectionTopBar(count = selection.count, onClear = { selection.clear() }) {
+                    IconButton(onClick = { showDispatch = true }) {
+                        Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
                     }
-                },
-                actions = {
-                    if (selectedIds.isNotEmpty()) {
-                        IconButton(onClick = { showDispatch = true }) {
-                            Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
-                        }
-                        IconButton(onClick = { selectedIds = emptySet() }) {
-                            Icon(Icons.Filled.Close, stringResource(R.string.cd_clear_selection))
-                        }
-                    }
-                    IconButton(onClick = { menuOpen = true }) {
-                        Icon(Icons.Filled.MoreVert, stringResource(R.string.cd_library_menu))
-                    }
-                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.library_export_json)) },
-                            onClick = {
-                                menuOpen = false
-                                viewModel.exportJson()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.library_export_bibtex)) },
-                            onClick = {
-                                menuOpen = false
-                                viewModel.exportBibtex()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.library_menu_routines)) },
-                            onClick = {
-                                menuOpen = false
-                                onOpenRoutines()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.library_menu_history)) },
-                            onClick = {
-                                menuOpen = false
-                                onOpenHistory()
-                            },
-                        )
-                    }
-                },
-            )
+                    overflow()
+                }
+            } else {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.nav_library)) },
+                    actions = overflow,
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -199,12 +158,9 @@ fun LibraryScreen(
                 0 ->
                     PapersTab(
                         state = state,
-                        selectedIds = selectedIds,
+                        selection = selection,
                         onFilter = viewModel::setStatusFilter,
                         onPaperClick = onPaperClick,
-                        onToggleSelect = { id ->
-                            selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id
-                        },
                     )
                 1 ->
                     CollectionsTab(
@@ -220,10 +176,10 @@ fun LibraryScreen(
 
     if (showDispatch) {
         dev.blokz.arxiver.feature.claude.DispatchSheet(
-            paperIds = selectedIds.toList(),
+            paperIds = selection.selected.toList(),
             onDismiss = {
                 showDispatch = false
-                selectedIds = emptySet()
+                selection.clear()
             },
             onGoToRoutines = {
                 showDispatch = false
@@ -246,10 +202,9 @@ fun LibraryScreen(
 @Composable
 private fun PapersTab(
     state: LibraryUiState,
-    selectedIds: Set<String>,
+    selection: SelectionState,
     onFilter: (String?) -> Unit,
     onPaperClick: (String) -> Unit,
-    onToggleSelect: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -288,18 +243,63 @@ private fun PapersTab(
                     PaperListItem(
                         paper = row.paper,
                         onClick = {
-                            if (selectedIds.isEmpty()) onPaperClick(id) else onToggleSelect(id)
+                            if (selection.isActive) selection.toggle(id) else onPaperClick(id)
                         },
-                        onLongClick = { onToggleSelect(id) },
+                        onLongClick = { selection.toggle(id) },
                         status = row.status,
                         rating = row.rating,
-                        selectionMode = selectedIds.isNotEmpty(),
-                        selected = id in selectedIds,
+                        selectionMode = selection.isActive,
+                        selected = selection.contains(id),
                         showDivider = index != state.papers.lastIndex,
                     )
                 }
             }
         }
+    }
+}
+
+/** The library overflow menu — identical in normal and selection modes. */
+@Composable
+private fun LibraryOverflow(
+    menuOpen: Boolean,
+    onMenuOpenChange: (Boolean) -> Unit,
+    onExportJson: () -> Unit,
+    onExportBibtex: () -> Unit,
+    onOpenRoutines: () -> Unit,
+    onOpenHistory: () -> Unit,
+) {
+    IconButton(onClick = { onMenuOpenChange(true) }) {
+        Icon(Icons.Filled.MoreVert, stringResource(R.string.cd_library_menu))
+    }
+    DropdownMenu(expanded = menuOpen, onDismissRequest = { onMenuOpenChange(false) }) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.library_export_json)) },
+            onClick = {
+                onMenuOpenChange(false)
+                onExportJson()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.library_export_bibtex)) },
+            onClick = {
+                onMenuOpenChange(false)
+                onExportBibtex()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.library_menu_routines)) },
+            onClick = {
+                onMenuOpenChange(false)
+                onOpenRoutines()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.library_menu_history)) },
+            onClick = {
+                onMenuOpenChange(false)
+                onOpenHistory()
+            },
+        )
     }
 }
 
@@ -435,10 +435,9 @@ private fun LibraryPapersPreview() {
     dev.blokz.arxiver.ui.theme.ArxiverTheme {
         PapersTab(
             state = LibraryUiState(papers = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.libraryPapers),
-            selectedIds = emptySet(),
+            selection = SelectionState(),
             onFilter = {},
             onPaperClick = {},
-            onToggleSelect = {},
         )
     }
 }
