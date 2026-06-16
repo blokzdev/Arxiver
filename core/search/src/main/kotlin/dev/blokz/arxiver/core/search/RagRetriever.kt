@@ -19,6 +19,8 @@ data class RetrievedChunk(
     val text: String,
     val score: Double,
     val provenance: Provenance,
+    /** Chunk source (`ChunkEmbeddingEntity.SOURCE_*`) — lets callers gate note-derived chunks. */
+    val sourceKind: String,
 )
 
 /** A scoped chunk with its decoded embedding (semantic leg input). */
@@ -27,6 +29,7 @@ data class ScopedChunk(
     val paperId: String,
     val text: String,
     val vector: FloatArray,
+    val sourceKind: String,
 )
 
 /** Paginated source of a scope's chunk vectors — a seam so the retriever is pure-testable. */
@@ -92,7 +95,14 @@ class RagRetriever(
             .take(k)
             .mapNotNull { hit ->
                 val chunk = hit.paperId.toLongOrNull()?.let(lookup::get) ?: return@mapNotNull null
-                RetrievedChunk(chunk.chunkId, chunk.paperId, chunk.text, hit.score, hit.provenance)
+                RetrievedChunk(
+                    chunk.chunkId,
+                    chunk.paperId,
+                    chunk.text,
+                    hit.score,
+                    hit.provenance,
+                    chunk.sourceKind,
+                )
             }
     }
 
@@ -115,7 +125,13 @@ class DaoChunkVectorSource(private val dao: ChunkEmbeddingDao) : ChunkVectorSour
                 is RetrievalScope.Collection -> dao.chunksForCollection(scope.collectionId, limit, offset)
             }
         return rows.map {
-            ScopedChunk(it.id, it.paperId, it.chunkText, PaperEmbeddingEntity.blobToFloats(it.vector))
+            ScopedChunk(
+                it.id,
+                it.paperId,
+                it.chunkText,
+                PaperEmbeddingEntity.blobToFloats(it.vector),
+                it.sourceKind,
+            )
         }
     }
 }

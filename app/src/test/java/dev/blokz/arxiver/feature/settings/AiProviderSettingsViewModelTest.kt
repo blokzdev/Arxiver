@@ -90,6 +90,13 @@ class AiProviderSettingsViewModelTest {
         override suspend fun setPreferredOnDeviceTier(tier: InferenceTier?) {
             preferred.value = tier
         }
+
+        val preferOnDevice = MutableStateFlow(false)
+        override val preferOnDeviceWhenReady: Flow<Boolean> = preferOnDevice
+
+        override suspend fun setPreferOnDeviceWhenReady(prefer: Boolean) {
+            preferOnDevice.value = prefer
+        }
     }
 
     private class FakeNano(var nanoStatus: NanoStatus = NanoStatus.UNAVAILABLE) : NanoAvailability {

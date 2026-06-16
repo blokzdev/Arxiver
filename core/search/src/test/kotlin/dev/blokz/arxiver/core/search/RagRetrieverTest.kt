@@ -11,7 +11,8 @@ class RagRetrieverTest {
         paperId: String,
         text: String,
         vector: FloatArray,
-    ) = ScopedChunk(id, paperId, text, vector)
+        sourceKind: String = "abstract",
+    ) = ScopedChunk(id, paperId, text, vector, sourceKind)
 
     private class FakeVectors(private val data: List<ScopedChunk>) : ChunkVectorSource {
         var lastScope: RetrievalScope? = null

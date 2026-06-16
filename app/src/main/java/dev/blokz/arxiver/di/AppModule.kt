@@ -328,6 +328,43 @@ object AppModule {
         )
 
     @Provides
+    fun chatDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.ChatDao = db.chatDao()
+
+    @Provides
+    @Singleton
+    fun providerResolver(
+        registry: dev.blokz.arxiver.core.ai.ProviderRegistry,
+        store: dev.blokz.arxiver.data.AiProviderStore,
+        gemmaEngine: dev.blokz.arxiver.core.ai.GemmaEngine,
+        nanoEngine: dev.blokz.arxiver.core.ai.NanoEngine,
+    ): dev.blokz.arxiver.core.ai.ProviderResolver =
+        dev.blokz.arxiver.core.ai.ProviderResolver(
+            registry = registry,
+            selected = { store.selectedAiProvider.first() },
+            preferOnDevice = { store.preferOnDeviceWhenReady.first() },
+            onDeviceReady = { gemmaEngine.isReady() || nanoEngine.isReady() },
+        )
+
+    @Provides
+    @Singleton
+    fun chatRepository(
+        chatDao: dev.blokz.arxiver.core.database.dao.ChatDao,
+        ragRetriever: dev.blokz.arxiver.core.search.RagRetriever,
+        providerResolver: dev.blokz.arxiver.core.ai.ProviderResolver,
+        embeddingService: dev.blokz.arxiver.core.ml.EmbeddingService,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.data.ChatRepository =
+        dev.blokz.arxiver.data.ChatRepository(
+            chatDao = chatDao,
+            ragRetriever = ragRetriever,
+            providerResolver = providerResolver,
+            assembler = dev.blokz.arxiver.chat.ChatContextAssembler(),
+            previewBuilder = dev.blokz.arxiver.chat.ChatPreviewBuilder(),
+            embedQuery = embeddingService::embedQuery,
+            dispatchers = dispatchers,
+        )
+
+    @Provides
     @Singleton
     fun pdfDownloader(
         httpClient: OkHttpClient,
