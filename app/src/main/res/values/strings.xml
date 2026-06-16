@@ -148,6 +148,8 @@
     <string name="cd_send_to_claude">Send to Claude</string>
     <string name="cd_clear_selection">Clear selection</string>
     <string name="cd_dismiss_feedback">Dismiss</string>
+    <string name="cd_add_to_organize">Add to collection or tag</string>
+    <string name="cd_save_selected">Save selected to library</string>
 
     <plurals name="organize_title">
         <item quantity="one">Add paper to…</item>

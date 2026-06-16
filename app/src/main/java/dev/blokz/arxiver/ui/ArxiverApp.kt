@@ -249,6 +249,7 @@ fun ArxiverApp(
                         onBack = { navController.popBackStack() },
                         onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                         onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
+                        onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                     )
                 }
 

@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.feature.library
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -8,6 +9,9 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -35,11 +39,15 @@ import dev.blokz.arxiver.data.LibraryPaper
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.ui.components.EmptyState
-import dev.blokz.arxiver.ui.components.PaperListItem
+import dev.blokz.arxiver.ui.components.SelectionState
+import dev.blokz.arxiver.ui.components.SelectionTopBar
 import dev.blokz.arxiver.ui.components.SkeletonList
+import dev.blokz.arxiver.ui.components.SwipeablePaperRow
+import dev.blokz.arxiver.ui.components.rememberSelectionState
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
@@ -47,7 +55,7 @@ class FilteredPapersViewModel
     @Inject
     constructor(
         savedStateHandle: SavedStateHandle,
-        libraryRepository: LibraryRepository,
+        private val libraryRepository: LibraryRepository,
     ) : ViewModel() {
         val title: String = savedStateHandle["title"] ?: ""
         private val mode: String = checkNotNull(savedStateHandle["mode"])
@@ -62,6 +70,20 @@ class FilteredPapersViewModel
                 "collection" -> libraryRepository.observeCollectionPapers(id)
                 else -> libraryRepository.observeTagPapers(id)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+        fun save(paperId: String) = viewModelScope.launch { libraryRepository.save(paperId) }
+
+        fun saveAll(ids: Collection<String>) = viewModelScope.launch { ids.forEach { libraryRepository.save(it) } }
+
+        /** Swipe-left/remove takes the paper out of *this* collection or tag, not the library. */
+        fun removeFromScope(paperId: String) =
+            viewModelScope.launch {
+                if (mode == "collection") {
+                    libraryRepository.removeFromCollection(id, paperId)
+                } else {
+                    libraryRepository.removeTag(paperId, id)
+                }
+            }
     }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -70,29 +92,49 @@ fun FilteredPapersScreen(
     onBack: () -> Unit,
     onPaperClick: (String) -> Unit,
     onOpenAiSettings: () -> Unit,
+    onOpenRoutines: () -> Unit = {},
     viewModel: FilteredPapersViewModel = hiltViewModel(),
 ) {
     val papers by viewModel.papers.collectAsState()
     val collectionId = viewModel.collectionId
     var showAsk by remember { mutableStateOf(false) }
+    var showOrganize by remember { mutableStateOf(false) }
+    var showDispatch by remember { mutableStateOf(false) }
+    val selection = rememberSelectionState()
+
+    BackHandler(enabled = selection.isActive) { selection.clear() }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(viewModel.title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
+            if (selection.isActive) {
+                SelectionTopBar(count = selection.count, onClear = { selection.clear() }) {
+                    IconButton(onClick = { showOrganize = true }) {
+                        Icon(Icons.Filled.CreateNewFolder, stringResource(R.string.cd_add_to_organize))
                     }
-                },
-                actions = {
-                    if (collectionId != null) {
-                        IconButton(onClick = { showAsk = true }) {
-                            Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_chat_collection))
+                    IconButton(onClick = { viewModel.saveAll(selection.selected) }) {
+                        Icon(Icons.Filled.BookmarkAdd, stringResource(R.string.cd_save_selected))
+                    }
+                    IconButton(onClick = { showDispatch = true }) {
+                        Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
+                    }
+                }
+            } else {
+                TopAppBar(
+                    title = { Text(viewModel.title) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
                         }
-                    }
-                },
-            )
+                    },
+                    actions = {
+                        if (collectionId != null) {
+                            IconButton(onClick = { showAsk = true }) {
+                                Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_chat_collection))
+                            }
+                        }
+                    },
+                )
+            }
         },
     ) { padding ->
         Box(
@@ -101,7 +143,13 @@ fun FilteredPapersScreen(
                     .fillMaxSize()
                     .padding(padding),
         ) {
-            FilteredPapersContent(rows = papers, onPaperClick = onPaperClick)
+            FilteredPapersContent(
+                rows = papers,
+                selection = selection,
+                onPaperClick = onPaperClick,
+                onSave = viewModel::save,
+                onRemove = viewModel::removeFromScope,
+            )
         }
     }
 
@@ -115,12 +163,39 @@ fun FilteredPapersScreen(
             },
         )
     }
+
+    if (showOrganize) {
+        dev.blokz.arxiver.feature.organize.OrganizeSheet(
+            paperIds = selection.selected.toList(),
+            onDismiss = {
+                showOrganize = false
+                selection.clear()
+            },
+        )
+    }
+
+    if (showDispatch) {
+        dev.blokz.arxiver.feature.claude.DispatchSheet(
+            paperIds = selection.selected.toList(),
+            onDismiss = {
+                showDispatch = false
+                selection.clear()
+            },
+            onGoToRoutines = {
+                showDispatch = false
+                onOpenRoutines()
+            },
+        )
+    }
 }
 
 @Composable
 private fun FilteredPapersContent(
     rows: List<LibraryPaper>?,
+    selection: SelectionState,
     onPaperClick: (String) -> Unit,
+    onSave: (String) -> Unit,
+    onRemove: (String) -> Unit,
 ) {
     when {
         rows == null -> SkeletonList()
@@ -133,9 +208,17 @@ private fun FilteredPapersContent(
         else ->
             LazyColumn(modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(rows, key = { _, row -> row.paper.id.value }) { index, row ->
-                    PaperListItem(
+                    val id = row.paper.id.value
+                    SwipeablePaperRow(
                         paper = row.paper,
-                        onClick = { onPaperClick(row.paper.id.value) },
+                        onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },
+                        onLongClick = { selection.toggle(id) },
+                        onSwipeSave = { onSave(id) },
+                        onSwipeDismiss = { onRemove(id) },
+                        status = row.status,
+                        rating = row.rating,
+                        selectionMode = selection.isActive,
+                        selected = selection.contains(id),
                         showDivider = index != rows.lastIndex,
                     )
                 }
@@ -148,7 +231,13 @@ private fun FilteredPapersContent(
 @Composable
 private fun FilteredPapersEmptyPreview() {
     dev.blokz.arxiver.ui.theme.ArxiverTheme {
-        FilteredPapersContent(rows = emptyList(), onPaperClick = {})
+        FilteredPapersContent(
+            rows = emptyList(),
+            selection = SelectionState(),
+            onPaperClick = {},
+            onSave = {},
+            onRemove = {},
+        )
     }
 }
 
@@ -159,7 +248,10 @@ private fun FilteredPapersListPreview() {
     dev.blokz.arxiver.ui.theme.ArxiverTheme {
         FilteredPapersContent(
             rows = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.libraryPapers,
+            selection = SelectionState(),
             onPaperClick = {},
+            onSave = {},
+            onRemove = {},
         )
     }
 }

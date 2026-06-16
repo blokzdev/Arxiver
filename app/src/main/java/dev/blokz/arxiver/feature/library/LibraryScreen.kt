@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Folder
@@ -86,6 +87,7 @@ fun LibraryScreen(
     var showNewCollection by remember { mutableStateOf(false) }
     val selection = rememberSelectionState()
     var showDispatch by remember { mutableStateOf(false) }
+    var showOrganize by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val feedback = LocalFeedbackController.current
 
@@ -130,6 +132,9 @@ fun LibraryScreen(
             }
             if (selection.isActive) {
                 SelectionTopBar(count = selection.count, onClear = { selection.clear() }) {
+                    IconButton(onClick = { showOrganize = true }) {
+                        Icon(Icons.Filled.CreateNewFolder, stringResource(R.string.cd_add_to_organize))
+                    }
                     IconButton(onClick = { showDispatch = true }) {
                         Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
                     }
@@ -184,6 +189,16 @@ fun LibraryScreen(
             onGoToRoutines = {
                 showDispatch = false
                 onOpenRoutines()
+            },
+        )
+    }
+
+    if (showOrganize) {
+        dev.blokz.arxiver.feature.organize.OrganizeSheet(
+            paperIds = selection.selected.toList(),
+            onDismiss = {
+                showOrganize = false
+                selection.clear()
             },
         )
     }
