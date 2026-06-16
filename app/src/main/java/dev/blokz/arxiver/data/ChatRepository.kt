@@ -180,6 +180,9 @@ class ChatRepository(
 
     fun observeMessages(sessionId: Long): Flow<List<ChatMessageEntity>> = chatDao.observeMessages(sessionId)
 
+    /** All sessions across scopes, most-recently-active first (chat-history list). */
+    fun observeAllSessions(): Flow<List<ChatSessionEntity>> = chatDao.observeAllSessions()
+
     suspend fun deleteSession(id: Long) = withContext(dispatchers.io) { chatDao.deleteSession(id) }
 
     /** Persist a partial/failed turn even if the surrounding coroutine is cancelled. */

@@ -236,7 +236,7 @@ fun PaperDetailScreen(
     if (showAsk) {
         state.paper?.let { paper ->
             AskSheet(
-                paperId = paper.id.value,
+                scope = dev.blokz.arxiver.core.search.RetrievalScope.Paper(paper.id.value),
                 onDismiss = { showAsk = false },
                 onConfigureProvider = {
                     showAsk = false

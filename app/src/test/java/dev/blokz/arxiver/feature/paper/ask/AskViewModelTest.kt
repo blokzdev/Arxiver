@@ -23,6 +23,7 @@ import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.core.search.ScopedChunk
 import dev.blokz.arxiver.data.ChatRepository
+import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -140,6 +141,9 @@ class AskViewModelTest {
                 list.filter { it.scope == scope && it.scopeId == scopeId }.sortedByDescending { it.lastMessageAt }
             }
 
+        override fun observeAllSessions(): Flow<List<ChatSessionEntity>> =
+            sessions.map { list -> list.sortedByDescending { it.lastMessageAt } }
+
         override suspend fun sessionById(id: Long): ChatSessionEntity? = sessions.value.firstOrNull { it.id == id }
 
         override suspend fun deleteSession(id: Long) {
@@ -172,6 +176,8 @@ class AskViewModelTest {
         keys: Set<ProviderId> = emptySet(),
         onDeviceReady: Boolean = false,
         embed: suspend (String) -> AppResult<FloatArray> = { AppResult.Success(FloatArray(384)) },
+        indexer: ScopeIndexer = ScopeIndexer {},
+        scope: RetrievalScope = RetrievalScope.Paper("2401.00001"),
     ): AskViewModel {
         val registry = ProviderRegistry(listOf(provider), FakeKeyStore(keys))
         val resolver = ProviderResolver(registry, { selected }, { false }, { onDeviceReady })
@@ -185,7 +191,7 @@ class AskViewModelTest {
                 embedQuery = embed,
                 dispatchers = TestDispatchers(dispatcher),
             )
-        return AskViewModel(repo).also { it.start("2401.00001") }
+        return AskViewModel(repo, indexer).also { it.start(scope) }
     }
 
     private fun onDeviceProvider(script: () -> Flow<ChatChunk>) =
@@ -280,6 +286,22 @@ class AskViewModelTest {
             assertEquals(AskRole.ASSISTANT, state.messages.last().role)
             assertTrue(state.messages.last().error)
             assertEquals(false, state.streaming)
+        }
+
+    @Test
+    fun `a collection scope ensures the collection is indexed on open`() =
+        runTest(dispatcher) {
+            val indexed = mutableListOf<RetrievalScope>()
+            vm(
+                onDeviceProvider { flowOf(ChatChunk.Done()) },
+                selected = ProviderId.ON_DEVICE,
+                onDeviceReady = true,
+                indexer = ScopeIndexer { indexed += it },
+                scope = RetrievalScope.Collection(7),
+            )
+            advanceUntilIdle()
+
+            assertEquals(listOf<RetrievalScope>(RetrievalScope.Collection(7)), indexed)
         }
 
     @Test

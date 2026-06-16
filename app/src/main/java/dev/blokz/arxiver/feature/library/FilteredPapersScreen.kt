@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -17,6 +18,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -26,8 +30,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.LibraryPaper
 import dev.blokz.arxiver.data.LibraryRepository
+import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.PaperListItem
 import dev.blokz.arxiver.ui.components.SkeletonList
@@ -47,6 +53,9 @@ class FilteredPapersViewModel
         private val mode: String = checkNotNull(savedStateHandle["mode"])
         private val id: Long = checkNotNull(savedStateHandle.get<String>("id")).toLong()
 
+        /** Non-null only for a collection — drives the "Chat with this collection" action. */
+        val collectionId: Long? = if (mode == "collection") id else null
+
         // null = still loading (flow hasn't emitted); empty list = genuinely empty.
         val papers: StateFlow<List<LibraryPaper>?> =
             when (mode) {
@@ -60,9 +69,12 @@ class FilteredPapersViewModel
 fun FilteredPapersScreen(
     onBack: () -> Unit,
     onPaperClick: (String) -> Unit,
+    onOpenAiSettings: () -> Unit,
     viewModel: FilteredPapersViewModel = hiltViewModel(),
 ) {
     val papers by viewModel.papers.collectAsState()
+    val collectionId = viewModel.collectionId
+    var showAsk by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -71,6 +83,13 @@ fun FilteredPapersScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
+                    }
+                },
+                actions = {
+                    if (collectionId != null) {
+                        IconButton(onClick = { showAsk = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_chat_collection))
+                        }
                     }
                 },
             )
@@ -84,6 +103,17 @@ fun FilteredPapersScreen(
         ) {
             FilteredPapersContent(rows = papers, onPaperClick = onPaperClick)
         }
+    }
+
+    if (showAsk && collectionId != null) {
+        AskSheet(
+            scope = RetrievalScope.Collection(collectionId),
+            onDismiss = { showAsk = false },
+            onConfigureProvider = {
+                showAsk = false
+                onOpenAiSettings()
+            },
+        )
     }
 }
 

@@ -55,4 +55,28 @@ class RagIndexer(
             chunkDao.insert(rows)
         }
     }
+
+    /**
+     * Ensure a collection's papers are chunk-embedded for KB chat (P2.4): indexes
+     * only papers missing current-model chunks (already-indexed papers — e.g. from
+     * the library backfill — are skipped, so this is cheap on a warm collection).
+     * Bounded per call; a very large collection finishes over subsequent opens.
+     */
+    suspend fun indexCollection(
+        collectionId: Long,
+        limit: Int = COLLECTION_BATCH,
+    ): AppResult<Unit> {
+        val pending = chunkDao.collectionPapersMissingChunks(collectionId, modelName, limit)
+        for (paperId in pending) {
+            when (val result = indexPaper(paperId)) {
+                is AppResult.Failure -> return result
+                is AppResult.Success -> Unit
+            }
+        }
+        return AppResult.Success(Unit)
+    }
+
+    companion object {
+        private const val COLLECTION_BATCH = 100
+    }
 }

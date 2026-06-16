@@ -147,6 +147,21 @@ class ChunkEmbeddingDaoTest {
         }
 
     @Test
+    fun `collectionPapersMissingChunks returns only un-indexed collection papers`() =
+        runTest {
+            seedPaper("p1")
+            seedPaper("p2")
+            val dao = db.chunkEmbeddingDao()
+            val collectionId = db.libraryDao().createCollection(CollectionEntity(name = "KB", createdAt = 0))
+            db.libraryDao().addToCollection(CollectionPaperCrossRef(collectionId, "p1", 0))
+            db.libraryDao().addToCollection(CollectionPaperCrossRef(collectionId, "p2", 0))
+            dao.insert(listOf(chunk("p1", "already indexed", 0)))
+
+            val missing = dao.collectionPapersMissingChunks(collectionId, model, limit = 10)
+            assertEquals(listOf("p2"), missing)
+        }
+
+    @Test
     fun `libraryPapersMissingChunks returns only un-indexed library papers`() =
         runTest {
             seedPaper("p1")

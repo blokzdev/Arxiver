@@ -5,6 +5,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.entity.CollectionEntity
+import dev.blokz.arxiver.core.database.entity.CollectionPaperCrossRef
 import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
@@ -94,6 +96,21 @@ class RagIndexerTest {
 
             indexer().indexPaper("p1")
             assertEquals(first, db.chunkEmbeddingDao().count())
+        }
+
+    @Test
+    fun `indexCollection indexes the collection's missing papers`() =
+        runTest {
+            seedPaper("p1")
+            seedPaper("p2")
+            val collectionId = db.libraryDao().createCollection(CollectionEntity(name = "KB", createdAt = 0))
+            db.libraryDao().addToCollection(CollectionPaperCrossRef(collectionId, "p1", 0))
+            db.libraryDao().addToCollection(CollectionPaperCrossRef(collectionId, "p2", 0))
+
+            indexer().indexCollection(collectionId)
+
+            assertTrue(db.chunkEmbeddingDao().chunksForPaper("p1", 100, 0).isNotEmpty())
+            assertTrue(db.chunkEmbeddingDao().chunksForPaper("p2", 100, 0).isNotEmpty())
         }
 
     @Test

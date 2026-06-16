@@ -99,6 +99,10 @@ embeddings API we depend on — retrieval never leaves the device, only generati
 - **stream**: persist the user turn, stream `AiProvider.chat`, persist the assistant turn with a
   `status` (`incomplete` while streaming → `complete` on done; `error` on `AiException`; cancellation
   leaves the partial `incomplete`).
+- **Scope** is uniform: per-paper Ask uses `RetrievalScope.Paper`; **collection (KB) chat** (P2.4)
+  uses `RetrievalScope.Collection` over the collection's papers' chunks, with **ensure-embedded on
+  open** (`RagIndexer.indexCollection` indexes only papers missing current-model chunks). Sessions
+  are listed/resumable via `ChatDao.observeAllSessions` (chat-history screen). No new hosts/schema.
 
 ## 7. Testing
 
