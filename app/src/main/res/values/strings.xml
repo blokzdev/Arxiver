@@ -148,6 +148,14 @@
     <string name="cd_send_to_claude">Send to Claude</string>
     <string name="cd_clear_selection">Clear selection</string>
     <string name="cd_dismiss_feedback">Dismiss</string>
+
+    <plurals name="organize_title">
+        <item quantity="one">Add paper to…</item>
+        <item quantity="other">Add %1$d papers to…</item>
+    </plurals>
+    <string name="organize_new_tag">New tag</string>
+    <string name="organize_done">Done</string>
+    <string name="action_add_to_collection">Add to…</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
     <string name="cd_delete_routine">Delete routine %1$s</string>

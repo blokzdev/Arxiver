@@ -35,6 +35,7 @@ import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.claude.RoutineAction
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.feature.claude.DispatchSheet
+import dev.blokz.arxiver.feature.organize.OrganizeSheet
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.SectionHeader
 import dev.blokz.arxiver.ui.components.SkeletonList
@@ -58,22 +59,31 @@ fun TodayScreen(
     val state by viewModel.uiState.collectAsState()
     val triageEvent by viewModel.triageEvent.collectAsState()
     var weeklyReviewIds by remember { mutableStateOf<List<String>?>(null) }
+    var organizeIds by remember { mutableStateOf<List<String>?>(null) }
     val scope = rememberCoroutineScope()
     val feedback = LocalFeedbackController.current
 
     // Every triage swipe gets an undo window (SPEC-UI §3), routed through the app-level feedback host.
+    // A save also offers a second step — file the paper into a collection/tag.
     val savedMessage = stringResource(R.string.today_snackbar_saved)
     val dismissedMessage = stringResource(R.string.today_snackbar_dismissed)
     val undoLabel = stringResource(R.string.action_undo)
+    val addToLabel = stringResource(R.string.action_add_to_collection)
     LaunchedEffect(triageEvent) {
         val event = triageEvent ?: return@LaunchedEffect
+        val saved = event.kind == TriageKind.SAVED
         feedback.show(
             FeedbackMessage(
-                text = if (event.kind == TriageKind.SAVED) savedMessage else dismissedMessage,
+                text = if (saved) savedMessage else dismissedMessage,
                 primary = FeedbackAction(undoLabel) { viewModel.undo(event) },
+                secondary = if (saved) FeedbackAction(addToLabel) { organizeIds = listOf(event.paperId) } else null,
             ),
         )
         viewModel.consumeTriageEvent()
+    }
+
+    organizeIds?.let { ids ->
+        OrganizeSheet(paperIds = ids, onDismiss = { organizeIds = null })
     }
 
     Scaffold(

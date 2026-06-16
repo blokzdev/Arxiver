@@ -7,3 +7,4 @@
 - [gh secret CRLF gotcha](gh-secret-crlf-gotcha.md) — set secrets byte-exact from Windows; a stray \r breaks base64 -d on runners
 - [Claude Routines UI contract](claude-routines-ui-contract.md) — observed routine-creation fields/triggers; connectors run without permission prompts
 - [Self-improvement routine state](self-improvement-routine-state.md) — live routine fires research payloads at cloud sessions; ledger of shipped augmentations
+- [Lint unused-resources gate](lint-unused-resources-gate.md) — `:app:lintDebug` fails on unused strings; add a strings.xml key only with its consumer

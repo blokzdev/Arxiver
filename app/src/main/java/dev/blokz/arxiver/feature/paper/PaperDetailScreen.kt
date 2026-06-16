@@ -79,6 +79,9 @@ import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.ScoreBar
 import dev.blokz.arxiver.ui.components.SkeletonLine
+import dev.blokz.arxiver.ui.feedback.FeedbackAction
+import dev.blokz.arxiver.ui.feedback.FeedbackMessage
+import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
 import dev.blokz.arxiver.ui.theme.ArxiverMotion
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
@@ -101,6 +104,10 @@ fun PaperDetailScreen(
 ) {
     var showDispatch by remember { mutableStateOf(false) }
     var showAsk by remember { mutableStateOf(false) }
+    var showOrganize by remember { mutableStateOf(false) }
+    val feedback = LocalFeedbackController.current
+    val savedMessage = stringResource(R.string.today_snackbar_saved)
+    val addToLabel = stringResource(R.string.action_add_to_collection)
     val state by viewModel.uiState.collectAsState()
     val entry by viewModel.entry.collectAsState()
     val notes by viewModel.notes.collectAsState()
@@ -151,8 +158,18 @@ fun PaperDetailScreen(
                         }
                         IconButton(
                             onClick = {
+                                val wasSaved = entry != null
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 viewModel.toggleSaved()
+                                // On a fresh save, offer the second step: file it into a collection/tag.
+                                if (!wasSaved) {
+                                    feedback.show(
+                                        FeedbackMessage(
+                                            text = savedMessage,
+                                            secondary = FeedbackAction(addToLabel) { showOrganize = true },
+                                        ),
+                                    )
+                                }
                             },
                         ) {
                             Crossfade(targetState = entry != null, label = "bookmark") { saved ->
@@ -242,6 +259,15 @@ fun PaperDetailScreen(
                     showAsk = false
                     onOpenAiSettings()
                 },
+            )
+        }
+    }
+
+    if (showOrganize) {
+        state.paper?.let { paper ->
+            dev.blokz.arxiver.feature.organize.OrganizeSheet(
+                paperIds = listOf(paper.id.value),
+                onDismiss = { showOrganize = false },
             )
         }
     }
