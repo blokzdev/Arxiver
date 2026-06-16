@@ -43,6 +43,7 @@ data class OnDeviceInfo(
     val gemmaState: ModelState,
     val nanoStatus: NanoStatus,
     val preferredTier: InferenceTier? = null,
+    val preferOnDeviceWhenReady: Boolean = false,
     val nanoDownload: NanoDownloadProgress? = null,
 )
 
@@ -89,8 +90,9 @@ class AiProviderSettingsViewModel
                 modelController.state,
                 capability,
                 store.preferredOnDeviceTier,
+                store.preferOnDeviceWhenReady,
                 nanoDownload,
-            ) { gemmaState, deviceCapability, preferred, download ->
+            ) { gemmaState, deviceCapability, preferred, preferOnDevice, download ->
                 deviceCapability?.let {
                     OnDeviceInfo(
                         recommendedTier = TierSelector.recommend(it),
@@ -99,6 +101,7 @@ class AiProviderSettingsViewModel
                         gemmaState = gemmaState,
                         nanoStatus = it.nanoStatus,
                         preferredTier = preferred,
+                        preferOnDeviceWhenReady = preferOnDevice,
                         nanoDownload = download,
                     )
                 }
@@ -158,6 +161,10 @@ class AiProviderSettingsViewModel
 
         fun setPreferredOnDeviceTier(tier: InferenceTier?) {
             viewModelScope.launch { store.setPreferredOnDeviceTier(tier) }
+        }
+
+        fun setPreferOnDeviceWhenReady(prefer: Boolean) {
+            viewModelScope.launch { store.setPreferOnDeviceWhenReady(prefer) }
         }
 
         fun downloadOnDeviceModel() = modelController.download()

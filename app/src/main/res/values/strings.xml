@@ -317,6 +317,30 @@
     <string name="ai_nano_unavailable">Not supported on this device.</string>
     <string name="ai_ondevice_prefer">Preferred engine</string>
     <string name="ai_prefer_auto">Auto</string>
+    <string name="ai_prefer_ondevice_when_ready">Prefer on-device when ready</string>
+    <string name="ai_prefer_ondevice_when_ready_hint">When on, chat runs on-device whenever a model is ready — nothing leaves your device, no cloud cost. When off, your selected provider is used.</string>
+
+    <!-- Ask this paper (P2.3) -->
+    <string name="cd_ask">Ask about this paper</string>
+    <string name="ask_title">Ask this paper</string>
+    <string name="ask_empty_hint">Ask anything about this paper. Answers are grounded in its abstract and your notes.</string>
+    <string name="ask_summarize">Summarize this paper</string>
+    <string name="ask_input_hint">Ask a question…</string>
+    <string name="ask_send">Send</string>
+    <string name="ask_stop">Stop</string>
+    <string name="ask_thinking">Thinking…</string>
+    <string name="ask_include_notes">Include my notes</string>
+    <string name="ask_include_notes_hint">Let the answer draw on your notes for this paper.</string>
+    <string name="ask_provider_cloud">Answered by %1$s — review what\'s sent before each cloud reply.</string>
+    <string name="ask_provider_ondevice">On-device — nothing leaves your device.</string>
+    <string name="ask_confirm_title">What leaves the device</string>
+    <string name="ask_confirm_send">Send</string>
+    <string name="ask_confirm_cancel">Cancel</string>
+    <string name="ask_not_configured">No AI provider is set up yet. Add a key or download an on-device model to ask questions.</string>
+    <string name="ask_configure_provider">Configure a provider</string>
+    <string name="ask_error_offline">Offline — try again when connected.</string>
+    <string name="ask_error_rate_limited">Rate limited — wait a moment and try again.</string>
+    <string name="ask_error_generic">Couldn\'t get an answer. Try again.</string>
 
     <string name="settings_about_section">About</string>
     <string name="settings_version">Arxiver %1$s</string>

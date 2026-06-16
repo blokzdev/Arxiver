@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -84,6 +85,7 @@ fun AiProviderSettingsScreen(
             onDeleteModel = viewModel::deleteOnDeviceModel,
             onDownloadNano = viewModel::downloadNano,
             onSetPreferredTier = viewModel::setPreferredOnDeviceTier,
+            onSetPreferOnDeviceWhenReady = viewModel::setPreferOnDeviceWhenReady,
         )
     }
 }
@@ -100,6 +102,7 @@ private fun AiProviderSettingsContent(
     onDeleteModel: () -> Unit,
     onDownloadNano: () -> Unit,
     onSetPreferredTier: (InferenceTier?) -> Unit,
+    onSetPreferOnDeviceWhenReady: (Boolean) -> Unit,
 ) {
     Column(
         modifier =
@@ -127,6 +130,7 @@ private fun AiProviderSettingsContent(
                 onDeleteModel = onDeleteModel,
                 onDownloadNano = onDownloadNano,
                 onSetPreferredTier = onSetPreferredTier,
+                onSetPreferOnDeviceWhenReady = onSetPreferOnDeviceWhenReady,
             )
         }
         Text(
@@ -150,6 +154,7 @@ private fun ProviderCard(
     onDeleteModel: () -> Unit,
     onDownloadNano: () -> Unit,
     onSetPreferredTier: (InferenceTier?) -> Unit,
+    onSetPreferOnDeviceWhenReady: (Boolean) -> Unit,
 ) {
     val onDevice = row.onDevice
     val usable = if (onDevice != null) onDevice.isUsable else row.configured
@@ -175,6 +180,7 @@ private fun ProviderCard(
                 onDeleteModel = onDeleteModel,
                 onDownloadNano = onDownloadNano,
                 onSetPreferredTier = onSetPreferredTier,
+                onSetPreferOnDeviceWhenReady = onSetPreferOnDeviceWhenReady,
             )
         } else {
             CloudKeySection(
@@ -249,6 +255,7 @@ private fun OnDeviceSection(
     onDeleteModel: () -> Unit,
     onDownloadNano: () -> Unit,
     onSetPreferredTier: (InferenceTier?) -> Unit,
+    onSetPreferOnDeviceWhenReady: (Boolean) -> Unit,
 ) {
     Text(
         stringResource(R.string.ai_ondevice_ram, info.totalRamMb),
@@ -321,6 +328,27 @@ private fun OnDeviceSection(
             PreferChip(R.string.ai_tier_nano, info.preferredTier == InferenceTier.NANO) {
                 onSetPreferredTier(InferenceTier.NANO)
             }
+        }
+    }
+
+    // Privacy/cost opt-in: prefer on-device over the selected cloud provider when ready.
+    if (info.gemmaState is ModelState.Ready || info.nanoStatus == NanoStatus.AVAILABLE) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.ai_prefer_ondevice_when_ready),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    stringResource(R.string.ai_prefer_ondevice_when_ready_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = info.preferOnDeviceWhenReady,
+                onCheckedChange = onSetPreferOnDeviceWhenReady,
+            )
         }
     }
 }
@@ -464,6 +492,7 @@ private fun AiProviderSettingsContentPreview() {
             onDeleteModel = {},
             onDownloadNano = {},
             onSetPreferredTier = {},
+            onSetPreferOnDeviceWhenReady = {},
         )
     }
 }

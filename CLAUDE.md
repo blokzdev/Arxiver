@@ -16,10 +16,11 @@ Every working session, and repeatedly within a session:
 4. **Implement** with tests per the spec's testing section.
 5. **Verify:** `./gradlew build` (compiles + unit tests + lint) must pass. Never commit red.
 6. **Record:** mark task `[x]`, update Decision log if decisions were made.
-7. **Commit & push:** one commit per task (or tight task cluster), descriptive message, push to the designated branch (`git push -u origin <branch>`; on network failure retry ×4 with 2/4/8/16s backoff).
-8. **Checkpoint gates:** at a phase CHECKPOINT, run the full phase verification listed in ROADMAP, fix anything failing, then check the checkpoint box in its own commit titled `checkpoint: phase N`.
-9. Tasks tagged `[needs-user]` (e.g. real routine token): ask the user, mark `[!] blocked` with reason if no answer, and continue with the next non-dependent task.
-10. **Device-bound work → `VERIFICATION.md`:** if a task's only remaining verification needs real hardware (signed-APK behavior, background workers, on-device ML, performance, TalkBack, PDF, live routine dispatch), the task can still go `[x]` on a green build — but add/refresh its concrete check in `VERIFICATION.md` (mirroring any `[needs-user/device]` ROADMAP item) in the same commit. When the user reports a device session, update the matching item's status and append a dated Verification-log row, again in the same commit.
+7. **Commit & push:** one commit per task (or tight task cluster), descriptive message, push to the subphase branch (`git push -u origin <branch>`; on network failure retry ×4 with 2/4/8/16s backoff).
+8. **Ship the PR (autonomous loop):** open a ready-for-review PR. **Once CI is green, merge it** (no waiting on the user), then return to step 1 — in plan mode, plan the next subphase/PR and present it for approval. The standing blocker is *plan approval*, not merge. **Bounce back to the user** (don't merge / don't push further) when: there are unresolved review comments, CI fails or is flaky again after a reasonable re-kick, or you're genuinely unsure of a fix. Keep the local `./gradlew build` green before pushing — CI is the merge gate, not a substitute for local verification.
+9. **Checkpoint gates:** at a phase CHECKPOINT, run the full phase verification listed in ROADMAP, fix anything failing, then check the checkpoint box in its own commit titled `checkpoint: phase N`.
+10. Tasks tagged `[needs-user]` (e.g. real routine token): ask the user, mark `[!] blocked` with reason if no answer, and continue with the next non-dependent task.
+11. **Device-bound work → `VERIFICATION.md`:** if a task's only remaining verification needs real hardware (signed-APK behavior, background workers, on-device ML, performance, TalkBack, PDF, live routine dispatch), the task can still go `[x]` on a green build — but add/refresh its concrete check in `VERIFICATION.md` (mirroring any `[needs-user/device]` ROADMAP item) in the same commit. When the user reports a device session, update the matching item's status and append a dated Verification-log row, again in the same commit.
 
 Rules: no `[x]` without green build · ROADMAP edits travel in the same commit as the work · device-only verification never blocks `[x]` but must be tracked in `VERIFICATION.md` · blocked ≠ stopped (find the next unblocked task) · when context is summarized mid-session, re-orient from step 1.
 
@@ -79,5 +80,5 @@ Code + tests written → spec honored (or spec updated deliberately) → `./grad
 
 ## Git
 
-- Branch: work happens on the session's designated branch; never push elsewhere without explicit permission. No PR creation unless the user asks.
+- Branch: one branch per subphase/PR, cut from latest `main`; never push to `main` directly. Open a ready-for-review PR per subphase and **self-merge once CI is green** (loop step 8); never force-push shared branches.
 - Commits: imperative subject, scope prefix when natural (`database:`, `search:`, `ci:`), body explains *why* when non-obvious.
