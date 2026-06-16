@@ -39,10 +39,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -67,6 +63,9 @@ import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.PaperListItem
+import dev.blokz.arxiver.ui.feedback.FeedbackAction
+import dev.blokz.arxiver.ui.feedback.FeedbackMessage
+import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.theme.Spacing
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,7 +87,7 @@ fun LibraryScreen(
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var showDispatch by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val snackbar = remember { SnackbarHostState() }
+    val feedback = LocalFeedbackController.current
 
     // System back leaves selection mode before leaving the screen.
     BackHandler(enabled = selectedIds.isNotEmpty()) { selectedIds = emptySet() }
@@ -97,13 +96,12 @@ fun LibraryScreen(
     val undoLabel = stringResource(R.string.action_undo)
     LaunchedEffect(collectionDeleted) {
         val event = collectionDeleted ?: return@LaunchedEffect
-        val result =
-            snackbar.showSnackbar(
-                message = deletedMessage,
-                actionLabel = undoLabel,
-                duration = SnackbarDuration.Short,
-            )
-        if (result == SnackbarResult.ActionPerformed) viewModel.undoDeleteCollection(event)
+        feedback.show(
+            FeedbackMessage(
+                text = deletedMessage,
+                primary = FeedbackAction(undoLabel) { viewModel.undoDeleteCollection(event) },
+            ),
+        )
         viewModel.consumeCollectionDeleted()
     }
 
@@ -119,7 +117,6 @@ fun LibraryScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 colors =

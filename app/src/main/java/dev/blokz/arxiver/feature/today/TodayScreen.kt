@@ -20,10 +20,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarDuration
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -57,6 +53,9 @@ import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.PaperListItem
 import dev.blokz.arxiver.ui.components.SectionHeader
 import dev.blokz.arxiver.ui.components.SkeletonList
+import dev.blokz.arxiver.ui.feedback.FeedbackAction
+import dev.blokz.arxiver.ui.feedback.FeedbackMessage
+import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
@@ -75,26 +74,24 @@ fun TodayScreen(
     val triageEvent by viewModel.triageEvent.collectAsState()
     var weeklyReviewIds by remember { mutableStateOf<List<String>?>(null) }
     val scope = rememberCoroutineScope()
-    val snackbar = remember { SnackbarHostState() }
+    val feedback = LocalFeedbackController.current
 
-    // Every triage swipe gets an undo window (SPEC-UI §3).
+    // Every triage swipe gets an undo window (SPEC-UI §3), routed through the app-level feedback host.
     val savedMessage = stringResource(R.string.today_snackbar_saved)
     val dismissedMessage = stringResource(R.string.today_snackbar_dismissed)
     val undoLabel = stringResource(R.string.action_undo)
     LaunchedEffect(triageEvent) {
         val event = triageEvent ?: return@LaunchedEffect
-        val result =
-            snackbar.showSnackbar(
-                message = if (event.kind == TriageKind.SAVED) savedMessage else dismissedMessage,
-                actionLabel = undoLabel,
-                duration = SnackbarDuration.Short,
-            )
-        if (result == SnackbarResult.ActionPerformed) viewModel.undo(event)
+        feedback.show(
+            FeedbackMessage(
+                text = if (event.kind == TriageKind.SAVED) savedMessage else dismissedMessage,
+                primary = FeedbackAction(undoLabel) { viewModel.undo(event) },
+            ),
+        )
         viewModel.consumeTriageEvent()
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.nav_today)) },

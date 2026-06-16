@@ -147,6 +147,7 @@
 
     <string name="cd_send_to_claude">Send to Claude</string>
     <string name="cd_clear_selection">Clear selection</string>
+    <string name="cd_dismiss_feedback">Dismiss</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
     <string name="cd_delete_routine">Delete routine %1$s</string>

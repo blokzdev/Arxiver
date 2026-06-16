@@ -92,6 +92,7 @@ Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + li
 ## 4. Component conventions
 
 - `PaperListItem` is THE list cell, with slots for: score bar, provenance badge, swipe actions, selection state. One composable, parameterized — Today/Search/Library/Related all use it.
+- **Feedback (Phase UX2):** transient feedback is app-level, not per-screen. A single `FeedbackController` (`@Singleton` bus, reachable from any ViewModel or — via `LocalFeedbackController` — composable) feeds one `FeedbackHost` mounted at the app shell `Scaffold`. The host renders one message at a time as an **elevated, dismissible** snackbar (tonal+shadow elevation, rounded `shapes.small`, explicit "✕") with an optional **primary + secondary action** (e.g. *Undo* and *Add to collection*). Custom durations (M3 exposes only Short/Long/Indefinite) come from racing `withTimeoutOrNull` against the user's tap — action-bearing messages linger longer. Screens must not host their own `SnackbarHostState` for routine feedback.
 - All screens: ViewModel + immutable `UiState` data class + sealed `UiEvent`. No business logic in composables.
 - Loading: content-shaped skeletons for lists; never full-screen spinners after first frame.
 - Errors: inline retry affordances; rate-limit states are *informative*, not error-styled.
