@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
@@ -74,6 +75,7 @@ import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.feature.claude.DispatchSheet
+import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.ScoreBar
 import dev.blokz.arxiver.ui.components.SkeletonLine
@@ -94,9 +96,11 @@ fun PaperDetailScreen(
     onPaperClick: (String) -> Unit,
     onOpenConnections: (String) -> Unit,
     onOpenRoutines: () -> Unit,
+    onOpenAiSettings: () -> Unit,
     viewModel: PaperDetailViewModel = hiltViewModel(),
 ) {
     var showDispatch by remember { mutableStateOf(false) }
+    var showAsk by remember { mutableStateOf(false) }
     val state by viewModel.uiState.collectAsState()
     val entry by viewModel.entry.collectAsState()
     val notes by viewModel.notes.collectAsState()
@@ -139,6 +143,9 @@ fun PaperDetailScreen(
                 },
                 actions = {
                     state.paper?.let { paper ->
+                        IconButton(onClick = { showAsk = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_ask))
+                        }
                         IconButton(onClick = { showDispatch = true }) {
                             Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
                         }
@@ -221,6 +228,19 @@ fun PaperDetailScreen(
                 onGoToRoutines = {
                     showDispatch = false
                     onOpenRoutines()
+                },
+            )
+        }
+    }
+
+    if (showAsk) {
+        state.paper?.let { paper ->
+            AskSheet(
+                paperId = paper.id.value,
+                onDismiss = { showAsk = false },
+                onConfigureProvider = {
+                    showAsk = false
+                    onOpenAiSettings()
                 },
             )
         }

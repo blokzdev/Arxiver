@@ -67,7 +67,9 @@ back to the UI.
   travels only in the HTTP header, so it is **structurally absent** from this body; note-derived
   chunks are gated by `includeNotes` in `ChatContextAssembler`, the same way dispatch gates notes.
   A golden test (`ChatPreviewBuilderTest`) asserts the body carries exactly the intended context
-  and no key / no gated note content.
+  and no key / no gated note content. The per-paper **Ask sheet** (P2.3) renders this preview as a
+  confirm before a cloud reply and streams on-device with no confirm; the **prefer-on-device**
+  toggle (Settings) is the opt-in that routes to on-device when ready.
 - No-telemetry red line holds. Allowed network hosts extend only to: `api.anthropic.com`,
   `generativelanguage.googleapis.com`, and the pinned Gemma 4 model download URL (in addition
   to the existing export.arxiv.org / api.semanticscholar.org / routine URLs / pinned bge URL).

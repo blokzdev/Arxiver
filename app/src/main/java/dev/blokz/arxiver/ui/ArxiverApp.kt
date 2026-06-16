@@ -246,6 +246,7 @@ fun ArxiverApp(
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                     onOpenConnections = { id -> navController.navigate(Routes.connections(id)) },
                     onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                    onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
                 )
             }
             composable(Routes.PDF_VIEWER) {

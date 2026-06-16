@@ -348,4 +348,19 @@ class AiProviderSettingsViewModelTest {
             assertEquals(InferenceTier.NANO, row(vm.uiState.value, ProviderId.ON_DEVICE).onDevice!!.preferredTier)
             job.cancel()
         }
+
+    @Test
+    fun `setting prefer-on-device-when-ready persists and surfaces in the row`() =
+        runBlocking {
+            probe.gemmaReady = true
+            modelController.state.value = ModelState.Ready(java.io.File("m.litertlm"))
+            val vm = vm()
+            val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
+
+            vm.setPreferOnDeviceWhenReady(true)
+
+            assertTrue(store.preferOnDevice.value)
+            assertTrue(row(vm.uiState.value, ProviderId.ON_DEVICE).onDevice!!.preferOnDeviceWhenReady)
+            job.cancel()
+        }
 }
