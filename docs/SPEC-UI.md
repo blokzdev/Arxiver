@@ -99,6 +99,17 @@ Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + li
 - Errors: inline retry affordances; rate-limit states are *informative*, not error-styled.
 - Previews: every screen gets `@Preview` light/dark with fixture data (fixtures shared with tests).
 
+## 4a. Background-task status (Phase UX2)
+
+A single `BackgroundTaskMonitor` (`@Singleton`) merges the model-downloaders' `ModelState` and
+WorkManager RUNNING state for follow-sync/embedding into one `Flow<List<BackgroundTask>>`. The
+`BackgroundTasksSheet` (opened from Settings → *Background activity*, and surfaced when long downloads
+run) shows each task with live progress and cancel/retry. Long downloads (the Gemma `.litertlm` and the
+bge model) additionally run as a **foreground service with a local progress notification** (UX2.8). All
+of this is **local-only** — it observes on-device state and posts an on-device notification; nothing is
+sent anywhere (no-telemetry red line). `POST_NOTIFICATIONS` is requested lazily on Android 13+, and a
+denial degrades gracefully (the download still runs; only the notification is suppressed).
+
 ## 5. Accessibility & quality bar
 
 - TalkBack labels on all actionables; **every** swipe action (all swipeable lists, not just Today) carries a `CustomAccessibilityAction` equivalent built per enabled direction (`SwipeablePaperRow`). Swipe is disabled in selection mode so it never competes with long-press multi-select.

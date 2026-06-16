@@ -123,6 +123,11 @@ class SyncScheduler
             )
         }
 
+        /** Cancel a unique work by name (background-tasks sheet). No-op if not running. */
+        fun cancelUnique(uniqueName: String) {
+            workManager.cancelUniqueWork(uniqueName)
+        }
+
         // RUNNING only — never ENQUEUED. A one-shot waiting on retry backoff (or the
         // always-ENQUEUED periodic worker) is not "syncing now", and surfacing those as a
         // spinner left it spinning forever (a failing follow keeps the one-shot enqueued).

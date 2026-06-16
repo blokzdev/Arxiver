@@ -158,6 +158,15 @@
     <string name="organize_new_tag">New tag</string>
     <string name="organize_done">Done</string>
     <string name="action_add_to_collection">Add to…</string>
+
+    <string name="bg_tasks_title">Background activity</string>
+    <string name="bg_tasks_empty">Nothing running right now.</string>
+    <string name="bg_task_gemma_download">Downloading on-device model</string>
+    <string name="bg_task_model_download">Downloading search model</string>
+    <string name="bg_task_follow_sync">Syncing your follows</string>
+    <string name="bg_task_embedding">Indexing your library</string>
+    <string name="bg_task_failed">Failed — tap retry</string>
+    <string name="settings_background_activity">Background activity</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
     <string name="cd_delete_routine">Delete routine %1$s</string>
