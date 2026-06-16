@@ -92,6 +92,7 @@ Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + li
 ## 4. Component conventions
 
 - `PaperListItem` is THE list cell, with slots for: score bar, provenance badge, swipe actions, selection state. One composable, parameterized — Today/Search/Library/Related all use it.
+- **Selection & swipe (Phase UX2):** multi-select is hoisted ephemeral UI state — `rememberSelectionState()` (a Saveable `SelectionState`, keyed by paper id) plus a shared `SelectionTopBar` (contextual action bar: tonal surface, "N selected", leading ✕, trailing bulk actions). Swipe lives in `SwipeablePaperRow`, a `PaperListItem` wrapper with per-direction opt-in (right = save, left = remove/dismiss) that is **inert while selection mode is on** so the gesture and long-press multi-select coexist. Every list screen composes these rather than re-implementing selection/swipe.
 - **Feedback (Phase UX2):** transient feedback is app-level, not per-screen. A single `FeedbackController` (`@Singleton` bus, reachable from any ViewModel or — via `LocalFeedbackController` — composable) feeds one `FeedbackHost` mounted at the app shell `Scaffold`. The host renders one message at a time as an **elevated, dismissible** snackbar (tonal+shadow elevation, rounded `shapes.small`, explicit "✕") with an optional **primary + secondary action** (e.g. *Undo* and *Add to collection*). Custom durations (M3 exposes only Short/Long/Indefinite) come from racing `withTimeoutOrNull` against the user's tap — action-bearing messages linger longer. Screens must not host their own `SnackbarHostState` for routine feedback.
 - All screens: ViewModel + immutable `UiState` data class + sealed `UiEvent`. No business logic in composables.
 - Loading: content-shaped skeletons for lists; never full-screen spinners after first frame.
@@ -100,6 +101,6 @@ Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + li
 
 ## 5. Accessibility & quality bar
 
-- TalkBack labels on all actionables; swipe actions have accessible alternatives (overflow menu).
+- TalkBack labels on all actionables; **every** swipe action (all swipeable lists, not just Today) carries a `CustomAccessibilityAction` equivalent built per enabled direction (`SwipeablePaperRow`). Swipe is disabled in selection mode so it never competes with long-press multi-select.
 - Min text contrast AA; respects system font scale to 1.3× without truncation of titles (wrap, don't ellipsize, in detail views).
 - Baseline profile generated before release for startup performance (Phase 5).

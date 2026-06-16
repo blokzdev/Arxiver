@@ -166,7 +166,7 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
 
 - [x] UX2.1 App-level feedback infra: `@Singleton FeedbackController` (SharedFlow bus, drop-oldest) + `LocalFeedbackController`; custom elevated dismissible `FeedbackHost` snackbar (primary+secondary action, custom duration via Indefinite+timeout race); single host wired at the `ArxiverApp` shell Scaffold; Today + Library migrated off their per-screen `SnackbarHostState`. Test: `FeedbackControllerTest`.
 - [x] UX2.2 Reusable selection mechanism: extract `rememberSelectionState` (Saveable) + `SelectionTopBar` from Library; Library re-expressed through them (behavior preserved; contextual bar now uses a leading ✕, generalized `selection_count` plural). Test: `SelectionStateTest`.
-- [ ] UX2.3 Reusable swipeable row: extract `SwipeablePaperRow` from Today (per-direction opt-in, TalkBack `CustomAccessibilityAction`, inert in selection mode); Today re-expressed through it.
+- [x] UX2.3 Reusable swipeable row: extract `SwipeablePaperRow` from Today (per-direction opt-in, TalkBack `CustomAccessibilityAction`, inert in selection mode, snap-back on action); Today re-expressed through it. Test: `SwipeablePaperRowTest` (pure a11y-action builder).
 - [ ] UX2.4 OrganizeSheet + single-paper integration: reusable collections+tags picker (tri-state, add-only, inline create); the "Added to library" feedback gains an "Add to collection/tag" secondary action. Test: `OrganizeViewModelTest` (load-bearing).
 - [ ] UX2.5 Bulk Organize + bulk Save on Library + FilteredPapers (multi-select bulk add-to-collection/tag — the #1 ask).
 - [ ] UX2.6 Multi-select + swipe on Search & CategoryFeed (inject `LibraryRepository` save paths). Tests: Search/CategoryFeed VM save paths.
