@@ -34,6 +34,7 @@ import androidx.navigation.navArgument
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.feature.browse.BrowseScreen
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
+import dev.blokz.arxiver.feature.chat.ChatHistoryScreen
 import dev.blokz.arxiver.feature.claude.DispatchHistoryScreen
 import dev.blokz.arxiver.feature.claude.RoutineSetupScreen
 import dev.blokz.arxiver.feature.claude.RoutinesScreen
@@ -71,6 +72,7 @@ object Routes {
     const val AI_SETTINGS = "settings/ai"
     const val ONBOARDING = "onboarding"
     const val DISPATCH_HISTORY = "claude/history"
+    const val CHAT_HISTORY = "chat/history"
     const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
 
     fun categoryFeed(
@@ -157,10 +159,17 @@ fun ArxiverApp(
                     onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
                     onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
                     onOpenAiProviders = { navController.navigate(Routes.AI_SETTINGS) },
+                    onOpenChatHistory = { navController.navigate(Routes.CHAT_HISTORY) },
                 )
             }
             composable(Routes.AI_SETTINGS) {
                 AiProviderSettingsScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Routes.CHAT_HISTORY) {
+                ChatHistoryScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
+                )
             }
             composable(
                 route = TopLevelDestination.Today.route,
@@ -230,6 +239,7 @@ fun ArxiverApp(
                 FilteredPapersScreen(
                     onBack = { navController.popBackStack() },
                     onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                    onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
                 )
             }
 

@@ -60,6 +60,24 @@ interface ChunkEmbeddingDao {
         limit: Int,
     ): List<String>
 
+    /** A collection's papers with no current-model chunk row yet (ensure-embedded on chat open). */
+    @Query(
+        """
+        SELECT cp.paper_id FROM collection_papers cp
+        WHERE cp.collection_id = :collectionId AND NOT EXISTS (
+            SELECT 1 FROM chunk_embeddings ce
+            WHERE ce.paper_id = cp.paper_id AND ce.model = :model
+        )
+        ORDER BY cp.added_at DESC
+        LIMIT :limit
+        """,
+    )
+    suspend fun collectionPapersMissingChunks(
+        collectionId: Long,
+        model: String,
+        limit: Int,
+    ): List<String>
+
     // --- scoped vector reads (semantic leg) ---
 
     @Query("SELECT * FROM chunk_embeddings WHERE paper_id = :paperId LIMIT :limit OFFSET :offset")

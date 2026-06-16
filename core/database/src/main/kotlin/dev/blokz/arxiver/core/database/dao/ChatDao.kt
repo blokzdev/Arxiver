@@ -48,6 +48,10 @@ interface ChatDao {
         scopeId: String,
     ): Flow<List<ChatSessionEntity>>
 
+    /** Every session across all scopes, most-recently-active first (chat-history list). */
+    @Query("SELECT * FROM chat_sessions ORDER BY last_message_at DESC")
+    fun observeAllSessions(): Flow<List<ChatSessionEntity>>
+
     @Query("SELECT * FROM chat_sessions WHERE id = :id")
     suspend fun sessionById(id: Long): ChatSessionEntity?
 

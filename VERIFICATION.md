@@ -106,8 +106,8 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 - [ ] **K4 Privacy preview fidelity** — before a **cloud** call the `ChatPreviewBuilder` "what leaves the device" confirm shows exactly the system instruction + messages (retrieved chunks folded in) that will be sent; **no provider key** (header-only), no gated note chunks (`includeNotes` off); on-device generation shows **no preview and emits no network traffic** (confirm in airplane mode). _(P2.2 builder / P2.3 sheet)_
 - [ ] **K5 Provider resolution + fallback** — the explicitly selected provider is used by default; turning on **prefer-on-device-when-ready** uses an on-device engine when ready; an unconfigured selection falls back (on-device first); no usable provider surfaces a clear "configure a provider" state (`NotConfigured`). _(P2.2)_
 - [ ] **K6 Summaries** — the `AskSheet` summarize chip returns a useful paper summary grounded in the abstract (and notes if included). _(P2.3)_
-- [ ] **K7 Collection (KB) chat** — chat scoped to a collection retrieves across its papers; adding/removing a paper changes what's retrievable. _(P2.4)_
-- [ ] **K8 Chat history persists** — sessions + turns survive app restart; per-paper and per-collection sessions resume. _(P2.4)_
+- [ ] **K7 Collection (KB) chat** — the collection screen's "Chat" action opens KB chat that retrieves across the collection's papers (ensure-embedded indexes missing papers on open, shown by the "Preparing this collection…" note); adding/removing a paper changes what's retrievable. _(P2.4)_
+- [ ] **K8 Chat history persists** — the Settings → "Chat history" list shows past sessions (paper title / collection name); sessions + turns survive app restart; tapping resumes the right conversation; delete removes it. _(P2.4)_
 
 ## H. Success criteria rollup _(PRD §7)_
 - [ ] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1).

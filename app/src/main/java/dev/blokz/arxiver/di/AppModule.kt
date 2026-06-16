@@ -332,6 +332,18 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun scopeIndexer(ragIndexer: dev.blokz.arxiver.rag.RagIndexer): dev.blokz.arxiver.rag.ScopeIndexer =
+        dev.blokz.arxiver.rag.ScopeIndexer { scope ->
+            when (scope) {
+                is dev.blokz.arxiver.core.search.RetrievalScope.Collection ->
+                    ragIndexer.indexCollection(scope.collectionId)
+                // Library papers are covered by the background backfill; ad-hoc paper indexing is backlog.
+                is dev.blokz.arxiver.core.search.RetrievalScope.Paper -> Unit
+            }
+        }
+
+    @Provides
+    @Singleton
     fun providerResolver(
         registry: dev.blokz.arxiver.core.ai.ProviderRegistry,
         store: dev.blokz.arxiver.data.AiProviderStore,

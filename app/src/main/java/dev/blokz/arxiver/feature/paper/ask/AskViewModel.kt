@@ -15,6 +15,7 @@ import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.ChatPrepareResult
 import dev.blokz.arxiver.data.ChatRepository
 import dev.blokz.arxiver.data.PreparedChat
+import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +41,8 @@ data class AskUiState(
     val messages: List<AskMessage> = emptyList(),
     val input: String = "",
     val includeNotes: Boolean = true,
+    /** True while the scope's papers are being chunk-embedded on open (collections). */
+    val indexing: Boolean = false,
     val preparing: Boolean = false,
     val streaming: Boolean = false,
     /** Non-null while a cloud call awaits the "what leaves the device" confirm. */
@@ -63,6 +66,7 @@ class AskViewModel
     @Inject
     constructor(
         private val chatRepository: ChatRepository,
+        private val scopeIndexer: ScopeIndexer,
     ) : ViewModel() {
         private lateinit var scope: RetrievalScope
         private var sessionId: Long? = null
@@ -72,14 +76,26 @@ class AskViewModel
         private val _uiState = MutableStateFlow(AskUiState())
         val uiState: StateFlow<AskUiState> = _uiState.asStateFlow()
 
-        /** Bind the sheet to a paper and hydrate its most recent session (if any). */
-        fun start(paperId: String) {
+        /**
+         * Bind the sheet to a [scope] (a paper or a collection). Hydrates [sessionId]'s
+         * turns when given (history resume), else the scope's most-recent session, and
+         * ensures the scope's papers are chunk-embedded in the background.
+         */
+        fun start(
+            scope: RetrievalScope,
+            sessionId: Long? = null,
+        ) {
             if (::scope.isInitialized) return
-            scope = RetrievalScope.Paper(paperId)
+            this.scope = scope
             viewModelScope.launch {
-                val session = chatRepository.observeSessions(scope).first().firstOrNull() ?: return@launch
-                sessionId = session.id
-                val history = chatRepository.observeMessages(session.id).first().map { it.toAskMessage() }
+                _uiState.update { it.copy(indexing = true) }
+                runCatching { scopeIndexer.ensureIndexed(scope) }
+                _uiState.update { it.copy(indexing = false) }
+            }
+            viewModelScope.launch {
+                val resume = sessionId ?: chatRepository.observeSessions(scope).first().firstOrNull()?.id
+                this@AskViewModel.sessionId = resume ?: return@launch
+                val history = chatRepository.observeMessages(resume).first().map { it.toAskMessage() }
                 _uiState.update { it.copy(messages = history) }
             }
         }

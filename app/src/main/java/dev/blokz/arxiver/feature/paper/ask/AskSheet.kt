@@ -40,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.chat.ChatPreview
 import dev.blokz.arxiver.core.ai.ProviderId
+import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 
@@ -51,13 +52,14 @@ import dev.blokz.arxiver.ui.theme.Spacing
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AskSheet(
-    paperId: String,
+    scope: RetrievalScope,
     onDismiss: () -> Unit,
     onConfigureProvider: () -> Unit,
+    sessionId: Long? = null,
     viewModel: AskViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
-    LaunchedEffect(paperId) { viewModel.start(paperId) }
+    LaunchedEffect(scope, sessionId) { viewModel.start(scope, sessionId) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         AskSheetContent(
@@ -98,6 +100,14 @@ private fun AskSheetContent(
         Text(stringResource(R.string.ask_title), style = MaterialTheme.typography.titleLarge)
 
         state.provider?.let { ProviderIndicator(it, state.isCloud) }
+
+        if (state.indexing) {
+            Text(
+                stringResource(R.string.ask_indexing_collection),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         if (state.messages.isEmpty() && !state.preparing) {
             Text(

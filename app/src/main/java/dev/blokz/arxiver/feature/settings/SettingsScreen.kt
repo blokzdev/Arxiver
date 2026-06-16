@@ -68,6 +68,7 @@ fun SettingsScreen(
     onOpenHistory: () -> Unit,
     onOpenTemplates: () -> Unit,
     onOpenAiProviders: () -> Unit,
+    onOpenChatHistory: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -147,6 +148,7 @@ fun SettingsScreen(
             onOpenTemplates = onOpenTemplates,
             onOpenHistory = onOpenHistory,
             onOpenAiProviders = onOpenAiProviders,
+            onOpenChatHistory = onOpenChatHistory,
         )
     }
 }
@@ -166,6 +168,7 @@ private fun SettingsContent(
     onOpenTemplates: () -> Unit,
     onOpenHistory: () -> Unit,
     onOpenAiProviders: () -> Unit,
+    onOpenChatHistory: () -> Unit,
 ) {
     Column(
         modifier =
@@ -257,6 +260,7 @@ private fun SettingsContent(
 
         SectionTitle(stringResource(R.string.settings_ai_section), icon = Icons.Outlined.SmartToy)
         SettingsLink(stringResource(R.string.settings_ai_providers_link), onOpenAiProviders)
+        SettingsLink(stringResource(R.string.settings_chat_history_link), onOpenChatHistory)
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -354,6 +358,7 @@ private fun SettingsContentPreview() {
             onOpenTemplates = {},
             onOpenHistory = {},
             onOpenAiProviders = {},
+            onOpenChatHistory = {},
         )
     }
 }

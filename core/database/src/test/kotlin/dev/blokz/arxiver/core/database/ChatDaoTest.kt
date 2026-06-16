@@ -72,6 +72,19 @@ class ChatDaoTest {
         }
 
     @Test
+    fun `observeAllSessions returns every scope, most-recent first`() =
+        runTest {
+            val dao = db.chatDao()
+            dao.insertSession(session(scope = ChatSessionEntity.SCOPE_PAPER, scopeId = "p1").copy(lastMessageAt = 10))
+            val newer = dao.insertSession(session(scope = ChatSessionEntity.SCOPE_COLLECTION, scopeId = "7"))
+            dao.touchSession(newer, 99)
+
+            val all = dao.observeAllSessions().first()
+            assertEquals(listOf(newer), all.take(1).map { it.id })
+            assertEquals(2, all.size)
+        }
+
+    @Test
     fun `deleting a session cascades to its messages`() =
         runTest {
             val dao = db.chatDao()
