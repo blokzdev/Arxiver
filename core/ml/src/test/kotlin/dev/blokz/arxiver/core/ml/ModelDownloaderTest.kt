@@ -104,6 +104,35 @@ class ModelDownloaderTest {
         }
 
     @Test
+    fun `download removes stale same-kind siblings but keeps other model kinds`() =
+        runTest {
+            // A superseded variant of the same kind, plus an unrelated embedding model, already on disk.
+            java.io.File(tmp.root, "gemma-old-web.litertlm").writeText("old variant")
+            java.io.File(tmp.root, "bge-small.onnx").writeText("keep me")
+            server.enqueue(MockResponse().setBody(okio.Buffer().write(payload)))
+            val downloader =
+                ModelDownloader(
+                    httpClient = OkHttpClient(),
+                    dispatchers = dispatchers,
+                    modelDir = tmp.root,
+                    spec =
+                        ModelDownloader.ModelSpec(
+                            fileName = "gemma-new.litertlm",
+                            url = server.url("/gemma-new.litertlm").toString(),
+                            sha256 = payloadSha,
+                            dimensions = 0,
+                            displayName = "gemma",
+                        ),
+                )
+
+            downloader.ensureDownloaded()
+
+            assertFalse(java.io.File(tmp.root, "gemma-old-web.litertlm").exists()) // stale .litertlm purged
+            assertTrue(java.io.File(tmp.root, "bge-small.onnx").exists()) // other extension untouched
+            assertTrue(java.io.File(tmp.root, "gemma-new.litertlm").exists()) // new model present
+        }
+
+    @Test
     fun `delete resets state`() =
         runTest {
             server.enqueue(MockResponse().setBody(okio.Buffer().write(payload)))

@@ -49,12 +49,19 @@ class GemmaEngine(
                 request.system
                     ?.let { ConversationConfig(systemInstruction = Contents.of(it)) }
                     ?: ConversationConfig()
+            var emittedAny = false
             activeEngine.createConversation(config).use { conversation ->
                 conversation.sendMessageAsync(promptOf(request)).collect { message ->
                     val text = message.text()
-                    if (text.isNotEmpty()) emit(ChatChunk.Delta(text))
+                    if (text.isNotEmpty()) {
+                        emittedAny = true
+                        emit(ChatChunk.Delta(text))
+                    }
                 }
             }
+            // A stream that produced zero tokens is a failure (e.g. a model with no usable decode
+            // graph for this backend) — surface it instead of completing with a silent blank answer.
+            if (!emittedAny) throw AiException(AppError.Unexpected())
             emit(ChatChunk.Done())
         }.catch { e ->
             throw if (e is AiException) e else AiException(AppError.Unexpected(e))
@@ -94,18 +101,21 @@ class GemmaEngine(
 
     companion object {
         /**
-         * Pinned model: the **text-only** Gemma 4 E2B `.litertlm` from the LiteRT
-         * community (Apache-2.0). ~1.87 GB download; Android runtime RAM ~1.4–1.7 GB.
-         * The variant is WebGPU-tuned — if it fails to load on Android CPU, the
-         * fallback is the standard `gemma-4-E2B-it.litertlm` (tracked in VERIFICATION.md).
+         * Pinned model: the **standard** (CPU/GPU) Gemma 4 E2B `.litertlm` from the LiteRT
+         * community (Apache-2.0), ~2.59 GB. The earlier `-web` variant is WebGPU-only — it ships
+         * a single `gpu_artisan` decoder with **no CPU `TF_LITE_PREFILL_DECODE` graph**, so on a
+         * CPU-backend device (e.g. Galaxy S20, NPU registration fails) it loads but generates zero
+         * tokens. This standard build carries the CPU prefill/decode graph (XNNPACK). Verified on
+         * device → VERIFICATION.md §J6/§K3. The model is never bundled — fetched on unmetered
+         * networks by the download worker and SHA-256-verified.
          */
         val SPEC =
             ModelDownloader.ModelSpec(
-                fileName = "gemma-4-E2B-it-web.litertlm",
+                fileName = "gemma-4-E2B-it.litertlm",
                 url =
                     "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/" +
-                        "resolve/main/gemma-4-E2B-it-web.litertlm",
-                sha256 = "3a08e8d94e23b814ae5414469c370c503813949acb8ceaa17e4ebf8a35af35b5",
+                        "resolve/main/gemma-4-E2B-it.litertlm",
+                sha256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c",
                 // dimensions is embedding-specific and unused for an LLM.
                 dimensions = 0,
                 displayName = "Gemma 4 E2B (on-device, text-only)",

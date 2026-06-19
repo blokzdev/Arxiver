@@ -27,10 +27,16 @@ class NanoEngine(
     override fun generate(request: ChatRequest): Flow<ChatChunk> =
         flow {
             val client = clientProvider()
+            var emittedAny = false
             client.generateContentStream(promptOf(request)).collect { response ->
                 val text = response.candidates.firstOrNull()?.text
-                if (!text.isNullOrEmpty()) emit(ChatChunk.Delta(text))
+                if (!text.isNullOrEmpty()) {
+                    emittedAny = true
+                    emit(ChatChunk.Delta(text))
+                }
             }
+            // Zero tokens is a failure, not a blank answer — surface it (see GemmaEngine).
+            if (!emittedAny) throw AiException(AppError.Unexpected())
             emit(ChatChunk.Done())
         }.catch { e ->
             throw if (e is AiException) e else AiException(AppError.Unexpected(e))
