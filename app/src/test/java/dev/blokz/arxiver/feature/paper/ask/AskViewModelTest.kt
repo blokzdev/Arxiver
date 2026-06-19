@@ -289,6 +289,27 @@ class AskViewModelTest {
         }
 
     @Test
+    fun `a provider that completes with no tokens surfaces an error, not a blank answer`() =
+        runTest(dispatcher) {
+            // Provider completes with zero deltas (the on-device-empty case).
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+            vm.setInput("q")
+            vm.send()
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertTrue(state.error != null, "empty completion must surface an error")
+            assertTrue(state.messages.last().error)
+            assertEquals("", state.messages.last().text)
+            assertEquals(false, state.streaming)
+        }
+
+    @Test
     fun `a collection scope ensures the collection is indexed on open`() =
         runTest(dispatcher) {
             val indexed = mutableListOf<RetrievalScope>()

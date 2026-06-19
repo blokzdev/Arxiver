@@ -70,6 +70,7 @@ class ModelDownloader(
             val tmp = File(modelDir, spec.fileName + ".part")
             runCatching {
                 modelDir.mkdirs()
+                deleteStaleSiblings()
                 _state.value = ModelState.Downloading(0)
                 val request = Request.Builder().url(spec.url).build()
                 httpClient.newCall(request).execute().use { response ->
@@ -112,6 +113,21 @@ class ModelDownloader(
     fun delete() {
         modelFile.delete()
         _state.value = ModelState.NotDownloaded
+    }
+
+    /**
+     * Remove other files of the same kind left by a previous spec (e.g. a superseded model variant)
+     * so a model swap doesn't strand gigabytes on disk. Scoped to the spec's file extension, so
+     * downloaders sharing [modelDir] (the embedding `.onnx` vs an LLM `.litertlm`) never delete each
+     * other's files.
+     */
+    private fun deleteStaleSiblings() {
+        val ext = spec.fileName.substringAfterLast('.', "")
+        if (ext.isEmpty()) return
+        val keep = setOf(spec.fileName, spec.fileName + ".part")
+        modelDir.listFiles()
+            ?.filter { it.isFile && it.name.endsWith(".$ext") && it.name !in keep }
+            ?.forEach { it.delete() }
     }
 
     private fun fail(error: AppError): AppResult<File> {

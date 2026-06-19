@@ -177,7 +177,16 @@ class AskViewModel
                                     answer.append(chunk.text)
                                     updateAssistant(answer.toString(), streaming = true)
                                 }
-                                is ChatChunk.Done -> updateAssistant(answer.toString(), streaming = false)
+                                is ChatChunk.Done ->
+                                    if (answer.isBlank()) {
+                                        // A provider that completed without producing any text is a
+                                        // failure, not a blank answer (on-device engines now throw, but
+                                        // guard cloud providers too) — show the error, not an empty bubble.
+                                        updateAssistant(answer.toString(), streaming = false, error = true)
+                                        _uiState.update { it.copy(error = R.string.ask_error_generic) }
+                                    } else {
+                                        updateAssistant(answer.toString(), streaming = false)
+                                    }
                             }
                         }
                     } catch (e: AiException) {
