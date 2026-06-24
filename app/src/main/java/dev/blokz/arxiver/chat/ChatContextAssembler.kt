@@ -39,9 +39,12 @@ class ChatContextAssembler(
     ): AssembledChat {
         val gated = if (includeNotes) chunks else chunks.filter { it.sourceKind != ChunkEmbeddingEntity.SOURCE_NOTE }
 
+        // Cloud models also get a LaTeX-math invitation; small on-device models stay plain.
+        val system = if (capability.onDevice) SYSTEM_PROMPT else SYSTEM_PROMPT + CLOUD_RICH_ADDENDUM
+
         var budget =
             capability.contextTokens - maxOutputTokens - safetyMarginTokens -
-                estTokens(SYSTEM_PROMPT) - estTokens(question)
+                estTokens(system) - estTokens(question)
 
         // Highest-scored chunks first, keep those that fit.
         val keptChunks = mutableListOf<RetrievedChunk>()
@@ -66,7 +69,7 @@ class ChatContextAssembler(
                 ChatMessage(ChatRole.USER, userTurn(question, keptChunks))
 
         return AssembledChat(
-            request = ChatRequest(messages = messages, system = SYSTEM_PROMPT, maxTokens = maxOutputTokens),
+            request = ChatRequest(messages = messages, system = system, maxTokens = maxOutputTokens),
             citedChunks = keptChunks,
         )
     }
@@ -103,5 +106,13 @@ class ChatContextAssembler(
                 "Format your answer in Markdown — use headings, bullet or numbered lists, **bold** " +
                 "for key terms, fenced code for code, and a Markdown table when comparing things — " +
                 "whenever it makes the answer clearer."
+
+        /**
+         * Appended for cloud models (small on-device models emit structured output
+         * unreliably): invite LaTeX math, which the app renders with KaTeX (P-Rich R1).
+         */
+        const val CLOUD_RICH_ADDENDUM =
+            " Use LaTeX for mathematics — inline as ${'$'}…${'$'} and display equations as " +
+                "${'$'}${'$'}…${'$'}${'$'} — when it clarifies the answer."
     }
 }
