@@ -116,10 +116,13 @@ class AskViewModel
             ask(question)
         }
 
-        fun summarize() {
+        /** Run a one-tap preset (P-Rich R3c) — its instruction is sent as the question. */
+        fun runPreset(instruction: String) {
             if (_uiState.value.streaming || _uiState.value.preparing) return
-            ask(SUMMARIZE_PROMPT)
+            ask(instruction)
         }
+
+        fun summarize() = runPreset(SUMMARIZE_PROMPT)
 
         fun confirmSend() {
             val prepared = pendingPrepared ?: return
