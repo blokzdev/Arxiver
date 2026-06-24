@@ -20,6 +20,7 @@ retrofit = "2.11.0"
 okhttp = "4.12.0"
 timber = "5.0.1"
 litertlm = "0.13.1"
+commonmark = "0.24.0"
 
 junit = "4.13.2"
 kotlinTest = "2.1.21"
@@ -71,6 +72,8 @@ okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver",
 timber = { group = "com.jakewharton.timber", name = "timber", version.ref = "timber" }
 onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version = "1.22.0" }
 litertlm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }
+commonmark = { group = "org.commonmark", name = "commonmark", version.ref = "commonmark" }
+commonmark-gfm-tables = { group = "org.commonmark", name = "commonmark-ext-gfm-tables", version.ref = "commonmark" }
 mlkit-genai-prompt = { group = "com.google.mlkit", name = "genai-prompt", version = "1.0.0-beta2" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }

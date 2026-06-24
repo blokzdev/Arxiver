@@ -28,6 +28,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
+/** A cited source backing an answer's `[index]` reference (P-Rich R0 — render-only). */
+data class Citation(val index: Int, val paperId: String, val excerpt: String)
+
 /** A resolved, ready-to-stream chat turn (everything embedded/retrieved/assembled). */
 data class PreparedChat(
     val scope: RetrievalScope,
@@ -38,6 +41,8 @@ data class PreparedChat(
     /** Cloud providers require a "what leaves the device" confirm; on-device sends nothing. */
     val isCloud: Boolean,
     val preview: ChatPreview,
+    /** The chunks cited as `[1..n]` in [request], so the UI can link `[n]` to its source. */
+    val citations: List<Citation>,
     internal val provider: AiProvider,
 )
 
@@ -97,17 +102,19 @@ class ChatRepository(
                     ?.map { ChatTurn(it.role.toRole(), it.content) }
                     .orEmpty()
 
-            val request = assembler.assemble(question, chunks, history, includeNotes, provider.capability)
+            val assembled = assembler.assemble(question, chunks, history, includeNotes, provider.capability)
+            val citations = assembled.citedChunks.mapIndexed { i, c -> Citation(i + 1, c.paperId, c.text) }
 
             ChatPrepareResult.Ready(
                 PreparedChat(
                     scope = scope,
                     sessionId = sessionId,
                     question = question,
-                    request = request,
+                    request = assembled.request,
                     providerId = provider.id,
                     isCloud = provider.capability.requiresKey,
-                    preview = previewBuilder.build(request),
+                    preview = previewBuilder.build(assembled.request),
+                    citations = citations,
                     provider = provider,
                 ),
             )

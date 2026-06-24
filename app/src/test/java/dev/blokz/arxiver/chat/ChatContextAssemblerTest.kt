@@ -32,7 +32,7 @@ class ChatContextAssemblerTest {
                 history = emptyList(),
                 includeNotes = true,
                 capability = cap(),
-            )
+            ).request
 
         assertEquals(ChatContextAssembler.SYSTEM_PROMPT, request.system)
         val last = request.messages.last()
@@ -49,10 +49,10 @@ class ChatContextAssemblerTest {
                 chunk(2, "Private note text.", 0.8, ChunkEmbeddingEntity.SOURCE_NOTE),
             )
 
-        val withNotes = assembler.assemble("q", chunks, emptyList(), includeNotes = true, capability = cap())
+        val withNotes = assembler.assemble("q", chunks, emptyList(), includeNotes = true, capability = cap()).request
         assertTrue(withNotes.messages.last().content.contains("Private note text."))
 
-        val without = assembler.assemble("q", chunks, emptyList(), includeNotes = false, capability = cap())
+        val without = assembler.assemble("q", chunks, emptyList(), includeNotes = false, capability = cap()).request
         assertFalse(without.messages.last().content.contains("Private note text."))
         assertTrue(without.messages.last().content.contains("Abstract sentence."))
     }
@@ -70,7 +70,7 @@ class ChatContextAssemblerTest {
                     ),
                 includeNotes = true,
                 capability = cap(),
-            )
+            ).request
 
         assertEquals(3, request.messages.size)
         assertEquals("first question", request.messages[0].content)
@@ -91,11 +91,21 @@ class ChatContextAssemblerTest {
                 emptyList(),
                 includeNotes = true,
                 capability = cap(contextTokens = systemTokens + 21),
-            )
+            ).request
 
         val content = request.messages.last().content
         assertTrue(content.contains("high-scored-chunk-body"), "keeps the higher-scored chunk")
         assertFalse(content.contains("low-scored-chunk-body"), "drops the lower-scored chunk")
         assertTrue(content.contains("Question: q"))
+    }
+
+    @Test
+    fun `cited chunks are returned in citation order (highest score first)`() {
+        // [n] order = the order chunks are labeled in the user turn = highest-scored first.
+        val chunks = listOf(chunk(1, "Alpha.", 0.4), chunk(2, "Beta.", 0.9))
+        val assembled = assembler.assemble("q", chunks, emptyList(), includeNotes = true, capability = cap())
+
+        assertEquals(listOf("2401.00002", "2401.00001"), assembled.citedChunks.map { it.paperId })
+        assertEquals("Beta.", assembled.citedChunks.first().text)
     }
 }

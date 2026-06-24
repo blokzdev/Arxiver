@@ -119,6 +119,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.timber)
+    // Markdown parsing for rich AI output (P-Rich): pure-JVM, offline, no Android/Compose coupling.
+    implementation(libs.commonmark)
+    implementation(libs.commonmark.gfm.tables)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
