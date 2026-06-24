@@ -337,8 +337,11 @@ object AppModule {
             when (scope) {
                 is dev.blokz.arxiver.core.search.RetrievalScope.Collection ->
                     ragIndexer.indexCollection(scope.collectionId)
-                // Library papers are covered by the background backfill; ad-hoc paper indexing is backlog.
-                is dev.blokz.arxiver.core.search.RetrievalScope.Paper -> Unit
+                // Index the paper's abstract on open so per-paper Ask is grounded even for
+                // inbox papers the library backfill never reaches (the sheet promises
+                // "grounded in its abstract"). Already-embedded papers no-op via the model guard.
+                is dev.blokz.arxiver.core.search.RetrievalScope.Paper ->
+                    ragIndexer.indexPaper(scope.paperId)
             }
         }
 

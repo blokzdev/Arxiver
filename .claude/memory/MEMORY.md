@@ -8,3 +8,4 @@
 - [Claude Routines UI contract](claude-routines-ui-contract.md) — observed routine-creation fields/triggers; connectors run without permission prompts
 - [Self-improvement routine state](self-improvement-routine-state.md) — live routine fires research payloads at cloud sessions; ledger of shipped augmentations
 - [Lint unused-resources gate](lint-unused-resources-gate.md) — `:app:lintDebug` fails on unused strings; add a strings.xml key only with its consumer
+- [Local build JDK 17](local-build-jdk17.md) — build locally on JDK 17 (CI's JVM); JDK 21 causes a Windows daemon file-lock + a coroutine-test flake
