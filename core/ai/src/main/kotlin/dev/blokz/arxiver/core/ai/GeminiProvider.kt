@@ -154,8 +154,13 @@ class GeminiProvider(
     companion object {
         const val DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
-        /** Pinned model id (SPEC-AI-PROVIDERS §8 — model selection is a later enhancement). */
-        const val DEFAULT_MODEL = "gemini-2.0-flash"
+        /**
+         * Pinned model id (SPEC-AI-PROVIDERS §8 — model selection is a later enhancement).
+         * Google retires older Gemini models: `gemini-2.0-flash` began returning HTTP 404
+         * ("no longer available"), which surfaced as a generic connection error. Keep this
+         * on a current model and revisit when Google deprecates it.
+         */
+        const val DEFAULT_MODEL = "gemini-2.5-flash"
 
         /** Gemini's input window; used for tier/UI gating, not request-shaping. */
         private const val CONTEXT_TOKENS = 1_000_000

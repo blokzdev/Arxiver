@@ -38,7 +38,8 @@ class ChatPreviewBuilderTest {
                 chunk(1, "PUBLIC_ABSTRACT_SENTENCE", ChunkEmbeddingEntity.SOURCE_ABSTRACT),
                 chunk(2, "SECRET_NOTE_SENTENCE", ChunkEmbeddingEntity.SOURCE_NOTE),
             )
-        val request = assembler.assemble("MY_QUESTION", chunks, emptyList(), includeNotes = false, capability = cap())
+        val request =
+            assembler.assemble("MY_QUESTION", chunks, emptyList(), includeNotes = false, capability = cap()).request
 
         val preview = builder.build(request)
 
@@ -52,7 +53,7 @@ class ChatPreviewBuilderTest {
     @Test
     fun `included notes appear when the user opts in`() {
         val chunks = listOf(chunk(2, "OPTED_IN_NOTE", ChunkEmbeddingEntity.SOURCE_NOTE))
-        val request = assembler.assemble("q", chunks, emptyList(), includeNotes = true, capability = cap())
+        val request = assembler.assemble("q", chunks, emptyList(), includeNotes = true, capability = cap()).request
 
         assertTrue(builder.build(request).json.contains("OPTED_IN_NOTE"))
     }

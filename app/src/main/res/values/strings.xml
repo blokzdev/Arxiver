@@ -372,6 +372,7 @@
     <string name="ask_send">Send</string>
     <string name="ask_stop">Stop</string>
     <string name="ask_thinking">Thinking…</string>
+    <string name="ask_sources">Sources · %1$d</string>
     <string name="ask_include_notes">Include my notes</string>
     <string name="ask_include_notes_hint">Let the answer draw on your notes for this paper.</string>
     <string name="ask_provider_cloud">Answered by %1$s — review what\'s sent before each cloud reply.</string>

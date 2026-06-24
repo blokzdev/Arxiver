@@ -14,6 +14,7 @@ import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.ChatPrepareResult
 import dev.blokz.arxiver.data.ChatRepository
+import dev.blokz.arxiver.data.Citation
 import dev.blokz.arxiver.data.PreparedChat
 import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.Job
@@ -35,6 +36,8 @@ data class AskMessage(
     val text: String,
     val streaming: Boolean = false,
     val error: Boolean = false,
+    /** Sources cited as `[1..n]` in this (assistant) answer, for tappable citations. */
+    val citations: List<Citation> = emptyList(),
 )
 
 data class AskUiState(
@@ -169,7 +172,7 @@ class AskViewModel
                     messages =
                         it.messages +
                             AskMessage(AskRole.USER, prepared.question) +
-                            AskMessage(AskRole.ASSISTANT, "", streaming = true),
+                            AskMessage(AskRole.ASSISTANT, "", streaming = true, citations = prepared.citations),
                 )
             }
             streamJob =

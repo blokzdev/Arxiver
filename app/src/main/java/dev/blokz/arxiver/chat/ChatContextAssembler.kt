@@ -11,6 +11,12 @@ import dev.blokz.arxiver.core.search.RetrievedChunk
 data class ChatTurn(val role: ChatRole, val content: String)
 
 /**
+ * The assembled request plus the chunks actually cited in it, in `[1..n]` order (the
+ * subset that fit the budget) — so the UI can map an answer's `[n]` to its source.
+ */
+data class AssembledChat(val request: ChatRequest, val citedChunks: List<RetrievedChunk>)
+
+/**
  * Builds a provider-neutral [ChatRequest] for a grounded answer (SPEC-AI-PROVIDERS
  * chat orchestration). Folds retrieved chunks into the final user turn as a labeled,
  * citable context block, prepends prior turns, and fits everything inside the
@@ -30,7 +36,7 @@ class ChatContextAssembler(
         history: List<ChatTurn>,
         includeNotes: Boolean,
         capability: ProviderCapability,
-    ): ChatRequest {
+    ): AssembledChat {
         val gated = if (includeNotes) chunks else chunks.filter { it.sourceKind != ChunkEmbeddingEntity.SOURCE_NOTE }
 
         var budget =
@@ -59,7 +65,10 @@ class ChatContextAssembler(
             keptHistory.map { ChatMessage(it.role, it.content) } +
                 ChatMessage(ChatRole.USER, userTurn(question, keptChunks))
 
-        return ChatRequest(messages = messages, system = SYSTEM_PROMPT, maxTokens = maxOutputTokens)
+        return AssembledChat(
+            request = ChatRequest(messages = messages, system = SYSTEM_PROMPT, maxTokens = maxOutputTokens),
+            citedChunks = keptChunks,
+        )
     }
 
     private fun userTurn(
@@ -90,6 +99,9 @@ class ChatContextAssembler(
             "You are a research assistant inside the Arxiver app. Answer the user's question " +
                 "using ONLY the provided context excerpts from their library. Cite the excerpts you " +
                 "use by their [number]. If the context does not contain the answer, say so plainly " +
-                "rather than guessing. Be concise and precise."
+                "rather than guessing. Be concise and precise. " +
+                "Format your answer in Markdown — use headings, bullet or numbered lists, **bold** " +
+                "for key terms, fenced code for code, and a Markdown table when comparing things — " +
+                "whenever it makes the answer clearer."
     }
 }

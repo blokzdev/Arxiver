@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.feature.paper.ask
 
 import android.content.res.Configuration
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,6 +13,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,10 +33,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -41,6 +51,8 @@ import dev.blokz.arxiver.R
 import dev.blokz.arxiver.chat.ChatPreview
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.search.RetrievalScope
+import dev.blokz.arxiver.data.Citation
+import dev.blokz.arxiver.ui.markdown.MarkdownText
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 
@@ -190,6 +202,7 @@ private fun AskBubble(message: AskMessage) {
     val isUser = message.role == AskRole.USER
     val bubbleColor =
         if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+    var sourcesExpanded by remember { mutableStateOf(false) }
     Surface(
         color = bubbleColor,
         shape = MaterialTheme.shapes.medium,
@@ -197,13 +210,78 @@ private fun AskBubble(message: AskMessage) {
     ) {
         Column(modifier = Modifier.padding(Spacing.md), verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
             val body = message.text.ifEmpty { if (message.streaming) stringResource(R.string.ask_thinking) else "" }
-            Text(
-                body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (message.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-            )
+            if (isUser || message.error) {
+                Text(
+                    body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (message.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                )
+            } else {
+                // Assistant answers render as markdown (P-Rich R0); a tapped [n] opens Sources.
+                val onCite: ((Int) -> Unit)? =
+                    if (message.citations.isNotEmpty()) {
+                        { sourcesExpanded = true }
+                    } else {
+                        null
+                    }
+                MarkdownText(markdown = body, color = MaterialTheme.colorScheme.onSurface, onCitationClick = onCite)
+                if (message.citations.isNotEmpty() && !message.streaming) {
+                    CitationSources(
+                        citations = message.citations,
+                        expanded = sourcesExpanded,
+                        onToggle = { sourcesExpanded = !sourcesExpanded },
+                    )
+                }
+            }
             if (message.streaming) {
                 CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+            }
+        }
+    }
+}
+
+/** Collapsible list of the sources an answer cited as `[n]` (P-Rich R0). */
+@Composable
+private fun CitationSources(
+    citations: List<Citation>,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(top = Spacing.xs)) {
+        Row(
+            modifier = Modifier.clickable(onClick = onToggle),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = stringResource(R.string.ask_sources, citations.size),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        if (expanded) {
+            Column(
+                modifier = Modifier.padding(start = Spacing.sm, top = Spacing.xs),
+                verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+            ) {
+                citations.forEach { citation ->
+                    val snippet = citation.excerpt.trim()
+                    Text(
+                        text =
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("[${citation.index}] ") }
+                                append("arXiv:${citation.paperId} — ")
+                                append(if (snippet.length > 160) snippet.take(160).trimEnd() + "…" else snippet)
+                            },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -328,7 +406,22 @@ private fun AskSheetConversationPreview() {
                     messages =
                         listOf(
                             AskMessage(AskRole.USER, "What is the main contribution?"),
-                            AskMessage(AskRole.ASSISTANT, "The paper introduces…", streaming = true),
+                            AskMessage(
+                                AskRole.ASSISTANT,
+                                "The paper proposes a **three-component** pipeline [1]:\n\n" +
+                                    "1. A cold-start data stage\n" +
+                                    "2. RL dataset curation\n" +
+                                    "3. An adaptive tool-invocation strategy\n\n" +
+                                    "| Stage | Role |\n|---|---|\n| Cold-start | bootstrap |\n| RL | curation |",
+                                citations =
+                                    listOf(
+                                        Citation(
+                                            1,
+                                            "2606.23678",
+                                            "We propose a comprehensive three-component solution…",
+                                        ),
+                                    ),
+                            ),
                         ),
                 ),
             onInput = {}, onSend = {}, onSummarize = {}, onSetIncludeNotes = {},
