@@ -367,7 +367,16 @@
     <string name="cd_ask">Ask about this paper</string>
     <string name="ask_title">Ask this paper</string>
     <string name="ask_empty_hint">Ask anything about this paper. Answers are grounded in its abstract and your notes.</string>
-    <string name="ask_summarize">Summarize this paper</string>
+    <!-- P-Rich R3c: one-tap research-tool preset labels (chips) -->
+    <string name="preset_summarize">Summarize</string>
+    <string name="preset_key_contributions">Key contributions</string>
+    <string name="preset_explain_method">Explain method</string>
+    <string name="preset_limitations">Limitations</string>
+    <string name="preset_compare_related">Compare related</string>
+    <string name="preset_eli5">Explain simply</string>
+    <string name="preset_glossary">Key terms</string>
+    <string name="preset_bibtex">Cite (BibTeX)</string>
+    <string name="preset_reproducibility">Reproducibility</string>
     <string name="ask_input_hint">Ask a question…</string>
     <string name="ask_send">Send</string>
     <string name="ask_stop">Stop</string>

@@ -2,6 +2,7 @@ package dev.blokz.arxiver.feature.paper.ask
 
 import android.content.res.Configuration
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -83,13 +84,17 @@ fun AskSheet(
 ) {
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(scope, sessionId) { viewModel.start(scope, sessionId) }
+    // The "what you can ask" presets, filtered to this scope (paper drops collection-only and
+    // vice versa) — P-Rich R3c. Scope is known here; AskSheetContent stays a pure function of it.
+    val presets = remember(scope) { AskPresets.forScope(scope is RetrievalScope.Paper) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         AskSheetContent(
             state = state,
+            presets = presets,
             onInput = viewModel::setInput,
             onSend = viewModel::send,
-            onSummarize = viewModel::summarize,
+            onRunPreset = viewModel::runPreset,
             onSetIncludeNotes = viewModel::setIncludeNotes,
             onConfirmSend = viewModel::confirmSend,
             onCancelConfirm = viewModel::cancelConfirm,
@@ -104,9 +109,10 @@ fun AskSheet(
 @Composable
 private fun AskSheetContent(
     state: AskUiState,
+    presets: List<AskPreset>,
     onInput: (String) -> Unit,
     onSend: () -> Unit,
-    onSummarize: () -> Unit,
+    onRunPreset: (String) -> Unit,
     onSetIncludeNotes: (Boolean) -> Unit,
     onConfirmSend: () -> Unit,
     onCancelConfirm: () -> Unit,
@@ -142,7 +148,6 @@ private fun AskSheetContent(
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            AssistChip(onClick = onSummarize, label = { Text(stringResource(R.string.ask_summarize)) })
         } else {
             state.messages.forEach { AskBubble(it, onOpenCrossRef = onOpenCrossRef, onPinAnswer = onPinAnswer) }
         }
@@ -181,6 +186,11 @@ private fun AskSheetContent(
         if (confirm != null) {
             ConfirmCard(preview = confirm, onSend = onConfirmSend, onCancel = onCancelConfirm)
         } else {
+            PresetRow(
+                presets = presets,
+                enabled = !state.streaming && !state.preparing,
+                onRunPreset = onRunPreset,
+            )
             IncludeNotesRow(state.includeNotes, onSetIncludeNotes)
             InputRow(
                 input = state.input,
@@ -380,6 +390,27 @@ private fun ConfirmCard(
     }
 }
 
+/** One-tap research-tool presets (P-Rich R3c); each runs its instruction as a grounded question. */
+@Composable
+private fun PresetRow(
+    presets: List<AskPreset>,
+    enabled: Boolean,
+    onRunPreset: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        presets.forEach { preset ->
+            AssistChip(
+                onClick = { onRunPreset(preset.instruction) },
+                enabled = enabled,
+                label = { Text(stringResource(preset.labelRes)) },
+            )
+        }
+    }
+}
+
 @Composable
 private fun IncludeNotesRow(
     includeNotes: Boolean,
@@ -446,7 +477,8 @@ private fun AskSheetEmptyPreview() {
     ArxiverTheme {
         AskSheetContent(
             state = AskUiState(provider = ProviderId.ON_DEVICE, isCloud = false),
-            onInput = {}, onSend = {}, onSummarize = {}, onSetIncludeNotes = {},
+            presets = AskPresets.forScope(isPaper = true),
+            onInput = {}, onSend = {}, onRunPreset = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
@@ -483,7 +515,8 @@ private fun AskSheetConversationPreview() {
                             ),
                         ),
                 ),
-            onInput = {}, onSend = {}, onSummarize = {}, onSetIncludeNotes = {},
+            presets = AskPresets.forScope(isPaper = true),
+            onInput = {}, onSend = {}, onRunPreset = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
