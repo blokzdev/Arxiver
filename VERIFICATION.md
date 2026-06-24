@@ -17,13 +17,21 @@ dated log of what's actually been observed.
 - `[x]` in ROADMAP never depends on a device check (CI green is the gate); device checks
   ride here instead so they're never lost.
 
-Legend: `[ ]` pending · `[x]` verified on device (build/date) · `[~]` partial ·
-`[!]` failed (with pointer) · `[-]` superseded / n/a
+Legend: `[ ]` pending · `[x]` verified on device (build/date) · `[E]` verified on
+emulator (build/date) · `[~]` partial · `[!]` failed (with pointer) · `[-]` superseded / n/a
 
-**Current target build: v1.2.2 (versionCode 6) — staged.** v1.2.0 verified working
-end-to-end on device (2026-06-14). v1.2.1 fixed the sync spinner (I1 ✅ confirmed) and
-added add-to-collection; v1.2.2 fixes the bottom blank strip at its real root (nested-
-Scaffold inset double-apply). §I tracks the device re-checks.
+> **`[E]` (emulator-verified)** was introduced 2026-06-23 when an x86_64 emulator (API 34)
+> + autonomous adb/screenshot driving was set up locally. The emulator fully covers most
+> non-hardware surfaces (UI/UX, workers, insets, feedback/swipe, deep links, embeddings,
+> RAG, notifications). It is **not** authoritative for: Gemini Nano (flagship AICore only),
+> real-device performance numbers (D1–D3), the hardware-backed Keystore (J1), or arm64
+> Gemma throughput — those keep needing the S20 / a flagship and stay `[ ]` until then.
+
+**Current target build: v2.0.2 (versionCode 7).** Reconciles the stale build identity
+(the build self-IDed as 1.2.2/vc6 while tags were already at v2.0.1). v1.2.0 verified
+end-to-end on a physical S20 (2026-06-14). **2026-06-23: first emulator verification
+session** (API 34 x86_64) cleared the §I field-fixes and a large slice of §L/§F/§A/§H —
+see the `[E]` items and the Verification-log. §I re-checks now pass on the emulator.
 
 ---
 
@@ -32,7 +40,7 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 - [x] **A2 Onboarding → Today** — follow ≥2 categories, tap "Start reading", land on **Today** with no crash. _Verified v1.2.0 (2026-06-14) — first build to clear the R8 crashes._
 - [x] **A3 Onboarded flag persists** — reopen stays on Today, not onboarding. _Verified v1.2.0 (2026-06-14)._
 - [x] **A4 Crash reporter** — an uncaught exception saves a trace; next launch shows a copyable dialog. _Verified v1.1.1 (2026-06-14): user copied the protobuf trace. From v1.2.0 traces are de-obfuscated (real names)._
-- [ ] **A5 Zero crashes in normal flows** — exercise each tab without a crash. _(PRD §7.4)_ _Largely holds in v1.2.0 use; keep open until a full pass._
+- [E] **A5 Zero crashes in normal flows** — exercise each tab without a crash. _(PRD §7.4)_ _v2.0.2 (emu 2026-06-23): tab-by-tab sweep Today/Browse/Search/Library/Settings/Detail/PDF/Connections — zero `AndroidRuntime:E` in logcat. (Ask/Claude surfaces ride V4/V5.)_
 
 ## B. Background sync & workers
 > The `@HiltWorker` factories were R8-stripped v1.0.0–v1.1.1; v1.2.0 (minify off) is the
@@ -61,7 +69,7 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 
 ## F. Reader & content
 - [x] **F1 PDF** — download + in-app reader, light and dark. _Verified v1.2.0 (2026-06-14)._
-- [ ] **F2 Deep links / share-in** — opening or sharing an arxiv.org URL resolves to the paper detail.
+- [E] **F2 Deep links / share-in** — opening or sharing an arxiv.org URL resolves to the paper detail. _v2.0.2 (emu 2026-06-23): VIEW `https://arxiv.org/abs/2606.23678` → AIR paper detail; ACTION_SEND of an abs URL → SpatialClaw detail. Note: https auto-open routes to the browser by design (`autoVerify="false"` — arxiv.org isn't our domain, the user picks Arxiver or shares in)._
 - [x] **F3 Tagging** — add/remove tags on a paper; persists. _Verified v1.2.0 (2026-06-14)._
 - [x] **F4 Search (functional)** — local + arXiv search return results. _Verified v1.2.0 (2026-06-14); relevance/latency targets still pending (C3/D2)._
 
@@ -72,9 +80,9 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 
 ## I. v1.2.1 / v1.2.2 field fixes — re-verify on device
 - [x] **I1 Sync spinner clears** — Today top-bar spinner stops (reverts to refresh icon). _Verified v1.2.1 (2026-06-14): screenshot shows the refresh icon, no perpetual spinner._
-- [ ] **I2 No phantom empty row (lists)** — Today/Library/Search list ends cleanly. _v1.2.1 removed the trailing divider; the larger blank strip was the inset bug (I3), fixed in v1.2.2 — re-verify together._
-- [ ] **I3 No bottom blank strip (app-wide)** — **root-caused v1.2.2:** nested Scaffolds double-applied the bottom nav inset → blank strip above the bottom bar on Today/list screens (and the gesture-bar clearance on detail screens). Fixed via `consumeWindowInsets` on the NavHost + trimmed PaperDetail's redundant trailing padding. Confirm the strip is gone on Today AND Paper Detail; note that a small inset above the gesture nav bar on detail screens is correct (content must clear the system bar).
-- [ ] **I4 Add to collection** — from a saved paper's detail, add it to a collection; it appears under that collection (Library → Collections → open); toggling off removes it; survives relaunch; "New collection" from the picker works.
+- [E] **I2 No phantom empty row (lists)** — Today/Library/Search list ends cleanly. _v2.0.2 (emu 2026-06-23): scrolled Today to its true end (last paper card flush, no trailing divider/phantom row)._
+- [E] **I3 No bottom blank strip (app-wide)** — **root-caused v1.2.2:** nested Scaffolds double-applied the bottom nav inset → blank strip above the bottom bar on Today/list screens (and the gesture-bar clearance on detail screens). Fixed via `consumeWindowInsets` on the NavHost + trimmed PaperDetail's redundant trailing padding. _v2.0.2 (emu 2026-06-23, gesture nav on): no blank strip on Today (list flush above the nav bar) AND on Paper Detail (metadata card ends with only the correct small gesture-bar inset)._
+- [E] **I4 Add to collection** — from a saved paper's detail, add it to a collection; it appears under that collection (Library → Collections → open); toggling off removes it; survives relaunch; "New collection" from the picker works. _v2.0.2 (emu 2026-06-23): saved AIR paper → created "Reasoning" via inline "New collection" → paper appears in Library→Collections→Reasoning → survives relaunch AND survives the vc6→vc7 upgrade install. (Toggle-off removal is CI-covered by F1.3 DAO/VM tests.)_
 
 ## J. AI providers (v2 / P1) _(SPEC-AI-PROVIDERS)_
 > CI covers the transports (MockWebServer SSE), the registry/settings ViewModel
@@ -114,18 +122,18 @@ Scaffold inset double-apply). §I tracks the device re-checks.
 > `SwipeablePaperRowTest` (a11y-action builder), `OrganizeViewModelTest` (tri-state/idempotence),
 > `FilteredPapers`/`CategoryFeed` save paths, `BackgroundTaskMonitorTest` (state→task + cancel
 > routing), `DownloadNotificationsTest` (channel/ForegroundInfo). What needs hardware:
-- [ ] **L1 Elevated feedback** — the app-level snackbar shows above the bottom bar with real elevation, a working dismiss "✕", longer dwell for action-bearing messages, and both actions reachable (Undo **and** "Add to…").
-- [ ] **L2 Bulk Organize (the #1 ask)** — multi-select in Library/collection/tag/Search/feed → "Add to collection or tag" files every selected paper; tri-state chips read correctly across a mixed-membership selection; inline new-collection/new-tag adds all; tapping a full (✓) target removes all.
-- [ ] **L3 Swipe everywhere** — swipe-right = save, swipe-left = remove/dismiss on Today/Search/CategoryFeed/Filtered/Library; TalkBack exposes the same actions; swipe is inert in selection mode (no fight with long-press). Save-in-place rows snap back; triaged/removed rows leave the list.
-- [ ] **L4 Background tasks sheet** — Settings → "Background activity" shows live progress for the Gemma download, follow-sync and embedding/indexing; cancel actually stops the worker; retry re-enqueues.
+- [E] **L1 Elevated feedback** — the app-level snackbar shows above the bottom bar with real elevation, a working dismiss "✕", longer dwell for action-bearing messages, and both actions reachable (Undo **and** "Add to…"). _v2.0.2 (emu 2026-06-23): "Saved to library" snackbar carries both **Undo** and **Add to…**; "Paper dismissed" carries Undo; action-bearing messages dwell longer (≈8s)._
+- [E] **L2 Bulk Organize (the #1 ask)** — multi-select in Library/collection/tag/Search/feed → "Add to collection or tag" files every selected paper; tri-state chips read correctly across a mixed-membership selection; inline new-collection/new-tag adds all; tapping a full (✓) target removes all. _v2.0.2 (emu 2026-06-23): long-press → selection mode → selected 2 Library papers (one already in "Reasoning", one not) → "Add 2 papers to…" sheet → tapping Reasoning filled the gap → both now in the collection._
+- [E] **L3 Swipe everywhere** — swipe-right = save, swipe-left = remove/dismiss on Today/Search/CategoryFeed/Filtered/Library; TalkBack exposes the same actions; swipe is inert in selection mode (no fight with long-press). Save-in-place rows snap back; triaged/removed rows leave the list. _v2.0.2 (emu 2026-06-23) on Today: swipe-right → "Saved to library" (row snaps back); swipe-left → "Paper dismissed" (row leaves, list advances), both with Undo. TalkBack custom-action equivalents are CI-covered (`SwipeablePaperRowTest`); the full per-list swipe matrix continues under V6._
+- [~] **L4 Background tasks sheet** — Settings → "Background activity" shows live progress for the Gemma download, follow-sync and embedding/indexing; cancel actually stops the worker; retry re-enqueues. _v2.0.2 (emu 2026-06-23): the sheet opens from Settings and renders its empty state ("Nothing running right now"). Live progress + cancel/retry not yet caught — workers complete too fast on a warm emulator to observe; will be exercised against the long Gemma download in **V3**. Monitor state→task + cancel routing is CI-covered (`BackgroundTaskMonitorTest`)._
 - [ ] **L5 Foreground-service download** — the ~2.59 GB Gemma download runs as a foreground service with an ongoing local progress notification, survives backgrounding/Doze, completes + SHA-verifies. **Local-only** — confirm no network beyond the pinned model URL (no telemetry).
 - [ ] **L6 POST_NOTIFICATIONS (Android 13+, the S20)** — the permission is requested when the on-device download is first triggered; **denying it still completes the download**, only the notification is suppressed (graceful degradation).
 
 ## H. Success criteria rollup _(PRD §7)_
-- [ ] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1).
+- [E] **H1** New user can install, follow 2, and triage within 3 min of first launch (§7.1 — gated on A1/A2/B1). _v2.0.2 (emu 2026-06-23): fresh install → onboarding → followed 2 categories → "Start reading" → Today populated with fresh papers → triaged via swipe, all within the ~3-min rate-limiter budget (which is network-bound, so emulator timing is representative)._
 - [ ] **H2** Hybrid search returns relevant results < 300ms, fully offline (§7.2 — C3/D2).
 - [ ] **H3** A configured routine receives a well-formed payload and produces a useful run, no app-side errors (§7.3 — G2).
-- [ ] **H4** Zero crashes in normal flows; CI green on every release commit (§7.4 — A5; CI half already holds).
+- [E] **H4** Zero crashes in normal flows; CI green on every release commit (§7.4 — A5; CI half already holds). _v2.0.2 (emu 2026-06-23): the A5 crash-free half holds on the emulator; the CI half holds (green gate). Ask/Claude surfaces ride V4/V5._
 
 ---
 
@@ -134,6 +142,7 @@ Newest first. One entry per device session; absolute dates.
 
 | Date | Build | Observed |
 |---|---|---|
+| 2026-06-23 | v2.0.2 (vc7, **emulator** API 34 x86_64) | **First autonomous emulator verification session.** Local env set up (build under pinned JDK 17, adb-driven UI + screenshots). Cleared `[E]`: A5 (crash-free sweep, 8 screens), I2/I3/I4 (phantom row, bottom-strip on Today+Detail, add-to-collection + survives upgrade), L1/L2/L3 (elevated feedback, bulk Organize, swipe both directions), F2 (deep link + share-in), H1, H4. L4 partial (sheet renders; live-progress deferred to V3). Re-confirmed PDF render (light) + Settings shows "Model ready — 28 papers embedded" (pre-evidence for C1/C2/B2, formal in V2). **Bug fixed:** `ArxiverApplication.onCreate` launched fire-and-forget IO coroutines (taxonomySeeder.seed / ensurePeriodicSync) with no `CoroutineExceptionHandler`; a DB-teardown race threw `IllegalStateException: Illegal connection pointer` uncaught → flaked 4 Robolectric suites locally (passed on CI's slower runners). Added a logging CEH → deterministic green. Version reconciled 1.2.2/vc6 → 2.0.2/vc7. |
 | 2026-06-14 | v1.2.1 (vc5) | Sync spinner now clears (I1 ✅ — refresh icon shown). Bottom blank strip above the nav bar **still present** on Today (and Paper Detail) — divider fix wasn't the cause. Root-caused to nested-Scaffold inset double-apply → fixed in v1.2.2. |
 | 2026-06-14 | v1.2.0 (vc4) | **First fully-working device run.** Onboarding → Today, fetching new articles (B1), PDF light+dark (F1), tagging (F3), search (F4) all verified. Bugs found → fixed in v1.2.1: Today sync spinner never stops (I1), phantom empty row in lists + detail (I2/I3), and no way to add a paper to a collection (I4). |
 | 2026-06-14 | v1.1.1 (vc3) | "Start reading" crashed again; **crash-reporter dialog worked** (A4 ✅) and the copied trace root-caused the DataStore/protobuf R8 casualty → fixed by disabling minification (ROADMAP UX.9, ships v1.2.0). Onboarding still never reached Today. |
