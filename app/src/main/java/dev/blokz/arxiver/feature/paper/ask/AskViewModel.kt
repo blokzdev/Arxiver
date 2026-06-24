@@ -71,6 +71,7 @@ class AskViewModel
         private lateinit var scope: RetrievalScope
         private var sessionId: Long? = null
         private var streamJob: Job? = null
+        private var indexJob: Job? = null
         private var pendingPrepared: PreparedChat? = null
 
         private val _uiState = MutableStateFlow(AskUiState())
@@ -87,11 +88,12 @@ class AskViewModel
         ) {
             if (::scope.isInitialized) return
             this.scope = scope
-            viewModelScope.launch {
-                _uiState.update { it.copy(indexing = true) }
-                runCatching { scopeIndexer.ensureIndexed(scope) }
-                _uiState.update { it.copy(indexing = false) }
-            }
+            indexJob =
+                viewModelScope.launch {
+                    _uiState.update { it.copy(indexing = true) }
+                    runCatching { scopeIndexer.ensureIndexed(scope) }
+                    _uiState.update { it.copy(indexing = false) }
+                }
             viewModelScope.launch {
                 val resume = sessionId ?: chatRepository.observeSessions(scope).first().firstOrNull()?.id
                 this@AskViewModel.sessionId = resume ?: return@launch
@@ -135,6 +137,9 @@ class AskViewModel
         private fun ask(question: String) {
             _uiState.update { it.copy(error = null, notConfigured = false, preparing = true) }
             viewModelScope.launch {
+                // Wait for on-open scope indexing so retrieval sees the freshly-embedded
+                // chunks; an un-embedded inbox paper would otherwise retrieve nothing.
+                indexJob?.join()
                 when (val result = chatRepository.prepare(scope, sessionId, question, _uiState.value.includeNotes)) {
                     is ChatPrepareResult.Ready -> {
                         val prepared = result.prepared

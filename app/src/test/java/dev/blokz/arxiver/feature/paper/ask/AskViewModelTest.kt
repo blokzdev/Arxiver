@@ -24,6 +24,7 @@ import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.core.search.ScopedChunk
 import dev.blokz.arxiver.data.ChatRepository
 import dev.blokz.arxiver.rag.ScopeIndexer
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -246,6 +247,35 @@ class AskViewModelTest {
             assertNull(state.pendingConfirm)
             assertEquals(2, state.messages.size)
             assertEquals("Answer", state.messages.last().text)
+        }
+
+    @Test
+    fun `a question waits for scope indexing before preparing`() =
+        runTest(dispatcher) {
+            // An un-embedded inbox paper is indexed on open; retrieval must not race ahead
+            // of that indexing or it would send no context (regression: per-paper Ask was
+            // ungrounded for inbox papers because the Paper scope indexer was a no-op).
+            val gate = CompletableDeferred<Unit>()
+            val vm =
+                vm(
+                    cloudProvider { flowOf(ChatChunk.Delta("Answer"), ChatChunk.Done()) },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    indexer = ScopeIndexer { gate.await() },
+                )
+            vm.setInput("Why?")
+            vm.send()
+            advanceUntilIdle()
+
+            // Indexing is still in flight, so prepare has not produced a confirm yet.
+            assertNull(vm.uiState.value.pendingConfirm)
+            assertTrue(vm.uiState.value.preparing)
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            // Indexing done → prepare ran → the confirm is shown.
+            assertTrue(vm.uiState.value.pendingConfirm != null)
         }
 
     @Test
