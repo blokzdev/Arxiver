@@ -36,11 +36,30 @@ data class ProviderCapability(
     val streaming: Boolean,
     val onDevice: Boolean,
     val requiresKey: Boolean,
+    /** Whether the model accepts image input (P-Rich R3d); on-device stays text-only. */
+    val vision: Boolean = false,
 )
 
 enum class ChatRole { SYSTEM, USER, ASSISTANT }
 
-data class ChatMessage(val role: ChatRole, val content: String)
+/**
+ * An image attached to a chat turn (P-Rich R3d vision). [base64] is RFC-4648 (NO_WRAP) image bytes;
+ * [mediaType] their MIME (e.g. `image/jpeg`). [label] is a human description for the privacy preview
+ * (e.g. "page 2 of arXiv:2401.0001") and is NEVER serialized to the wire — providers read only
+ * [mediaType]/[base64].
+ */
+data class ChatImage(
+    val mediaType: String,
+    val base64: String,
+    val label: String? = null,
+)
+
+/** A chat turn. [images] is empty for text-only turns, so existing callers + wire bytes are unchanged. */
+data class ChatMessage(
+    val role: ChatRole,
+    val content: String,
+    val images: List<ChatImage> = emptyList(),
+)
 
 /**
  * A provider-neutral chat turn. Retrieved RAG context is folded into

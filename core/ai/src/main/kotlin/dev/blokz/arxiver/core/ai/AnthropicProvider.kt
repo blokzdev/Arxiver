@@ -8,6 +8,12 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -46,6 +52,7 @@ class AnthropicProvider(
             streaming = true,
             onDevice = false,
             requiresKey = true,
+            vision = true,
         )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -111,7 +118,7 @@ class AnthropicProvider(
                 messages =
                     request.messages
                         .filter { it.role != ChatRole.SYSTEM }
-                        .map { WireMessage(role = it.role.wire(), content = it.content) },
+                        .map { WireMessage(role = it.role.wire(), content = anthropicContent(it)) },
             )
         return Request.Builder()
             .url("$baseUrl/messages")
@@ -126,6 +133,40 @@ class AnthropicProvider(
         when (this) {
             ChatRole.ASSISTANT -> "assistant"
             else -> "user"
+        }
+
+    /**
+     * A message's wire content: text-only turns serialize as a JSON **string** (byte-identical to
+     * pre-R3d); turns with images serialize as Anthropic's content-block **array** (text + base64
+     * image blocks). [ChatImage.label] is never written (only media type + data).
+     */
+    private fun anthropicContent(message: ChatMessage): JsonElement =
+        if (message.images.isEmpty()) {
+            JsonPrimitive(message.content)
+        } else {
+            buildJsonArray {
+                add(
+                    buildJsonObject {
+                        put("type", "text")
+                        put("text", message.content)
+                    },
+                )
+                message.images.forEach { img ->
+                    add(
+                        buildJsonObject {
+                            put("type", "image")
+                            put(
+                                "source",
+                                buildJsonObject {
+                                    put("type", "base64")
+                                    put("media_type", img.mediaType)
+                                    put("data", img.base64)
+                                },
+                            )
+                        },
+                    )
+                }
+            }
         }
 
     private fun Int.toAppError(): AppError =
@@ -146,7 +187,7 @@ class AnthropicProvider(
     )
 
     @Serializable
-    private data class WireMessage(val role: String, val content: String)
+    private data class WireMessage(val role: String, val content: JsonElement)
 
     @Serializable
     private data class StreamEvent(
