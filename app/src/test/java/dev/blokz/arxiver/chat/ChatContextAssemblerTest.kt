@@ -102,6 +102,75 @@ class ChatContextAssemblerTest {
     }
 
     @Test
+    fun `standard mode adds no directive — byte-identical user turn`() {
+        val chunks = listOf(chunk(1, "Body.", 0.9))
+        val default = assembler.assemble("q", chunks, emptyList(), includeNotes = true, capability = cap()).request
+        val standard =
+            assembler.assemble(
+                "q",
+                chunks,
+                emptyList(),
+                includeNotes = true,
+                capability = cap(),
+                mode = ChatMode.STANDARD,
+            )
+                .request
+        assertEquals(default.messages.last().content, standard.messages.last().content)
+        assertFalse(standard.messages.last().content.contains(ChatContextAssembler.QUICK_DIRECTIVE))
+        assertFalse(standard.messages.last().content.contains(ChatContextAssembler.MAX_DIRECTIVE))
+    }
+
+    @Test
+    fun `quick mode prepends the quick directive`() {
+        val content =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(),
+                mode = ChatMode.QUICK,
+            )
+                .request.messages.last().content
+        assertTrue(content.contains(ChatContextAssembler.QUICK_DIRECTIVE))
+        assertTrue(content.contains("Question: q"))
+    }
+
+    @Test
+    fun `max mode on a cloud model includes the rich nudge`() {
+        val content =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(),
+                mode = ChatMode.MAX,
+            )
+                .request.messages.last().content
+        assertTrue(content.contains(ChatContextAssembler.MAX_DIRECTIVE))
+        assertTrue(content.contains(ChatContextAssembler.MAX_RICH_SUFFIX.trim()))
+    }
+
+    @Test
+    fun `max mode on an on-device model omits the rich nudge`() {
+        val onDevice =
+            ProviderCapability(contextTokens = 100_000, streaming = true, onDevice = true, requiresKey = false)
+        val content =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = onDevice,
+                mode = ChatMode.MAX,
+            )
+                .request.messages.last().content
+        assertTrue(content.contains(ChatContextAssembler.MAX_DIRECTIVE))
+        assertFalse(content.contains(ChatContextAssembler.MAX_RICH_SUFFIX.trim()))
+    }
+
+    @Test
     fun `cited chunks are returned in citation order (highest score first)`() {
         // [n] order = the order chunks are labeled in the user turn = highest-scored first.
         val chunks = listOf(chunk(1, "Alpha.", 0.4), chunk(2, "Beta.", 0.9))

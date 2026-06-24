@@ -377,6 +377,10 @@
     <string name="preset_glossary">Key terms</string>
     <string name="preset_bibtex">Cite (BibTeX)</string>
     <string name="preset_reproducibility">Reproducibility</string>
+    <!-- P-Rich R3b: answer-depth mode dial -->
+    <string name="mode_quick">Quick</string>
+    <string name="mode_standard">Standard</string>
+    <string name="mode_max">Max</string>
     <string name="ask_input_hint">Ask a question…</string>
     <string name="ask_send">Send</string>
     <string name="ask_stop">Stop</string>
