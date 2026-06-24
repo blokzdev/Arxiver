@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.chat.ChatMode
 import dev.blokz.arxiver.chat.ChatPreview
 import dev.blokz.arxiver.core.ai.AiException
 import dev.blokz.arxiver.core.ai.ChatChunk
@@ -53,6 +54,8 @@ data class AskUiState(
     val provider: ProviderId? = null,
     val isCloud: Boolean = false,
     val notConfigured: Boolean = false,
+    /** Answer-depth dial (P-Rich R3b); applies to the next send or preset. */
+    val mode: ChatMode = ChatMode.STANDARD,
     @StringRes val error: Int? = null,
 )
 
@@ -109,6 +112,8 @@ class AskViewModel
 
         fun setIncludeNotes(value: Boolean) = _uiState.update { it.copy(includeNotes = value) }
 
+        fun setMode(mode: ChatMode) = _uiState.update { it.copy(mode = mode) }
+
         fun send() {
             val question = _uiState.value.input.trim()
             if (question.isEmpty() || _uiState.value.streaming || _uiState.value.preparing) return
@@ -146,7 +151,17 @@ class AskViewModel
                 // Wait for on-open scope indexing so retrieval sees the freshly-embedded
                 // chunks; an un-embedded inbox paper would otherwise retrieve nothing.
                 indexJob?.join()
-                when (val result = chatRepository.prepare(scope, sessionId, question, _uiState.value.includeNotes)) {
+                val mode = _uiState.value.mode
+                when (
+                    val result =
+                        chatRepository.prepare(
+                            scope,
+                            sessionId,
+                            question,
+                            _uiState.value.includeNotes,
+                            mode,
+                        )
+                ) {
                     is ChatPrepareResult.Ready -> {
                         val prepared = result.prepared
                         _uiState.update {

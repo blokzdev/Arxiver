@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.data
 
 import dev.blokz.arxiver.chat.ChatContextAssembler
+import dev.blokz.arxiver.chat.ChatMode
 import dev.blokz.arxiver.chat.ChatPreview
 import dev.blokz.arxiver.chat.ChatPreviewBuilder
 import dev.blokz.arxiver.chat.ChatTurn
@@ -79,6 +80,7 @@ class ChatRepository(
         sessionId: Long?,
         question: String,
         includeNotes: Boolean,
+        mode: ChatMode = ChatMode.STANDARD,
     ): ChatPrepareResult =
         withContext(dispatchers.io) {
             val provider =
@@ -102,7 +104,7 @@ class ChatRepository(
                     ?.map { ChatTurn(it.role.toRole(), it.content) }
                     .orEmpty()
 
-            val assembled = assembler.assemble(question, chunks, history, includeNotes, provider.capability)
+            val assembled = assembler.assemble(question, chunks, history, includeNotes, provider.capability, mode)
             val citations = assembled.citedChunks.mapIndexed { i, c -> Citation(i + 1, c.paperId, c.text) }
 
             ChatPrepareResult.Ready(

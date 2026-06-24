@@ -11,6 +11,13 @@ import dev.blokz.arxiver.core.search.RetrievedChunk
 data class ChatTurn(val role: ChatRole, val content: String)
 
 /**
+ * Answer-depth dial (P-Rich R3b): scales an answer's length/richness via a short directive
+ * prepended to the user turn — never a system-prompt change. [STANDARD] adds nothing (today's
+ * behavior, byte-identical request), so the redaction goldens are untouched.
+ */
+enum class ChatMode { QUICK, STANDARD, MAX }
+
+/**
  * The assembled request plus the chunks actually cited in it, in `[1..n]` order (the
  * subset that fit the budget) — so the UI can map an answer's `[n]` to its source.
  */
@@ -36,15 +43,20 @@ class ChatContextAssembler(
         history: List<ChatTurn>,
         includeNotes: Boolean,
         capability: ProviderCapability,
+        mode: ChatMode = ChatMode.STANDARD,
     ): AssembledChat {
         val gated = if (includeNotes) chunks else chunks.filter { it.sourceKind != ChunkEmbeddingEntity.SOURCE_NOTE }
 
         // Cloud models also get a LaTeX-math invitation; small on-device models stay plain.
         val system = if (capability.onDevice) SYSTEM_PROMPT else SYSTEM_PROMPT + CLOUD_RICH_ADDENDUM
 
+        // The depth directive rides the user turn (never the system prompt); STANDARD is empty,
+        // so a default-mode request is byte-identical to before. Max's rich nudge is cloud-only.
+        val directive = modeDirective(mode, capability.onDevice)
+
         var budget =
             capability.contextTokens - maxOutputTokens - safetyMarginTokens -
-                estTokens(system) - estTokens(question)
+                estTokens(system) - estTokens(question) - estTokens(directive)
 
         // Highest-scored chunks first, keep those that fit.
         val keptChunks = mutableListOf<RetrievedChunk>()
@@ -66,7 +78,7 @@ class ChatContextAssembler(
 
         val messages =
             keptHistory.map { ChatMessage(it.role, it.content) } +
-                ChatMessage(ChatRole.USER, userTurn(question, keptChunks))
+                ChatMessage(ChatRole.USER, userTurn(question, keptChunks, directive))
 
         return AssembledChat(
             request = ChatRequest(messages = messages, system = system, maxTokens = maxOutputTokens),
@@ -77,8 +89,14 @@ class ChatContextAssembler(
     private fun userTurn(
         question: String,
         chunks: List<RetrievedChunk>,
+        directive: String,
     ): String =
         buildString {
+            // Depth directive first (empty for STANDARD → identical to the pre-R3b turn).
+            if (directive.isNotBlank()) {
+                append(directive)
+                append("\n\n")
+            }
             if (chunks.isNotEmpty()) {
                 appendLine("Context from the user's library:")
                 chunks.forEachIndexed { i, c ->
@@ -90,12 +108,32 @@ class ChatContextAssembler(
             append(question)
         }
 
+    /** The depth directive for [mode]; Max's rich-output nudge is cloud-only (mirrors the addendum). */
+    private fun modeDirective(
+        mode: ChatMode,
+        onDevice: Boolean,
+    ): String =
+        when (mode) {
+            ChatMode.QUICK -> QUICK_DIRECTIVE
+            ChatMode.STANDARD -> ""
+            ChatMode.MAX -> if (onDevice) MAX_DIRECTIVE else MAX_DIRECTIVE + MAX_RICH_SUFFIX
+        }
+
     private fun estTokens(text: String): Int = (text.length + 3) / 4
 
     companion object {
         /** Reserve so the char/4 estimate's slack never overruns the real window. */
         const val SAFETY_MARGIN_TOKENS = 256
         private const val CHUNK_LABEL_TOKENS = 8
+
+        /** Depth-dial directives (P-Rich R3b), prepended to the user turn. STANDARD adds nothing. */
+        const val QUICK_DIRECTIVE = "Keep the answer to 2–3 sentences — just the essentials."
+        const val MAX_DIRECTIVE =
+            "Give a thorough, detailed answer: synthesize across the excerpts and surface " +
+                "nuances and edge cases."
+
+        /** Appended to [MAX_DIRECTIVE] for cloud models only (small on-device models emit broken markup). */
+        const val MAX_RICH_SUFFIX = " Use a Markdown table or a Mermaid diagram when it genuinely clarifies."
 
         /** Model-facing system instruction (English, like the routine starter text). */
         const val SYSTEM_PROMPT =

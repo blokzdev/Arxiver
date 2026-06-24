@@ -30,6 +30,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -53,6 +56,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.chat.ChatMode
 import dev.blokz.arxiver.chat.ChatPreview
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.search.RetrievalScope
@@ -95,6 +99,7 @@ fun AskSheet(
             onInput = viewModel::setInput,
             onSend = viewModel::send,
             onRunPreset = viewModel::runPreset,
+            onSetMode = viewModel::setMode,
             onSetIncludeNotes = viewModel::setIncludeNotes,
             onConfirmSend = viewModel::confirmSend,
             onCancelConfirm = viewModel::cancelConfirm,
@@ -113,6 +118,7 @@ private fun AskSheetContent(
     onInput: (String) -> Unit,
     onSend: () -> Unit,
     onRunPreset: (String) -> Unit,
+    onSetMode: (ChatMode) -> Unit,
     onSetIncludeNotes: (Boolean) -> Unit,
     onConfirmSend: () -> Unit,
     onCancelConfirm: () -> Unit,
@@ -191,6 +197,7 @@ private fun AskSheetContent(
                 enabled = !state.streaming && !state.preparing,
                 onRunPreset = onRunPreset,
             )
+            ModeRow(mode = state.mode, enabled = !state.streaming && !state.preparing, onSetMode = onSetMode)
             IncludeNotesRow(state.includeNotes, onSetIncludeNotes)
             InputRow(
                 input = state.input,
@@ -390,6 +397,31 @@ private fun ConfirmCard(
     }
 }
 
+/** Answer-depth dial (P-Rich R3b): Quick / Standard / Max, applied to the next send or preset. */
+@Composable
+private fun ModeRow(
+    mode: ChatMode,
+    enabled: Boolean,
+    onSetMode: (ChatMode) -> Unit,
+) {
+    val options =
+        listOf(
+            ChatMode.QUICK to R.string.mode_quick,
+            ChatMode.STANDARD to R.string.mode_standard,
+            ChatMode.MAX to R.string.mode_max,
+        )
+    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        options.forEachIndexed { index, (value, labelRes) ->
+            SegmentedButton(
+                selected = mode == value,
+                onClick = { onSetMode(value) },
+                enabled = enabled,
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size),
+            ) { Text(stringResource(labelRes)) }
+        }
+    }
+}
+
 /** One-tap research-tool presets (P-Rich R3c); each runs its instruction as a grounded question. */
 @Composable
 private fun PresetRow(
@@ -478,7 +510,7 @@ private fun AskSheetEmptyPreview() {
         AskSheetContent(
             state = AskUiState(provider = ProviderId.ON_DEVICE, isCloud = false),
             presets = AskPresets.forScope(isPaper = true),
-            onInput = {}, onSend = {}, onRunPreset = {}, onSetIncludeNotes = {},
+            onInput = {}, onSend = {}, onRunPreset = {}, onSetMode = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
@@ -516,7 +548,7 @@ private fun AskSheetConversationPreview() {
                         ),
                 ),
             presets = AskPresets.forScope(isPaper = true),
-            onInput = {}, onSend = {}, onRunPreset = {}, onSetIncludeNotes = {},
+            onInput = {}, onSend = {}, onRunPreset = {}, onSetMode = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
