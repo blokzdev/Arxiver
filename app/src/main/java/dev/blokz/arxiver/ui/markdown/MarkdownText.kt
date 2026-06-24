@@ -78,6 +78,7 @@ fun MarkdownText(
     modifier: Modifier = Modifier,
     color: Color = LocalContentColor.current,
     onCitationClick: ((Int) -> Unit)? = null,
+    onArxivCrossRefClick: ((String) -> Unit)? = null,
 ) {
     val document = remember(markdown) { MARKDOWN_PARSER.parse(markdown) }
     val palette =
@@ -85,19 +86,29 @@ fun MarkdownText(
             link = MaterialTheme.colorScheme.primary,
             citation = MaterialTheme.colorScheme.primary,
             codeBackground = MaterialTheme.colorScheme.surfaceVariant,
+            // A distinct accent so an `arXiv:` cross-ref reads as navigation, not a [n] citation.
+            crossRef = MaterialTheme.colorScheme.tertiary,
         )
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-        Blocks(document, color, palette, onCitationClick)
+        Blocks(document, color, palette, onCitationClick, onArxivCrossRefClick)
     }
 }
 
 /** Theme colors threaded into the pure inline builders. */
-data class MdPalette(val link: Color, val citation: Color, val codeBackground: Color)
+data class MdPalette(
+    val link: Color,
+    val citation: Color,
+    val codeBackground: Color,
+    val crossRef: Color = link,
+)
 
 private val MARKDOWN_PARSER: Parser =
     Parser.builder().extensions(listOf(TablesExtension.create())).build()
 
 private val CITATION_REF = Regex("""\[(\d{1,3})]""")
+
+/** `arXiv:NNNN.NNNNN` (modern) or `arXiv:cat/NNNNNNN` (legacy) → a tappable cross-reference. */
+private val ARXIV_REF = Regex("""arXiv:(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})""")
 
 @Composable
 private fun Blocks(
@@ -105,10 +116,11 @@ private fun Blocks(
     color: Color,
     palette: MdPalette,
     onCite: ((Int) -> Unit)?,
+    onCrossRef: ((String) -> Unit)? = null,
 ) {
     var node = parent.firstChild
     while (node != null) {
-        Block(node, color, palette, onCite)
+        Block(node, color, palette, onCite, onCrossRef)
         node = node.next
     }
 }
@@ -119,11 +131,12 @@ private fun Block(
     color: Color,
     palette: MdPalette,
     onCite: ((Int) -> Unit)?,
+    onCrossRef: ((String) -> Unit)? = null,
 ) {
     when (node) {
         is Heading ->
             Text(
-                inlineString(node, palette, onCite),
+                inlineString(node, palette, onCite, onCrossRef),
                 style =
                     when (node.level) {
                         1 -> MaterialTheme.typography.titleLarge
@@ -135,10 +148,14 @@ private fun Block(
             )
 
         is Paragraph ->
-            Text(inlineString(node, palette, onCite), style = MaterialTheme.typography.bodyMedium, color = color)
+            Text(
+                inlineString(node, palette, onCite, onCrossRef),
+                style = MaterialTheme.typography.bodyMedium,
+                color = color,
+            )
 
-        is BulletList -> ListBlockUi(node, ordered = false, color, palette, onCite)
-        is OrderedList -> ListBlockUi(node, ordered = true, color, palette, onCite)
+        is BulletList -> ListBlockUi(node, ordered = false, color, palette, onCite, onCrossRef)
+        is OrderedList -> ListBlockUi(node, ordered = true, color, palette, onCite, onCrossRef)
 
         is BlockQuote ->
             Row(modifier = Modifier.height(IntrinsicSize.Min)) {
@@ -150,18 +167,18 @@ private fun Block(
                             .background(MaterialTheme.colorScheme.outlineVariant),
                 )
                 Column(modifier = Modifier.padding(start = Spacing.sm)) {
-                    Blocks(node, color.copy(alpha = 0.8f), palette, onCite)
+                    Blocks(node, color.copy(alpha = 0.8f), palette, onCite, onCrossRef)
                 }
             }
 
         is FencedCodeBlock -> CodeBox(node.literal.trimEnd('\n'), palette, color)
         is IndentedCodeBlock -> CodeBox(node.literal.trimEnd('\n'), palette, color)
         is ThematicBreak -> HorizontalDivider()
-        is TableBlock -> MarkdownTable(node, color, palette, onCite)
+        is TableBlock -> MarkdownTable(node, color, palette, onCite, onCrossRef)
 
         else -> {
             // Unknown/unsupported block: render any inline text it carries, never crash.
-            val text = inlineString(node, palette, onCite)
+            val text = inlineString(node, palette, onCite, onCrossRef)
             if (text.isNotEmpty()) {
                 Text(text, style = MaterialTheme.typography.bodyMedium, color = color)
             }
@@ -176,6 +193,7 @@ private fun ListBlockUi(
     color: Color,
     palette: MdPalette,
     onCite: ((Int) -> Unit)?,
+    onCrossRef: ((String) -> Unit)? = null,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
         var item = list.firstChild
@@ -188,7 +206,7 @@ private fun ListBlockUi(
                     color = color,
                     modifier = Modifier.width(if (ordered) 24.dp else 16.dp),
                 )
-                Column(modifier = Modifier.weight(1f)) { Blocks(item, color, palette, onCite) }
+                Column(modifier = Modifier.weight(1f)) { Blocks(item, color, palette, onCite, onCrossRef) }
             }
             item = item.next
             index++
@@ -221,6 +239,7 @@ private fun MarkdownTable(
     color: Color,
     palette: MdPalette,
     onCite: ((Int) -> Unit)?,
+    onCrossRef: ((String) -> Unit)? = null,
 ) {
     val border = MaterialTheme.colorScheme.outlineVariant
     Column(
@@ -240,7 +259,7 @@ private fun MarkdownTable(
                         while (cell != null) {
                             if (cell is TableCell) {
                                 Text(
-                                    text = inlineString(cell, palette, onCite),
+                                    text = inlineString(cell, palette, onCite, onCrossRef),
                                     style =
                                         if (header) {
                                             MaterialTheme.typography.labelLarge
@@ -275,9 +294,14 @@ internal fun inlineString(
     parent: Node,
     palette: MdPalette,
     onCite: ((Int) -> Unit)?,
+    onCrossRef: ((String) -> Unit)? = null,
 ): AnnotatedString {
-    val base = buildAnnotatedString { appendInlines(parent, palette) }
-    return if (onCite == null) base else withCitationLinks(base, palette, onCite)
+    var result = buildAnnotatedString { appendInlines(parent, palette) }
+    // Overlay citation and cross-ref links on the finished text; both are span annotations
+    // over the same characters, so applying them in sequence keeps every range valid.
+    if (onCite != null) result = withCitationLinks(result, palette, onCite)
+    if (onCrossRef != null) result = withCrossRefLinks(result, palette, onCrossRef)
+    return result
 }
 
 internal fun withCitationLinks(
@@ -294,6 +318,31 @@ internal fun withCitationLinks(
                     tag = "cite:$n",
                     styles = TextLinkStyles(SpanStyle(color = palette.citation, fontWeight = FontWeight.Medium)),
                 ) { onCite(n) },
+                start = match.range.first,
+                end = match.range.last + 1,
+            )
+        }
+    }
+
+/**
+ * Overlays `arXiv:<id>` cross-references as tappable links (P-Rich R3a). The raw id (modern or
+ * legacy) is handed to [onCrossRef]; the navigation boundary validates it with `ArxivId.parse`.
+ * Styled with [MdPalette.crossRef] so it reads as navigation, distinct from a `[n]` citation.
+ */
+internal fun withCrossRefLinks(
+    base: AnnotatedString,
+    palette: MdPalette,
+    onCrossRef: (String) -> Unit,
+): AnnotatedString =
+    buildAnnotatedString {
+        append(base)
+        for (match in ARXIV_REF.findAll(base.text)) {
+            val id = match.groupValues[1]
+            addLink(
+                LinkAnnotation.Clickable(
+                    tag = "arxiv:$id",
+                    styles = TextLinkStyles(SpanStyle(color = palette.crossRef, fontWeight = FontWeight.Medium)),
+                ) { onCrossRef(id) },
                 start = match.range.first,
                 end = match.range.last + 1,
             )

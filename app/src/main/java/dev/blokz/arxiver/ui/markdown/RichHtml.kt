@@ -24,6 +24,9 @@ object RichHtml {
     private val MERMAID_CODE = Regex("(?s)<pre><code class=\"language-mermaid\">(.*?)</code></pre>")
     private val CITATION = Regex("""\[(\d{1,3})]""")
 
+    /** `arXiv:NNNN.NNNNN` (modern) / `arXiv:cat/NNNNNNN` (legacy) → an in-app cross-ref link. */
+    private val ARXIV = Regex("""arXiv:(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})""")
+
     // Spans that must NOT be touched by citation linkification: Mermaid blocks + math.
     private val PROTECTED = Regex("(?s)<pre class=\"mermaid\">.*?</pre>|\\$\\$.*?\\$\\$|\\$[^$\\n]+\\$")
 
@@ -35,6 +38,7 @@ object RichHtml {
         codeBackground: String,
         mutedColor: String,
         dark: Boolean = false,
+        crossRefColor: String = citationColor,
     ): String {
         // ```math fences -> $$..$$ for KaTeX; ```mermaid code -> a <pre class="mermaid"> for Mermaid.
         val normalized = MATH_FENCE.replace(markdown) { "\$\$\n${it.groupValues[1]}\n\$\$" }
@@ -42,11 +46,14 @@ object RichHtml {
             MERMAID_CODE.replace(htmlRenderer.render(parser.parse(normalized))) {
                 "<pre class=\"mermaid\">${it.groupValues[1]}</pre>"
             }
-        return template(linkifyCitations(rendered), textColor, citationColor, codeBackground, mutedColor, dark)
+        return template(linkify(rendered), textColor, citationColor, codeBackground, mutedColor, dark, crossRefColor)
     }
 
-    /** Linkify `[n]` only outside math/Mermaid spans, so LaTeX `[3]` / Mermaid `B[1]` are untouched. */
-    internal fun linkifyCitations(html: String): String {
+    /**
+     * Linkify `[n]` citations and `arXiv:<id>` cross-references — only outside math/Mermaid spans,
+     * so LaTeX `[3]` / a Mermaid `B[1]` node / an `arXiv:` inside a formula are left untouched.
+     */
+    internal fun linkify(html: String): String {
         val out = StringBuilder()
         var last = 0
         for (span in PROTECTED.findAll(html)) {
@@ -58,10 +65,18 @@ object RichHtml {
         return out.toString()
     }
 
-    private fun linkOutside(text: String): String =
-        CITATION.replace(text) { m ->
+    private fun linkOutside(text: String): String {
+        // arXiv cross-refs first; a legacy `cat/NNNNNNN` id encodes its slash so the WebView's
+        // arxiver://paper handler reads the whole id as one path segment.
+        val withXref =
+            ARXIV.replace(text) { m ->
+                val id = m.groupValues[1]
+                "<a href=\"arxiver://paper/${id.replace("/", "%2F")}\" class=\"xref\">arXiv:$id</a>"
+            }
+        return CITATION.replace(withXref) { m ->
             "<a href=\"arxiver://cite/${m.groupValues[1]}\" class=\"cite\">[${m.groupValues[1]}]</a>"
         }
+    }
 
     private fun template(
         body: String,
@@ -70,6 +85,7 @@ object RichHtml {
         codeBackground: String,
         mutedColor: String,
         dark: Boolean,
+        crossRefColor: String,
     ): String {
         val displayDelim = "${'$'}${'$'}"
         val inlineDelim = "${'$'}"
@@ -83,6 +99,7 @@ object RichHtml {
                 font-family:sans-serif;font-size:15px;line-height:1.5;
                 -webkit-text-size-adjust:100%;overflow-wrap:break-word;word-break:break-word;}
               a.cite{color:$citationColor;text-decoration:none;font-weight:500;}
+              a.xref{color:$crossRefColor;text-decoration:none;font-weight:500;}
               code{background:$codeBackground;border-radius:4px;padding:0 4px;
                 font-family:monospace;font-size:0.9em;}
               pre{background:$codeBackground;border-radius:6px;padding:8px;overflow-x:auto;}

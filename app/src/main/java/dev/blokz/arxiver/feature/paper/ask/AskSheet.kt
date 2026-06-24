@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -13,8 +14,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -29,6 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -70,6 +74,11 @@ fun AskSheet(
     onDismiss: () -> Unit,
     onConfigureProvider: () -> Unit,
     sessionId: Long? = null,
+    /** Open an arXiv cross-reference tapped in an answer (P-Rich R3a); null disables cross-refs. */
+    onOpenCrossRef: ((String) -> Unit)? = null,
+    /** Pin an assistant answer into the paper's notes (P-Rich R3a); null hides the action
+     *  (e.g. collection-scope chat, which has no single target paper). */
+    onPinAnswer: ((String) -> Unit)? = null,
     viewModel: AskViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -86,6 +95,8 @@ fun AskSheet(
             onCancelConfirm = viewModel::cancelConfirm,
             onStop = viewModel::cancel,
             onConfigureProvider = onConfigureProvider,
+            onOpenCrossRef = onOpenCrossRef,
+            onPinAnswer = onPinAnswer,
         )
     }
 }
@@ -101,6 +112,8 @@ private fun AskSheetContent(
     onCancelConfirm: () -> Unit,
     onStop: () -> Unit,
     onConfigureProvider: () -> Unit,
+    onOpenCrossRef: ((String) -> Unit)? = null,
+    onPinAnswer: ((String) -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -131,7 +144,7 @@ private fun AskSheetContent(
             )
             AssistChip(onClick = onSummarize, label = { Text(stringResource(R.string.ask_summarize)) })
         } else {
-            state.messages.forEach { AskBubble(it) }
+            state.messages.forEach { AskBubble(it, onOpenCrossRef = onOpenCrossRef, onPinAnswer = onPinAnswer) }
         }
 
         if (state.preparing) {
@@ -200,7 +213,11 @@ private fun ProviderIndicator(
 }
 
 @Composable
-private fun AskBubble(message: AskMessage) {
+private fun AskBubble(
+    message: AskMessage,
+    onOpenCrossRef: ((String) -> Unit)? = null,
+    onPinAnswer: ((String) -> Unit)? = null,
+) {
     val isUser = message.role == AskRole.USER
     val bubbleColor =
         if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
@@ -226,12 +243,18 @@ private fun AskBubble(message: AskMessage) {
                     } else {
                         null
                     }
-                // A math answer renders via the sandboxed offline KaTeX WebView (P-Rich R1)
+                // A math/diagram answer renders via the sandboxed offline WebView (P-Rich R1/R2)
                 // once the stream settles; everything else uses the native markdown renderer.
+                // Both paths linkify `arXiv:<id>` cross-refs to onOpenCrossRef (P-Rich R3a).
                 if (!message.streaming && RichContent.has(body)) {
-                    RichBlockWebView(markdown = body, onCitationClick = onCite)
+                    RichBlockWebView(markdown = body, onCitationClick = onCite, onArxivPaperClick = onOpenCrossRef)
                 } else {
-                    MarkdownText(markdown = body, color = MaterialTheme.colorScheme.onSurface, onCitationClick = onCite)
+                    MarkdownText(
+                        markdown = body,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        onCitationClick = onCite,
+                        onArxivCrossRefClick = onOpenCrossRef,
+                    )
                 }
                 if (message.citations.isNotEmpty() && !message.streaming) {
                     CitationSources(
@@ -239,6 +262,34 @@ private fun AskBubble(message: AskMessage) {
                         expanded = sourcesExpanded,
                         onToggle = { sourcesExpanded = !sourcesExpanded },
                     )
+                }
+                // Pin a settled, non-empty answer into the paper's notes (P-Rich R3a). Hidden
+                // when there's no target paper (collection chat) — onPinAnswer is null there.
+                // The confirmation is shown in-sheet (the app snackbar sits behind the modal),
+                // by flipping the button to a "done" state on tap.
+                if (onPinAnswer != null && !message.streaming && !message.error && message.text.isNotBlank()) {
+                    var pinned by remember(message.text) { mutableStateOf(false) }
+                    TextButton(
+                        onClick = {
+                            if (!pinned) {
+                                onPinAnswer(message.text)
+                                pinned = true
+                            }
+                        },
+                        enabled = !pinned,
+                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
+                    ) {
+                        Icon(
+                            if (pinned) Icons.Filled.Check else Icons.Outlined.PushPin,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            stringResource(if (pinned) R.string.ask_pinned_to_notes else R.string.ask_pin_to_notes),
+                            modifier = Modifier.padding(start = Spacing.xs),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
                 }
             }
             if (message.streaming) {

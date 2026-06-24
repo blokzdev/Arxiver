@@ -108,6 +108,7 @@ fun PaperDetailScreen(
     val feedback = LocalFeedbackController.current
     val savedMessage = stringResource(R.string.today_snackbar_saved)
     val addToLabel = stringResource(R.string.action_add_to_collection)
+    val pinnedToNotesMessage = stringResource(R.string.ask_pinned_to_notes)
     val state by viewModel.uiState.collectAsState()
     val entry by viewModel.entry.collectAsState()
     val notes by viewModel.notes.collectAsState()
@@ -258,6 +259,19 @@ fun PaperDetailScreen(
                 onConfigureProvider = {
                     showAsk = false
                     onOpenAiSettings()
+                },
+                // Tapping an `arXiv:<id>` in an answer opens that paper in-app (validated here,
+                // fetch-on-demand if not in the library) — P-Rich R3a.
+                onOpenCrossRef = { rawId ->
+                    dev.blokz.arxiver.core.model.ArxivId.parse(rawId)?.let { (id, _) ->
+                        showAsk = false
+                        onPaperClick(id.value)
+                    }
+                },
+                // Pin the answer into this paper's notes, with a confirming snackbar — P-Rich R3a.
+                onPinAnswer = { answer ->
+                    viewModel.addNote(answer)
+                    feedback.show(FeedbackMessage(text = pinnedToNotesMessage))
                 },
             )
         }
