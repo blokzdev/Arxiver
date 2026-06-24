@@ -5,6 +5,7 @@ import dev.blokz.arxiver.chat.ChatMode
 import dev.blokz.arxiver.chat.ChatPreview
 import dev.blokz.arxiver.chat.ChatPreviewBuilder
 import dev.blokz.arxiver.chat.ChatTurn
+import dev.blokz.arxiver.chat.extractFollowUps
 import dev.blokz.arxiver.core.ai.AiException
 import dev.blokz.arxiver.core.ai.AiProvider
 import dev.blokz.arxiver.core.ai.ChatChunk
@@ -168,7 +169,14 @@ class ChatRepository(
                     when (chunk) {
                         is ChatChunk.Delta -> answer.append(chunk.text)
                         is ChatChunk.Done ->
-                            chatDao.updateMessage(assistantId, answer.toString(), ChatMessageEntity.STATUS_COMPLETE)
+                            // Persist the body with any model FOLLOWUPS:: sentinel stripped (P-Rich
+                            // R3b.2), so history hydration and pin-to-notes never resurrect it. Uses
+                            // the same extractor as the ViewModel display path, so DB and UI agree.
+                            chatDao.updateMessage(
+                                assistantId,
+                                extractFollowUps(answer.toString()).first,
+                                ChatMessageEntity.STATUS_COMPLETE,
+                            )
                     }
                     emit(chunk)
                 }

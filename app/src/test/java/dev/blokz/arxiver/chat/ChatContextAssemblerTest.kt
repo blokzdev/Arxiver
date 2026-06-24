@@ -179,4 +179,89 @@ class ChatContextAssemblerTest {
         assertEquals(listOf("2401.00002", "2401.00001"), assembled.citedChunks.map { it.paperId })
         assertEquals("Beta.", assembled.citedChunks.first().text)
     }
+
+    // --- R3b.2: model follow-ups directive + extraction ---
+
+    @Test
+    fun `max cloud asks for model follow-ups but on-device max does not`() {
+        val cloud =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(),
+                mode = ChatMode.MAX,
+            )
+                .request.messages.last().content
+        assertTrue(cloud.contains(ChatContextAssembler.MAX_FOLLOWUPS_SUFFIX.trim()))
+
+        val onDevice =
+            ProviderCapability(contextTokens = 100_000, streaming = true, onDevice = true, requiresKey = false)
+        val dev =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = onDevice,
+                mode = ChatMode.MAX,
+            )
+                .request.messages.last().content
+        assertFalse(dev.contains("FOLLOWUPS"))
+    }
+
+    @Test
+    fun `standard and quick never ask for follow-ups`() {
+        val std =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(),
+                mode = ChatMode.STANDARD,
+            )
+                .request.messages.last().content
+        val quick =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(),
+                mode = ChatMode.QUICK,
+            )
+                .request.messages.last().content
+        assertFalse(std.contains("FOLLOWUPS"))
+        assertFalse(quick.contains("FOLLOWUPS"))
+    }
+
+    @Test
+    fun `extractFollowUps parses and strips a trailing sentinel`() {
+        val (body, ups) = extractFollowUps("The answer.\n\nFOLLOWUPS:: What are the limits? | How does it compare?")
+        assertEquals("The answer.", body)
+        assertEquals(listOf("What are the limits?", "How does it compare?"), ups)
+    }
+
+    @Test
+    fun `extractFollowUps leaves a sentinel-free answer unchanged`() {
+        val (body, ups) = extractFollowUps("Just a normal answer.")
+        assertEquals("Just a normal answer.", body)
+        assertTrue(ups.isEmpty())
+    }
+
+    @Test
+    fun `extractFollowUps only considers the final non-blank line`() {
+        val ans = "Intro that mentions FOLLOWUPS:: not a block.\n\nReal conclusion here."
+        val (body, ups) = extractFollowUps(ans)
+        assertTrue(ups.isEmpty(), "a mid-answer FOLLOWUPS:: must not be parsed or stripped")
+        assertEquals(ans, body)
+    }
+
+    @Test
+    fun `extractFollowUps caps at three, dedups, drops blanks, and accepts a bullet marker`() {
+        assertEquals(listOf("a", "b", "c"), extractFollowUps("X\nFOLLOWUPS:: a | a | b |  | c | d").second)
+        assertEquals(listOf("q1", "q2"), extractFollowUps("X\n- FOLLOWUPS:: q1 | q2").second)
+    }
 }
