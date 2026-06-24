@@ -27,7 +27,7 @@ The model answers in **GitHub-Flavored Markdown**. Rich content rides in **fence
 | Diagrams | ` ```mermaid ` | R2 |
 | Charts | ` ```chart ` (JSON: type, series, labels) | R2 |
 | Vector | ` ```svg ` (sanitized) | R2 |
-| arXiv cross-refs | `arXiv:NNNN.NNNNN` in prose | R3 |
+| arXiv cross-refs | `arXiv:NNNN.NNNNN` in prose | R3a |
 
 **MDX is explicitly rejected:** JSX-in-markdown needs a JS/React runtime and permits arbitrary component execution — wrong for a native, offline, no-telemetry app. Fenced blocks give the same expressive power with a fraction of the dependency and security surface.
 
@@ -45,9 +45,9 @@ Rendering during **streaming** re-parses the partial text per frame (answers are
 ## 5. Conversational-quality features
 
 - **Clickable `[n]` citations → source (R0).** The assembler's labeled context (`[i+1] (arXiv:…) …`, `ChatContextAssembler.userTurn`) is the `n → {paperId, excerpt}` map; it is threaded to the assistant message. `[n]` renders as a tappable span; a **"Sources"** expander under the answer lists each excerpt; tapping `[n]` reveals/scrolls to its source. (Render-only — nothing new leaves the device; redaction goldens unchanged.)
-- **arXiv cross-reference chips (R3).** `arXiv:NNNN.NNNNN` in prose → a chip that opens that paper *in Arxiver* (reuse the deep-link/share-in resolver from task 1.8). Chat becomes navigation.
-- **Pin-to-notes (R3).** Save an answer (or a rendered diagram) into the paper's notes — chat insight becomes durable library content (reuses the notes store).
-- **Follow-up suggestion chips (R3)** and optional **length/tone controls** (e.g. "shorter", "for a non-specialist") for engagement.
+- **arXiv cross-reference chips (R3a ✅).** `arXiv:NNNN.NNNNN` (+ legacy) in an answer → a tappable link that opens that paper *in Arxiver* (resolved at the nav boundary by `ArxivId.parse`, reusing `onPaperClick` fetch-on-demand). Works in both the native and WebView render paths. Chat becomes navigation.
+- **Pin-to-notes (R3a ✅).** Save an answer into the paper's notes (`LibraryRepository.addNote`) with an "Added to notes" snackbar — chat insight becomes durable library content. Hidden for collection-scope chat (no single target paper; multi-paper pinning → R3.x).
+- **Preset / mode / multimodal (R3c / R3b / R3d).** One-tap research-tool presets (the *task*), a Quick/Standard/Max depth dial (the *how*), and a vision "with figures" input axis — see §8. **Follow-up suggestion chips** and **length/tone** fold into modes (heuristic follow-ups in Quick/Standard, model-generated in Max).
 - **TTS read-aloud (R4-adjacent).** Speak an answer (aligns with the planned P3 `TextToSpeech`), reading the text alternative for rich blocks.
 
 ## 6. System prompt (provider-aware)
@@ -69,8 +69,13 @@ Render a block (or whole answer) to **PNG/SVG/PDF**; tables → CSV; whole conve
 - **R1** ✅ — math: `RichBlockWebView` foundation + KaTeX; provider-aware (cloud-only) math system-prompt invitation. **Design note:** an answer that contains math is rendered **whole** through the WebView (commonmark `HtmlRenderer` → HTML → KaTeX), not block-by-block — this handles **inline** `$…$` (which a native bitmap lib does poorly) and is the foundation R2 reuses for Mermaid. `jlatexmath` was rejected (not reliably on Maven Central → dep risk). Plain answers stay on the native R0 renderer; the WebView talks back only via `arxiver://cite|height` link interception (no JS↔app data bridge), loads only bundled KaTeX, and blocks all network/file access.
 - **R2** ✅ — **Mermaid** diagrams + charts on the same WebView: bundled `mermaid@10.9.3` (UMD); `RichHtml` rewrites ` ```mermaid ` code blocks to `<pre class="mermaid">` and runs Mermaid (`securityLevel:'strict'`, theme matched to light/dark) after KaTeX; `RichContent.has` routes diagram answers; cloud system-prompt invites Mermaid (flowchart/sequence/mindmap/timeline + pie/xychart-beta). Charts are Mermaid's native chart types (no separate `chart.js`). **Raw ` ```svg ` deferred to R2.5** — model-supplied SVG is a markup-injection surface deserving its own sanitizer; Mermaid covers the bulk of the diagram/chart value.
 - **R2.5** — sanitized raw ` ```svg ` passthrough (strip `<script>`/event-handlers/`<foreignObject>`/external refs) on the same WebView.
-- **R3** — arXiv cross-ref chips, pin-to-notes, follow-up chips, tone controls.
+- **R3a** ✅ — **navigation & capture.** `arXiv:<id>` (modern + legacy) cross-references → open the paper in-app, wired in **both** render paths (native `MarkdownText` `crossRef`-tinted link; WebView `RichHtml` → `<a href="arxiver://paper/<id>">` intercepted in `RichBlockWebView`, legacy slash-ids percent-encoded); resolved at the nav boundary via `ArxivId.parse` (fetch-on-demand, `notFound` on miss). **Pin-to-notes:** a settled answer → `LibraryRepository.addNote` + an "Added to notes" snackbar; hidden for collection-scope chat. No new deps, no prompt change, redaction goldens untouched.
+- **R3c** — **Ask preset library (text-only):** an extensible `AskPreset` registry (Summarize is member #1; Key contributions, Explain method, Critique, Compare, ELI5, Glossary, BibTeX, Repro-checklist), each a curated instruction injected as a **user-turn**. The *task* ("what") dimension.
+- **R3b** — **3-mode depth system** (Quick / Standard / Max): an ambient per-session dial modulating length + richness + follow-up sophistication (heuristic in Quick/Standard, model-generated in Max, cloud-only), injected as a user-turn directive; Max strengthens the cloud rich invite. The *depth* ("how") dimension — **orthogonal** to presets. Rule: modes govern depth only; *audience* ("non-specialist") is a preset (ELI5), never a mode facet.
+- **R3d** — **multimodal "with figures"** (vision, cloud-only): PDF page/figure → bitmap → vision request; provider-vision gating (on-device hidden), privacy-preview disclosure, payload limits. The *input* ("with what") axis; surfaces as a `requiresVision` preset.
 - **R4** — export/share (per-block + whole-conversation), TTS.
+
+**The model — two composable dimensions + a capability axis:** **preset** (what) × **mode** (how) compose into an N×3 grid, both implemented as stacked **user-turn directives** so `SYSTEM_PROMPT` stays byte-identical (goldens safe); **multimodal** adds an *input* axis as a flag on a preset.
 
 ## 9. Testing
 

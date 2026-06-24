@@ -36,4 +36,16 @@ class MarkdownTextTest {
         val withCitations = firstBlockInline(markdown, onCite = {})
         assertEquals(2, withCitations.getLinkAnnotations(0, withCitations.length).size)
     }
+
+    @Test
+    fun `arXiv cross-refs become clickable links only when wired`() {
+        val markdown = "Builds on arXiv:2403.01234 and the legacy arXiv:hep-th/9901001."
+        val node = requireNotNull(parser.parse(markdown).firstChild)
+        assertTrue(
+            inlineString(node, palette, onCite = null).getLinkAnnotations(0, markdown.length).isEmpty(),
+            "no cross-ref links until wired",
+        )
+        val linked = inlineString(node, palette, onCite = null, onCrossRef = {})
+        assertEquals(2, linked.getLinkAnnotations(0, linked.length).size, "modern + legacy ids both linked")
+    }
 }

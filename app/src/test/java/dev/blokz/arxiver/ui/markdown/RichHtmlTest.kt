@@ -33,7 +33,7 @@ class RichHtmlTest {
 
     @Test
     fun `citations linkify outside math but not inside`() {
-        val out = RichHtml.linkifyCitations("See [1] and a span ${'$'}\\sqrt[2]{x}${'$'} then [3].")
+        val out = RichHtml.linkify("See [1] and a span ${'$'}\\sqrt[2]{x}${'$'} then [3].")
         assertTrue(out.contains("arxiver://cite/1"), "citation before math")
         assertTrue(out.contains("arxiver://cite/3"), "citation after math")
         assertTrue(out.contains("\\sqrt[2]{x}"), "the LaTeX [2] inside math is preserved")
@@ -52,10 +52,37 @@ class RichHtmlTest {
     fun `citations skip mermaid blocks`() {
         // A Mermaid node label like B[1] must NOT be turned into a citation.
         val out =
-            RichHtml.linkifyCitations("intro [1] <pre class=\"mermaid\">graph TD; A-->B[1]</pre> end [2]")
+            RichHtml.linkify("intro [1] <pre class=\"mermaid\">graph TD; A-->B[1]</pre> end [2]")
         assertTrue(out.contains("arxiver://cite/1"), "intro citation")
         assertTrue(out.contains("arxiver://cite/2"), "trailing citation")
         assertTrue(out.contains("A-->B[1]"), "the Mermaid node B[1] is preserved")
+    }
+
+    @Test
+    fun `arXiv references become in-app paper links`() {
+        val out = html("Builds on arXiv:2403.01234 and the legacy arXiv:hep-th/9901001.")
+        assertTrue(out.contains("arxiver://paper/2403.01234"), "modern id -> paper link")
+        // Legacy slash-id is percent-encoded so the WebView reads it as one path segment.
+        assertTrue(out.contains("arxiver://paper/hep-th%2F9901001"), "legacy id -> encoded paper link")
+        assertTrue(out.contains(">arXiv:2403.01234</a>"), "the visible link text keeps the arXiv: prefix")
+    }
+
+    @Test
+    fun `cross-refs linkify outside math and mermaid only`() {
+        val out =
+            RichHtml.linkify(
+                "see arXiv:2403.01234 ${'$'}x=arXiv:1111.22222${'$'} " +
+                    "<pre class=\"mermaid\">A[arXiv:9999.88888]</pre>",
+            )
+        assertTrue(out.contains("arxiver://paper/2403.01234"), "cross-ref in prose is linked")
+        assertTrue(out.contains("${'$'}x=arXiv:1111.22222${'$'}"), "an arXiv-looking token inside math is untouched")
+        assertTrue(out.contains("A[arXiv:9999.88888]"), "an arXiv token inside a mermaid block is untouched")
+    }
+
+    @Test
+    fun `malformed arXiv ids are not linked`() {
+        val out = html("Not a ref: arXiv:2405.1 nor arXiv:notreal.")
+        assertFalse(out.contains("arxiver://paper/"), "too-short / non-id text is never a cross-ref link")
     }
 
     @Test

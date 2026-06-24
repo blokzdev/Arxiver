@@ -161,6 +161,13 @@ fun FilteredPapersScreen(
                 showAsk = false
                 onOpenAiSettings()
             },
+            // Cross-refs navigate from collection chat too; pinning is omitted (no single paper).
+            onOpenCrossRef = { rawId ->
+                dev.blokz.arxiver.core.model.ArxivId.parse(rawId)?.let { (id, _) ->
+                    showAsk = false
+                    onPaperClick(id.value)
+                }
+            },
         )
     }
 
