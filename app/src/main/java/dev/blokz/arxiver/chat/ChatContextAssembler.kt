@@ -109,10 +109,13 @@ class ChatContextAssembler(
 
         /**
          * Appended for cloud models (small on-device models emit structured output
-         * unreliably): invite LaTeX math, which the app renders with KaTeX (P-Rich R1).
+         * unreliably): invite LaTeX math (KaTeX, P-Rich R1) and Mermaid diagrams (P-Rich R2),
+         * which the app renders locally.
          */
         const val CLOUD_RICH_ADDENDUM =
             " Use LaTeX for mathematics — inline as ${'$'}…${'$'} and display equations as " +
-                "${'$'}${'$'}…${'$'}${'$'} — when it clarifies the answer."
+                "${'$'}${'$'}…${'$'}${'$'}. When a picture helps, draw it with a Mermaid block " +
+                "(```mermaid) — a flowchart, sequence, mindmap, or timeline, or a pie/xychart-beta " +
+                "chart. Use these only when they make the answer clearer."
     }
 }

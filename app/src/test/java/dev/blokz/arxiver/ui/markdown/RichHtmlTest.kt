@@ -41,10 +41,29 @@ class RichHtmlTest {
     }
 
     @Test
-    fun `rich content gate detects math only`() {
+    fun `mermaid fences become renderable mermaid blocks`() {
+        val out = html("```mermaid\ngraph TD; A-->B\n```")
+        assertTrue(out.contains("<pre class=\"mermaid\">"), "```mermaid becomes a renderable block")
+        assertTrue(out.contains("mermaid.min.js"), "loads bundled Mermaid")
+        assertTrue(out.contains("mermaid.run"), "runs Mermaid")
+    }
+
+    @Test
+    fun `citations skip mermaid blocks`() {
+        // A Mermaid node label like B[1] must NOT be turned into a citation.
+        val out =
+            RichHtml.linkifyCitations("intro [1] <pre class=\"mermaid\">graph TD; A-->B[1]</pre> end [2]")
+        assertTrue(out.contains("arxiver://cite/1"), "intro citation")
+        assertTrue(out.contains("arxiver://cite/2"), "trailing citation")
+        assertTrue(out.contains("A-->B[1]"), "the Mermaid node B[1] is preserved")
+    }
+
+    @Test
+    fun `rich content gate detects math and diagrams only`() {
         assertTrue(RichContent.has("energy ${'$'}E=mc^2${'$'} here"))
         assertTrue(RichContent.has("display ${'$'}${'$'}\\int x${'$'}${'$'} block"))
         assertTrue(RichContent.has("```math\nx\n```"))
+        assertTrue(RichContent.has("```mermaid\ngraph TD\n```"))
         assertFalse(RichContent.has("just **bold**, a list, and a 5 dollar price"))
     }
 }

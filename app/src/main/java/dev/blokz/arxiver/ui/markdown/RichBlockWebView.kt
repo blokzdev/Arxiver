@@ -5,6 +5,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
@@ -39,14 +40,16 @@ fun RichBlockWebView(
     onCitationClick: ((Int) -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
+    val dark = isSystemInDarkTheme()
     val html =
-        remember(markdown, scheme.onSurface, scheme.primary, scheme.surfaceVariant) {
+        remember(markdown, scheme.onSurface, scheme.primary, scheme.surfaceVariant, dark) {
             RichHtml.answerHtml(
                 markdown = markdown,
                 textColor = scheme.onSurface.toCssHex(),
                 citationColor = scheme.primary.toCssHex(),
                 codeBackground = scheme.surfaceVariant.toCssHex(),
                 mutedColor = scheme.outlineVariant.toCssHex(),
+                dark = dark,
             )
         }
     var heightDp by remember { mutableIntStateOf(0) }

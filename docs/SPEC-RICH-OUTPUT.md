@@ -67,7 +67,8 @@ Render a block (or whole answer) to **PNG/SVG/PDF**; tables → CSV; whole conve
 
 - **R0** ✅ — commonmark dep + `MarkdownText` renderer in `AskBubble`; clickable `[n]` citations + Sources expander; markdown system-prompt invitation. *(+ Gemini deprecated-model fix.)*
 - **R1** ✅ — math: `RichBlockWebView` foundation + KaTeX; provider-aware (cloud-only) math system-prompt invitation. **Design note:** an answer that contains math is rendered **whole** through the WebView (commonmark `HtmlRenderer` → HTML → KaTeX), not block-by-block — this handles **inline** `$…$` (which a native bitmap lib does poorly) and is the foundation R2 reuses for Mermaid. `jlatexmath` was rejected (not reliably on Maven Central → dep risk). Plain answers stay on the native R0 renderer; the WebView talks back only via `arxiver://cite|height` link interception (no JS↔app data bridge), loads only bundled KaTeX, and blocks all network/file access.
-- **R2** — diagrams/charts/SVG on the WebView + native charts; full system-prompt invitation.
+- **R2** ✅ — **Mermaid** diagrams + charts on the same WebView: bundled `mermaid@10.9.3` (UMD); `RichHtml` rewrites ` ```mermaid ` code blocks to `<pre class="mermaid">` and runs Mermaid (`securityLevel:'strict'`, theme matched to light/dark) after KaTeX; `RichContent.has` routes diagram answers; cloud system-prompt invites Mermaid (flowchart/sequence/mindmap/timeline + pie/xychart-beta). Charts are Mermaid's native chart types (no separate `chart.js`). **Raw ` ```svg ` deferred to R2.5** — model-supplied SVG is a markup-injection surface deserving its own sanitizer; Mermaid covers the bulk of the diagram/chart value.
+- **R2.5** — sanitized raw ` ```svg ` passthrough (strip `<script>`/event-handlers/`<foreignObject>`/external refs) on the same WebView.
 - **R3** — arXiv cross-ref chips, pin-to-notes, follow-up chips, tone controls.
 - **R4** — export/share (per-block + whole-conversation), TTS.
 
