@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -99,6 +101,7 @@ fun AskSheet(
             onInput = viewModel::setInput,
             onSend = viewModel::send,
             onRunPreset = viewModel::runPreset,
+            onFollowUp = viewModel::runPreset,
             onSetMode = viewModel::setMode,
             onSetIncludeNotes = viewModel::setIncludeNotes,
             onConfirmSend = viewModel::confirmSend,
@@ -118,6 +121,7 @@ private fun AskSheetContent(
     onInput: (String) -> Unit,
     onSend: () -> Unit,
     onRunPreset: (String) -> Unit,
+    onFollowUp: (String) -> Unit,
     onSetMode: (ChatMode) -> Unit,
     onSetIncludeNotes: (Boolean) -> Unit,
     onConfirmSend: () -> Unit,
@@ -155,7 +159,19 @@ private fun AskSheetContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            state.messages.forEach { AskBubble(it, onOpenCrossRef = onOpenCrossRef, onPinAnswer = onPinAnswer) }
+            // Follow-up chips render only on the latest assistant turn (a "next question" affordance,
+            // not a wall of chips up the scrollback), and only when no turn is in flight.
+            val lastAssistant = state.messages.indexOfLast { it.role == AskRole.ASSISTANT }
+            val chipsEnabled = !state.streaming && !state.preparing
+            state.messages.forEachIndexed { index, message ->
+                AskBubble(
+                    message = message,
+                    onOpenCrossRef = onOpenCrossRef,
+                    onPinAnswer = onPinAnswer,
+                    onFollowUp = if (index == lastAssistant) onFollowUp else null,
+                    followUpsEnabled = chipsEnabled,
+                )
+            }
         }
 
         if (state.preparing) {
@@ -234,6 +250,8 @@ private fun AskBubble(
     message: AskMessage,
     onOpenCrossRef: ((String) -> Unit)? = null,
     onPinAnswer: ((String) -> Unit)? = null,
+    onFollowUp: ((String) -> Unit)? = null,
+    followUpsEnabled: Boolean = true,
 ) {
     val isUser = message.role == AskRole.USER
     val bubbleColor =
@@ -307,6 +325,15 @@ private fun AskBubble(
                             style = MaterialTheme.typography.labelMedium,
                         )
                     }
+                }
+                // Suggested follow-up questions (P-Rich R3b.2): a settled, non-empty answer on the
+                // latest turn offers tappable next questions that re-enter the grounded ask() path.
+                if (onFollowUp != null && !message.streaming && !message.error && message.followUps.isNotEmpty()) {
+                    FollowUpChips(
+                        followUps = message.followUps,
+                        enabled = followUpsEnabled,
+                        onFollowUp = onFollowUp,
+                    )
                 }
             }
             if (message.streaming) {
@@ -393,6 +420,34 @@ private fun ConfirmCard(
                     Text(stringResource(R.string.ask_confirm_send))
                 }
             }
+        }
+    }
+}
+
+/** Tappable suggested next questions below a settled answer (P-Rich R3b.2); each re-enters ask(). */
+@Composable
+private fun FollowUpChips(
+    followUps: List<String>,
+    enabled: Boolean,
+    onFollowUp: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+    ) {
+        followUps.forEach { question ->
+            AssistChip(
+                onClick = { onFollowUp(question) },
+                enabled = enabled,
+                label = {
+                    Text(
+                        question,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 240.dp),
+                    )
+                },
+            )
         }
     }
 }
@@ -510,7 +565,7 @@ private fun AskSheetEmptyPreview() {
         AskSheetContent(
             state = AskUiState(provider = ProviderId.ON_DEVICE, isCloud = false),
             presets = AskPresets.forScope(isPaper = true),
-            onInput = {}, onSend = {}, onRunPreset = {}, onSetMode = {}, onSetIncludeNotes = {},
+            onInput = {}, onSend = {}, onRunPreset = {}, onFollowUp = {}, onSetMode = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
@@ -548,7 +603,7 @@ private fun AskSheetConversationPreview() {
                         ),
                 ),
             presets = AskPresets.forScope(isPaper = true),
-            onInput = {}, onSend = {}, onRunPreset = {}, onSetMode = {}, onSetIncludeNotes = {},
+            onInput = {}, onSend = {}, onRunPreset = {}, onFollowUp = {}, onSetMode = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }

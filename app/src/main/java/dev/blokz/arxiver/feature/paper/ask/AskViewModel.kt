@@ -7,6 +7,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.chat.ChatMode
 import dev.blokz.arxiver.chat.ChatPreview
+import dev.blokz.arxiver.chat.extractFollowUps
 import dev.blokz.arxiver.core.ai.AiException
 import dev.blokz.arxiver.core.ai.ChatChunk
 import dev.blokz.arxiver.core.ai.ProviderId
@@ -39,6 +40,8 @@ data class AskMessage(
     val error: Boolean = false,
     /** Sources cited as `[1..n]` in this (assistant) answer, for tappable citations. */
     val citations: List<Citation> = emptyList(),
+    /** Suggested follow-up questions (P-Rich R3b.2); live-turn only, not persisted. */
+    val followUps: List<String> = emptyList(),
 )
 
 data class AskUiState(
@@ -79,6 +82,10 @@ class AskViewModel
         private var streamJob: Job? = null
         private var indexJob: Job? = null
         private var pendingPrepared: PreparedChat? = null
+
+        // The mode pinned for the parked cloud request — read at ask() time, NOT from the live
+        // ui state (which can change during the confirm dialog), so a Max turn keeps Max follow-ups.
+        private var pendingMode: ChatMode = ChatMode.STANDARD
 
         private val _uiState = MutableStateFlow(AskUiState())
         val uiState: StateFlow<AskUiState> = _uiState.asStateFlow()
@@ -132,7 +139,7 @@ class AskViewModel
         fun confirmSend() {
             val prepared = pendingPrepared ?: return
             pendingPrepared = null
-            startStream(prepared)
+            startStream(prepared, pendingMode)
         }
 
         fun cancelConfirm() {
@@ -169,9 +176,10 @@ class AskViewModel
                         }
                         if (prepared.isCloud) {
                             pendingPrepared = prepared
+                            pendingMode = mode
                             _uiState.update { it.copy(pendingConfirm = prepared.preview) }
                         } else {
-                            startStream(prepared)
+                            startStream(prepared, mode)
                         }
                     }
                     ChatPrepareResult.NotConfigured ->
@@ -182,7 +190,10 @@ class AskViewModel
             }
         }
 
-        private fun startStream(prepared: PreparedChat) {
+        private fun startStream(
+            prepared: PreparedChat,
+            mode: ChatMode,
+        ) {
             _uiState.update {
                 it.copy(
                     pendingConfirm = null,
@@ -211,7 +222,8 @@ class AskViewModel
                                         updateAssistant(answer.toString(), streaming = false, error = true)
                                         _uiState.update { it.copy(error = R.string.ask_error_generic) }
                                     } else {
-                                        updateAssistant(answer.toString(), streaming = false)
+                                        val (body, followUps) = settleFollowUps(prepared, mode, answer.toString())
+                                        updateAssistant(body, streaming = false, followUps = followUps)
                                     }
                             }
                         }
@@ -238,11 +250,36 @@ class AskViewModel
                 }
         }
 
+        /**
+         * Settle a finished answer's follow-ups (P-Rich R3b.2): strip the cloud-Max `FOLLOWUPS::`
+         * sentinel from the body, and use the model's suggestions for cloud-Max, else (incl.
+         * on-device Max or a Max answer with no parseable block) the local heuristic generator.
+         * Returns the cleaned body + the chosen follow-ups.
+         */
+        private fun settleFollowUps(
+            prepared: PreparedChat,
+            mode: ChatMode,
+            rawAnswer: String,
+        ): Pair<String, List<String>> {
+            val (body, modelFollowUps) = extractFollowUps(rawAnswer)
+            val fromModel = if (mode == ChatMode.MAX && prepared.isCloud) modelFollowUps else emptyList()
+            val followUps =
+                fromModel.ifEmpty {
+                    FollowUpHeuristics.followUps(prepared.question, body, prepared.citations, priorQuestions())
+                }
+            return body to followUps
+        }
+
+        /** Earlier user questions this session (for follow-up dedup); excludes the live turn's own. */
+        private fun priorQuestions(): List<String> =
+            _uiState.value.messages.filter { it.role == AskRole.USER }.map { it.text }
+
         /** Replace the trailing assistant bubble (the live/just-finished turn). */
         private fun updateAssistant(
             text: String,
             streaming: Boolean,
             error: Boolean = false,
+            followUps: List<String> = emptyList(),
         ) = _uiState.update { state ->
             val messages = state.messages
             val lastIndex = messages.indexOfLast { it.role == AskRole.ASSISTANT }
@@ -252,7 +289,13 @@ class AskViewModel
                 state.copy(
                     messages =
                         messages.toMutableList().also {
-                            it[lastIndex] = it[lastIndex].copy(text = text, streaming = streaming, error = error)
+                            it[lastIndex] =
+                                it[lastIndex].copy(
+                                    text = text,
+                                    streaming = streaming,
+                                    error = error,
+                                    followUps = followUps,
+                                )
                         },
                 )
             }

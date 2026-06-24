@@ -17,6 +17,28 @@ data class ChatTurn(val role: ChatRole, val content: String)
  */
 enum class ChatMode { QUICK, STANDARD, MAX }
 
+private val FOLLOWUPS_LINE = Regex("""^[ \t>*\-]*FOLLOWUPS::[ \t]*(.+)$""")
+
+/**
+ * Model-generated follow-ups (P-Rich R3b.2): if [answer]'s **last non-blank line** is a
+ * `FOLLOWUPS:: q1 | q2 | q3` sentinel (Max on cloud emits it — see
+ * [ChatContextAssembler.MAX_FOLLOWUPS_SUFFIX]), returns the body with that one line removed plus the
+ * parsed suggestions (≤3, de-duped). Only the final non-blank line is considered, so a mid-answer
+ * or fenced `FOLLOWUPS::` literal is never stripped (and the conclusion is never truncated).
+ * Returns `(answer, emptyList())` when absent or malformed. Pure — shared by the ViewModel (display)
+ * and the repository (persist) so the rendered and stored bodies always agree.
+ */
+fun extractFollowUps(answer: String): Pair<String, List<String>> {
+    val lines = answer.trimEnd().lines()
+    val lastIdx = lines.indexOfLast { it.isNotBlank() }
+    if (lastIdx < 0) return answer to emptyList()
+    val match = FOLLOWUPS_LINE.matchEntire(lines[lastIdx].trim()) ?: return answer to emptyList()
+    val items =
+        match.groupValues[1].split('|').map { it.trim() }.filter { it.isNotBlank() }.distinct().take(3)
+    if (items.isEmpty()) return answer to emptyList()
+    return lines.subList(0, lastIdx).joinToString("\n").trimEnd() to items
+}
+
 /**
  * The assembled request plus the chunks actually cited in it, in `[1..n]` order (the
  * subset that fit the budget) — so the UI can map an answer's `[n]` to its source.
@@ -116,7 +138,7 @@ class ChatContextAssembler(
         when (mode) {
             ChatMode.QUICK -> QUICK_DIRECTIVE
             ChatMode.STANDARD -> ""
-            ChatMode.MAX -> if (onDevice) MAX_DIRECTIVE else MAX_DIRECTIVE + MAX_RICH_SUFFIX
+            ChatMode.MAX -> if (onDevice) MAX_DIRECTIVE else MAX_DIRECTIVE + MAX_RICH_SUFFIX + MAX_FOLLOWUPS_SUFFIX
         }
 
     private fun estTokens(text: String): Int = (text.length + 3) / 4
@@ -134,6 +156,16 @@ class ChatContextAssembler(
 
         /** Appended to [MAX_DIRECTIVE] for cloud models only (small on-device models emit broken markup). */
         const val MAX_RICH_SUFFIX = " Use a Markdown table or a Mermaid diagram when it genuinely clarifies."
+
+        /**
+         * Appended for cloud Max only (P-Rich R3b.2): asks for model-generated follow-ups as a final
+         * `FOLLOWUPS::` line, parsed + stripped by [extractFollowUps]. Rides the user turn (never the
+         * system prompt); on-device Max omits it and falls back to local heuristics.
+         */
+        const val MAX_FOLLOWUPS_SUFFIX =
+            " Finally, on the very last line and with nothing after it, suggest 2–3 natural follow-up " +
+                "questions in the form: FOLLOWUPS:: first question | second question | third question " +
+                "(separate them with ' | ' and put no other text on that line)."
 
         /** Model-facing system instruction (English, like the routine starter text). */
         const val SYSTEM_PROMPT =
