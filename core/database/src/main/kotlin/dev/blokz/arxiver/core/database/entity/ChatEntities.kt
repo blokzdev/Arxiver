@@ -11,7 +11,9 @@ import androidx.room.PrimaryKey
  * `PAPER` (per-paper Ask) or `COLLECTION` (KB chat over a collection's papers);
  * `scope_id` holds the paper id or the collection id as text. `provider_id` is a
  * `ProviderId` name — never a key. Chat history is local conversation: excluded
- * from exports/backups (red line).
+ * from the automated/importable exports/backups (`BackupManager`/`LibraryExporter`)
+ * — red line. (A user-initiated one-shot share-out of a single conversation as
+ * Markdown via the OS share sheet is a different, explicit action — P-Rich R4.)
  */
 @Entity(
     tableName = "chat_sessions",

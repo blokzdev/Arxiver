@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -26,6 +27,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -86,6 +88,10 @@ fun AskSheet(
     /** Pin an assistant answer into the paper's notes (P-Rich R3a); null hides the action
      *  (e.g. collection-scope chat, which has no single target paper). */
     onPinAnswer: ((String) -> Unit)? = null,
+    /** Share a single answer as Markdown via the OS share sheet (P-Rich R4); null hides it. */
+    onShareAnswer: ((AskMessage) -> Unit)? = null,
+    /** Share the whole conversation as Markdown via the OS share sheet (P-Rich R4); null hides it. */
+    onShareConversation: ((List<AskMessage>) -> Unit)? = null,
     viewModel: AskViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -110,6 +116,8 @@ fun AskSheet(
             onConfigureProvider = onConfigureProvider,
             onOpenCrossRef = onOpenCrossRef,
             onPinAnswer = onPinAnswer,
+            onShareAnswer = onShareAnswer,
+            onShareConversation = onShareConversation,
         )
     }
 }
@@ -130,6 +138,8 @@ private fun AskSheetContent(
     onConfigureProvider: () -> Unit,
     onOpenCrossRef: ((String) -> Unit)? = null,
     onPinAnswer: ((String) -> Unit)? = null,
+    onShareAnswer: ((AskMessage) -> Unit)? = null,
+    onShareConversation: ((List<AskMessage>) -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -140,7 +150,24 @@ private fun AskSheetContent(
                 .padding(bottom = Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        Text(stringResource(R.string.ask_title), style = MaterialTheme.typography.titleLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.ask_title),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.weight(1f),
+            )
+            // Share the whole conversation as Markdown (P-Rich R4) — shown once a real answer exists.
+            val canShareConversation =
+                onShareConversation != null &&
+                    state.messages.any {
+                        it.role == AskRole.ASSISTANT && !it.streaming && !it.error && it.text.isNotBlank()
+                    }
+            if (canShareConversation) {
+                IconButton(onClick = { onShareConversation!!(state.messages) }) {
+                    Icon(Icons.Filled.Share, stringResource(R.string.cd_ask_share_conversation))
+                }
+            }
+        }
 
         state.provider?.let { ProviderIndicator(it, state.isCloud) }
 
@@ -168,6 +195,7 @@ private fun AskSheetContent(
                     message = message,
                     onOpenCrossRef = onOpenCrossRef,
                     onPinAnswer = onPinAnswer,
+                    onShareAnswer = onShareAnswer,
                     onFollowUp = if (index == lastAssistant) onFollowUp else null,
                     followUpsEnabled = chipsEnabled,
                 )
@@ -250,6 +278,7 @@ private fun AskBubble(
     message: AskMessage,
     onOpenCrossRef: ((String) -> Unit)? = null,
     onPinAnswer: ((String) -> Unit)? = null,
+    onShareAnswer: ((AskMessage) -> Unit)? = null,
     onFollowUp: ((String) -> Unit)? = null,
     followUpsEnabled: Boolean = true,
 ) {
@@ -298,32 +327,52 @@ private fun AskBubble(
                         onToggle = { sourcesExpanded = !sourcesExpanded },
                     )
                 }
-                // Pin a settled, non-empty answer into the paper's notes (P-Rich R3a). Hidden
-                // when there's no target paper (collection chat) — onPinAnswer is null there.
-                // The confirmation is shown in-sheet (the app snackbar sits behind the modal),
-                // by flipping the button to a "done" state on tap.
-                if (onPinAnswer != null && !message.streaming && !message.error && message.text.isNotBlank()) {
-                    var pinned by remember(message.text) { mutableStateOf(false) }
-                    TextButton(
-                        onClick = {
-                            if (!pinned) {
-                                onPinAnswer(message.text)
-                                pinned = true
+                // Action row under a settled, non-empty answer: pin-to-notes (P-Rich R3a, paper
+                // scope only — onPinAnswer null in collection chat) + share-as-Markdown (P-Rich R4).
+                // Pin's confirmation is shown in-sheet (the app snackbar sits behind the modal) by
+                // flipping the button to a "done" state; share's confirmation is the OS chooser.
+                val canAct = !message.streaming && !message.error && message.text.isNotBlank()
+                if (canAct && (onPinAnswer != null || onShareAnswer != null)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+                        if (onPinAnswer != null) {
+                            var pinned by remember(message.text) { mutableStateOf(false) }
+                            TextButton(
+                                onClick = {
+                                    if (!pinned) {
+                                        onPinAnswer(message.text)
+                                        pinned = true
+                                    }
+                                },
+                                enabled = !pinned,
+                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
+                            ) {
+                                Icon(
+                                    if (pinned) Icons.Filled.Check else Icons.Outlined.PushPin,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    stringResource(
+                                        if (pinned) R.string.ask_pinned_to_notes else R.string.ask_pin_to_notes,
+                                    ),
+                                    modifier = Modifier.padding(start = Spacing.xs),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
                             }
-                        },
-                        enabled = !pinned,
-                        contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
-                    ) {
-                        Icon(
-                            if (pinned) Icons.Filled.Check else Icons.Outlined.PushPin,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp),
-                        )
-                        Text(
-                            stringResource(if (pinned) R.string.ask_pinned_to_notes else R.string.ask_pin_to_notes),
-                            modifier = Modifier.padding(start = Spacing.xs),
-                            style = MaterialTheme.typography.labelMedium,
-                        )
+                        }
+                        if (onShareAnswer != null) {
+                            TextButton(
+                                onClick = { onShareAnswer(message) },
+                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
+                            ) {
+                                Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Text(
+                                    stringResource(R.string.ask_share_answer),
+                                    modifier = Modifier.padding(start = Spacing.xs),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
                     }
                 }
                 // Suggested follow-up questions (P-Rich R3b.2): a settled, non-empty answer on the
@@ -373,13 +422,13 @@ private fun CitationSources(
                 verticalArrangement = Arrangement.spacedBy(Spacing.xs),
             ) {
                 citations.forEach { citation ->
-                    val snippet = citation.excerpt.trim()
                     Text(
                         text =
                             buildAnnotatedString {
                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("[${citation.index}] ") }
                                 append("arXiv:${citation.paperId} — ")
-                                append(if (snippet.length > 160) snippet.take(160).trimEnd() + "…" else snippet)
+                                // Shared with the Markdown export so shared text matches the screen (R4).
+                                append(truncateExcerpt(citation.excerpt))
                             },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -388,6 +388,13 @@
     <string name="ask_sources">Sources · %1$d</string>
     <string name="ask_pin_to_notes">Pin to notes</string>
     <string name="ask_pinned_to_notes">Added to notes</string>
+    <!-- P-Rich R4: share / export -->
+    <string name="ask_share_answer">Share</string>
+    <string name="cd_ask_share_conversation">Share this conversation</string>
+    <string name="ask_export_you">You</string>
+    <string name="ask_export_assistant">Assistant</string>
+    <string name="ask_export_sources">Sources</string>
+    <string name="ask_export_footer">Exported from Arxiver</string>
     <string name="ask_include_notes">Include my notes</string>
     <string name="ask_include_notes_hint">Let the answer draw on your notes for this paper.</string>
     <string name="ask_provider_cloud">Answered by %1$s — review what\'s sent before each cloud reply.</string>
