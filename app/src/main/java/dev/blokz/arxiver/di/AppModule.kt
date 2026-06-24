@@ -29,6 +29,13 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun pageImageSource(
+        @ApplicationContext context: Context,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.data.PageImageSource = dev.blokz.arxiver.data.PdfPageImageSource(context, dispatchers)
+
+    @Provides
+    @Singleton
     fun database(
         @ApplicationContext context: Context,
     ): ArxiverDatabase = ArxiverDatabase.build(context)
