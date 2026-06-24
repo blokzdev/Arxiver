@@ -53,6 +53,8 @@ import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.Citation
 import dev.blokz.arxiver.ui.markdown.MarkdownText
+import dev.blokz.arxiver.ui.markdown.RichBlockWebView
+import dev.blokz.arxiver.ui.markdown.RichContent
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 
@@ -224,7 +226,13 @@ private fun AskBubble(message: AskMessage) {
                     } else {
                         null
                     }
-                MarkdownText(markdown = body, color = MaterialTheme.colorScheme.onSurface, onCitationClick = onCite)
+                // A math answer renders via the sandboxed offline KaTeX WebView (P-Rich R1)
+                // once the stream settles; everything else uses the native markdown renderer.
+                if (!message.streaming && RichContent.has(body)) {
+                    RichBlockWebView(markdown = body, onCitationClick = onCite)
+                } else {
+                    MarkdownText(markdown = body, color = MaterialTheme.colorScheme.onSurface, onCitationClick = onCite)
+                }
                 if (message.citations.isNotEmpty() && !message.streaming) {
                     CitationSources(
                         citations = message.citations,

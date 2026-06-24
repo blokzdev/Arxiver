@@ -34,7 +34,7 @@ class ChatContextAssemblerTest {
                 capability = cap(),
             ).request
 
-        assertEquals(ChatContextAssembler.SYSTEM_PROMPT, request.system)
+        assertTrue(request.system!!.startsWith(ChatContextAssembler.SYSTEM_PROMPT))
         val last = request.messages.last()
         assertEquals(ChatRole.USER, last.role)
         assertTrue(last.content.contains("Transformers scale well."))
@@ -83,7 +83,9 @@ class ChatContextAssemblerTest {
         // Two equal-length (equal-cost) chunks; only the higher-scored one should fit.
         val chunks = listOf(chunk(1, "low-scored-chunk-body!", 0.1), chunk(2, "high-scored-chunk-body", 0.9))
         // Budget after system+question (~20 tokens) leaves room for one ~14-token chunk, not two.
-        val systemTokens = (ChatContextAssembler.SYSTEM_PROMPT.length + 3) / 4
+        // cap() is a cloud capability, so the system prompt is base + the math addendum.
+        val systemTokens =
+            (ChatContextAssembler.SYSTEM_PROMPT.length + ChatContextAssembler.CLOUD_RICH_ADDENDUM.length + 3) / 4
         val request =
             assembler.assemble(
                 "q",
