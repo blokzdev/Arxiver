@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -38,12 +39,15 @@ import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.LibraryPaper
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
+import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
+import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdownLabels
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.SelectionState
 import dev.blokz.arxiver.ui.components.SelectionTopBar
 import dev.blokz.arxiver.ui.components.SkeletonList
 import dev.blokz.arxiver.ui.components.SwipeablePaperRow
 import dev.blokz.arxiver.ui.components.rememberSelectionState
+import dev.blokz.arxiver.ui.shareText
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -101,6 +105,14 @@ fun FilteredPapersScreen(
     var showOrganize by remember { mutableStateOf(false) }
     var showDispatch by remember { mutableStateOf(false) }
     val selection = rememberSelectionState()
+    val context = LocalContext.current
+    val exportLabels =
+        ConversationMarkdownLabels(
+            you = stringResource(R.string.ask_export_you),
+            assistant = stringResource(R.string.ask_export_assistant),
+            sources = stringResource(R.string.ask_export_sources),
+            footer = stringResource(R.string.ask_export_footer),
+        )
 
     BackHandler(enabled = selection.isActive) { selection.clear() }
 
@@ -167,6 +179,16 @@ fun FilteredPapersScreen(
                     showAsk = false
                     onPaperClick(id.value)
                 }
+            },
+            // Share an answer / the whole collection conversation as Markdown — P-Rich R4.
+            onShareAnswer = { m ->
+                context.shareText(ConversationMarkdown.answer(m, exportLabels), subject = viewModel.title)
+            },
+            onShareConversation = { msgs ->
+                context.shareText(
+                    ConversationMarkdown.conversation(msgs, viewModel.title, exportLabels),
+                    subject = viewModel.title,
+                )
             },
         )
     }

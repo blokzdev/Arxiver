@@ -76,6 +76,8 @@ import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
+import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
+import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdownLabels
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.ScoreBar
 import dev.blokz.arxiver.ui.components.SkeletonLine
@@ -83,6 +85,7 @@ import dev.blokz.arxiver.ui.feedback.FeedbackAction
 import dev.blokz.arxiver.ui.feedback.FeedbackMessage
 import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
+import dev.blokz.arxiver.ui.shareText
 import dev.blokz.arxiver.ui.theme.ArxiverMotion
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
@@ -109,6 +112,13 @@ fun PaperDetailScreen(
     val savedMessage = stringResource(R.string.today_snackbar_saved)
     val addToLabel = stringResource(R.string.action_add_to_collection)
     val pinnedToNotesMessage = stringResource(R.string.ask_pinned_to_notes)
+    val exportLabels =
+        ConversationMarkdownLabels(
+            you = stringResource(R.string.ask_export_you),
+            assistant = stringResource(R.string.ask_export_assistant),
+            sources = stringResource(R.string.ask_export_sources),
+            footer = stringResource(R.string.ask_export_footer),
+        )
     val state by viewModel.uiState.collectAsState()
     val entry by viewModel.entry.collectAsState()
     val notes by viewModel.notes.collectAsState()
@@ -272,6 +282,16 @@ fun PaperDetailScreen(
                 onPinAnswer = { answer ->
                     viewModel.addNote(answer)
                     feedback.show(FeedbackMessage(text = pinnedToNotesMessage))
+                },
+                // Share an answer / the whole conversation as Markdown via the OS sheet — P-Rich R4.
+                onShareAnswer = { m ->
+                    context.shareText(ConversationMarkdown.answer(m, exportLabels), subject = paper.title)
+                },
+                onShareConversation = { msgs ->
+                    context.shareText(
+                        ConversationMarkdown.conversation(msgs, paper.title, exportLabels),
+                        subject = paper.title,
+                    )
                 },
             )
         }

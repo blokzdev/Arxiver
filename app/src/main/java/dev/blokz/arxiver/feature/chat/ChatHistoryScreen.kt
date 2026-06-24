@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -47,8 +48,11 @@ import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.ChatRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
+import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
+import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdownLabels
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.SkeletonList
+import dev.blokz.arxiver.ui.shareText
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
@@ -120,6 +124,14 @@ fun ChatHistoryScreen(
 ) {
     val rows by viewModel.rows.collectAsState()
     var active by remember { mutableStateOf<ChatHistoryRow?>(null) }
+    val context = LocalContext.current
+    val exportLabels =
+        ConversationMarkdownLabels(
+            you = stringResource(R.string.ask_export_you),
+            assistant = stringResource(R.string.ask_export_assistant),
+            sources = stringResource(R.string.ask_export_sources),
+            footer = stringResource(R.string.ask_export_footer),
+        )
 
     Scaffold(
         topBar = {
@@ -169,6 +181,16 @@ fun ChatHistoryScreen(
             onConfigureProvider = {
                 active = null
                 onOpenAiSettings()
+            },
+            // Share an answer / the whole conversation as Markdown via the OS sheet — P-Rich R4.
+            onShareAnswer = { m ->
+                context.shareText(ConversationMarkdown.answer(m, exportLabels), subject = row.label)
+            },
+            onShareConversation = { msgs ->
+                context.shareText(
+                    ConversationMarkdown.conversation(msgs, row.label, exportLabels),
+                    subject = row.label,
+                )
             },
         )
     }
