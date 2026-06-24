@@ -130,6 +130,42 @@ class GeminiProviderTest {
             assertEquals(0, server.requestCount)
         }
 
+    @Test
+    fun `text-only turn omits inlineData (R3d byte-identity)`() =
+        runBlocking {
+            server.enqueue(sse("""data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"STOP"}]}"""))
+            provider().chat(request()).toList()
+
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("\"text\":\"Summarize this paper.\""), body)
+            assertTrue(!body.contains("inlineData"), body)
+        }
+
+    @Test
+    fun `an image turn serializes an inlineData part, never the label (R3d vision)`() =
+        runBlocking {
+            server.enqueue(sse("""data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"STOP"}]}"""))
+            val req =
+                ChatRequest(
+                    messages =
+                        listOf(
+                            ChatMessage(
+                                ChatRole.USER,
+                                "Describe the figure.",
+                                images = listOf(ChatImage("image/jpeg", "QUJD", label = "page 2 of arXiv:2401.0001")),
+                            ),
+                        ),
+                )
+            provider().chat(req).toList()
+
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("\"text\":\"Describe the figure.\""), body)
+            assertTrue(body.contains("\"inlineData\""), body)
+            assertTrue(body.contains("\"mimeType\":\"image/jpeg\""), body)
+            assertTrue(body.contains("\"data\":\"QUJD\""), body)
+            assertTrue(!body.contains("page 2 of arXiv"), body)
+        }
+
     private fun request(): ChatRequest =
         ChatRequest(
             messages = listOf(ChatMessage(ChatRole.USER, "Summarize this paper.")),

@@ -143,6 +143,45 @@ class AnthropicProviderTest {
             assertEquals(0, server.requestCount)
         }
 
+    @Test
+    fun `text-only turn serializes content as a string, not a block array (R3d byte-identity)`() =
+        runBlocking {
+            server.enqueue(sse("""data: {"type":"message_stop"}"""))
+            provider().chat(request()).toList()
+
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("\"content\":\"Summarize this paper.\""), body)
+            assertTrue(!body.contains("\"content\":["), body)
+            assertTrue(!body.contains("\"type\":\"image\""), body)
+        }
+
+    @Test
+    fun `an image turn serializes a text+image content array, never the label (R3d vision)`() =
+        runBlocking {
+            server.enqueue(sse("""data: {"type":"message_stop"}"""))
+            val req =
+                ChatRequest(
+                    messages =
+                        listOf(
+                            ChatMessage(
+                                ChatRole.USER,
+                                "Describe the figure.",
+                                images = listOf(ChatImage("image/jpeg", "QUJD", label = "page 2 of arXiv:2401.0001")),
+                            ),
+                        ),
+                )
+            provider().chat(req).toList()
+
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("\"content\":["), body)
+            assertTrue(body.contains("\"type\":\"text\""), body)
+            assertTrue(body.contains("\"type\":\"image\""), body)
+            assertTrue(body.contains("\"media_type\":\"image/jpeg\""), body)
+            assertTrue(body.contains("\"data\":\"QUJD\""), body)
+            // The human privacy-preview label must never reach the wire.
+            assertTrue(!body.contains("page 2 of arXiv"), body)
+        }
+
     private fun request(): ChatRequest =
         ChatRequest(
             messages = listOf(ChatMessage(ChatRole.USER, "Summarize this paper.")),

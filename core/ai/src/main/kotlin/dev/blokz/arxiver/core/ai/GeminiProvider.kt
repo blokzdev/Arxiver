@@ -45,6 +45,7 @@ class GeminiProvider(
             streaming = true,
             onDevice = false,
             requiresKey = true,
+            vision = true,
         )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -100,7 +101,20 @@ class GeminiProvider(
                 contents =
                     request.messages
                         .filter { it.role != ChatRole.SYSTEM }
-                        .map { GenContent(role = it.role.wire(), parts = listOf(GenPart(it.content))) },
+                        .map { msg ->
+                            // Keep the text part unconditionally (byte-identical to pre-R3d); append
+                            // an inlineData part per attached image (P-Rich R3d). null fields are omitted.
+                            val parts =
+                                buildList {
+                                    add(GenPart(text = msg.content))
+                                    msg.images.forEach {
+                                        add(
+                                            GenPart(inlineData = InlineData(it.mediaType, it.base64)),
+                                        )
+                                    }
+                                }
+                            GenContent(role = msg.role.wire(), parts = parts)
+                        },
                 systemInstruction = systemParts.takeIf { it.isNotEmpty() }?.let { GenContent(parts = it) },
                 generationConfig = GenConfig(maxOutputTokens = request.maxTokens),
             )
@@ -149,7 +163,17 @@ class GeminiProvider(
     )
 
     @Serializable
-    private data class GenPart(val text: String? = null)
+    private data class GenPart(
+        val text: String? = null,
+        val inlineData: InlineData? = null,
+    )
+
+    /** Gemini inline image bytes (P-Rich R3d): base64 [data] + its [mimeType]. */
+    @Serializable
+    private data class InlineData(
+        val mimeType: String,
+        val data: String,
+    )
 
     companion object {
         const val DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
