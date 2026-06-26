@@ -94,6 +94,19 @@ class LibraryDaoTest {
         }
 
     @Test
+    fun `paperIdsForCollection returns exactly the member ids`() =
+        runTest {
+            insertPaper("2403.00001")
+            insertPaper("2403.00002")
+            val cid = dao.createCollection(CollectionEntity(name = "Map me", createdAt = 0))
+            dao.addToCollection(CollectionPaperCrossRef(cid, "2403.00001", addedAt = 1))
+            dao.addToCollection(CollectionPaperCrossRef(cid, "2403.00002", addedAt = 2))
+
+            assertEquals(setOf("2403.00001", "2403.00002"), dao.paperIdsForCollection(cid).toSet())
+            assertTrue(dao.paperIdsForCollection(999L).isEmpty(), "an unknown collection has no members")
+        }
+
+    @Test
     fun `deleting a collection cascades its membership rows`() =
         runTest {
             insertPaper("2403.00001")

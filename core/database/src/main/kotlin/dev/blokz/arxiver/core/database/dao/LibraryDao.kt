@@ -98,6 +98,10 @@ interface LibraryDao {
     @Query("SELECT COUNT(*) FROM collection_papers WHERE collection_id = :collectionId")
     fun observeCollectionSize(collectionId: Long): Flow<Int>
 
+    /** The member paper ids of a collection — the seed for the PA.5 collection knowledge map. */
+    @Query("SELECT paper_id FROM collection_papers WHERE collection_id = :collectionId")
+    suspend fun paperIdsForCollection(collectionId: Long): List<String>
+
     /** Collections this paper currently belongs to — drives the detail-screen picker. */
     @Query("SELECT collection_id FROM collection_papers WHERE paper_id = :paperId")
     fun observeCollectionMemberships(paperId: String): Flow<List<Long>>

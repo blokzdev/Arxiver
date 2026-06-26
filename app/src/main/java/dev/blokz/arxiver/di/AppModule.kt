@@ -42,6 +42,12 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun collectionGraphSource(
+        impl: dev.blokz.arxiver.data.CollectionGraphRepository,
+    ): dev.blokz.arxiver.data.CollectionGraphSource = impl
+
+    @Provides
+    @Singleton
     fun database(
         @ApplicationContext context: Context,
     ): ArxiverDatabase = ArxiverDatabase.build(context)
