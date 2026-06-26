@@ -4,6 +4,7 @@ kotlin = "2.1.21"
 ksp = "2.1.21-2.0.1"
 coroutines = "1.10.2"
 serialization = "1.8.1"
+jsoup = "1.18.3"
 
 coreKtx = "1.16.0"
 activityCompose = "1.10.1"
@@ -30,6 +31,7 @@ androidxTestCore = "1.6.1"
 ktlintPlugin = "12.1.1"
 
 [libraries]
+jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }

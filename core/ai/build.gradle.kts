@@ -42,6 +42,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.security.crypto)
+    // P-Share PS.1: vetted XML/HTML parser backing the pure SvgSanitizer allowlist (also the
+    // engine for the future ar5iv/HTML paper-reading vision). First HTML-parse dep in the tree.
+    implementation(libs.jsoup)
     testImplementation(libs.junit)
     testImplementation(libs.okhttp.mockwebserver)
     testImplementation(libs.robolectric)

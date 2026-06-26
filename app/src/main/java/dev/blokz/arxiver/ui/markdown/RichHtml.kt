@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.ui.markdown
 
+import dev.blokz.arxiver.core.ai.SvgSanitizer
 import org.commonmark.ext.gfm.tables.TablesExtension
 import org.commonmark.parser.Parser
 import org.commonmark.renderer.html.HtmlRenderer
@@ -22,13 +23,16 @@ object RichHtml {
     private const val FENCE = "```"
     private val MATH_FENCE = Regex("(?s)$FENCE(?:math|latex)\\s*\\n(.*?)\\n$FENCE")
     private val MERMAID_CODE = Regex("(?s)<pre><code class=\"language-mermaid\">(.*?)</code></pre>")
+    private val SVG_CODE = Regex("(?s)<pre><code class=\"language-svg\">(.*?)</code></pre>")
     private val CITATION = Regex("""\[(\d{1,3})]""")
 
     /** `arXiv:NNNN.NNNNN` (modern) / `arXiv:cat/NNNNNNN` (legacy) → an in-app cross-ref link. */
     private val ARXIV = Regex("""arXiv:(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})""")
 
-    // Spans that must NOT be touched by citation linkification: Mermaid blocks + math.
-    private val PROTECTED = Regex("(?s)<pre class=\"mermaid\">.*?</pre>|\\$\\$.*?\\$\\$|\\$[^$\\n]+\\$")
+    // Spans that must NOT be touched by citation linkification: Mermaid blocks + sanitized SVG + math
+    // (so a `B[1]` Mermaid node, a `<path d="…[0]…">`, or a `[3]` in LaTeX isn't mistaken for a citation).
+    private val PROTECTED =
+        Regex("(?s)<pre class=\"mermaid\">.*?</pre>|<div class=\"svg\">.*?</div>|\\$\\$.*?\\$\\$|\\$[^$\\n]+\\$")
 
     /** Full HTML doc for [markdown], themed with the given hex colors and dark flag. */
     fun answerHtml(
@@ -42,12 +46,29 @@ object RichHtml {
     ): String {
         // ```math fences -> $$..$$ for KaTeX; ```mermaid code -> a <pre class="mermaid"> for Mermaid.
         val normalized = MATH_FENCE.replace(markdown) { "\$\$\n${it.groupValues[1]}\n\$\$" }
-        val rendered =
+        val withMermaid =
             MERMAID_CODE.replace(htmlRenderer.render(parser.parse(normalized))) {
                 "<pre class=\"mermaid\">${it.groupValues[1]}</pre>"
             }
+        // ```svg -> a sanitized inline vector (P-Share PS.1). commonmark HTML-escaped the source, so
+        // un-escape it, run the allowlist sanitizer, and inject the safe svg as raw HTML — or, when the
+        // sanitizer rejects it (no svg root / nothing survives), leave the inert code block untouched.
+        val rendered =
+            SVG_CODE.replace(withMermaid) { m ->
+                val safe = SvgSanitizer.sanitize(htmlUnescape(m.groupValues[1]))
+                if (safe != null) "<div class=\"svg\">$safe</div>" else m.value
+            }
         return template(linkify(rendered), textColor, citationColor, codeBackground, mutedColor, dark, crossRefColor)
     }
+
+    /** Reverse commonmark's code-block HTML escaping so the raw `<svg>` source can be parsed + rendered. */
+    private fun htmlUnescape(s: String): String =
+        s.replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&apos;", "'")
+            .replace("&amp;", "&")
 
     /**
      * Linkify `[n]` citations and `arXiv:<id>` cross-references — only outside math/Mermaid spans,
@@ -106,6 +127,8 @@ object RichHtml {
               pre code{background:transparent;padding:0;}
               pre.mermaid{background:transparent;padding:0;text-align:center;}
               pre.mermaid svg{max-width:100%;height:auto;}
+              div.svg{text-align:center;margin:8px 0;}
+              div.svg svg{max-width:100%;height:auto;}
               table{border-collapse:collapse;width:100%;font-size:0.9em;}
               th,td{border:1px solid $mutedColor;padding:6px;text-align:left;}
               h1,h2,h3{line-height:1.25;}
@@ -139,7 +162,7 @@ object RichHtml {
 
 /** Whether an answer needs the rich (WebView) renderer rather than native markdown. */
 object RichContent {
-    private val RICH = Regex("(?s)\\$\\$.*?\\$\\$|\\$[^$\\n]+\\$|```(?:math|latex|mermaid)")
+    private val RICH = Regex("(?s)\\$\\$.*?\\$\\$|\\$[^$\\n]+\\$|```(?:math|latex|mermaid|svg)")
 
     fun has(text: String): Boolean = RICH.containsMatchIn(text)
 }
