@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.chat
 
+import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRole
 import dev.blokz.arxiver.core.ai.ProviderCapability
 import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
@@ -13,8 +14,16 @@ import kotlin.test.assertTrue
 class ChatContextAssemblerTest {
     private val assembler = ChatContextAssembler(maxOutputTokens = 0, safetyMarginTokens = 0)
 
-    private fun cap(contextTokens: Int = 100_000) =
-        ProviderCapability(contextTokens = contextTokens, streaming = true, onDevice = false, requiresKey = true)
+    private fun cap(
+        contextTokens: Int = 100_000,
+        vision: Boolean = false,
+    ) = ProviderCapability(
+        contextTokens = contextTokens,
+        streaming = true,
+        onDevice = false,
+        requiresKey = true,
+        vision = vision,
+    )
 
     private fun chunk(
         id: Long,
@@ -168,6 +177,55 @@ class ChatContextAssemblerTest {
                 .request.messages.last().content
         assertTrue(content.contains(ChatContextAssembler.MAX_DIRECTIVE))
         assertFalse(content.contains(ChatContextAssembler.MAX_RICH_SUFFIX.trim()))
+    }
+
+    // --- R3d.3: vision attachment ---
+
+    @Test
+    fun `a vision attachment folds onto the final user turn (vision provider)`() {
+        val img = ChatImage("image/jpeg", "QUJD", "page 1 of arXiv:2401.00001")
+        val request =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(vision = true),
+                attachment = img,
+            ).request
+        assertEquals(listOf(img), request.messages.last().images)
+    }
+
+    @Test
+    fun `a non-vision provider drops the attachment (defense-in-depth)`() {
+        val img = ChatImage("image/jpeg", "QUJD")
+        val request =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(vision = false),
+                attachment = img,
+            ).request
+        assertTrue(request.messages.last().images.isEmpty())
+    }
+
+    @Test
+    fun `a null attachment is byte-identical to the no-arg call`() {
+        val noArg = assembler.assemble("q", emptyList(), emptyList(), includeNotes = true, capability = cap()).request
+        val nullAttach =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(),
+                attachment = null,
+            )
+                .request
+        assertEquals(noArg.messages.last().content, nullAttach.messages.last().content)
+        assertTrue(nullAttach.messages.last().images.isEmpty())
     }
 
     @Test

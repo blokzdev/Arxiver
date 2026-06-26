@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.chat
 
+import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatMessage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ChatRole
@@ -66,6 +67,7 @@ class ChatContextAssembler(
         includeNotes: Boolean,
         capability: ProviderCapability,
         mode: ChatMode = ChatMode.STANDARD,
+        attachment: ChatImage? = null,
     ): AssembledChat {
         val gated = if (includeNotes) chunks else chunks.filter { it.sourceKind != ChunkEmbeddingEntity.SOURCE_NOTE }
 
@@ -98,9 +100,14 @@ class ChatContextAssembler(
             keptHistory.addFirst(turn)
         }
 
+        // Attach a vision image (P-Rich R3d) to the final user turn — but ONLY when the resolved
+        // provider actually supports vision. This is defense-in-depth: even if a caller passes an
+        // image to an on-device/non-vision provider, it is dropped here so it never reaches the wire.
+        val images = if (attachment != null && capability.vision) listOf(attachment) else emptyList()
+
         val messages =
             keptHistory.map { ChatMessage(it.role, it.content) } +
-                ChatMessage(ChatRole.USER, userTurn(question, keptChunks, directive))
+                ChatMessage(ChatRole.USER, userTurn(question, keptChunks, directive), images = images)
 
         return AssembledChat(
             request = ChatRequest(messages = messages, system = system, maxTokens = maxOutputTokens),

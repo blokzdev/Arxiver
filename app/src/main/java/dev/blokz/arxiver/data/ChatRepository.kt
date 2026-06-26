@@ -9,6 +9,7 @@ import dev.blokz.arxiver.chat.extractFollowUps
 import dev.blokz.arxiver.core.ai.AiException
 import dev.blokz.arxiver.core.ai.AiProvider
 import dev.blokz.arxiver.core.ai.ChatChunk
+import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ChatRole
 import dev.blokz.arxiver.core.ai.ProviderId
@@ -82,6 +83,7 @@ class ChatRepository(
         question: String,
         includeNotes: Boolean,
         mode: ChatMode = ChatMode.STANDARD,
+        attachment: ChatImage? = null,
     ): ChatPrepareResult =
         withContext(dispatchers.io) {
             val provider =
@@ -105,7 +107,10 @@ class ChatRepository(
                     ?.map { ChatTurn(it.role.toRole(), it.content) }
                     .orEmpty()
 
-            val assembled = assembler.assemble(question, chunks, history, includeNotes, provider.capability, mode)
+            // The assembler drops the image unless provider.capability.vision is true (R3d M2/M3),
+            // so an attachment never reaches a non-vision/on-device provider.
+            val assembled =
+                assembler.assemble(question, chunks, history, includeNotes, provider.capability, mode, attachment)
             val citations = assembled.citedChunks.mapIndexed { i, c -> Citation(i + 1, c.paperId, c.text) }
 
             ChatPrepareResult.Ready(

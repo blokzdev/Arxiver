@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.chat
 
+import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -13,7 +14,19 @@ data class ChatPreview(
 )
 
 @Serializable
-private data class PreviewMessageDto(val role: String, val content: String)
+private data class PreviewMessageDto(
+    val role: String,
+    val content: String,
+    /** Human disclosures of attached images (P-Rich R3d) — the base64 bytes are NEVER included.
+     *  Omitted (null) for text-only turns, so the redaction golden stays byte-identical. */
+    val attachments: List<String>? = null,
+)
+
+/** A faithful disclosure of an attached image — page/paper label, mime, approx size; never the data. */
+private fun ChatImage.disclosure(): String {
+    val approxKb = (base64.length.toLong() * 3 / 4 / 1024).coerceAtLeast(1)
+    return "Attached image: ${label ?: "image"} — $mediaType, ~$approxKb KB"
+}
 
 @Serializable
 private data class PreviewDto(
@@ -42,7 +55,14 @@ class ChatPreviewBuilder(
         val dto =
             PreviewDto(
                 system = request.system,
-                messages = request.messages.map { PreviewMessageDto(it.role.name.lowercase(), it.content) },
+                messages =
+                    request.messages.map { msg ->
+                        PreviewMessageDto(
+                            role = msg.role.name.lowercase(),
+                            content = msg.content,
+                            attachments = msg.images.takeIf { it.isNotEmpty() }?.map { it.disclosure() },
+                        )
+                    },
                 maxTokens = request.maxTokens,
             )
         return ChatPreview(text = render(request), json = json.encodeToString(PreviewDto.serializer(), dto))
@@ -61,6 +81,9 @@ class ChatPreviewBuilder(
             request.messages.forEach { msg ->
                 appendLine("${msg.role.name}:")
                 appendLine(msg.content)
+                // Disclose attached images here too (P-Rich R3d) so the human-readable confirm the
+                // user actually approves mentions the image — base64 bytes are never shown.
+                msg.images.forEach { appendLine("[${it.disclosure()}]") }
                 appendLine()
             }
         }.trimEnd()
