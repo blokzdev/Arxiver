@@ -10,8 +10,15 @@ class TierSelectorTest {
         ramMb: Long = 8192,
         nano: NanoStatus = NanoStatus.UNAVAILABLE,
         gemmaReady: Boolean = false,
+        lightReady: Boolean = false,
         cloud: Boolean = false,
-    ) = DeviceCapability(totalRamMb = ramMb, nanoStatus = nano, gemmaReady = gemmaReady, cloudConfigured = cloud)
+    ) = DeviceCapability(
+        totalRamMb = ramMb,
+        nanoStatus = nano,
+        gemmaReady = gemmaReady,
+        lightReady = lightReady,
+        cloudConfigured = cloud,
+    )
 
     @Test
     fun `gemma wins over nano when both are ready`() {
@@ -64,6 +71,42 @@ class TierSelectorTest {
             TierSelector.fallbackOrder(cap(gemmaReady = true, cloud = true)),
         )
         assertEquals(listOf(InferenceTier.NONE), TierSelector.fallbackOrder(cap()))
+    }
+
+    // --- P-Atlas PA.3: the light (Qwen) tier ranks below Gemma, above Nano ---
+
+    @Test
+    fun `gemma wins over the light tier when both are ready`() {
+        assertEquals(InferenceTier.GEMMA, TierSelector.recommend(cap(gemmaReady = true, lightReady = true)))
+    }
+
+    @Test
+    fun `light tier recommended when gemma is not installed`() {
+        assertEquals(InferenceTier.LIGHT, TierSelector.recommend(cap(lightReady = true, cloud = true)))
+    }
+
+    @Test
+    fun `light tier beats nano (no 256-token cap)`() {
+        assertEquals(
+            InferenceTier.LIGHT,
+            TierSelector.recommend(cap(nano = NanoStatus.AVAILABLE, lightReady = true)),
+        )
+    }
+
+    @Test
+    fun `full fallback order is gemma then light then nano then cloud then none`() {
+        assertEquals(
+            listOf(
+                InferenceTier.GEMMA,
+                InferenceTier.LIGHT,
+                InferenceTier.NANO,
+                InferenceTier.CLOUD,
+                InferenceTier.NONE,
+            ),
+            TierSelector.fallbackOrder(
+                cap(nano = NanoStatus.AVAILABLE, gemmaReady = true, lightReady = true, cloud = true),
+            ),
+        )
     }
 
     @Test

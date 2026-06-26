@@ -133,6 +133,36 @@ class ModelDownloaderTest {
         }
 
     @Test
+    fun `two same-extension models in separate dirs do not purge each other (P-Atlas PA3 light tier)`() =
+        runTest {
+            // Gemma (LLM) and the light Qwen tier are BOTH `.litertlm`. deleteStaleSiblings() is
+            // extension-scoped, so co-located they would purge each other on download — the light
+            // downloader uses a separate child dir, which (with non-recursive listFiles) must isolate them.
+            val gemma = java.io.File(tmp.root, "gemma-4-E2B-it.litertlm").apply { writeText("gemma model") }
+            val lightDir = java.io.File(tmp.root, "light")
+            server.enqueue(MockResponse().setBody(okio.Buffer().write(payload)))
+            val lightDownloader =
+                ModelDownloader(
+                    httpClient = OkHttpClient(),
+                    dispatchers = dispatchers,
+                    modelDir = lightDir,
+                    spec =
+                        ModelDownloader.ModelSpec(
+                            fileName = "Qwen3-0.6B.litertlm",
+                            url = server.url("/Qwen3-0.6B.litertlm").toString(),
+                            sha256 = payloadSha,
+                            dimensions = 0,
+                            displayName = "qwen",
+                        ),
+                )
+
+            lightDownloader.ensureDownloaded()
+
+            assertTrue(gemma.exists(), "the Gemma .litertlm in the parent dir survives the light download")
+            assertTrue(java.io.File(lightDir, "Qwen3-0.6B.litertlm").exists(), "the light model downloaded")
+        }
+
+    @Test
     fun `delete resets state`() =
         runTest {
             server.enqueue(MockResponse().setBody(okio.Buffer().write(payload)))

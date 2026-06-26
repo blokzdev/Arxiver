@@ -13,6 +13,7 @@ class AndroidDeviceCapabilityProbe(
     private val context: Context,
     private val nanoAvailability: NanoAvailability,
     private val gemmaDownloader: ModelDownloader,
+    private val lightDownloader: ModelDownloader,
     private val keyStore: AiKeyStore,
 ) : DeviceCapabilityProbe {
     override suspend fun probe(): DeviceCapability {
@@ -22,6 +23,7 @@ class AndroidDeviceCapabilityProbe(
             totalRamMb = memory.totalMem / (1024 * 1024),
             nanoStatus = nanoAvailability.status(),
             gemmaReady = gemmaDownloader.modelFile.exists(),
+            lightReady = lightDownloader.modelFile.exists(),
             cloudConfigured = keyStore.has(ProviderId.CLAUDE) || keyStore.has(ProviderId.GEMINI),
         )
     }
