@@ -13,9 +13,11 @@ import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ChatRole
 import dev.blokz.arxiver.core.ai.OnDeviceProvider
+import dev.blokz.arxiver.core.ai.OutputRichness
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderResolution
 import dev.blokz.arxiver.core.ai.ProviderResolver
+import dev.blokz.arxiver.core.ai.StructuredTableTransform
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
@@ -47,8 +49,25 @@ data class PreparedChat(
     val preview: ChatPreview,
     /** The chunks cited as `[1..n]` in [request], so the UI can link `[n]` to its source. */
     val citations: List<Citation>,
+    /** The resolved output richness of the turn — gates the PA.4 STRUCTURED table transform on settle. */
+    val richness: OutputRichness,
     internal val provider: AiProvider,
 )
+
+/**
+ * Render the PA.4 `TABLE::` intermediate to a valid table/list — but ONLY on a STRUCTURED turn
+ * (else identity, so cloud FULL / the PLAIN tier / ordinary prose are byte-identical). Shared by the
+ * repository's persist path and the ViewModel's display path so the DB and the UI never diverge.
+ */
+internal fun settleStructured(
+    prepared: PreparedChat,
+    strippedBody: String,
+): String =
+    if (prepared.richness == OutputRichness.STRUCTURED) {
+        StructuredTableTransform.transform(strippedBody)
+    } else {
+        strippedBody
+    }
 
 /** Outcome of [ChatRepository.prepare]. */
 sealed interface ChatPrepareResult {
@@ -134,6 +153,7 @@ class ChatRepository(
                     isCloud = provider.capability.requiresKey,
                     preview = previewBuilder.build(assembled.request),
                     citations = citations,
+                    richness = capability.richness,
                     provider = provider,
                 ),
             )
@@ -199,12 +219,13 @@ class ChatRepository(
                     when (chunk) {
                         is ChatChunk.Delta -> answer.append(chunk.text)
                         is ChatChunk.Done ->
-                            // Persist the body with any model FOLLOWUPS:: sentinel stripped (P-Rich
-                            // R3b.2), so history hydration and pin-to-notes never resurrect it. Uses
-                            // the same extractor as the ViewModel display path, so DB and UI agree.
+                            // Persist the settled body: strip any model FOLLOWUPS:: sentinel (P-Rich
+                            // R3b.2), then on a STRUCTURED turn render the TABLE:: intermediate to a
+                            // valid table/list (PA.4). The ViewModel display path runs the SAME two
+                            // transforms on the same input, so DB == UI == export (no resurrection).
                             chatDao.updateMessage(
                                 assistantId,
-                                extractFollowUps(answer.toString()).first,
+                                settleStructured(prepared, extractFollowUps(answer.toString()).first),
                                 ChatMessageEntity.STATUS_COMPLETE,
                             )
                     }

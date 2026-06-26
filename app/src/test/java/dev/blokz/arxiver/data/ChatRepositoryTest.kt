@@ -67,10 +67,12 @@ class ChatRepositoryTest {
     private class FakeOnDeviceEngine(
         override val tier: InferenceTier,
         override val richness: OutputRichness,
+        private val reply: String = "",
     ) : OnDeviceEngine {
         override suspend fun isReady(): Boolean = true
 
-        override fun generate(request: ChatRequest): Flow<ChatChunk> = flowOf(ChatChunk.Done())
+        override fun generate(request: ChatRequest): Flow<ChatChunk> =
+            if (reply.isEmpty()) flowOf(ChatChunk.Done()) else flowOf(ChatChunk.Delta(reply), ChatChunk.Done())
     }
 
     private class FakeKeyStore(private val keys: Set<ProviderId>) : AiKeyStore {
@@ -252,5 +254,70 @@ class ChatRepositoryTest {
                 system.contains(ChatContextAssembler.CLOUD_RICH_ADDENDUM),
                 "on-device never gets the cloud LaTeX/Mermaid invitation",
             )
+        }
+
+    // --- P-Atlas PA.4: the STRUCTURED TABLE:: intermediate is rendered to a valid table on persist ---
+
+    private val tableReply =
+        "Both stages differ.\n" +
+            "TABLE::\nStage ~|~ Role\nCold ~|~ boot [1]\nRL ~|~ refine [2]\n::TABLE\n" +
+            "The cold stage stabilizes RL [1].\n" +
+            "FOLLOWUPS:: what is cold-start | how does RL refine | which dataset"
+
+    @Test
+    fun `a STRUCTURED on-device turn persists a rendered GFM table, FOLLOWUPS stripped`() =
+        runTest {
+            val onDevice =
+                OnDeviceProvider(
+                    listOf(FakeOnDeviceEngine(InferenceTier.GEMMA, OutputRichness.STRUCTURED, reply = tableReply)),
+                    DefaultDispatcherProvider(),
+                )
+            val repo = repo(onDevice, keys = emptySet(), preferOnDevice = true, onDeviceReady = true)
+
+            repo.stream(repo.prepared(RetrievalScope.Paper("p1"), null, "compare the stages")).toList()
+
+            val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
+            val persisted = db.chatDao().messagesFor(sid).last().content
+            assertTrue(persisted.contains("| Stage | Role |\n| --- | --- |"), "the TABLE:: block became a GFM table")
+            assertTrue(persisted.contains("| Cold | boot [1] |"), "rows + citations survive")
+            assertFalse(persisted.contains("~|~"), "the sentinel intermediate is gone")
+            assertFalse(persisted.contains("TABLE::"), "the fence is gone")
+            assertFalse(persisted.contains("FOLLOWUPS"), "the follow-up sentinel is stripped (composition)")
+            assertTrue(persisted.startsWith("Both stages differ."), "surrounding prose preserved")
+        }
+
+    @Test
+    fun `a cloud (FULL) turn never transforms the TABLE intermediate — byte-identical (the cloud invariant)`() =
+        runTest {
+            // A cloud provider emitting the same sentinel text must persist it untouched (FULL ≠ STRUCTURED).
+            val structuredText = "Both stages differ.\nTABLE::\nStage ~|~ Role\nCold ~|~ boot [1]\n::TABLE"
+            val repo = repo(FakeProvider { flowOf(ChatChunk.Delta(structuredText), ChatChunk.Done()) })
+
+            repo.stream(repo.prepared(RetrievalScope.Paper("p1"), null, "q")).toList()
+
+            val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
+            assertEquals(structuredText, db.chatDao().messagesFor(sid).last().content, "FULL is untransformed")
+        }
+
+    @Test
+    fun `settleStructured (the shared display+persist gate) transforms STRUCTURED but leaves FULL byte-identical`() =
+        runTest {
+            // The display seam (AskViewModel.settleFollowUps) and the persist seam call this SAME helper,
+            // so pinning it here covers both seams' gating with real PreparedChats.
+            val sentinelBody = "Both stages.\nTABLE::\nStage ~|~ Role\nCold ~|~ boot [1]\nRL ~|~ refine [2]\n::TABLE"
+
+            val onDevice =
+                OnDeviceProvider(
+                    listOf(FakeOnDeviceEngine(InferenceTier.GEMMA, OutputRichness.STRUCTURED)),
+                    DefaultDispatcherProvider(),
+                )
+            val structuredPrep =
+                repo(onDevice, keys = emptySet(), preferOnDevice = true, onDeviceReady = true)
+                    .prepared(RetrievalScope.Paper("p1"), null, "q")
+            assertTrue(settleStructured(structuredPrep, sentinelBody).contains("| Stage | Role |"))
+
+            val fullPrep =
+                repo(FakeProvider { flowOf(ChatChunk.Done()) }).prepared(RetrievalScope.Paper("p2"), null, "q")
+            assertEquals(sentinelBody, settleStructured(fullPrep, sentinelBody), "cloud FULL is never transformed")
         }
 }
