@@ -91,6 +91,41 @@ class RichHtmlTest {
         assertTrue(RichContent.has("display ${'$'}${'$'}\\int x${'$'}${'$'} block"))
         assertTrue(RichContent.has("```math\nx\n```"))
         assertTrue(RichContent.has("```mermaid\ngraph TD\n```"))
+        assertTrue(RichContent.has("```svg\n<svg/>\n```"), "a raw svg block needs the rich renderer")
         assertFalse(RichContent.has("just **bold**, a list, and a 5 dollar price"))
+    }
+
+    // --- P-Share PS.1: raw-svg rendering, jsoup-sanitized ---
+
+    @Test
+    fun `svg fences render as a sanitized inline vector`() {
+        val out = html("```svg\n<svg viewBox=\"0 0 4 4\"><circle cx=\"2\" cy=\"2\" r=\"1\"/></svg>\n```")
+        assertTrue(out.contains("<div class=\"svg\">"), "routed to the inline svg renderer")
+        assertTrue(out.contains("<circle") && out.contains("viewBox"), "benign vector content survives")
+        assertFalse(out.contains("language-svg"), "the inert code block is replaced")
+    }
+
+    @Test
+    fun `a malicious svg is neutralized in the pipeline`() {
+        val out =
+            html("```svg\n<svg onload=\"boom()\"><script>alert(1)</script><rect width=\"2\" height=\"2\"/></svg>\n```")
+        assertTrue(out.contains("<div class=\"svg\">"), "still renders the safe remainder")
+        assertFalse(out.contains("alert(1)") || out.contains("onload"), "script + handler stripped")
+        assertTrue(out.contains("<rect"), "the benign shape is kept")
+    }
+
+    @Test
+    fun `a non-svg svg-fence falls back to the inert code block`() {
+        val out = html("```svg\nnot actually svg\n```")
+        assertFalse(out.contains("<div class=\"svg\">"), "no svg root -> sanitizer returns null")
+        assertTrue(out.contains("not actually svg"), "the original code block is left untouched")
+    }
+
+    @Test
+    fun `citations skip sanitized svg blocks`() {
+        val out = RichHtml.linkify("ref [1] <div class=\"svg\"><path d=\"M0 0 [2]\"/></div> end [3]")
+        assertTrue(out.contains("arxiver://cite/1") && out.contains("arxiver://cite/3"), "prose citations linked")
+        assertTrue(out.contains("d=\"M0 0 [2]\""), "a [2] inside the svg path is preserved")
+        assertFalse(out.contains("arxiver://cite/2"), "the svg-internal [2] is NOT a citation")
     }
 }
