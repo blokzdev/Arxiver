@@ -125,10 +125,15 @@ static capability is a PLAIN placeholder; `resolveRichness()` runs the **same** 
 (`copy(richness = …)`) before assembling. A microscopic prepare-vs-stream readiness flip is harmless
 (STRUCTURED differs from PLAIN only by the table nudge; the base prompt invites tables for either).
 
-PA.2 is principally the **infrastructure** the light tier and constrained decoding build on. The
-*valid-by-construction* on-device structured-output win — **grammar/constrained decoding**, which
-LiteRT-LM exposes (JSON-schema/Lark via LLGuidance) — is a later tier (gated on confirming the
-Kotlin `litertlm-android` binding exposes it); STRUCTURED is the seam it hooks into.
+PA.2 is principally the **infrastructure** the light tier (PA.3) and the structured-output work
+(PA.4) build on. The *valid-by-construction* on-device win is **not** grammar/constrained decoding:
+the PA.0 spike (2026-06-26) found LiteRT-LM's **Kotlin** binding doesn't expose it (only C++ does;
+upstream issue [#1662](https://github.com/google-ai-edge/LiteRT-LM/issues/1662) is open), and the
+research found constraints *hurt* content at our model scale ("Constraint Tax", 2026). Instead,
+**PA.4 = "app-draws-the-structure"**: the model emits a low-syntax sentinel-delimited intermediate,
+a pure-Kotlin parser builds a typed `ComparisonTable`, and a deterministic renderer emits a
+guaranteed-valid table (with a confidence-gated bulleted-list fallback) — extending PA.1's
+deterministic-artifact thesis to tables. STRUCTURED is the seam it hooks into.
 
 ## 7. Testing
 
