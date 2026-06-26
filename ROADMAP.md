@@ -183,7 +183,7 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
 - [x] F2.3 "Test connection" truthfulness rides F2.2 (an empty on-device ping now throws → `ConnectionTest.Error`).
 - [x] F2.4 `ModelDownloader` purges stale same-extension siblings on (re)download, so the swap doesn't strand the old ~2 GB `-web` file; extension-scoped so the bge `.onnx` is untouched. Test: `ModelDownloaderTest` cleanup.
 - [x] F2.5 Empty/failed on-device generation now surfaces the error toast instead of a blank bubble (the user-visible win; messaging reuses `ask_error_generic`).
-- [ ] **CHECKPOINT F2 [needs-user/device]:** `./gradlew build` green; on device — re-download swaps to the 2.59 GB model (old one purged), per-paper Ask + collection chat stream real answers on the S20, forced failure shows an error not a blank bubble. Record in `VERIFICATION.md §J6/§K3`.
+- [E] **CHECKPOINT F2:** `./gradlew build` green; the root fix is **emulator-verified** (V3, 2026-06-26, 6 GB AVD — `VERIFICATION.md` log + §J5/§J6/§J7/§K3): the standard 2.59 GB `gemma-4-E2B-it.litertlm` downloads + SHA-verifies, the engine loads on **CPU** with no `TF_LITE_PREFILL_DECODE` skip, Test connection returns a reply, and per-paper Ask streams **real grounded tokens, not a blank bubble** (the F2 regression is closed — collection chat shares the same `GemmaEngine`, so the token-generation fix covers it). **Remaining (true device, the S20):** arm64/NPU throughput, the old-`-web`-model **purge** on re-download (this AVD had no stale sibling), the **forced-failure** path on device (zero-token → error toast; unit-tested via `AskViewModelTest`), and a collection-scope on-device run.
 
 ## Phase P-Rich — Rich AI output & rendering (v2-era, user-directed 2026-06-23)
 
