@@ -48,6 +48,10 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun readAloud(impl: dev.blokz.arxiver.tts.TextToSpeechManager): dev.blokz.arxiver.tts.ReadAloud = impl
+
+    @Provides
+    @Singleton
     fun database(
         @ApplicationContext context: Context,
     ): ArxiverDatabase = ArxiverDatabase.build(context)

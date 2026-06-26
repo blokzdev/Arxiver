@@ -87,6 +87,7 @@ class AskViewModel
         private val scopeIndexer: ScopeIndexer,
         private val pageImageSource: PageImageSource,
         private val relationGraphSource: RelationGraphSource,
+        private val tts: dev.blokz.arxiver.tts.ReadAloud,
     ) : ViewModel() {
         private lateinit var scope: RetrievalScope
         private var sessionId: Long? = null
@@ -100,6 +101,24 @@ class AskViewModel
 
         private val _uiState = MutableStateFlow(AskUiState())
         val uiState: StateFlow<AskUiState> = _uiState.asStateFlow()
+
+        /** The key of the answer currently being read aloud (P-Share PS.2), or null. Drives the play/stop toggle. */
+        val speaking: StateFlow<String?> = tts.speakingId
+
+        /** Toggle read-aloud for an answer; [spoken] is the pre-extracted speakable form (`SpeakableText`). */
+        fun toggleReadAloud(
+            key: String,
+            spoken: String,
+        ) = tts.toggle(key, spoken)
+
+        /** Stop any read-aloud (e.g. the sheet/app went to the background). */
+        fun stopReadAloud() = tts.stop()
+
+        override fun onCleared() {
+            // Stop (not shutdown) — the engine is an app-lifetime @Singleton shared across Ask hosts.
+            tts.stop()
+            super.onCleared()
+        }
 
         /**
          * Bind the sheet to a [scope] (a paper or a collection). Hydrates [sessionId]'s
