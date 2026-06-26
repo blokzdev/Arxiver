@@ -116,6 +116,7 @@ fun AskSheet(
             onSend = viewModel::send,
             onRunPreset = viewModel::runPreset,
             onRunVisionPreset = viewModel::runVisionPreset,
+            onRunGraphArtifact = viewModel::runGraphArtifact,
             onFollowUp = viewModel::runPreset,
             onSetMode = viewModel::setMode,
             onSetIncludeNotes = viewModel::setIncludeNotes,
@@ -140,6 +141,8 @@ private fun AskSheetContent(
     onRunPreset: (String) -> Unit,
     /** R3d.4: run the vision preset for a chosen 1-based page (instruction, pageNumber). */
     onRunVisionPreset: (String, Int) -> Unit,
+    /** P-Atlas PA.1: run an app-composed artifact preset (e.g. the relation graph); arg = the user-turn label. */
+    onRunGraphArtifact: (String) -> Unit,
     onFollowUp: (String) -> Unit,
     onSetMode: (ChatMode) -> Unit,
     onSetIncludeNotes: (Boolean) -> Unit,
@@ -254,7 +257,11 @@ private fun AskSheetContent(
                 enabled = !state.streaming && !state.preparing,
                 pageCount = state.pageCount,
                 onPresetClick = { preset ->
-                    if (preset.requiresVision) pendingVision = preset else onRunPreset(preset.instruction)
+                    when {
+                        preset.requiresVision -> pendingVision = preset
+                        preset.artifact -> onRunGraphArtifact(preset.instruction)
+                        else -> onRunPreset(preset.instruction)
+                    }
                 },
             )
             pendingVision?.let { preset ->
@@ -691,7 +698,8 @@ private fun AskSheetEmptyPreview() {
         AskSheetContent(
             state = AskUiState(provider = ProviderId.ON_DEVICE, isCloud = false),
             presets = AskPresets.forScope(isPaper = true),
-            onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> }, onFollowUp = {},
+            onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
+            onRunGraphArtifact = {}, onFollowUp = {},
             onSetMode = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
@@ -732,7 +740,8 @@ private fun AskSheetConversationPreview() {
                         ),
                 ),
             presets = AskPresets.forScope(isPaper = true, visionAvailable = true),
-            onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> }, onFollowUp = {},
+            onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
+            onRunGraphArtifact = {}, onFollowUp = {},
             onSetMode = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )

@@ -209,6 +209,55 @@ class ChatRepository(
             chatDao.touchSession(sessionId, clock())
         }.flowOn(dispatchers.io)
 
+    /**
+     * Persist a complete, **app-composed** turn (P-Atlas PA.1) with **no provider call**: a
+     * `STATUS_COMPLETE` user turn ([question]) + a `STATUS_COMPLETE` assistant turn carrying
+     * [content] (e.g. an app-drawn Mermaid graph). Bypasses `prepare()`/`stream()`/the privacy
+     * preview entirely — nothing is sent off-device — so the redaction goldens are untouched.
+     * Returns the new-or-reused session id. `providerId` is recorded as on-device (the artifact is
+     * computed locally) to keep the history-list label honest without a real provider.
+     */
+    suspend fun insertArtifactTurn(
+        scope: RetrievalScope,
+        sessionId: Long?,
+        question: String,
+        content: String,
+    ): Long =
+        withContext(dispatchers.io) {
+            val now = clock()
+            val (scopeKind, scopeId) = scope.toRow()
+            val sid =
+                sessionId ?: chatDao.insertSession(
+                    ChatSessionEntity(
+                        scope = scopeKind,
+                        scopeId = scopeId,
+                        providerId = ProviderId.ON_DEVICE.name,
+                        createdAt = now,
+                        lastMessageAt = now,
+                    ),
+                )
+            chatDao.insertMessage(
+                ChatMessageEntity(
+                    sessionId = sid,
+                    role = ChatMessageEntity.ROLE_USER,
+                    content = question,
+                    status = ChatMessageEntity.STATUS_COMPLETE,
+                    createdAt = now,
+                ),
+            )
+            chatDao.insertMessage(
+                ChatMessageEntity(
+                    sessionId = sid,
+                    role = ChatMessageEntity.ROLE_ASSISTANT,
+                    content = content,
+                    status = ChatMessageEntity.STATUS_COMPLETE,
+                    createdAt = clock(),
+                ),
+            )
+            chatDao.touchSession(sid, clock())
+            sid
+        }
+
     fun observeSessions(scope: RetrievalScope): Flow<List<ChatSessionEntity>> {
         val (scopeKind, scopeId) = scope.toRow()
         return chatDao.observeSessions(scopeKind, scopeId)

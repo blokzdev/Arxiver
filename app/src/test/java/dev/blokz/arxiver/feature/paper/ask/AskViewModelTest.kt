@@ -22,10 +22,16 @@ import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.search.ChunkKeywordSource
 import dev.blokz.arxiver.core.search.ChunkVectorSource
 import dev.blokz.arxiver.core.search.RagRetriever
+import dev.blokz.arxiver.core.search.RelationEdge
+import dev.blokz.arxiver.core.search.RelationEdgeKind
+import dev.blokz.arxiver.core.search.RelationGraph
+import dev.blokz.arxiver.core.search.RelationNode
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.core.search.ScopedChunk
 import dev.blokz.arxiver.data.ChatRepository
+import dev.blokz.arxiver.data.GraphResult
 import dev.blokz.arxiver.data.PageImageSource
+import dev.blokz.arxiver.data.RelationGraphSource
 import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -219,6 +225,7 @@ class AskViewModelTest {
         indexer: ScopeIndexer = ScopeIndexer {},
         scope: RetrievalScope = RetrievalScope.Paper("2401.00001"),
         pageImageSource: PageImageSource = FakePageImageSource(),
+        relationGraphSource: RelationGraphSource = RelationGraphSource { GraphResult.NoRelations },
     ): AskViewModel {
         val registry = ProviderRegistry(listOf(provider), FakeKeyStore(keys))
         val resolver = ProviderResolver(registry, { selected }, { false }, { onDeviceReady })
@@ -232,7 +239,7 @@ class AskViewModelTest {
                 embedQuery = embed,
                 dispatchers = TestDispatchers(dispatcher),
             )
-        return AskViewModel(repo, indexer, pageImageSource).also { it.start(scope) }
+        return AskViewModel(repo, indexer, pageImageSource, relationGraphSource).also { it.start(scope) }
     }
 
     private fun onDeviceProvider(script: () -> Flow<ChatChunk>) =
@@ -579,5 +586,60 @@ class AskViewModelTest {
             assertEquals(false, state.preparing)
             assertTrue(state.messages.isEmpty())
             assertNull(source.requestedPageIndex) // the re-check returns BEFORE rendering the page
+        }
+
+    // --- P-Atlas PA.1 app-drawn relation graph ---
+
+    @Test
+    fun `runGraphArtifact draws an app-composed graph turn with no provider call`() =
+        runTest(dispatcher) {
+            val graph =
+                RelationGraph(
+                    nodes =
+                        listOf(
+                            RelationNode("2401.00001", "Center", isCenter = true),
+                            RelationNode("2402.00002", "Neighbor", inLibrary = true),
+                        ),
+                    edges = listOf(RelationEdge("2401.00001", "2402.00002", RelationEdgeKind.SIMILAR, 0.8)),
+                )
+            val vm =
+                vm(
+                    // The provider must NOT be touched — an artifact never calls prepare()/stream().
+                    cloudProvider { error("provider must not be called for an app-drawn artifact") },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    relationGraphSource = RelationGraphSource { GraphResult.Ready(graph) },
+                )
+            vm.runGraphArtifact("Map relationships")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertNull(state.pendingConfirm, "no privacy confirm — nothing leaves the device")
+            assertEquals(false, state.preparing)
+            assertEquals(2, state.messages.size)
+            assertEquals("Map relationships", state.messages.first().text)
+            val answer = state.messages.last()
+            assertEquals(AskRole.ASSISTANT, answer.role)
+            assertEquals(false, answer.error)
+            assertTrue(answer.text.contains("```mermaid"), "the assistant turn carries the app-drawn Mermaid")
+        }
+
+    @Test
+    fun `runGraphArtifact surfaces the not-embedded empty state`() =
+        runTest(dispatcher) {
+            val vm =
+                vm(
+                    cloudProvider { error("provider must not be called") },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    relationGraphSource = RelationGraphSource { GraphResult.NotEmbedded },
+                )
+            vm.runGraphArtifact("Map relationships")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertEquals(R.string.ask_graph_not_embedded, state.error)
+            assertEquals(false, state.preparing)
+            assertTrue(state.messages.isEmpty())
         }
 }
