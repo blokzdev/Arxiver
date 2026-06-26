@@ -43,5 +43,6 @@ class BackgroundTaskMonitorTest {
         assertEquals(EmbeddingWorker.UNIQUE_ONESHOT, uniqueWorkNameFor(TaskKind.EMBEDDING))
         assertEquals(EmbeddingWorker.UNIQUE_ONESHOT, uniqueWorkNameFor(TaskKind.EMBEDDING_MODEL_DOWNLOAD))
         assertEquals(OnDeviceModelWorker.UNIQUE_ONESHOT, uniqueWorkNameFor(TaskKind.GEMMA_DOWNLOAD))
+        assertEquals(LightModelWorker.UNIQUE_ONESHOT, uniqueWorkNameFor(TaskKind.LIGHT_DOWNLOAD))
     }
 }

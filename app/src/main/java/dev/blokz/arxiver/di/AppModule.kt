@@ -278,11 +278,25 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun onDeviceModelController(
+    @GemmaModel
+    fun gemmaModelController(
         @GemmaModel gemmaDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
         syncScheduler: dev.blokz.arxiver.sync.SyncScheduler,
     ): dev.blokz.arxiver.data.OnDeviceModelController =
-        dev.blokz.arxiver.data.DefaultOnDeviceModelController(gemmaDownloader, syncScheduler)
+        dev.blokz.arxiver.data.DefaultOnDeviceModelController(gemmaDownloader) {
+            syncScheduler.downloadOnDeviceModel()
+        }
+
+    @Provides
+    @Singleton
+    @QwenModel
+    fun lightModelController(
+        @QwenModel lightDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
+        syncScheduler: dev.blokz.arxiver.sync.SyncScheduler,
+    ): dev.blokz.arxiver.data.OnDeviceModelController =
+        dev.blokz.arxiver.data.DefaultOnDeviceModelController(lightDownloader) {
+            syncScheduler.downloadLightModel()
+        }
 
     @Provides
     @Singleton

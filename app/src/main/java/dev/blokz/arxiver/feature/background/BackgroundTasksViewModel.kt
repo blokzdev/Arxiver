@@ -33,6 +33,7 @@ class BackgroundTasksViewModel
                 TaskKind.FOLLOW_SYNC -> syncScheduler.syncNow()
                 TaskKind.EMBEDDING, TaskKind.EMBEDDING_MODEL_DOWNLOAD -> syncScheduler.embedNow()
                 TaskKind.GEMMA_DOWNLOAD -> syncScheduler.downloadOnDeviceModel()
+                TaskKind.LIGHT_DOWNLOAD -> syncScheduler.downloadLightModel()
             }
         }
     }

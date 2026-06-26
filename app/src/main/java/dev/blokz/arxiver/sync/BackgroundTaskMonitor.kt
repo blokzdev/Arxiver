@@ -7,6 +7,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.di.GemmaModel
+import dev.blokz.arxiver.di.QwenModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -14,7 +15,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /** The kinds of background work the user can observe. Also the row identity in the status sheet. */
-enum class TaskKind { GEMMA_DOWNLOAD, EMBEDDING_MODEL_DOWNLOAD, FOLLOW_SYNC, EMBEDDING }
+enum class TaskKind { GEMMA_DOWNLOAD, LIGHT_DOWNLOAD, EMBEDDING_MODEL_DOWNLOAD, FOLLOW_SYNC, EMBEDDING }
 
 sealed interface TaskState {
     /** [progress] in 0f..1f, or null for indeterminate (a worker we only know is RUNNING). */
@@ -40,6 +41,7 @@ class BackgroundTaskMonitor
     constructor(
         @ApplicationContext context: Context,
         @GemmaModel private val gemmaDownloader: ModelDownloader,
+        @QwenModel private val lightDownloader: ModelDownloader,
         private val embeddingModelDownloader: ModelDownloader,
     ) {
         private val workManager = WorkManager.getInstance(context)
@@ -47,11 +49,12 @@ class BackgroundTaskMonitor
         val tasks: Flow<List<BackgroundTask>> =
             combine(
                 modelTask(gemmaDownloader, TaskKind.GEMMA_DOWNLOAD),
+                modelTask(lightDownloader, TaskKind.LIGHT_DOWNLOAD),
                 modelTask(embeddingModelDownloader, TaskKind.EMBEDDING_MODEL_DOWNLOAD),
                 runningTask(FollowSyncWorker.UNIQUE_ONESHOT, TaskKind.FOLLOW_SYNC),
                 runningTask(EmbeddingWorker.UNIQUE_ONESHOT, TaskKind.EMBEDDING),
-            ) { gemma, embedModel, sync, embed ->
-                listOfNotNull(gemma, embedModel, sync, embed)
+            ) { gemma, light, embedModel, sync, embed ->
+                listOfNotNull(gemma, light, embedModel, sync, embed)
             }
 
         private fun modelTask(
@@ -92,4 +95,5 @@ internal fun uniqueWorkNameFor(kind: TaskKind): String =
         TaskKind.FOLLOW_SYNC -> FollowSyncWorker.UNIQUE_ONESHOT
         TaskKind.EMBEDDING, TaskKind.EMBEDDING_MODEL_DOWNLOAD -> EmbeddingWorker.UNIQUE_ONESHOT
         TaskKind.GEMMA_DOWNLOAD -> OnDeviceModelWorker.UNIQUE_ONESHOT
+        TaskKind.LIGHT_DOWNLOAD -> LightModelWorker.UNIQUE_ONESHOT
     }

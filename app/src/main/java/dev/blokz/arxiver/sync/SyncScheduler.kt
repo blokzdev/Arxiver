@@ -112,12 +112,23 @@ class SyncScheduler
             )
         }
 
-        /** User-triggered Gemma 4 E2B model download (~1.87 GB) — unmetered only. */
+        /** User-triggered Gemma 4 E2B model download (~2.6 GB) — unmetered only. */
         fun downloadOnDeviceModel() {
             workManager.enqueueUniqueWork(
                 OnDeviceModelWorker.UNIQUE_ONESHOT,
                 ExistingWorkPolicy.KEEP,
                 OneTimeWorkRequestBuilder<OnDeviceModelWorker>()
+                    .setConstraints(unmetered)
+                    .build(),
+            )
+        }
+
+        /** User-triggered light-tier Qwen3-0.6B download (~614 MB; P-Atlas PA.3b) — separate unique work. */
+        fun downloadLightModel() {
+            workManager.enqueueUniqueWork(
+                LightModelWorker.UNIQUE_ONESHOT,
+                ExistingWorkPolicy.KEEP,
+                OneTimeWorkRequestBuilder<LightModelWorker>()
                     .setConstraints(unmetered)
                     .build(),
             )

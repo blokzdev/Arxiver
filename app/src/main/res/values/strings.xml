@@ -162,6 +162,7 @@
     <string name="bg_tasks_title">Background activity</string>
     <string name="bg_tasks_empty">Nothing running right now.</string>
     <string name="bg_task_gemma_download">Downloading on-device model</string>
+    <string name="bg_task_light_download">Downloading light model</string>
     <string name="bg_task_model_download">Downloading search model</string>
     <string name="bg_task_follow_sync">Syncing your follows</string>
     <string name="bg_task_embedding">Indexing your library</string>
