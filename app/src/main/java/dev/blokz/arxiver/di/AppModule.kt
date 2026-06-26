@@ -36,6 +36,12 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun relationGraphSource(
+        impl: dev.blokz.arxiver.data.RelationGraphRepository,
+    ): dev.blokz.arxiver.data.RelationGraphSource = impl
+
+    @Provides
+    @Singleton
     fun database(
         @ApplicationContext context: Context,
     ): ArxiverDatabase = ArxiverDatabase.build(context)

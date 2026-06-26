@@ -13,12 +13,15 @@ import dev.blokz.arxiver.core.ai.ChatChunk
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
+import dev.blokz.arxiver.core.search.RelationGraphBuilder
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.ChatPrepareResult
 import dev.blokz.arxiver.data.ChatRepository
 import dev.blokz.arxiver.data.Citation
+import dev.blokz.arxiver.data.GraphResult
 import dev.blokz.arxiver.data.PageImageSource
 import dev.blokz.arxiver.data.PreparedChat
+import dev.blokz.arxiver.data.RelationGraphSource
 import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -82,6 +85,7 @@ class AskViewModel
         private val chatRepository: ChatRepository,
         private val scopeIndexer: ScopeIndexer,
         private val pageImageSource: PageImageSource,
+        private val relationGraphSource: RelationGraphSource,
     ) : ViewModel() {
         private lateinit var scope: RetrievalScope
         private var sessionId: Long? = null
@@ -152,6 +156,45 @@ class AskViewModel
         }
 
         fun summarize() = runPreset(SUMMARIZE_PROMPT)
+
+        /**
+         * Draw an app-composed relation graph for the paper (P-Atlas PA.1) — citation + similarity
+         * structure from local data, with **no provider call**. The Mermaid is built deterministically
+         * (valid by construction) and persisted as a complete assistant turn via
+         * [ChatRepository.insertArtifactTurn]; sparse data surfaces a specific empty-state message
+         * instead. Paper scope only (collection → PA.5). [question] is shown as the user turn.
+         */
+        fun runGraphArtifact(question: String) {
+            if (_uiState.value.streaming || _uiState.value.preparing) return
+            val paper = scope as? RetrievalScope.Paper ?: return
+            _uiState.update { it.copy(error = null, notConfigured = false, preparing = true) }
+            viewModelScope.launch {
+                indexJob?.join()
+                when (val result = relationGraphSource.graphForPaper(paper.paperId)) {
+                    is GraphResult.Ready -> {
+                        val mermaid = RelationGraphBuilder.toMermaid(result.graph)
+                        if (mermaid == null) {
+                            _uiState.update { it.copy(preparing = false, error = R.string.ask_graph_no_relations) }
+                            return@launch
+                        }
+                        sessionId = chatRepository.insertArtifactTurn(scope, sessionId, question, mermaid)
+                        _uiState.update {
+                            it.copy(
+                                preparing = false,
+                                messages =
+                                    it.messages +
+                                        AskMessage(AskRole.USER, question) +
+                                        AskMessage(AskRole.ASSISTANT, mermaid, streaming = false),
+                            )
+                        }
+                    }
+                    GraphResult.NotEmbedded ->
+                        _uiState.update { it.copy(preparing = false, error = R.string.ask_graph_not_embedded) }
+                    GraphResult.NoRelations ->
+                        _uiState.update { it.copy(preparing = false, error = R.string.ask_graph_no_relations) }
+                }
+            }
+        }
 
         fun confirmSend() {
             val prepared = pendingPrepared ?: return

@@ -54,4 +54,15 @@ class AskPresetsTest {
         val collection = AskPresets.forScope(isPaper = false, visionAvailable = true)
         assertTrue(collection.none { it.requiresVision }, "no vision preset in a collection sheet")
     }
+
+    @Test
+    fun `map relations is an artifact preset offered for a paper only`() {
+        // P-Atlas PA.1: routed to runGraphArtifact (no LLM), PAPER scope (collection → PA.5).
+        val preset = AskPresets.forScope(isPaper = true).firstOrNull { it.id == "map_relations" }
+        assertTrue(preset != null && preset.artifact, "map_relations is an artifact preset on a paper")
+        assertTrue(
+            AskPresets.forScope(isPaper = false).none { it.id == "map_relations" },
+            "not offered in a collection sheet yet",
+        )
+    }
 }

@@ -24,6 +24,12 @@ data class AskPreset(
      * exists (see [forScope] `visionAvailable`); routed through a page picker → `runVisionPreset`.
      */
     val requiresVision: Boolean = false,
+    /**
+     * P-Atlas PA.1: tapping draws an **app-composed** artifact (e.g. a relation graph) deterministically
+     * from local data with no LLM call (routed to `runGraphArtifact`), instead of sending [instruction]
+     * to a provider. The instruction is the human label shown as the user turn.
+     */
+    val artifact: Boolean = false,
 )
 
 /**
@@ -120,6 +126,13 @@ object AskPresets {
                         "or in the excerpts, and cite [n] for textual claims.",
                 appliesTo = PresetScope.PAPER,
                 requiresVision = true,
+            ),
+            AskPreset(
+                id = "map_relations",
+                labelRes = R.string.preset_map_relations,
+                instruction = "Map this paper's relationships to related work and your library.",
+                appliesTo = PresetScope.PAPER,
+                artifact = true,
             ),
         )
 

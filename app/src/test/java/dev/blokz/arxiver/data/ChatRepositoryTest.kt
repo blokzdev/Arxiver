@@ -157,6 +157,25 @@ class ChatRepositoryTest {
         }
 
     @Test
+    fun `insertArtifactTurn persists a complete user and assistant turn without a provider`() =
+        runTest {
+            // The provider script throws if touched — an app-drawn artifact must never call it (P-Atlas PA.1).
+            val repo = repo(FakeProvider { error("provider must not be called for an artifact turn") })
+            val mermaid = "```mermaid\ngraph TD\n  n0[\"x\"]\n```"
+
+            val sid = repo.insertArtifactTurn(RetrievalScope.Paper("p1"), null, "Map relationships", mermaid)
+
+            val msgs = db.chatDao().messagesFor(sid)
+            assertEquals(listOf("Map relationships", mermaid), msgs.map { it.content })
+            assertEquals(listOf("complete", "complete"), msgs.map { it.status })
+
+            // A second call reuses the same session (no orphan sessions).
+            val sid2 = repo.insertArtifactTurn(RetrievalScope.Paper("p1"), sid, "again", "x")
+            assertEquals(sid, sid2)
+            assertEquals(4, db.chatDao().messagesFor(sid).size)
+        }
+
+    @Test
     fun `no usable provider resolves to NotConfigured and persists nothing`() =
         runTest {
             val repo = repo(FakeProvider { flowOf(ChatChunk.Done()) }, keys = emptySet())
