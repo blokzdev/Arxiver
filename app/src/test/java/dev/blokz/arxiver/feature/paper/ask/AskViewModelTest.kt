@@ -1,11 +1,13 @@
 package dev.blokz.arxiver.feature.paper.ask
 
+import dev.blokz.arxiver.R
 import dev.blokz.arxiver.chat.ChatContextAssembler
 import dev.blokz.arxiver.chat.ChatPreviewBuilder
 import dev.blokz.arxiver.core.ai.AiException
 import dev.blokz.arxiver.core.ai.AiKeyStore
 import dev.blokz.arxiver.core.ai.AiProvider
 import dev.blokz.arxiver.core.ai.ChatChunk
+import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ProviderCapability
 import dev.blokz.arxiver.core.ai.ProviderId
@@ -23,6 +25,7 @@ import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.core.search.ScopedChunk
 import dev.blokz.arxiver.data.ChatRepository
+import dev.blokz.arxiver.data.PageImageSource
 import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -42,6 +45,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -69,12 +73,47 @@ class AskViewModelTest {
     private class FakeProvider(
         override val id: ProviderId,
         requiresKey: Boolean,
+        vision: Boolean = false,
         private val script: () -> Flow<ChatChunk>,
     ) : AiProvider {
         override val capability =
-            ProviderCapability(100_000, streaming = true, onDevice = !requiresKey, requiresKey = requiresKey)
+            ProviderCapability(
+                100_000,
+                streaming = true,
+                onDevice = !requiresKey,
+                requiresKey = requiresKey,
+                vision = vision,
+            )
 
         override fun chat(request: ChatRequest): Flow<ChatChunk> = script()
+    }
+
+    /**
+     * Configurable [PageImageSource] fake (R3d.4). [pageCount] drives sheet-open gating; [image]
+     * is what [pageImage] returns (null = render failure). Records the requested **0-based** index
+     * so a test can assert the single 1→0 conversion (m1).
+     */
+    private class FakePageImageSource(
+        private val pageCount: Int? = null,
+        private val image: ChatImage? = ChatImage("image/jpeg", "QUFB", label = "page 1 of arXiv:2401.00001"),
+    ) : PageImageSource {
+        var requestedPageIndex: Int? = null
+            private set
+        var pageCountQueries: Int = 0
+            private set
+
+        override suspend fun pageCountIfLocal(paperId: String): Int? {
+            pageCountQueries++
+            return pageCount
+        }
+
+        override suspend fun pageImage(
+            paperId: String,
+            pageIndex: Int,
+        ): ChatImage? {
+            requestedPageIndex = pageIndex
+            return image
+        }
     }
 
     private class FakeKeyStore(private val keys: Set<ProviderId>) : AiKeyStore {
@@ -179,6 +218,7 @@ class AskViewModelTest {
         embed: suspend (String) -> AppResult<FloatArray> = { AppResult.Success(FloatArray(384)) },
         indexer: ScopeIndexer = ScopeIndexer {},
         scope: RetrievalScope = RetrievalScope.Paper("2401.00001"),
+        pageImageSource: PageImageSource = FakePageImageSource(),
     ): AskViewModel {
         val registry = ProviderRegistry(listOf(provider), FakeKeyStore(keys))
         val resolver = ProviderResolver(registry, { selected }, { false }, { onDeviceReady })
@@ -192,7 +232,7 @@ class AskViewModelTest {
                 embedQuery = embed,
                 dispatchers = TestDispatchers(dispatcher),
             )
-        return AskViewModel(repo, indexer).also { it.start(scope) }
+        return AskViewModel(repo, indexer, pageImageSource).also { it.start(scope) }
     }
 
     private fun onDeviceProvider(script: () -> Flow<ChatChunk>) =
@@ -200,6 +240,9 @@ class AskViewModelTest {
 
     private fun cloudProvider(script: () -> Flow<ChatChunk>) =
         FakeProvider(ProviderId.CLAUDE, requiresKey = true, script = script)
+
+    private fun cloudVisionProvider(script: () -> Flow<ChatChunk>) =
+        FakeProvider(ProviderId.CLAUDE, requiresKey = true, vision = true, script = script)
 
     @Test
     fun `on-device question streams immediately without a confirm`() =
@@ -371,5 +414,170 @@ class AskViewModelTest {
             assertEquals(2, state.messages.size)
             assertEquals(AskViewModel.SUMMARIZE_PROMPT, state.messages.first().text)
             assertEquals("Summary.", state.messages.last().text)
+        }
+
+    // --- R3d.4 vision preset ---
+
+    @Test
+    fun `start gates visionAvailable on provider vision AND a local PDF`() =
+        runTest(dispatcher) {
+            // vision provider + a local PDF → available.
+            val withBoth =
+                vm(
+                    cloudVisionProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    pageImageSource = FakePageImageSource(pageCount = 3),
+                )
+            advanceUntilIdle()
+            assertTrue(withBoth.uiState.value.visionAvailable)
+            assertEquals(3, withBoth.uiState.value.pageCount)
+
+            // vision provider but NO local PDF → unavailable.
+            val noPdf =
+                vm(
+                    cloudVisionProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    pageImageSource = FakePageImageSource(pageCount = null),
+                )
+            advanceUntilIdle()
+            assertEquals(false, noPdf.uiState.value.visionAvailable)
+            assertEquals(0, noPdf.uiState.value.pageCount)
+
+            // non-vision (on-device) provider + a local PDF → unavailable (provider gate).
+            val noVision =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    pageImageSource = FakePageImageSource(pageCount = 3),
+                )
+            advanceUntilIdle()
+            assertEquals(false, noVision.uiState.value.visionAvailable)
+        }
+
+    @Test
+    fun `collection scope skips vision gating and runVisionPreset is a no-op`() =
+        runTest(dispatcher) {
+            val source = FakePageImageSource(pageCount = 5)
+            val vm =
+                vm(
+                    cloudVisionProvider { flowOf(ChatChunk.Delta("x"), ChatChunk.Done()) },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    scope = RetrievalScope.Collection(7),
+                    pageImageSource = source,
+                )
+            advanceUntilIdle()
+            // Gating never probes for a collection scope.
+            assertEquals(false, vm.uiState.value.visionAvailable)
+            assertEquals(0, vm.uiState.value.pageCount)
+            assertEquals(0, source.pageCountQueries)
+
+            // m2: runVisionPreset is a no-op for a collection (no single target paper).
+            vm.runVisionPreset("instruction", 1)
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.messages.isEmpty())
+            assertNull(vm.uiState.value.pendingConfirm)
+            assertEquals(false, vm.uiState.value.preparing)
+            assertNull(source.requestedPageIndex)
+        }
+
+    @Test
+    fun `runVisionPreset converts the 1-based page to 0-based exactly once`() =
+        runTest(dispatcher) {
+            // m1: picker page 2 must request page index 1 (the only conversion is at the VM boundary).
+            val source = FakePageImageSource(pageCount = 5)
+            val vm =
+                vm(
+                    cloudVisionProvider { flowOf(ChatChunk.Delta("x"), ChatChunk.Done()) },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    pageImageSource = source,
+                )
+            vm.runVisionPreset("instruction", 2)
+            advanceUntilIdle()
+            assertEquals(1, source.requestedPageIndex)
+        }
+
+    @Test
+    fun `runVisionPreset attaches the page image and parks on the cloud confirm`() =
+        runTest(dispatcher) {
+            val vm =
+                vm(
+                    cloudVisionProvider { flowOf(ChatChunk.Delta("Figure answer"), ChatChunk.Done()) },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    pageImageSource = FakePageImageSource(pageCount = 4),
+                )
+            vm.runVisionPreset("Summarize with figures", 1)
+            advanceUntilIdle()
+
+            // Cloud turn pauses on the confirm; nothing sent yet.
+            val parked = vm.uiState.value
+            assertTrue(parked.isCloud)
+            assertNotNull(parked.pendingConfirm)
+            assertTrue(parked.messages.isEmpty(), "no turn shown until confirmed")
+            // SB2: the attachment really reached prepare() — the preview discloses the image
+            // (a plain text turn would NOT contain this), tying the VM path to the real attachment.
+            assertTrue(
+                parked.pendingConfirm!!.text.contains("Attached image"),
+                "the privacy preview must disclose the attached page image",
+            )
+
+            vm.confirmSend()
+            advanceUntilIdle()
+            val state = vm.uiState.value
+            assertNull(state.pendingConfirm)
+            assertEquals(2, state.messages.size)
+            assertEquals("Figure answer", state.messages.last().text)
+        }
+
+    @Test
+    fun `runVisionPreset surfaces an error when the page image cannot be read`() =
+        runTest(dispatcher) {
+            val source = FakePageImageSource(pageCount = 3, image = null)
+            val vm =
+                vm(
+                    cloudVisionProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    pageImageSource = source,
+                )
+            vm.runVisionPreset("instruction", 1)
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertEquals(R.string.ask_error_page_image, state.error)
+            assertEquals(false, state.preparing)
+            assertTrue(state.messages.isEmpty())
+            assertNull(state.pendingConfirm)
+            assertEquals(0, source.requestedPageIndex) // pageImage WAS reached (vs. the no-vision path)
+        }
+
+    @Test
+    fun `runVisionPreset re-checks vision at action time and errors if the provider lost it`() =
+        runTest(dispatcher) {
+            // SB1: the sheet-open gate can go stale (e.g. an on-device engine becomes ready mid-sheet).
+            // A non-vision resolved provider must surface an error + hide the chip, not silently drop
+            // the image and run a figure-less text turn.
+            val source = FakePageImageSource(pageCount = 3)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Delta("x"), ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    pageImageSource = source,
+                )
+            vm.runVisionPreset("instruction", 1)
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            assertEquals(R.string.ask_error_no_vision, state.error)
+            assertEquals(false, state.visionAvailable)
+            assertEquals(false, state.preparing)
+            assertTrue(state.messages.isEmpty())
+            assertNull(source.requestedPageIndex) // the re-check returns BEFORE rendering the page
         }
 }

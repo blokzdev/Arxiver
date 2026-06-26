@@ -16,11 +16,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -97,8 +101,12 @@ fun AskSheet(
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(scope, sessionId) { viewModel.start(scope, sessionId) }
     // The "what you can ask" presets, filtered to this scope (paper drops collection-only and
-    // vice versa) — P-Rich R3c. Scope is known here; AskSheetContent stays a pure function of it.
-    val presets = remember(scope) { AskPresets.forScope(scope is RetrievalScope.Paper) }
+    // vice versa) — P-Rich R3c. The vision preset (R3d.4) is additionally gated on
+    // state.visionAvailable, which the VM resolves after open — so re-key on it.
+    val presets =
+        remember(scope, state.visionAvailable) {
+            AskPresets.forScope(scope is RetrievalScope.Paper, visionAvailable = state.visionAvailable)
+        }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         AskSheetContent(
@@ -107,6 +115,7 @@ fun AskSheet(
             onInput = viewModel::setInput,
             onSend = viewModel::send,
             onRunPreset = viewModel::runPreset,
+            onRunVisionPreset = viewModel::runVisionPreset,
             onFollowUp = viewModel::runPreset,
             onSetMode = viewModel::setMode,
             onSetIncludeNotes = viewModel::setIncludeNotes,
@@ -129,6 +138,8 @@ private fun AskSheetContent(
     onInput: (String) -> Unit,
     onSend: () -> Unit,
     onRunPreset: (String) -> Unit,
+    /** R3d.4: run the vision preset for a chosen 1-based page (instruction, pageNumber). */
+    onRunVisionPreset: (String, Int) -> Unit,
     onFollowUp: (String) -> Unit,
     onSetMode: (ChatMode) -> Unit,
     onSetIncludeNotes: (Boolean) -> Unit,
@@ -236,11 +247,26 @@ private fun AskSheetContent(
         if (confirm != null) {
             ConfirmCard(preview = confirm, onSend = onConfirmSend, onCancel = onCancelConfirm)
         } else {
+            // The vision preset (R3d.4) opens a page picker first; text presets run immediately.
+            var pendingVision by remember { mutableStateOf<AskPreset?>(null) }
             PresetRow(
                 presets = presets,
                 enabled = !state.streaming && !state.preparing,
-                onRunPreset = onRunPreset,
+                pageCount = state.pageCount,
+                onPresetClick = { preset ->
+                    if (preset.requiresVision) pendingVision = preset else onRunPreset(preset.instruction)
+                },
             )
+            pendingVision?.let { preset ->
+                PagePickDialog(
+                    pageCount = state.pageCount,
+                    onConfirm = { page ->
+                        onRunVisionPreset(preset.instruction, page)
+                        pendingVision = null
+                    },
+                    onDismiss = { pendingVision = null },
+                )
+            }
             ModeRow(mode = state.mode, enabled = !state.streaming && !state.preparing, onSetMode = onSetMode)
             IncludeNotesRow(state.includeNotes, onSetIncludeNotes)
             InputRow(
@@ -526,25 +552,76 @@ private fun ModeRow(
     }
 }
 
-/** One-tap research-tool presets (P-Rich R3c); each runs its instruction as a grounded question. */
+/**
+ * One-tap research-tool presets (P-Rich R3c). A text preset runs its instruction as a grounded
+ * question; the vision preset (R3d.4) is routed by the caller to a page picker. A `requiresVision`
+ * chip self-disables when no renderable page exists ([pageCount] == 0).
+ */
 @Composable
 private fun PresetRow(
     presets: List<AskPreset>,
     enabled: Boolean,
-    onRunPreset: (String) -> Unit,
+    pageCount: Int,
+    onPresetClick: (AskPreset) -> Unit,
 ) {
     Row(
         modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
     ) {
         presets.forEach { preset ->
+            val chipEnabled = enabled && (!preset.requiresVision || pageCount > 0)
             AssistChip(
-                onClick = { onRunPreset(preset.instruction) },
-                enabled = enabled,
+                onClick = { onPresetClick(preset) },
+                enabled = chipEnabled,
                 label = { Text(stringResource(preset.labelRes)) },
             )
         }
     }
+}
+
+/**
+ * Page picker for the vision preset (R3d.4). 1-based to the user, default page 1, bounded to
+ * [1..pageCount] by a +/- stepper (no free-text parse surface, inherently clamped, TalkBack-friendly).
+ * Confirm runs the vision turn for the chosen page (the VM owns the single 0-based conversion — m1).
+ */
+@Composable
+private fun PagePickDialog(
+    pageCount: Int,
+    onConfirm: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val maxPage = pageCount.coerceAtLeast(1)
+    var page by remember { mutableIntStateOf(1) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ask_pick_page_title)) },
+        text = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = { page = (page - 1).coerceAtLeast(1) }, enabled = page > 1) {
+                    Icon(Icons.Filled.Remove, stringResource(R.string.cd_ask_page_previous))
+                }
+                Text(
+                    stringResource(R.string.ask_pick_page_label, page, maxPage),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                IconButton(onClick = { page = (page + 1).coerceAtMost(maxPage) }, enabled = page < maxPage) {
+                    Icon(Icons.Filled.Add, stringResource(R.string.cd_ask_page_next))
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onConfirm(page.coerceIn(1, maxPage)) }) {
+                Text(stringResource(R.string.ask_pick_page_confirm))
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) { Text(stringResource(R.string.ask_pick_page_cancel)) }
+        },
+    )
 }
 
 @Composable
@@ -614,7 +691,8 @@ private fun AskSheetEmptyPreview() {
         AskSheetContent(
             state = AskUiState(provider = ProviderId.ON_DEVICE, isCloud = false),
             presets = AskPresets.forScope(isPaper = true),
-            onInput = {}, onSend = {}, onRunPreset = {}, onFollowUp = {}, onSetMode = {}, onSetIncludeNotes = {},
+            onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> }, onFollowUp = {},
+            onSetMode = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
@@ -630,6 +708,8 @@ private fun AskSheetConversationPreview() {
                 AskUiState(
                     provider = ProviderId.CLAUDE,
                     isCloud = true,
+                    visionAvailable = true,
+                    pageCount = 8,
                     messages =
                         listOf(
                             AskMessage(AskRole.USER, "What is the main contribution?"),
@@ -651,8 +731,9 @@ private fun AskSheetConversationPreview() {
                             ),
                         ),
                 ),
-            presets = AskPresets.forScope(isPaper = true),
-            onInput = {}, onSend = {}, onRunPreset = {}, onFollowUp = {}, onSetMode = {}, onSetIncludeNotes = {},
+            presets = AskPresets.forScope(isPaper = true, visionAvailable = true),
+            onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> }, onFollowUp = {},
+            onSetMode = {}, onSetIncludeNotes = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
