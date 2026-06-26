@@ -241,7 +241,24 @@ class AskViewModelTest {
                 embedQuery = embed,
                 dispatchers = TestDispatchers(dispatcher),
             )
-        return AskViewModel(repo, indexer, pageImageSource, relationGraphSource).also { it.start(scope) }
+        return AskViewModel(
+            repo,
+            indexer,
+            pageImageSource,
+            relationGraphSource,
+            NoopReadAloud(),
+        ).also { it.start(scope) }
+    }
+
+    private class NoopReadAloud : dev.blokz.arxiver.tts.ReadAloud {
+        override val speakingId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+        override fun toggle(
+            id: String,
+            text: String,
+        ) = Unit
+
+        override fun stop() = Unit
     }
 
     private fun onDeviceProvider(script: () -> Flow<ChatChunk>) =

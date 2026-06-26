@@ -16,12 +16,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -44,6 +46,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -63,6 +66,9 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.chat.ChatMode
 import dev.blokz.arxiver.chat.ChatPreview
@@ -100,6 +106,27 @@ fun AskSheet(
 ) {
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(scope, sessionId) { viewModel.start(scope, sessionId) }
+
+    // Read-aloud (P-Share PS.2): keyed by answer content so the play/stop toggle survives recomposition;
+    // the speakable form is extracted at the UI edge (labels are localized strings).
+    val speakingKey by viewModel.speaking.collectAsState()
+    val speakableLabels = rememberSpeakableLabels()
+    val onReadAloud: (AskMessage) -> Unit = { m ->
+        viewModel.toggleReadAloud(m.text.hashCode().toString(), SpeakableText.forAnswer(m.text, speakableLabels))
+    }
+    // Stop reading when the sheet is dismissed or the app leaves the foreground.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_STOP) viewModel.stopReadAloud()
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.stopReadAloud()
+        }
+    }
     // The "what you can ask" presets, filtered to this scope (paper drops collection-only and
     // vice versa) — P-Rich R3c. The vision preset (R3d.4) is additionally gated on
     // state.visionAvailable, which the VM resolves after open — so re-key on it.
@@ -128,9 +155,20 @@ fun AskSheet(
             onPinAnswer = onPinAnswer,
             onShareAnswer = onShareAnswer,
             onShareConversation = onShareConversation,
+            onReadAloud = onReadAloud,
+            speakingKey = speakingKey,
         )
     }
 }
+
+@Composable
+private fun rememberSpeakableLabels(): SpeakableLabels =
+    SpeakableLabels(
+        diagram = stringResource(R.string.speak_diagram),
+        equation = stringResource(R.string.speak_equation),
+        image = stringResource(R.string.speak_image),
+        code = stringResource(R.string.speak_code),
+    )
 
 @Composable
 private fun AskSheetContent(
@@ -154,6 +192,8 @@ private fun AskSheetContent(
     onPinAnswer: ((String) -> Unit)? = null,
     onShareAnswer: ((AskMessage) -> Unit)? = null,
     onShareConversation: ((List<AskMessage>) -> Unit)? = null,
+    onReadAloud: ((AskMessage) -> Unit)? = null,
+    speakingKey: String? = null,
 ) {
     Column(
         modifier =
@@ -210,6 +250,8 @@ private fun AskSheetContent(
                     onOpenCrossRef = onOpenCrossRef,
                     onPinAnswer = onPinAnswer,
                     onShareAnswer = onShareAnswer,
+                    onReadAloud = onReadAloud,
+                    isSpeaking = speakingKey != null && speakingKey == message.text.hashCode().toString(),
                     onFollowUp = if (index == lastAssistant) onFollowUp else null,
                     followUpsEnabled = chipsEnabled,
                 )
@@ -312,6 +354,8 @@ private fun AskBubble(
     onOpenCrossRef: ((String) -> Unit)? = null,
     onPinAnswer: ((String) -> Unit)? = null,
     onShareAnswer: ((AskMessage) -> Unit)? = null,
+    onReadAloud: ((AskMessage) -> Unit)? = null,
+    isSpeaking: Boolean = false,
     onFollowUp: ((String) -> Unit)? = null,
     followUpsEnabled: Boolean = true,
 ) {
@@ -365,7 +409,7 @@ private fun AskBubble(
                 // Pin's confirmation is shown in-sheet (the app snackbar sits behind the modal) by
                 // flipping the button to a "done" state; share's confirmation is the OS chooser.
                 val canAct = !message.streaming && !message.error && message.text.isNotBlank()
-                if (canAct && (onPinAnswer != null || onShareAnswer != null)) {
+                if (canAct && (onPinAnswer != null || onShareAnswer != null || onReadAloud != null)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
                         if (onPinAnswer != null) {
                             var pinned by remember(message.text) { mutableStateOf(false) }
@@ -401,6 +445,25 @@ private fun AskBubble(
                                 Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Text(
                                     stringResource(R.string.ask_share_answer),
+                                    modifier = Modifier.padding(start = Spacing.xs),
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+                        }
+                        if (onReadAloud != null) {
+                            TextButton(
+                                onClick = { onReadAloud(message) },
+                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
+                            ) {
+                                Icon(
+                                    if (isSpeaking) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    stringResource(
+                                        if (isSpeaking) R.string.ask_stop_reading else R.string.ask_read_aloud,
+                                    ),
                                     modifier = Modifier.padding(start = Spacing.xs),
                                     style = MaterialTheme.typography.labelMedium,
                                 )
