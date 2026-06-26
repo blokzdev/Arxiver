@@ -343,6 +343,7 @@
     <string name="ai_ondevice_ram">Device memory: %1$d MB</string>
     <string name="ai_ondevice_tier">Recommended: %1$s</string>
     <string name="ai_ondevice_download">Download model (~2.6 GB, Wi-Fi only)</string>
+    <string name="ai_ondevice_download_light">Download model (~0.6 GB, Wi-Fi only)</string>
     <string name="ai_ondevice_downloading">Downloading model… %1$d%%</string>
     <string name="ai_ondevice_delete">Delete model</string>
     <string name="ai_ondevice_retry">Retry download</string>
