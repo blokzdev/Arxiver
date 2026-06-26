@@ -17,6 +17,7 @@ import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.ChatPrepareResult
 import dev.blokz.arxiver.data.ChatRepository
 import dev.blokz.arxiver.data.Citation
+import dev.blokz.arxiver.data.PageImageSource
 import dev.blokz.arxiver.data.PreparedChat
 import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.Job
@@ -59,6 +60,10 @@ data class AskUiState(
     val notConfigured: Boolean = false,
     /** Answer-depth dial (P-Rich R3b); applies to the next send or preset. */
     val mode: ChatMode = ChatMode.STANDARD,
+    /** R3d.4: true only when the resolved provider is vision-capable AND a local PDF exists (paper scope). */
+    val visionAvailable: Boolean = false,
+    /** R3d.4: page count of the local PDF (0 = none/unknown); bounds the 1-based page picker. */
+    val pageCount: Int = 0,
     @StringRes val error: Int? = null,
 )
 
@@ -76,6 +81,7 @@ class AskViewModel
     constructor(
         private val chatRepository: ChatRepository,
         private val scopeIndexer: ScopeIndexer,
+        private val pageImageSource: PageImageSource,
     ) : ViewModel() {
         private lateinit var scope: RetrievalScope
         private var sessionId: Long? = null
@@ -112,6 +118,17 @@ class AskViewModel
                 this@AskViewModel.sessionId = resume ?: return@launch
                 val history = chatRepository.observeMessages(resume).first().map { it.toAskMessage() }
                 _uiState.update { it.copy(messages = history) }
+            }
+            // R3d.4: gate the vision preset for a paper scope. Both probes are network-free
+            // (pageCountIfLocal globs filesDir/pdfs; resolveVisionCapable is local store reads),
+            // so they never trip the arXiv limiter and run in parallel with indexing. Collection
+            // scope is left untouched (visionAvailable=false, pageCount=0).
+            (scope as? RetrievalScope.Paper)?.let { paper ->
+                viewModelScope.launch {
+                    val pages = runCatching { pageImageSource.pageCountIfLocal(paper.paperId) }.getOrNull() ?: 0
+                    val visionProvider = runCatching { chatRepository.resolveVisionCapable() }.getOrDefault(false)
+                    _uiState.update { it.copy(pageCount = pages, visionAvailable = visionProvider && pages > 0) }
+                }
             }
         }
 
@@ -159,34 +176,83 @@ class AskViewModel
                 // chunks; an un-embedded inbox paper would otherwise retrieve nothing.
                 indexJob?.join()
                 val mode = _uiState.value.mode
-                when (
-                    val result =
-                        chatRepository.prepare(
-                            scope,
-                            sessionId,
-                            question,
-                            _uiState.value.includeNotes,
-                            mode,
-                        )
-                ) {
-                    is ChatPrepareResult.Ready -> {
-                        val prepared = result.prepared
-                        _uiState.update {
-                            it.copy(preparing = false, provider = prepared.providerId, isCloud = prepared.isCloud)
-                        }
-                        if (prepared.isCloud) {
-                            pendingPrepared = prepared
-                            pendingMode = mode
-                            _uiState.update { it.copy(pendingConfirm = prepared.preview) }
-                        } else {
-                            startStream(prepared, mode)
-                        }
+                val result =
+                    chatRepository.prepare(scope, sessionId, question, _uiState.value.includeNotes, mode)
+                handlePrepared(result, mode)
+            }
+        }
+
+        /**
+         * R3d.4 "Summarize with figures": attach a PDF **page image** to a grounded turn. [pageNumber]
+         * is 1-based from the picker, converted to 0-based **exactly once** here (m1). Paper scope only
+         * (m2). The image render is network-free (an already-downloaded page). The turn then re-enters
+         * the SAME prepare → Ready → (cloud confirm | stream) path as [ask] via [handlePrepared], so a
+         * cloud vision turn always parks on the "what leaves the device" confirm before sending.
+         */
+        fun runVisionPreset(
+            instruction: String,
+            pageNumber: Int,
+        ) {
+            if (_uiState.value.streaming || _uiState.value.preparing) return
+            val paper = scope as? RetrievalScope.Paper ?: return // m2
+            val pageIndex0 = (pageNumber - 1).coerceAtLeast(0) // m1: the only 0-based conversion
+            _uiState.update { it.copy(error = null, notConfigured = false, preparing = true) }
+            viewModelScope.launch {
+                indexJob?.join()
+                // Action-time re-check (the sheet-open gate can go stale: an on-device engine may
+                // finish loading mid-sheet and, with prefer-on-device on, win at prepare time — the
+                // assembler would then silently drop the image). Surface it + hide the chip instead.
+                if (!chatRepository.resolveVisionCapable()) {
+                    _uiState.update {
+                        it.copy(preparing = false, visionAvailable = false, error = R.string.ask_error_no_vision)
                     }
-                    ChatPrepareResult.NotConfigured ->
-                        _uiState.update { it.copy(preparing = false, notConfigured = true) }
-                    is ChatPrepareResult.Failed ->
-                        _uiState.update { it.copy(preparing = false, error = result.error.toMessageRes()) }
+                    return@launch
                 }
+                val image = pageImageSource.pageImage(paper.paperId, pageIndex0)
+                if (image == null) {
+                    _uiState.update { it.copy(preparing = false, error = R.string.ask_error_page_image) }
+                    return@launch
+                }
+                val mode = _uiState.value.mode
+                val result =
+                    chatRepository.prepare(
+                        scope,
+                        sessionId,
+                        instruction,
+                        _uiState.value.includeNotes,
+                        mode,
+                        attachment = image,
+                    )
+                handlePrepared(result, mode)
+            }
+        }
+
+        /**
+         * Shared Ready / NotConfigured / Failed handling for [ask] and [runVisionPreset]. Non-suspend;
+         * only touches `_uiState` + the `pending*` fields, so it is safe to call after a suspend prepare().
+         */
+        private fun handlePrepared(
+            result: ChatPrepareResult,
+            mode: ChatMode,
+        ) {
+            when (result) {
+                is ChatPrepareResult.Ready -> {
+                    val prepared = result.prepared
+                    _uiState.update {
+                        it.copy(preparing = false, provider = prepared.providerId, isCloud = prepared.isCloud)
+                    }
+                    if (prepared.isCloud) {
+                        pendingPrepared = prepared
+                        pendingMode = mode
+                        _uiState.update { it.copy(pendingConfirm = prepared.preview) }
+                    } else {
+                        startStream(prepared, mode)
+                    }
+                }
+                ChatPrepareResult.NotConfigured ->
+                    _uiState.update { it.copy(preparing = false, notConfigured = true) }
+                is ChatPrepareResult.Failed ->
+                    _uiState.update { it.copy(preparing = false, error = result.error.toMessageRes()) }
             }
         }
 

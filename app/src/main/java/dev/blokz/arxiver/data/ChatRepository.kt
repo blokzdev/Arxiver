@@ -129,6 +129,20 @@ class ChatRepository(
         }
 
     /**
+     * Read-only: is the provider that would handle a turn right now vision-capable? Drives
+     * R3d.4 preset gating at sheet-open AND the action-time re-check in `runVisionPreset` (no
+     * embed/retrieve/assemble/persist, no network — provider resolution is local store reads
+     * only, so it never trips the arXiv limiter). NotConfigured → false (no usable provider).
+     */
+    suspend fun resolveVisionCapable(): Boolean =
+        withContext(dispatchers.io) {
+            when (val resolution = providerResolver.resolve()) {
+                is ProviderResolution.Resolved -> resolution.provider.capability.vision
+                ProviderResolution.NotConfigured -> false
+            }
+        }
+
+    /**
      * Streams the assistant reply, persisting turns. Re-emits the provider's
      * [ChatChunk]s; an [AiException] propagates after the partial turn is saved as
      * `error`, and cancellation leaves the partial as `incomplete`.

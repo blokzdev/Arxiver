@@ -18,6 +18,12 @@ data class AskPreset(
     @StringRes val labelRes: Int,
     val instruction: String,
     val appliesTo: PresetScope,
+    /**
+     * P-Rich R3d.4: tapping attaches a PDF **page image** (vision) instead of running a plain
+     * text question. Surfaced only when the resolved provider is vision-capable AND a local PDF
+     * exists (see [forScope] `visionAvailable`); routed through a page picker → `runVisionPreset`.
+     */
+    val requiresVision: Boolean = false,
 )
 
 /**
@@ -104,11 +110,31 @@ object AskPresets {
                         "or not mentioned, based only on the excerpts.",
                 appliesTo = PresetScope.PAPER,
             ),
+            AskPreset(
+                id = "summarize_with_figures",
+                labelRes = R.string.preset_summarize_with_figures,
+                instruction =
+                    "Summarize this page of the paper for a researcher, using the attached page image: " +
+                        "describe what each figure, plot, table, or diagram on the page shows and how it " +
+                        "supports the paper's argument. Ground every claim in what is visible on the page " +
+                        "or in the excerpts, and cite [n] for textual claims.",
+                appliesTo = PresetScope.PAPER,
+                requiresVision = true,
+            ),
         )
 
-    /** The presets offered for a paper sheet ([isPaper] true) vs a collection sheet. */
-    fun forScope(isPaper: Boolean): List<AskPreset> =
+    /**
+     * The presets offered for a paper sheet ([isPaper] true) vs a collection sheet. [visionAvailable]
+     * (R3d.4) gates `requiresVision` presets: offered only when the resolved provider is vision-capable
+     * AND a local PDF exists. Default false keeps every text-only call site (previews, the VM, the
+     * existing tests) byte-identical (m3).
+     */
+    fun forScope(
+        isPaper: Boolean,
+        visionAvailable: Boolean = false,
+    ): List<AskPreset> =
         ALL.filter {
+            if (it.requiresVision && !visionAvailable) return@filter false
             when (it.appliesTo) {
                 PresetScope.BOTH -> true
                 PresetScope.PAPER -> isPaper

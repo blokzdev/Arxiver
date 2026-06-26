@@ -39,4 +39,19 @@ class AskPresetsTest {
         val summarize = AskPresets.ALL.first { it.id == "summarize" }
         assertEquals(AskViewModel.SUMMARIZE_PROMPT, summarize.instruction)
     }
+
+    @Test
+    fun `vision preset is hidden unless visionAvailable`() {
+        // R3d.4 m3: default (visionAvailable=false) keeps the text-only chip set; gating reveals it.
+        val without = AskPresets.forScope(isPaper = true)
+        assertTrue(without.none { it.id == "summarize_with_figures" }, "vision preset hidden by default")
+        val with = AskPresets.forScope(isPaper = true, visionAvailable = true)
+        assertTrue(with.any { it.id == "summarize_with_figures" }, "vision preset shown when available")
+    }
+
+    @Test
+    fun `vision preset never shows for a collection even when visionAvailable`() {
+        val collection = AskPresets.forScope(isPaper = false, visionAvailable = true)
+        assertTrue(collection.none { it.requiresVision }, "no vision preset in a collection sheet")
+    }
 }
