@@ -28,7 +28,7 @@ class RelationGraphBuilderTest {
             )
         val out = RelationGraphBuilder.toMermaid(graph)!!
         // Routes to the WebView path (RichContent.has matches a bare ```mermaid fence).
-        assertTrue(out.startsWith("```mermaid\ngraph TD"), "fenced mermaid flowchart")
+        assertTrue(out.startsWith("```mermaid\ngraph LR"), "fenced mermaid flowchart (LR = phone-friendly tall layout)")
         assertTrue(out.trimEnd().endsWith("```"), "closes the fence")
         assertTrue(out.contains("n0{{\"Center paper\"}}"), "center is a hexagon")
         assertTrue(out.contains("n1[\"A library neighbor\"]"), "library node is a rectangle")
