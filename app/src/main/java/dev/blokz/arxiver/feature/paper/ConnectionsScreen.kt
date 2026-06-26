@@ -61,7 +61,7 @@ class ConnectionsViewModel
         savedStateHandle: SavedStateHandle,
         citationDao: CitationDao,
     ) : ViewModel() {
-        private val paperId: String = checkNotNull(savedStateHandle["id"])
+        val paperId: String = checkNotNull(savedStateHandle["id"])
 
         val uiState: StateFlow<ConnectionsUiState> =
             combine(
@@ -81,6 +81,7 @@ class ConnectionsViewModel
 fun ConnectionsScreen(
     onBack: () -> Unit,
     onPaperClick: (String) -> Unit,
+    onOpenMap: (String) -> Unit = {},
     viewModel: ConnectionsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -92,6 +93,11 @@ fun ConnectionsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { onOpenMap(viewModel.paperId) }) {
+                        Icon(Icons.Filled.Hub, stringResource(R.string.cd_open_knowledge_map))
                     }
                 },
             )

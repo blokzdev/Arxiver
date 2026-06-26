@@ -12,6 +12,7 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -97,6 +98,7 @@ fun FilteredPapersScreen(
     onPaperClick: (String) -> Unit,
     onOpenAiSettings: () -> Unit,
     onOpenRoutines: () -> Unit = {},
+    onOpenKnowledgeMap: (Long) -> Unit = {},
     viewModel: FilteredPapersViewModel = hiltViewModel(),
 ) {
     val papers by viewModel.papers.collectAsState()
@@ -140,6 +142,9 @@ fun FilteredPapersScreen(
                     },
                     actions = {
                         if (collectionId != null) {
+                            IconButton(onClick = { onOpenKnowledgeMap(collectionId) }) {
+                                Icon(Icons.Filled.Hub, stringResource(R.string.cd_open_knowledge_map))
+                            }
                             IconButton(onClick = { showAsk = true }) {
                                 Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_chat_collection))
                             }
