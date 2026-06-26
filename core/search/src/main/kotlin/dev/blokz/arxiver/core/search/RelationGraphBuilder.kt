@@ -42,7 +42,10 @@ object RelationGraphBuilder {
         if (edges.isEmpty()) return null
 
         val sb = StringBuilder()
-        sb.append("```mermaid\n").append("graph TD\n")
+        // LR (left→right), not TD: a star graph (center + N neighbours) fans out *horizontally* in
+        // TD and gets squished to phone width; LR makes it tall + narrow, so it fits the chat
+        // bubble width at a readable size while the WebView self-sizes its (scrollable) height.
+        sb.append("```mermaid\n").append("graph LR\n")
         for (n in kept) {
             val id = mid.getValue(n.id)
             val label = escapeLabel(n.title)
