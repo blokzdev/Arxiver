@@ -1,5 +1,7 @@
 package dev.blokz.arxiver.core.search
 
+import kotlinx.serialization.Serializable
+
 /**
  * A node in an app-drawn relation graph (P-Atlas PA.1): a paper, identified by its arXiv id.
  * [isCenter] marks the paper the graph radiates from (drawn distinctly); [inLibrary] drives the
@@ -13,6 +15,7 @@ data class RelationNode(
 )
 
 /** How two papers relate. [CITES] = a citation edge; [SIMILAR] = a high embedding cosine. */
+@Serializable
 enum class RelationEdgeKind { CITES, SIMILAR }
 
 /** A directed edge [from] → [to]; [weight] is the cosine for [SIMILAR], null for [CITES]. */
