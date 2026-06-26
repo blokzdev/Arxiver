@@ -10,6 +10,10 @@ import dev.blokz.arxiver.core.ai.AiKeyStore
 import dev.blokz.arxiver.core.ai.AiProvider
 import dev.blokz.arxiver.core.ai.ChatChunk
 import dev.blokz.arxiver.core.ai.ChatRequest
+import dev.blokz.arxiver.core.ai.InferenceTier
+import dev.blokz.arxiver.core.ai.OnDeviceEngine
+import dev.blokz.arxiver.core.ai.OnDeviceProvider
+import dev.blokz.arxiver.core.ai.OutputRichness
 import dev.blokz.arxiver.core.ai.ProviderCapability
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderRegistry
@@ -36,6 +40,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -46,9 +51,26 @@ class ChatRepositoryTest {
         override val id: ProviderId = ProviderId.CLAUDE,
         private val script: () -> Flow<ChatChunk>,
     ) : AiProvider {
-        override val capability = ProviderCapability(100_000, streaming = true, onDevice = false, requiresKey = true)
+        override val capability =
+            ProviderCapability(
+                100_000,
+                streaming = true,
+                onDevice = false,
+                requiresKey = true,
+                richness = OutputRichness.FULL,
+            )
 
         override fun chat(request: ChatRequest): Flow<ChatChunk> = script()
+    }
+
+    /** A ready on-device engine at a fixed tier/richness — used to prove richness threads through prepare (PA.2). */
+    private class FakeOnDeviceEngine(
+        override val tier: InferenceTier,
+        override val richness: OutputRichness,
+    ) : OnDeviceEngine {
+        override suspend fun isReady(): Boolean = true
+
+        override fun generate(request: ChatRequest): Flow<ChatChunk> = flowOf(ChatChunk.Done())
     }
 
     private class FakeKeyStore(private val keys: Set<ProviderId>) : AiKeyStore {
@@ -94,10 +116,13 @@ class ChatRepositoryTest {
     private fun repo(
         provider: AiProvider,
         keys: Set<ProviderId> = setOf(ProviderId.CLAUDE),
+        selected: ProviderId = ProviderId.CLAUDE,
+        preferOnDevice: Boolean = false,
+        onDeviceReady: Boolean = false,
         embed: suspend (String) -> AppResult<FloatArray> = { AppResult.Success(FloatArray(384)) },
     ): ChatRepository {
         val registry = ProviderRegistry(listOf(provider), FakeKeyStore(keys))
-        val resolver = ProviderResolver(registry, { ProviderId.CLAUDE }, { false }, { false })
+        val resolver = ProviderResolver(registry, { selected }, { preferOnDevice }, { onDeviceReady })
         var t = 0L
         return ChatRepository(
             chatDao = db.chatDao(),
@@ -199,5 +224,33 @@ class ChatRepositoryTest {
 
             assertEquals(4, db.chatDao().messagesFor(sid).size)
             assertEquals(1, repo.observeSessions(RetrievalScope.Paper("p1")).first().size)
+        }
+
+    @Test
+    fun `on-device Gemma threads STRUCTURED richness into the assembled system prompt (PA_2)`() =
+        runTest {
+            // A ready Gemma engine reports STRUCTURED; prepare() must resolve it and shape the system prompt.
+            val onDevice =
+                OnDeviceProvider(
+                    listOf(FakeOnDeviceEngine(InferenceTier.GEMMA, OutputRichness.STRUCTURED)),
+                    DefaultDispatcherProvider(),
+                )
+            val repo =
+                repo(onDevice, keys = emptySet(), preferOnDevice = true, onDeviceReady = true)
+
+            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "compare A and B")
+
+            assertEquals(ProviderId.ON_DEVICE, prep.providerId)
+            assertFalse(prep.isCloud)
+            val system = prep.request.system!!
+            assertTrue(system.startsWith(ChatContextAssembler.SYSTEM_PROMPT))
+            assertTrue(
+                system.contains(ChatContextAssembler.STRUCTURED_RICH_ADDENDUM),
+                "Gemma's STRUCTURED tier adds the table nudge",
+            )
+            assertFalse(
+                system.contains(ChatContextAssembler.CLOUD_RICH_ADDENDUM),
+                "on-device never gets the cloud LaTeX/Mermaid invitation",
+            )
         }
 }

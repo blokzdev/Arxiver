@@ -9,6 +9,7 @@ import dev.blokz.arxiver.core.ai.AiProvider
 import dev.blokz.arxiver.core.ai.ChatChunk
 import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRequest
+import dev.blokz.arxiver.core.ai.OutputRichness
 import dev.blokz.arxiver.core.ai.ProviderCapability
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderRegistry
@@ -88,6 +89,7 @@ class AskViewModelTest {
                 streaming = true,
                 onDevice = !requiresKey,
                 requiresKey = requiresKey,
+                richness = if (requiresKey) OutputRichness.FULL else OutputRichness.PLAIN,
                 vision = vision,
             )
 

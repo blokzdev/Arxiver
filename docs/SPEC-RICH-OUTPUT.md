@@ -52,12 +52,15 @@ Rendering during **streaming** re-parses the partial text per frame (answers are
 
 ## 6. System prompt (provider-aware)
 
-The chat system instruction (`ChatContextAssembler.SYSTEM_PROMPT`) invites these formats **when they aid understanding**, while preserving grounding + citation rules:
+The chat system instruction (`ChatContextAssembler.SYSTEM_PROMPT`) invites these formats **when they aid understanding**, while preserving grounding + citation rules. The invitation is shaped by a per-engine **richness ladder** — `OutputRichness { PLAIN, STRUCTURED, FULL }` (P-Atlas PA.2), resolved from the engine that will actually stream (cloud → FULL; on-device → the picked engine's tier; see SPEC-AI-PROVIDERS §6b):
 
-- **Cloud:** full invitation — use markdown tables for comparisons, `mermaid` for pipelines/architectures/sequences, `$…$`/`$$…$$` for math, fenced code for algorithms; still answer ONLY from the provided context and cite `[n]`; if the context lacks the answer, say so.
-- **On-device:** minimal invitation — clean markdown only (no diagrams/charts), to avoid unreliable structure from small models.
+- **FULL (cloud):** full invitation — markdown tables for comparisons, `mermaid` for pipelines/architectures/sequences, `$…$`/`$$…$$` for math, fenced code for algorithms. **Byte-identical to the pre-PA.2 cloud path.**
+- **STRUCTURED (Gemma E2B):** base prompt + a compact, **exemplar-backed table nudge**, with **no LaTeX / no diagrams**. Rationale (2025–2026 research): a ~2B model emits valid Markdown tables ~70–85% of the time and a 1-shot example lifts that, but valid Mermaid is only ~60% and LaTeX ~9.7% error — so diagrams/math stay cloud-only. PA.2 is **mostly the infrastructure** (the enum + per-engine resolution + 3-state gate); the *valid-by-construction* win is grammar/constrained decoding (PA.4), which STRUCTURED is the seam for.
+- **PLAIN (Nano / light tier):** base prompt only — which already invites clean Markdown tables; no extra nudge, no diagrams/math.
 
-Changes to `SYSTEM_PROMPT` update the `ChatPreviewBuilder` redaction golden (the preview reflects what's sent; the key stays header-only).
+All three still answer ONLY from the provided context, cite `[n]`, and say so when the context lacks the answer.
+
+Changes to `SYSTEM_PROMPT` (or the FULL addendum) update the `ChatPreviewBuilder` redaction golden (the preview reflects what's sent; the key stays header-only). The STRUCTURED/PLAIN addenda are on-device-only, so they never touch the cloud preview golden.
 
 ## 7. Export & share (R4)
 

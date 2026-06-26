@@ -11,6 +11,13 @@ import kotlinx.coroutines.flow.Flow
 interface OnDeviceEngine {
     val tier: InferenceTier
 
+    /**
+     * The output richness this engine can emit reliably (P-Atlas PA.2) — abstract so each engine
+     * makes a conscious choice (a new engine can't silently inherit the wrong tier). Gemma-class →
+     * [OutputRichness.STRUCTURED] (tables); tiny models (Nano, a future light tier) → [OutputRichness.PLAIN].
+     */
+    val richness: OutputRichness
+
     /** True when this engine can serve a request right now (model installed / available). */
     suspend fun isReady(): Boolean
 

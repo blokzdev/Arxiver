@@ -45,6 +45,7 @@ class GeminiProvider(
             streaming = true,
             onDevice = false,
             requiresKey = true,
+            richness = OutputRichness.FULL,
             vision = true,
         )
 

@@ -52,6 +52,7 @@ class AnthropicProvider(
             streaming = true,
             onDevice = false,
             requiresKey = true,
+            richness = OutputRichness.FULL,
             vision = true,
         )
 

@@ -18,6 +18,7 @@ class ProviderResolverTest {
                 streaming = true,
                 onDevice = !requiresKey,
                 requiresKey = requiresKey,
+                richness = if (requiresKey) OutputRichness.FULL else OutputRichness.PLAIN,
             )
 
         override fun chat(request: ChatRequest): Flow<ChatChunk> = emptyFlow()
