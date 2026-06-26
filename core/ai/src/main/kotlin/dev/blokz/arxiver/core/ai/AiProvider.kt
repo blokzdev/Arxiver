@@ -27,15 +27,20 @@ interface AiProvider {
 enum class ProviderId { CLAUDE, GEMINI, ON_DEVICE }
 
 /**
- * Static facts about a provider used for tier selection and UI gating.
+ * Facts about a provider used for tier selection, prompt shaping, and UI gating.
  * [contextTokens] is the model's input window; [requiresKey] is true for the
- * BYOK cloud providers and false for on-device.
+ * BYOK cloud providers and false for on-device. [richness] is the per-engine output
+ * tier (P-Atlas PA.2) — non-defaulted on purpose so every provider declares it; it is
+ * the model-static value for cloud, but **resolved per-turn** for on-device (the
+ * `OnDeviceProvider` wraps engines of differing richness — see `resolveRichness`).
  */
 data class ProviderCapability(
     val contextTokens: Int,
     val streaming: Boolean,
     val onDevice: Boolean,
     val requiresKey: Boolean,
+    /** Output richness tier (P-Atlas PA.2): PLAIN tiny / STRUCTURED Gemma / FULL cloud. */
+    val richness: OutputRichness,
     /** Whether the model accepts image input (P-Rich R3d); on-device stays text-only. */
     val vision: Boolean = false,
 )

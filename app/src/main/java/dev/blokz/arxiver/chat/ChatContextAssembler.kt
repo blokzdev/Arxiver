@@ -4,6 +4,7 @@ import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatMessage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ChatRole
+import dev.blokz.arxiver.core.ai.OutputRichness
 import dev.blokz.arxiver.core.ai.ProviderCapability
 import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
 import dev.blokz.arxiver.core.search.RetrievedChunk
@@ -71,12 +72,19 @@ class ChatContextAssembler(
     ): AssembledChat {
         val gated = if (includeNotes) chunks else chunks.filter { it.sourceKind != ChunkEmbeddingEntity.SOURCE_NOTE }
 
-        // Cloud models also get a LaTeX-math invitation; small on-device models stay plain.
-        val system = if (capability.onDevice) SYSTEM_PROMPT else SYSTEM_PROMPT + CLOUD_RICH_ADDENDUM
+        // Per-engine richness ladder (P-Atlas PA.2): PLAIN (tiny models) = base prompt (which already
+        // invites tables); STRUCTURED (Gemma E2B) = + a table-focused nudge, no LaTeX/Mermaid (too
+        // unreliable at ~2B); FULL (cloud) = + the LaTeX-math + Mermaid invitation.
+        val system =
+            when (capability.richness) {
+                OutputRichness.PLAIN -> SYSTEM_PROMPT
+                OutputRichness.STRUCTURED -> SYSTEM_PROMPT + STRUCTURED_RICH_ADDENDUM
+                OutputRichness.FULL -> SYSTEM_PROMPT + CLOUD_RICH_ADDENDUM
+            }
 
         // The depth directive rides the user turn (never the system prompt); STANDARD is empty,
-        // so a default-mode request is byte-identical to before. Max's rich nudge is cloud-only.
-        val directive = modeDirective(mode, capability.onDevice)
+        // so a default-mode request is byte-identical to before. Max's rich nudge is cloud-only (FULL).
+        val directive = modeDirective(mode, capability.richness)
 
         var budget =
             capability.contextTokens - maxOutputTokens - safetyMarginTokens -
@@ -137,15 +145,20 @@ class ChatContextAssembler(
             append(question)
         }
 
-    /** The depth directive for [mode]; Max's rich-output nudge is cloud-only (mirrors the addendum). */
+    /** The depth directive for [mode]; Max's rich-output nudge + follow-ups are FULL-only (cloud). */
     private fun modeDirective(
         mode: ChatMode,
-        onDevice: Boolean,
+        richness: OutputRichness,
     ): String =
         when (mode) {
             ChatMode.QUICK -> QUICK_DIRECTIVE
             ChatMode.STANDARD -> ""
-            ChatMode.MAX -> if (onDevice) MAX_DIRECTIVE else MAX_DIRECTIVE + MAX_RICH_SUFFIX + MAX_FOLLOWUPS_SUFFIX
+            ChatMode.MAX ->
+                if (richness == OutputRichness.FULL) {
+                    MAX_DIRECTIVE + MAX_RICH_SUFFIX + MAX_FOLLOWUPS_SUFFIX
+                } else {
+                    MAX_DIRECTIVE
+                }
         }
 
     private fun estTokens(text: String): Int = (text.length + 3) / 4
@@ -183,6 +196,18 @@ class ChatContextAssembler(
                 "Format your answer in Markdown — use headings, bullet or numbered lists, **bold** " +
                 "for key terms, fenced code for code, and a Markdown table when comparing things — " +
                 "whenever it makes the answer clearer."
+
+        /**
+         * Appended for STRUCTURED (Gemma E2B, P-Atlas PA.2): a table-focused nudge with a tiny inline
+         * 1-shot example (the one lever research says lifts ~2B table validity). Explicitly NO LaTeX
+         * or diagrams — at ~2B those break too often (~60% valid Mermaid, ~9.7% LaTeX error), so they
+         * stay cloud-only. ~50 tokens by the assembler's char/4 estimate; PA.0a measures the on-device
+         * table-validity + RAG-budget impact.
+         */
+        const val STRUCTURED_RICH_ADDENDUM =
+            " When you list or compare several things, present them as a small, well-formed Markdown " +
+                "table, for example:\n| Aspect | A | B |\n| --- | --- | --- |\n| Speed | fast | slower |\n" +
+                "Do not use LaTeX math or diagrams."
 
         /**
          * Appended for cloud models (small on-device models emit structured output

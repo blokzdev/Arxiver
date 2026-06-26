@@ -25,6 +25,7 @@ class OnDeviceProviderTest {
         override val tier: InferenceTier,
         private val ready: Boolean,
         private val reply: String,
+        override val richness: OutputRichness = OutputRichness.PLAIN,
     ) : OnDeviceEngine {
         var generated = false
 
@@ -131,5 +132,43 @@ class OnDeviceProviderTest {
             assertEquals("gemma", text)
             assertTrue(gemma.generated)
             assertTrue(!nano.generated)
+        }
+
+    // --- P-Atlas PA.2: richness resolution matches the engine that would stream ---
+
+    @Test
+    fun `the static capability richness is a PLAIN placeholder, independent of the engines`() {
+        // Even with a STRUCTURED engine wired, the static capability stays PLAIN — the real per-turn
+        // value comes from resolveRichness(); a reader that skips that override gets the benign tier.
+        val provider =
+            OnDeviceProvider(
+                listOf(
+                    FakeEngine(InferenceTier.GEMMA, ready = true, reply = "x", richness = OutputRichness.STRUCTURED),
+                ),
+                dispatchers,
+            )
+        assertEquals(OutputRichness.PLAIN, provider.capability.richness)
+    }
+
+    @Test
+    fun `resolveRichness returns the picked engine's richness, PLAIN when none ready`() =
+        runBlocking {
+            val gemma = FakeEngine(InferenceTier.GEMMA, ready = true, reply = "x", richness = OutputRichness.STRUCTURED)
+            val nano = FakeEngine(InferenceTier.NANO, ready = true, reply = "x", richness = OutputRichness.PLAIN)
+            // First-ready (DI order = Gemma-first) → STRUCTURED, matching who chat() would pick.
+            assertEquals(
+                OutputRichness.STRUCTURED,
+                OnDeviceProvider(listOf(gemma, nano), dispatchers).resolveRichness(),
+            )
+            // Prefer Nano → PLAIN, again matching the streaming engine.
+            assertEquals(
+                OutputRichness.PLAIN,
+                OnDeviceProvider(listOf(gemma, nano), dispatchers, preferredTier = { InferenceTier.NANO })
+                    .resolveRichness(),
+            )
+            // No engine ready → PLAIN fallback (the assembler then stays on the base prompt).
+            val unready =
+                FakeEngine(InferenceTier.GEMMA, ready = false, reply = "x", richness = OutputRichness.STRUCTURED)
+            assertEquals(OutputRichness.PLAIN, OnDeviceProvider(listOf(unready), dispatchers).resolveRichness())
         }
 }

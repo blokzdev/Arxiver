@@ -4,6 +4,7 @@ import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatMessage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ChatRole
+import dev.blokz.arxiver.core.ai.OutputRichness
 import dev.blokz.arxiver.core.ai.ProviderCapability
 import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
 import dev.blokz.arxiver.core.search.Provenance
@@ -27,6 +28,7 @@ class ChatPreviewBuilderTest {
             streaming = true,
             onDevice = false,
             requiresKey = true,
+            richness = OutputRichness.FULL,
         )
 
     private fun chunk(

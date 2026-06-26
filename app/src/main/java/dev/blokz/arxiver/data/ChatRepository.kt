@@ -12,6 +12,7 @@ import dev.blokz.arxiver.core.ai.ChatChunk
 import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ChatRole
+import dev.blokz.arxiver.core.ai.OnDeviceProvider
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderResolution
 import dev.blokz.arxiver.core.ai.ProviderResolver
@@ -107,10 +108,20 @@ class ChatRepository(
                     ?.map { ChatTurn(it.role.toRole(), it.content) }
                     .orEmpty()
 
-            // The assembler drops the image unless provider.capability.vision is true (R3d M2/M3),
+            // Resolve the per-turn richness from the engine that will actually run (P-Atlas PA.2):
+            // OnDeviceProvider's static capability is a PLAIN placeholder, so override it with the
+            // picked engine's richness (Gemma → STRUCTURED, Nano → PLAIN). Cloud capability is static.
+            val capability =
+                if (provider is OnDeviceProvider) {
+                    provider.capability.copy(richness = provider.resolveRichness())
+                } else {
+                    provider.capability
+                }
+
+            // The assembler drops the image unless capability.vision is true (R3d M2/M3),
             // so an attachment never reaches a non-vision/on-device provider.
             val assembled =
-                assembler.assemble(question, chunks, history, includeNotes, provider.capability, mode, attachment)
+                assembler.assemble(question, chunks, history, includeNotes, capability, mode, attachment)
             val citations = assembled.citedChunks.mapIndexed { i, c -> Citation(i + 1, c.paperId, c.text) }
 
             ChatPrepareResult.Ready(

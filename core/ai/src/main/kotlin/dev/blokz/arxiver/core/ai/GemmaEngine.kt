@@ -36,6 +36,9 @@ class GemmaEngine(
 ) : OnDeviceEngine {
     override val tier: InferenceTier = InferenceTier.GEMMA
 
+    // ~2B: reliable Markdown tables, but Mermaid/LaTeX break too often to invite (P-Atlas PA.2).
+    override val richness: OutputRichness = OutputRichness.STRUCTURED
+
     private val mutex = Mutex()
     private var engine: Engine? = null
 

@@ -104,6 +104,32 @@ embeddings API we depend on — retrieval never leaves the device, only generati
   open** (`RagIndexer.indexCollection` indexes only papers missing current-model chunks). Sessions
   are listed/resumable via `ChatDao.observeAllSessions` (chat-history screen). No new hosts/schema.
 
+## 6b. Output richness ladder (P-Atlas PA.2)
+
+A turn's system prompt is shaped per **engine**, not per provider — replacing the old binary
+"cloud vs on-device" gate with `OutputRichness { PLAIN, STRUCTURED, FULL }` (`:core:ai`), a
+**non-defaulted** field on `ProviderCapability` so every provider declares it:
+
+- **PLAIN** — the base `SYSTEM_PROMPT` only (which already invites Markdown tables). System Gemini
+  Nano and any future light tier.
+- **STRUCTURED** — base + a compact table-focused nudge **with a 1-shot example**, and explicitly
+  **no LaTeX / no Mermaid**. Gemma E2B. Rationale (2025–2026 research): a ~2B model emits valid
+  Markdown tables ~70–85% of the time (a 1-shot exemplar lifts it), but valid Mermaid only ~60%
+  (MermaidSeqBench) and LaTeX ~9.7% error — so diagrams/math stay cloud-only.
+- **FULL** — base + the LaTeX + Mermaid invitation (cloud BYOK: Claude, Gemini). **Byte-identical to
+  the pre-PA.2 cloud path** (the redaction goldens are untouched).
+
+**Resolution.** Richness must reflect the engine that will actually stream. `OnDeviceProvider`'s
+static capability is a PLAIN placeholder; `resolveRichness()` runs the **same** ready-engine pick as
+`chat()` (shared `pickReadyEngine`), and `ChatRepository.prepare` overrides the on-device capability
+(`copy(richness = …)`) before assembling. A microscopic prepare-vs-stream readiness flip is harmless
+(STRUCTURED differs from PLAIN only by the table nudge; the base prompt invites tables for either).
+
+PA.2 is principally the **infrastructure** the light tier and constrained decoding build on. The
+*valid-by-construction* on-device structured-output win — **grammar/constrained decoding**, which
+LiteRT-LM exposes (JSON-schema/Lark via LLGuidance) — is a later tier (gated on confirming the
+Kotlin `litertlm-android` binding exposes it); STRUCTURED is the seam it hooks into.
+
 ## 7. Testing
 
 - **Cloud transports**: `AnthropicProvider`/`GeminiProvider` against `MockWebServer` (success, SSE stream parse, auth-rejected → typed error, offline/5xx → `AppError`).

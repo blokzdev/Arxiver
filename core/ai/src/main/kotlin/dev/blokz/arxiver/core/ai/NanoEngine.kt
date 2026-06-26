@@ -22,6 +22,9 @@ class NanoEngine(
 ) : OnDeviceEngine {
     override val tier: InferenceTier = InferenceTier.NANO
 
+    // Nano's Prompt API caps output ~256 tokens (EN/KO) — stays plain text (P-Atlas PA.2).
+    override val richness: OutputRichness = OutputRichness.PLAIN
+
     override suspend fun isReady(): Boolean = availability.status() == NanoStatus.AVAILABLE
 
     override fun generate(request: ChatRequest): Flow<ChatChunk> =

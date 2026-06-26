@@ -2,6 +2,7 @@ package dev.blokz.arxiver.chat
 
 import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRole
+import dev.blokz.arxiver.core.ai.OutputRichness
 import dev.blokz.arxiver.core.ai.ProviderCapability
 import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
 import dev.blokz.arxiver.core.search.Provenance
@@ -14,6 +15,7 @@ import kotlin.test.assertTrue
 class ChatContextAssemblerTest {
     private val assembler = ChatContextAssembler(maxOutputTokens = 0, safetyMarginTokens = 0)
 
+    /** A cloud (FULL) capability — the default for most assembler tests. */
     private fun cap(
         contextTokens: Int = 100_000,
         vision: Boolean = false,
@@ -22,7 +24,20 @@ class ChatContextAssemblerTest {
         streaming = true,
         onDevice = false,
         requiresKey = true,
+        richness = OutputRichness.FULL,
         vision = vision,
+    )
+
+    /** An on-device capability at a given richness (PA.2): PLAIN (Nano/light) or STRUCTURED (Gemma). */
+    private fun onDeviceCap(
+        richness: OutputRichness,
+        contextTokens: Int = 100_000,
+    ) = ProviderCapability(
+        contextTokens = contextTokens,
+        streaming = true,
+        onDevice = true,
+        requiresKey = false,
+        richness = richness,
     )
 
     private fun chunk(
@@ -164,7 +179,7 @@ class ChatContextAssemblerTest {
     @Test
     fun `max mode on an on-device model omits the rich nudge`() {
         val onDevice =
-            ProviderCapability(contextTokens = 100_000, streaming = true, onDevice = true, requiresKey = false)
+            onDeviceCap(OutputRichness.PLAIN)
         val content =
             assembler.assemble(
                 "q",
@@ -177,6 +192,97 @@ class ChatContextAssemblerTest {
                 .request.messages.last().content
         assertTrue(content.contains(ChatContextAssembler.MAX_DIRECTIVE))
         assertFalse(content.contains(ChatContextAssembler.MAX_RICH_SUFFIX.trim()))
+    }
+
+    // --- P-Atlas PA.2: per-engine richness ladder ---
+
+    @Test
+    fun `structured (gemma) system invites a table example but not LaTeX or Mermaid`() {
+        val system =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = onDeviceCap(OutputRichness.STRUCTURED),
+            ).request.system!!
+        assertTrue(system.startsWith(ChatContextAssembler.SYSTEM_PROMPT))
+        assertTrue(system.contains("| Aspect | A | B |"), "the 1-shot table example is present")
+        assertFalse(system.contains("Use LaTeX"), "no LaTeX invitation on-device")
+        assertFalse(system.contains("```mermaid"), "no Mermaid invitation on-device")
+    }
+
+    @Test
+    fun `structured (gemma) max omits the rich suffix and follow-ups`() {
+        val content =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = onDeviceCap(OutputRichness.STRUCTURED),
+                mode = ChatMode.MAX,
+            ).request.messages.last().content
+        assertTrue(content.contains(ChatContextAssembler.MAX_DIRECTIVE))
+        assertFalse(content.contains(ChatContextAssembler.MAX_RICH_SUFFIX.trim()))
+        assertFalse(content.contains("FOLLOWUPS"))
+    }
+
+    @Test
+    fun `richness changes only the system prompt — the standard user turn is identical across tiers`() {
+        val chunks = listOf(chunk(1, "Body.", 0.9))
+
+        fun userTurn(c: ProviderCapability) =
+            assembler.assemble("q", chunks, emptyList(), includeNotes = true, capability = c).request
+        val full = userTurn(cap())
+        val structured = userTurn(onDeviceCap(OutputRichness.STRUCTURED))
+        val plain = userTurn(onDeviceCap(OutputRichness.PLAIN))
+        // The user turn (chunks + question, no STANDARD directive) is byte-identical across tiers.
+        assertEquals(full.messages.last().content, structured.messages.last().content)
+        assertEquals(full.messages.last().content, plain.messages.last().content)
+        // The system prompts differ by exactly their tier addendum (FULL byte-identical to today).
+        assertTrue(full.system!!.endsWith(ChatContextAssembler.CLOUD_RICH_ADDENDUM))
+        assertTrue(structured.system!!.endsWith(ChatContextAssembler.STRUCTURED_RICH_ADDENDUM))
+        assertEquals(ChatContextAssembler.SYSTEM_PROMPT, plain.system)
+    }
+
+    @Test
+    fun `the STRUCTURED nudge's RAG-budget cost is bounded — free at 4096, at most one chunk when tight (PA_0a)`() {
+        // Six realistic ~70-token chunks (≈62 body + 8 label each); the MARK markers let us count
+        // exactly how many survive packing. This is the headless half of PA.0a (table validity itself
+        // needs a real Gemma stream — VERIFICATION.md K9).
+        val chunks = (1..6).map { chunk(it.toLong(), "MARK$it " + "lorem ".repeat(40), 0.95 - it * 0.01) }
+
+        fun retained(
+            richness: OutputRichness,
+            contextTokens: Int,
+        ): Int {
+            val content =
+                assembler.assemble(
+                    "q",
+                    chunks,
+                    emptyList(),
+                    includeNotes = true,
+                    capability = onDeviceCap(richness, contextTokens = contextTokens),
+                ).request.messages.last().content
+            return (1..6).count { content.contains("MARK$it ") }
+        }
+
+        // (a) Real on-device window: 4096 tokens has ample headroom, so the ~50-token STRUCTURED
+        //     addendum is free — all six chunks fit on both tiers (no starvation at paper scope).
+        assertEquals(6, retained(OutputRichness.PLAIN, 4096))
+        assertEquals(6, retained(OutputRichness.STRUCTURED, 4096))
+
+        // (b) Sensitivity (what makes (a) non-tautological): at a deliberately TIGHT budget the
+        //     addendum's cost is *bounded* — it drops AT MOST ONE chunk vs PLAIN, and never starves
+        //     RAG entirely. A 10x-larger nudge (or STRUCTURED leaking the full cloud addendum) would
+        //     drop several chunks and fail `structured >= plain - 1`.
+        val tight = (ChatContextAssembler.SYSTEM_PROMPT.length + 3) / 4 + 300
+        val plainTight = retained(OutputRichness.PLAIN, tight)
+        val structuredTight = retained(OutputRichness.STRUCTURED, tight)
+        assertTrue(plainTight in 2..5, "the tight budget actually drops some chunks (boundary exercised): $plainTight")
+        assertTrue(structuredTight >= plainTight - 1, "the ~50-token nudge costs at most one chunk")
+        assertTrue(structuredTight >= 1, "RAG is never fully starved by the nudge")
     }
 
     // --- R3d.3: vision attachment ---
@@ -255,7 +361,7 @@ class ChatContextAssemblerTest {
         assertTrue(cloud.contains(ChatContextAssembler.MAX_FOLLOWUPS_SUFFIX.trim()))
 
         val onDevice =
-            ProviderCapability(contextTokens = 100_000, streaming = true, onDevice = true, requiresKey = false)
+            onDeviceCap(OutputRichness.PLAIN)
         val dev =
             assembler.assemble(
                 "q",

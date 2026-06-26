@@ -39,17 +39,35 @@ class ProviderRegistryTest {
     private val claude =
         FakeProvider(
             ProviderId.CLAUDE,
-            ProviderCapability(200_000, streaming = true, onDevice = false, requiresKey = true),
+            ProviderCapability(
+                200_000,
+                streaming = true,
+                onDevice = false,
+                requiresKey = true,
+                richness = OutputRichness.FULL,
+            ),
         )
     private val gemini =
         FakeProvider(
             ProviderId.GEMINI,
-            ProviderCapability(1_000_000, streaming = true, onDevice = false, requiresKey = true),
+            ProviderCapability(
+                1_000_000,
+                streaming = true,
+                onDevice = false,
+                requiresKey = true,
+                richness = OutputRichness.FULL,
+            ),
         )
     private val onDevice =
         FakeProvider(
             ProviderId.ON_DEVICE,
-            ProviderCapability(8_000, streaming = true, onDevice = true, requiresKey = false),
+            ProviderCapability(
+                8_000,
+                streaming = true,
+                onDevice = true,
+                requiresKey = false,
+                richness = OutputRichness.PLAIN,
+            ),
         )
 
     private val registry = ProviderRegistry(listOf(claude, gemini, onDevice), vault)

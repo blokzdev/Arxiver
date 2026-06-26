@@ -9,3 +9,4 @@
 - [Self-improvement routine state](self-improvement-routine-state.md) — live routine fires research payloads at cloud sessions; ledger of shipped augmentations
 - [Lint unused-resources gate](lint-unused-resources-gate.md) — `:app:lintDebug` fails on unused strings; add a strings.xml key only with its consumer
 - [Local build JDK 17](local-build-jdk17.md) — build locally on JDK 17 (CI's JVM); JDK 21 causes a Windows daemon file-lock + a coroutine-test flake
+- [Gemma STRUCTURED table validity](gemma-structured-table-validity.md) — PA.0a: Gemma E2B emits valid grounded Markdown tables with the PA.2 exemplar nudge; no LaTeX/Mermaid; constrained decoding is PA.4
