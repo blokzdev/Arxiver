@@ -42,6 +42,7 @@ import dev.blokz.arxiver.feature.claude.RoutineSetupScreen
 import dev.blokz.arxiver.feature.claude.RoutinesScreen
 import dev.blokz.arxiver.feature.claude.TemplateCatalogScreen
 import dev.blokz.arxiver.feature.claude.TemplateDetailScreen
+import dev.blokz.arxiver.feature.knowledgemap.KnowledgeMapScreen
 import dev.blokz.arxiver.feature.library.FilteredPapersScreen
 import dev.blokz.arxiver.feature.library.LibraryScreen
 import dev.blokz.arxiver.feature.onboarding.OnboardingScreen
@@ -79,6 +80,7 @@ object Routes {
     const val DISPATCH_HISTORY = "claude/history"
     const val CHAT_HISTORY = "chat/history"
     const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
+    const val KNOWLEDGE_MAP = "map/{scope}/{id}"
 
     fun categoryFeed(
         code: String,
@@ -91,6 +93,12 @@ object Routes {
     fun pdfViewer(id: String) = "paper/${Uri.encode(id)}/pdf"
 
     fun connections(id: String) = "paper/${Uri.encode(id)}/graph"
+
+    /** Full-screen knowledge map; [scope] is `collection` (id = collection id) or `paper` (id = arXiv id). */
+    fun knowledgeMap(
+        scope: String,
+        id: String,
+    ) = "map/$scope/${Uri.encode(id)}"
 
     fun filteredPapers(
         mode: String,
@@ -251,6 +259,9 @@ fun ArxiverApp(
                         onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                         onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                        onOpenKnowledgeMap = { cid ->
+                            navController.navigate(Routes.knowledgeMap("collection", cid.toString()))
+                        },
                     )
                 }
 
@@ -321,6 +332,13 @@ fun ArxiverApp(
                 }
                 composable(Routes.CONNECTIONS) {
                     ConnectionsScreen(
+                        onBack = { navController.popBackStack() },
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenMap = { id -> navController.navigate(Routes.knowledgeMap("paper", id)) },
+                    )
+                }
+                composable(Routes.KNOWLEDGE_MAP) {
+                    KnowledgeMapScreen(
                         onBack = { navController.popBackStack() },
                         onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                     )
