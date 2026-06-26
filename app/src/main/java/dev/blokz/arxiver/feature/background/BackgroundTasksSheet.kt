@@ -108,6 +108,7 @@ private fun TaskRow(
 private fun TaskKind.labelRes(): Int =
     when (this) {
         TaskKind.GEMMA_DOWNLOAD -> R.string.bg_task_gemma_download
+        TaskKind.LIGHT_DOWNLOAD -> R.string.bg_task_light_download
         TaskKind.EMBEDDING_MODEL_DOWNLOAD -> R.string.bg_task_model_download
         TaskKind.FOLLOW_SYNC -> R.string.bg_task_follow_sync
         TaskKind.EMBEDDING -> R.string.bg_task_embedding

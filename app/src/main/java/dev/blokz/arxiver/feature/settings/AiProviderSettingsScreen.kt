@@ -67,15 +67,19 @@ fun AiProviderSettingsScreen(
     // The model download runs as a foreground service with a progress notification (UX2.8). On
     // Android 13+ we ask for POST_NOTIFICATIONS first, then download regardless of the answer
     // (a denial only suppresses the notification — the download still runs).
+    // Which tier's download is awaiting the permission result (Gemma or the light Qwen tier; PA.3b).
+    var pendingDownloadTier by remember { mutableStateOf<InferenceTier?>(null) }
     val notifPermission =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-            viewModel.downloadOnDeviceModel()
+            pendingDownloadTier?.let { viewModel.downloadModel(it) }
+            pendingDownloadTier = null
         }
-    val downloadWithNotifPermission: () -> Unit = {
+    val downloadWithNotifPermission: (InferenceTier) -> Unit = { tier ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            pendingDownloadTier = tier
             notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            viewModel.downloadOnDeviceModel()
+            viewModel.downloadModel(tier)
         }
     }
 
@@ -102,7 +106,7 @@ fun AiProviderSettingsScreen(
             onTestConnection = viewModel::testConnection,
             onSelectDefault = viewModel::selectDefault,
             onDownloadModel = downloadWithNotifPermission,
-            onDeleteModel = viewModel::deleteOnDeviceModel,
+            onDeleteModel = viewModel::deleteModel,
             onDownloadNano = viewModel::downloadNano,
             onSetPreferredTier = viewModel::setPreferredOnDeviceTier,
             onSetPreferOnDeviceWhenReady = viewModel::setPreferOnDeviceWhenReady,
@@ -118,8 +122,8 @@ private fun AiProviderSettingsContent(
     onClearKey: (ProviderId) -> Unit,
     onTestConnection: (ProviderId) -> Unit,
     onSelectDefault: (ProviderId) -> Unit,
-    onDownloadModel: () -> Unit,
-    onDeleteModel: () -> Unit,
+    onDownloadModel: (InferenceTier) -> Unit,
+    onDeleteModel: (InferenceTier) -> Unit,
     onDownloadNano: () -> Unit,
     onSetPreferredTier: (InferenceTier?) -> Unit,
     onSetPreferOnDeviceWhenReady: (Boolean) -> Unit,
@@ -170,8 +174,8 @@ private fun ProviderCard(
     onClearKey: () -> Unit,
     onTestConnection: () -> Unit,
     onSelectDefault: () -> Unit,
-    onDownloadModel: () -> Unit,
-    onDeleteModel: () -> Unit,
+    onDownloadModel: (InferenceTier) -> Unit,
+    onDeleteModel: (InferenceTier) -> Unit,
     onDownloadNano: () -> Unit,
     onSetPreferredTier: (InferenceTier?) -> Unit,
     onSetPreferOnDeviceWhenReady: (Boolean) -> Unit,
@@ -271,8 +275,8 @@ private fun CloudKeySection(
 private fun OnDeviceSection(
     info: OnDeviceInfo,
     onTestConnection: () -> Unit,
-    onDownloadModel: () -> Unit,
-    onDeleteModel: () -> Unit,
+    onDownloadModel: (InferenceTier) -> Unit,
+    onDeleteModel: (InferenceTier) -> Unit,
     onDownloadNano: () -> Unit,
     onSetPreferredTier: (InferenceTier?) -> Unit,
     onSetPreferOnDeviceWhenReady: (Boolean) -> Unit,
@@ -288,11 +292,90 @@ private fun OnDeviceSection(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 
-    Text(stringResource(R.string.ai_tier_gemma), style = MaterialTheme.typography.labelLarge)
-    when (val state = info.gemmaState) {
+    // Gemma (≥4 GB) and the light Qwen tier (≥3 GB) are two independent downloads (P-Atlas PA.3b).
+    ModelCard(
+        labelRes = R.string.ai_tier_gemma,
+        state = info.gemmaState,
+        eligible = info.gemmaEligible,
+        onTestConnection = onTestConnection,
+        onDownload = { onDownloadModel(InferenceTier.GEMMA) },
+        onDelete = { onDeleteModel(InferenceTier.GEMMA) },
+    )
+    ModelCard(
+        labelRes = R.string.ai_tier_light,
+        state = info.lightState,
+        eligible = info.lightEligible,
+        onTestConnection = onTestConnection,
+        onDownload = { onDownloadModel(InferenceTier.LIGHT) },
+        onDelete = { onDeleteModel(InferenceTier.LIGHT) },
+    )
+
+    NanoSection(info = info, onDownloadNano = onDownloadNano)
+
+    val gemmaReady = info.gemmaState is ModelState.Ready
+    val lightReady = info.lightState is ModelState.Ready
+    val nanoReady = info.nanoStatus == NanoStatus.AVAILABLE
+
+    // Choose which on-device engine to use when more than one is ready.
+    if (listOf(gemmaReady, lightReady, nanoReady).count { it } >= 2) {
+        Text(stringResource(R.string.ai_ondevice_prefer), style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            PreferChip(R.string.ai_prefer_auto, info.preferredTier == null) { onSetPreferredTier(null) }
+            if (gemmaReady) {
+                PreferChip(R.string.ai_tier_gemma, info.preferredTier == InferenceTier.GEMMA) {
+                    onSetPreferredTier(InferenceTier.GEMMA)
+                }
+            }
+            if (lightReady) {
+                PreferChip(R.string.ai_tier_light, info.preferredTier == InferenceTier.LIGHT) {
+                    onSetPreferredTier(InferenceTier.LIGHT)
+                }
+            }
+            if (nanoReady) {
+                PreferChip(R.string.ai_tier_nano, info.preferredTier == InferenceTier.NANO) {
+                    onSetPreferredTier(InferenceTier.NANO)
+                }
+            }
+        }
+    }
+
+    // Privacy/cost opt-in: prefer on-device over the selected cloud provider when ready.
+    if (gemmaReady || lightReady || nanoReady) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.ai_prefer_ondevice_when_ready),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    stringResource(R.string.ai_prefer_ondevice_when_ready_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = info.preferOnDeviceWhenReady,
+                onCheckedChange = onSetPreferOnDeviceWhenReady,
+            )
+        }
+    }
+}
+
+/** One downloadable on-device model's state machine: download → progress → test/delete (P-Atlas PA.3b). */
+@Composable
+private fun ModelCard(
+    labelRes: Int,
+    state: ModelState,
+    eligible: Boolean,
+    onTestConnection: () -> Unit,
+    onDownload: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Text(stringResource(labelRes), style = MaterialTheme.typography.labelLarge)
+    when (state) {
         ModelState.NotDownloaded ->
-            if (info.gemmaEligible) {
-                Button(onClick = onDownloadModel) {
+            if (eligible) {
+                Button(onClick = onDownload) {
                     Text(stringResource(R.string.ai_ondevice_download))
                 }
             } else {
@@ -318,7 +401,7 @@ private fun OnDeviceSection(
                 TextButton(onClick = onTestConnection) {
                     Text(stringResource(R.string.ai_provider_test))
                 }
-                TextButton(onClick = onDeleteModel) {
+                TextButton(onClick = onDelete) {
                     Text(stringResource(R.string.ai_ondevice_delete))
                 }
             }
@@ -329,47 +412,10 @@ private fun OnDeviceSection(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
-                Button(onClick = onDownloadModel) {
+                Button(onClick = onDownload) {
                     Text(stringResource(R.string.ai_ondevice_retry))
                 }
             }
-    }
-
-    NanoSection(info = info, onDownloadNano = onDownloadNano)
-
-    // Choose which on-device engine to use when both Gemma and Nano are ready.
-    if (info.gemmaState is ModelState.Ready && info.nanoStatus == NanoStatus.AVAILABLE) {
-        Text(stringResource(R.string.ai_ondevice_prefer), style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
-            PreferChip(R.string.ai_prefer_auto, info.preferredTier == null) { onSetPreferredTier(null) }
-            PreferChip(R.string.ai_tier_gemma, info.preferredTier == InferenceTier.GEMMA) {
-                onSetPreferredTier(InferenceTier.GEMMA)
-            }
-            PreferChip(R.string.ai_tier_nano, info.preferredTier == InferenceTier.NANO) {
-                onSetPreferredTier(InferenceTier.NANO)
-            }
-        }
-    }
-
-    // Privacy/cost opt-in: prefer on-device over the selected cloud provider when ready.
-    if (info.gemmaState is ModelState.Ready || info.nanoStatus == NanoStatus.AVAILABLE) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.ai_prefer_ondevice_when_ready),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    stringResource(R.string.ai_prefer_ondevice_when_ready_hint),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = info.preferOnDeviceWhenReady,
-                onCheckedChange = onSetPreferOnDeviceWhenReady,
-            )
-        }
     }
 }
 
@@ -456,7 +502,10 @@ private fun TestResult(test: ConnectionTest) {
 
 /** Usable = a model is installed (Gemma) or Nano is available on this device. */
 private val OnDeviceInfo.isUsable: Boolean
-    get() = gemmaState is ModelState.Ready || nanoStatus == NanoStatus.AVAILABLE
+    get() =
+        gemmaState is ModelState.Ready ||
+            lightState is ModelState.Ready ||
+            nanoStatus == NanoStatus.AVAILABLE
 
 @Composable
 private fun tierLabel(tier: InferenceTier): String =
@@ -499,6 +548,8 @@ private fun AiProviderSettingsContentPreview() {
                                         totalRamMb = 7900,
                                         gemmaEligible = true,
                                         gemmaState = ModelState.NotDownloaded,
+                                        lightEligible = true,
+                                        lightState = ModelState.NotDownloaded,
                                         nanoStatus = NanoStatus.UNAVAILABLE,
                                     ),
                             ),

@@ -138,6 +138,7 @@ class AiProviderSettingsViewModelTest {
 
     private lateinit var probe: FakeProbe
     private lateinit var modelController: FakeModelController
+    private lateinit var lightController: FakeModelController
     private lateinit var nano: FakeNano
 
     @Before
@@ -149,6 +150,7 @@ class AiProviderSettingsViewModelTest {
         store = FakeStore()
         probe = FakeProbe()
         modelController = FakeModelController()
+        lightController = FakeModelController()
         nano = FakeNano()
         val client = OkHttpClient()
         val claude =
@@ -175,7 +177,8 @@ class AiProviderSettingsViewModelTest {
         server.shutdown()
     }
 
-    private fun vm() = AiProviderSettingsViewModel(registry, keyStore, store, probe, modelController, nano)
+    private fun vm() =
+        AiProviderSettingsViewModel(registry, keyStore, store, probe, modelController, lightController, nano)
 
     private fun claudeStream(): MockResponse =
         MockResponse()
@@ -322,16 +325,47 @@ class AiProviderSettingsViewModelTest {
         }
 
     @Test
-    fun `download and delete drive the model controller`() =
+    fun `download and delete drive the gemma model controller`() =
         runBlocking {
             val vm = vm()
             val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
 
-            vm.downloadOnDeviceModel()
-            vm.deleteOnDeviceModel()
+            vm.downloadModel(InferenceTier.GEMMA)
+            vm.deleteModel(InferenceTier.GEMMA)
 
             assertEquals(1, modelController.downloads)
             assertEquals(1, modelController.deletes)
+            assertEquals(0, lightController.downloads) // the light controller is untouched
+            job.cancel()
+        }
+
+    @Test
+    fun `download and delete for the LIGHT tier drive the light controller, not gemma`() =
+        runBlocking {
+            val vm = vm()
+            val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
+
+            vm.downloadModel(InferenceTier.LIGHT)
+            vm.deleteModel(InferenceTier.LIGHT)
+
+            assertEquals(1, lightController.downloads)
+            assertEquals(1, lightController.deletes)
+            assertEquals(0, modelController.downloads) // gemma untouched
+            job.cancel()
+        }
+
+    @Test
+    fun `light model state and eligibility surface in the on-device row`() =
+        runBlocking {
+            probe.ramMb = 3500 // light-eligible (>=3 GB) but not gemma-eligible (<4 GB)
+            val vm = vm()
+            val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
+
+            lightController.state.value = ModelState.Downloading(30)
+            val onDevice = row(vm.uiState.value, ProviderId.ON_DEVICE).onDevice!!
+            assertTrue(onDevice.lightEligible)
+            assertFalse(onDevice.gemmaEligible)
+            assertEquals(ModelState.Downloading(30), onDevice.lightState)
             job.cancel()
         }
 

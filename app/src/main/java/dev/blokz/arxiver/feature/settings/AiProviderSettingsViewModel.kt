@@ -21,6 +21,8 @@ import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.data.AiProviderStore
 import dev.blokz.arxiver.data.OnDeviceModelController
+import dev.blokz.arxiver.di.GemmaModel
+import dev.blokz.arxiver.di.QwenModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -41,6 +43,8 @@ data class OnDeviceInfo(
     val totalRamMb: Long,
     val gemmaEligible: Boolean,
     val gemmaState: ModelState,
+    val lightEligible: Boolean,
+    val lightState: ModelState,
     val nanoStatus: NanoStatus,
     val preferredTier: InferenceTier? = null,
     val preferOnDeviceWhenReady: Boolean = false,
@@ -74,7 +78,8 @@ class AiProviderSettingsViewModel
         private val keyStore: AiKeyStore,
         private val store: AiProviderStore,
         private val capabilityProbe: DeviceCapabilityProbe,
-        private val modelController: OnDeviceModelController,
+        @GemmaModel private val modelController: OnDeviceModelController,
+        @QwenModel private val lightController: OnDeviceModelController,
         private val nanoAvailability: NanoAvailability,
     ) : ViewModel() {
         private val testStates = MutableStateFlow<Map<ProviderId, ConnectionTest>>(emptyMap())
@@ -85,20 +90,27 @@ class AiProviderSettingsViewModel
         private val capability = MutableStateFlow<DeviceCapability?>(null)
         private val nanoDownload = MutableStateFlow<NanoDownloadProgress?>(null)
 
+        // Pre-combine the two model-download states so the outer combine stays within its 5-arg
+        // typed overload (Gemma + the light Qwen tier; P-Atlas PA.3b).
+        private val modelStates: Flow<Pair<ModelState, ModelState>> =
+            combine(modelController.state, lightController.state) { gemma, light -> gemma to light }
+
         private val onDeviceInfo: Flow<OnDeviceInfo?> =
             combine(
-                modelController.state,
+                modelStates,
                 capability,
                 store.preferredOnDeviceTier,
                 store.preferOnDeviceWhenReady,
                 nanoDownload,
-            ) { gemmaState, deviceCapability, preferred, preferOnDevice, download ->
+            ) { (gemmaState, lightState), deviceCapability, preferred, preferOnDevice, download ->
                 deviceCapability?.let {
                     OnDeviceInfo(
                         recommendedTier = TierSelector.recommend(it),
                         totalRamMb = it.totalRamMb,
                         gemmaEligible = it.gemmaEligible,
                         gemmaState = gemmaState,
+                        lightEligible = it.lightEligible,
+                        lightState = lightState,
                         nanoStatus = it.nanoStatus,
                         preferredTier = preferred,
                         preferOnDeviceWhenReady = preferOnDevice,
@@ -129,9 +141,10 @@ class AiProviderSettingsViewModel
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AiProviderSettingsUiState())
 
         init {
-            // Re-probe device capability whenever the model state changes (download
+            // Re-probe device capability whenever a model state changes (download
             // progress / completion / deletion), which also seeds the initial value.
             viewModelScope.launch { modelController.state.collect { refreshCapability() } }
+            viewModelScope.launch { lightController.state.collect { refreshCapability() } }
         }
 
         fun saveKey(
@@ -167,12 +180,16 @@ class AiProviderSettingsViewModel
             viewModelScope.launch { store.setPreferOnDeviceWhenReady(prefer) }
         }
 
-        fun downloadOnDeviceModel() = modelController.download()
+        /** Download the model for [tier] (GEMMA or the light Qwen LIGHT tier; P-Atlas PA.3b). */
+        fun downloadModel(tier: InferenceTier) = controllerFor(tier).download()
 
-        fun deleteOnDeviceModel() {
-            modelController.delete()
+        fun deleteModel(tier: InferenceTier) {
+            controllerFor(tier).delete()
             viewModelScope.launch { refreshCapability() }
         }
+
+        private fun controllerFor(tier: InferenceTier): OnDeviceModelController =
+            if (tier == InferenceTier.LIGHT) lightController else modelController
 
         fun downloadNano() {
             viewModelScope.launch {
