@@ -295,6 +295,7 @@ private fun OnDeviceSection(
     // Gemma (≥4 GB) and the light Qwen tier (≥3 GB) are two independent downloads (P-Atlas PA.3b).
     ModelCard(
         labelRes = R.string.ai_tier_gemma,
+        downloadLabelRes = R.string.ai_ondevice_download,
         state = info.gemmaState,
         eligible = info.gemmaEligible,
         onTestConnection = onTestConnection,
@@ -303,6 +304,7 @@ private fun OnDeviceSection(
     )
     ModelCard(
         labelRes = R.string.ai_tier_light,
+        downloadLabelRes = R.string.ai_ondevice_download_light,
         state = info.lightState,
         eligible = info.lightEligible,
         onTestConnection = onTestConnection,
@@ -365,6 +367,7 @@ private fun OnDeviceSection(
 @Composable
 private fun ModelCard(
     labelRes: Int,
+    downloadLabelRes: Int,
     state: ModelState,
     eligible: Boolean,
     onTestConnection: () -> Unit,
@@ -376,7 +379,7 @@ private fun ModelCard(
         ModelState.NotDownloaded ->
             if (eligible) {
                 Button(onClick = onDownload) {
-                    Text(stringResource(R.string.ai_ondevice_download))
+                    Text(stringResource(downloadLabelRes))
                 }
             } else {
                 Text(
