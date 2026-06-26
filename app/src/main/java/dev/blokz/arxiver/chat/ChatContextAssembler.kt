@@ -198,16 +198,22 @@ class ChatContextAssembler(
                 "whenever it makes the answer clearer."
 
         /**
-         * Appended for STRUCTURED (Gemma E2B, P-Atlas PA.2): a table-focused nudge with a tiny inline
-         * 1-shot example (the one lever research says lifts ~2B table validity). Explicitly NO LaTeX
-         * or diagrams — at ~2B those break too often (~60% valid Mermaid, ~9.7% LaTeX error), so they
-         * stay cloud-only. ~50 tokens by the assembler's char/4 estimate; PA.0a measures the on-device
-         * table-validity + RAG-budget impact.
+         * Appended for STRUCTURED (Gemma E2B, P-Atlas PA.4 — "app draws the structure"). A ~2B model
+         * emits valid GFM table *syntax* only ~40–85% of the time, so we ask for a **low-syntax
+         * intermediate** it nails 0-shot (arXiv:2506.19512) — a `TABLE::` … `::TABLE` block, one row
+         * per line, cells split by `~|~`, citations kept inline — and `StructuredTableTransform`
+         * deterministically builds a guaranteed-valid table (or a grounded list) from it. Explicitly
+         * steers OFF GFM pipes / LaTeX / diagrams (all high-failure at this size; cloud-only). The base
+         * `SYSTEM_PROMPT` is left untouched (changing it would ripple into PLAIN/FULL + the goldens).
          */
         const val STRUCTURED_RICH_ADDENDUM =
-            " When you list or compare several things, present them as a small, well-formed Markdown " +
-                "table, for example:\n| Aspect | A | B |\n| --- | --- | --- |\n| Speed | fast | slower |\n" +
-                "Do not use LaTeX math or diagrams."
+            " When you compare or list several things across the same aspects, put the comparison in a " +
+                "block that starts with a line TABLE:: and ends with a line ::TABLE. Inside, write one " +
+                "row per line and separate the cells with ~|~. The first row is the column headers. " +
+                "Keep the [number] citations inside the cells they support. For example:\n" +
+                "TABLE::\nAspect ~|~ A ~|~ B\nSpeed ~|~ fast [1] ~|~ slower [2]\n::TABLE\n" +
+                "Use this only for genuine comparisons; otherwise answer normally. Do not use Markdown " +
+                "table pipes, LaTeX math, or diagrams."
 
         /**
          * Appended for cloud models (small on-device models emit structured output

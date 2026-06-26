@@ -22,6 +22,7 @@ import dev.blokz.arxiver.data.GraphResult
 import dev.blokz.arxiver.data.PageImageSource
 import dev.blokz.arxiver.data.PreparedChat
 import dev.blokz.arxiver.data.RelationGraphSource
+import dev.blokz.arxiver.data.settleStructured
 import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
@@ -370,7 +371,10 @@ class AskViewModel
             mode: ChatMode,
             rawAnswer: String,
         ): Pair<String, List<String>> {
-            val (body, modelFollowUps) = extractFollowUps(rawAnswer)
+            val (stripped, modelFollowUps) = extractFollowUps(rawAnswer)
+            // PA.4: on a STRUCTURED turn, render the TABLE:: intermediate to a valid table/list — the
+            // same transform the repository persists, so display == DB. Heuristics run on the result.
+            val body = settleStructured(prepared, stripped)
             val fromModel = if (mode == ChatMode.MAX && prepared.isCloud) modelFollowUps else emptyList()
             val followUps =
                 fromModel.ifEmpty {

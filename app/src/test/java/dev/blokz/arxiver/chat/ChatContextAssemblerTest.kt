@@ -197,7 +197,7 @@ class ChatContextAssemblerTest {
     // --- P-Atlas PA.2: per-engine richness ladder ---
 
     @Test
-    fun `structured (gemma) system invites a table example but not LaTeX or Mermaid`() {
+    fun `structured (gemma) system teaches the low-syntax TABLE format, not GFM pipes or LaTeX or Mermaid`() {
         val system =
             assembler.assemble(
                 "q",
@@ -207,7 +207,10 @@ class ChatContextAssemblerTest {
                 capability = onDeviceCap(OutputRichness.STRUCTURED),
             ).request.system!!
         assertTrue(system.startsWith(ChatContextAssembler.SYSTEM_PROMPT))
-        assertTrue(system.contains("| Aspect | A | B |"), "the 1-shot table example is present")
+        // PA.4: the 1-shot example is the sentinel intermediate the app renders, not GFM pipes.
+        assertTrue(system.contains("TABLE::"), "the fence is taught")
+        assertTrue(system.contains("Aspect ~|~ A ~|~ B"), "the 1-shot ~|~ example is present")
+        assertFalse(system.contains("| Aspect | A | B |"), "no GFM-pipe exemplar (small models break it)")
         assertFalse(system.contains("Use LaTeX"), "no LaTeX invitation on-device")
         assertFalse(system.contains("```mermaid"), "no Mermaid invitation on-device")
     }
@@ -247,10 +250,10 @@ class ChatContextAssemblerTest {
     }
 
     @Test
-    fun `the STRUCTURED nudge's RAG-budget cost is bounded — free at 4096, at most one chunk when tight (PA_0a)`() {
+    fun `the STRUCTURED addendum's RAG-budget cost is bounded by its own size (PA_0a)`() {
         // Six realistic ~70-token chunks (≈62 body + 8 label each); the MARK markers let us count
-        // exactly how many survive packing. This is the headless half of PA.0a (table validity itself
-        // needs a real Gemma stream — VERIFICATION.md K9).
+        // exactly how many survive packing. This is the headless half of PA.0a (table validity / the
+        // TABLE:: format adherence itself needs a real Gemma stream — VERIFICATION.md K9).
         val chunks = (1..6).map { chunk(it.toLong(), "MARK$it " + "lorem ".repeat(40), 0.95 - it * 0.01) }
 
         fun retained(
@@ -268,21 +271,26 @@ class ChatContextAssemblerTest {
             return (1..6).count { content.contains("MARK$it ") }
         }
 
-        // (a) Real on-device window: 4096 tokens has ample headroom, so the ~50-token STRUCTURED
-        //     addendum is free — all six chunks fit on both tiers (no starvation at paper scope).
+        // (a) Real on-device window: 4096 tokens has ample headroom, so the PA.4 STRUCTURED addendum
+        //     (which teaches the TABLE:: format) is free — all six chunks fit on both tiers.
         assertEquals(6, retained(OutputRichness.PLAIN, 4096))
         assertEquals(6, retained(OutputRichness.STRUCTURED, 4096))
 
         // (b) Sensitivity (what makes (a) non-tautological): at a deliberately TIGHT budget the
-        //     addendum's cost is *bounded* — it drops AT MOST ONE chunk vs PLAIN, and never starves
-        //     RAG entirely. A 10x-larger nudge (or STRUCTURED leaking the full cloud addendum) would
-        //     drop several chunks and fail `structured >= plain - 1`.
+        //     addendum's cost is *bounded by its own size* — it drops no more chunks than its tokens
+        //     displace (≈ addendum_tokens / chunk_tokens), never a catastrophic collapse. Self-adjusts
+        //     to the addendum length, so it stays honest as the prompt evolves.
+        val addendumTokens = (ChatContextAssembler.STRUCTURED_RICH_ADDENDUM.length + 3) / 4
+        val maxDrop = addendumTokens / 70 + 1 // ~70-token chunks; +1 for the packing boundary
         val tight = (ChatContextAssembler.SYSTEM_PROMPT.length + 3) / 4 + 300
         val plainTight = retained(OutputRichness.PLAIN, tight)
         val structuredTight = retained(OutputRichness.STRUCTURED, tight)
-        assertTrue(plainTight in 2..5, "the tight budget actually drops some chunks (boundary exercised): $plainTight")
-        assertTrue(structuredTight >= plainTight - 1, "the ~50-token nudge costs at most one chunk")
-        assertTrue(structuredTight >= 1, "RAG is never fully starved by the nudge")
+        assertTrue(plainTight in 3..6, "the tight budget actually exercises packing: $plainTight")
+        assertTrue(
+            plainTight - structuredTight <= maxDrop,
+            "STRUCTURED drops at most $maxDrop chunk(s) (its own size); plain=$plainTight structured=$structuredTight",
+        )
+        assertTrue(structuredTight >= 1, "RAG is never fully starved by the addendum")
     }
 
     // --- R3d.3: vision attachment ---

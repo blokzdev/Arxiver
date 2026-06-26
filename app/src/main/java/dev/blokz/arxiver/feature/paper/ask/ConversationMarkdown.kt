@@ -81,7 +81,12 @@ object ConversationMarkdown {
             append("— ${labels.footer}")
         }
 
-    /** Strip any trailing model FOLLOWUPS sentinel + trim (defends the cancelled-Max-partial path). */
+    /**
+     * Strip any trailing model FOLLOWUPS sentinel + trim (defends the cancelled-Max-partial path).
+     * The PA.4 STRUCTURED table transform is NOT re-applied here: this reads the already-settled,
+     * persisted body (the `TABLE::` intermediate was rendered to GFM at persist time), so export
+     * already carries the valid table/list — no sentinel leaks. Safe by construction.
+     */
     private fun cleanBody(text: String): String = extractFollowUps(text).first.trim()
 
     private fun StringBuilder.appendSources(
