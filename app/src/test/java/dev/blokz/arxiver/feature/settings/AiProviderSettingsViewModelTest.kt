@@ -107,6 +107,7 @@ class AiProviderSettingsViewModelTest {
 
     private class FakeProbe(var ramMb: Long = 8192) : DeviceCapabilityProbe {
         var gemmaReady = false
+        var lightReady = false
         var nano = NanoStatus.UNAVAILABLE
         var cloud = false
 
@@ -115,6 +116,7 @@ class AiProviderSettingsViewModelTest {
                 totalRamMb = ramMb,
                 nanoStatus = nano,
                 gemmaReady = gemmaReady,
+                lightReady = lightReady,
                 cloudConfigured = cloud,
             )
     }

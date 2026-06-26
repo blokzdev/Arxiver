@@ -134,6 +134,40 @@ class OnDeviceProviderTest {
             assertTrue(!nano.generated)
         }
 
+    // --- P-Atlas PA.3: 3-engine routing with the LIGHT tier in the middle ---
+
+    private fun streamed(provider: OnDeviceProvider) =
+        runBlocking {
+            provider.chat(request()).toList().filterIsInstance<ChatChunk.Delta>().joinToString("") { it.text }
+        }
+
+    @Test
+    fun `gemma beats the light tier when both are ready`() {
+        val gemma = FakeEngine(InferenceTier.GEMMA, ready = true, reply = "gemma")
+        val light = FakeEngine(InferenceTier.LIGHT, ready = true, reply = "light")
+        val nano = FakeEngine(InferenceTier.NANO, ready = true, reply = "nano")
+        assertEquals("gemma", streamed(OnDeviceProvider(listOf(gemma, light, nano), dispatchers)))
+        assertTrue(!light.generated && !nano.generated)
+    }
+
+    @Test
+    fun `light tier wins over nano when gemma is unready (the tier's whole purpose)`() {
+        val gemma = FakeEngine(InferenceTier.GEMMA, ready = false, reply = "gemma")
+        val light = FakeEngine(InferenceTier.LIGHT, ready = true, reply = "light")
+        val nano = FakeEngine(InferenceTier.NANO, ready = true, reply = "nano")
+        assertEquals("light", streamed(OnDeviceProvider(listOf(gemma, light, nano), dispatchers)))
+        assertTrue(light.generated && !nano.generated)
+    }
+
+    @Test
+    fun `preferred LIGHT tier is picked over a ready gemma`() {
+        val gemma = FakeEngine(InferenceTier.GEMMA, ready = true, reply = "gemma")
+        val light = FakeEngine(InferenceTier.LIGHT, ready = true, reply = "light")
+        val provider = OnDeviceProvider(listOf(gemma, light), dispatchers, preferredTier = { InferenceTier.LIGHT })
+        assertEquals("light", streamed(provider))
+        assertTrue(!gemma.generated)
+    }
+
     // --- P-Atlas PA.2: richness resolution matches the engine that would stream ---
 
     @Test

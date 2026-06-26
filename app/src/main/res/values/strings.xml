@@ -349,6 +349,7 @@
     <string name="ai_ondevice_ineligible">This device doesn\'t have enough memory to run the on-device model.</string>
     <string name="ai_tier_nano">Gemini Nano (system)</string>
     <string name="ai_tier_gemma">Gemma (downloaded)</string>
+    <string name="ai_tier_light">Qwen 0.6B light (downloaded)</string>
     <string name="ai_tier_cloud">Cloud (your key)</string>
     <string name="ai_tier_none">none yet — connect a provider</string>
     <!-- Nano + on-device preference (P1.2c) -->

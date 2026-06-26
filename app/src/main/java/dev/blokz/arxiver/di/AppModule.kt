@@ -202,6 +202,36 @@ object AppModule {
 
     @Provides
     @Singleton
+    @QwenModel
+    fun qwenModelDownloader(
+        @ApplicationContext context: Context,
+        httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ml.ModelDownloader =
+        dev.blokz.arxiver.core.ml.ModelDownloader(
+            httpClient = httpClient,
+            dispatchers = dispatchers,
+            // Separate dir from Gemma: deleteStaleSiblings() is extension-scoped (.litertlm),
+            // so co-locating the two LLM files would have them purge each other (P-Atlas PA.3).
+            modelDir = java.io.File(context.filesDir, "models/light"),
+            spec = dev.blokz.arxiver.core.ai.QwenEngine.SPEC,
+        )
+
+    @Provides
+    @Singleton
+    fun qwenEngine(
+        @QwenModel qwenDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
+        dispatchers: DispatcherProvider,
+        @ApplicationContext context: Context,
+    ): dev.blokz.arxiver.core.ai.QwenEngine =
+        dev.blokz.arxiver.core.ai.QwenEngine(
+            modelDownloader = qwenDownloader,
+            dispatchers = dispatchers,
+            cacheDir = context.cacheDir,
+        )
+
+    @Provides
+    @Singleton
     fun nanoAvailability(): dev.blokz.arxiver.core.ai.NanoAvailability =
         dev.blokz.arxiver.core.ai.MlKitNanoAvailability()
 
@@ -216,13 +246,15 @@ object AppModule {
     @Singleton
     fun onDeviceProvider(
         gemmaEngine: dev.blokz.arxiver.core.ai.GemmaEngine,
+        qwenEngine: dev.blokz.arxiver.core.ai.QwenEngine,
         nanoEngine: dev.blokz.arxiver.core.ai.NanoEngine,
         dispatchers: DispatcherProvider,
         aiProviderStore: dev.blokz.arxiver.data.AiProviderStore,
     ): dev.blokz.arxiver.core.ai.OnDeviceProvider =
-        // Default order Gemma-first (more capable); Nano is the zero-download fallback.
+        // Default order best-first: Gemma (most capable) → Qwen light tier → Nano (zero-download).
+        // pickReadyEngine filters by isReady() then honours the user's preferredTier (P-Atlas PA.3).
         dev.blokz.arxiver.core.ai.OnDeviceProvider(
-            engines = listOf(gemmaEngine, nanoEngine),
+            engines = listOf(gemmaEngine, qwenEngine, nanoEngine),
             dispatchers = dispatchers,
             preferredTier = { aiProviderStore.preferredOnDeviceTier.first() },
         )
@@ -233,12 +265,14 @@ object AppModule {
         @ApplicationContext context: Context,
         nanoAvailability: dev.blokz.arxiver.core.ai.NanoAvailability,
         @GemmaModel gemmaDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
+        @QwenModel lightDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
         aiKeyStore: dev.blokz.arxiver.core.ai.AiKeyStore,
     ): dev.blokz.arxiver.core.ai.DeviceCapabilityProbe =
         dev.blokz.arxiver.core.ai.AndroidDeviceCapabilityProbe(
             context = context,
             nanoAvailability = nanoAvailability,
             gemmaDownloader = gemmaDownloader,
+            lightDownloader = lightDownloader,
             keyStore = aiKeyStore,
         )
 

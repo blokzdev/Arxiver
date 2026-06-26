@@ -464,6 +464,7 @@ private fun tierLabel(tier: InferenceTier): String =
         when (tier) {
             InferenceTier.NANO -> R.string.ai_tier_nano
             InferenceTier.GEMMA -> R.string.ai_tier_gemma
+            InferenceTier.LIGHT -> R.string.ai_tier_light
             InferenceTier.CLOUD -> R.string.ai_tier_cloud
             InferenceTier.NONE -> R.string.ai_tier_none
         },
