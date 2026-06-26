@@ -88,6 +88,7 @@ object GraphLayoutEngine {
                     degree = degree[i],
                     inLibrary = node.inLibrary,
                     isCenter = node.isCenter,
+                    primaryCategory = node.primaryCategory,
                 )
             }
         val sceneEdges =

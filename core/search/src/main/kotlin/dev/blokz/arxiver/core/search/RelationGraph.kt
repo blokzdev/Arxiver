@@ -6,12 +6,17 @@ import kotlinx.serialization.Serializable
  * A node in an app-drawn relation graph (P-Atlas PA.1): a paper, identified by its arXiv id.
  * [isCenter] marks the paper the graph radiates from (drawn distinctly); [inLibrary] drives the
  * node shape so a reader can tell library papers from external ones at a glance.
+ *
+ * [primaryCategory] (e.g. `cs.LG`) is unused by the PA.1 Mermaid builder but feeds the PA.5b
+ * clustering fallback: when a collection's edges are too sparse to form communities, the map groups
+ * by arXiv category instead. It is optional so PA.1 call sites stay unchanged.
  */
 data class RelationNode(
     val id: String,
     val title: String,
     val inLibrary: Boolean = false,
     val isCenter: Boolean = false,
+    val primaryCategory: String? = null,
 )
 
 /** How two papers relate. [CITES] = a citation edge; [SIMILAR] = a high embedding cosine. */
