@@ -13,6 +13,7 @@ import dev.blokz.arxiver.core.database.TaxonomySeeder
 import dev.blokz.arxiver.core.database.dao.CategoryDao
 import dev.blokz.arxiver.core.database.dao.FollowDao
 import dev.blokz.arxiver.core.database.dao.PaperDao
+import dev.blokz.arxiver.core.network.AllowedHostsInterceptor
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
 import kotlinx.coroutines.flow.first
@@ -97,6 +98,24 @@ object AppModule {
     @Provides
     @Singleton
     fun arxivRateLimiter(): ArxivRateLimiter = ArxivRateLimiter()
+
+    /**
+     * The dedicated egress-gated client for the arXiv fetch group (Atom + PDF + future HTML/image).
+     * Reuses the bare client's connection pool/config via [okHttpClient]'s [OkHttpClient.newBuilder]
+     * and adds the [AllowedHostsInterceptor] as a NETWORK interceptor (fires per redirect hop). The AI
+     * providers / routine trigger / model downloaders stay on the bare unqualified client — the AI-key
+     * path is never routed through the host gate (P-HTML PH.2).
+     */
+    @Provides
+    @Singleton
+    @ArxivClient
+    fun arxivHttpClient(httpClient: OkHttpClient): OkHttpClient {
+        val gate = AllowedHostsInterceptor()
+        return httpClient.newBuilder()
+            .addInterceptor(gate) // pre-connection: a disallowed original host opens no socket
+            .addNetworkInterceptor(gate) // per redirect hop: a disallowed 3xx target is blocked
+            .build()
+    }
 
     @Provides
     fun routineDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.RoutineDao = db.routineDao()
@@ -453,15 +472,16 @@ object AppModule {
     @Provides
     @Singleton
     fun pdfDownloader(
-        httpClient: OkHttpClient,
+        @ArxivClient httpClient: OkHttpClient,
+        rateLimiter: ArxivRateLimiter,
         dispatchers: DispatcherProvider,
     ): dev.blokz.arxiver.core.network.pdf.PdfDownloader =
-        dev.blokz.arxiver.core.network.pdf.PdfDownloader(httpClient, dispatchers)
+        dev.blokz.arxiver.core.network.pdf.PdfDownloader(httpClient, rateLimiter, dispatchers)
 
     @Provides
     @Singleton
     fun arxivApiClient(
-        httpClient: OkHttpClient,
+        @ArxivClient httpClient: OkHttpClient,
         rateLimiter: ArxivRateLimiter,
         dispatchers: DispatcherProvider,
     ): ArxivApiClient = ArxivApiClient(httpClient, rateLimiter, dispatchers)
