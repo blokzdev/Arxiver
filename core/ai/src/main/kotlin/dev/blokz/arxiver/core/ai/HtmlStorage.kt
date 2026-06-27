@@ -6,6 +6,8 @@ import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.model.ArxivId
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /** A cached reader body on disk + which source produced it (so the PH.4 banner survives a cache hit). */
 data class CachedHtml(
@@ -45,7 +47,9 @@ class HtmlStorage(
                 val index = File(vdir, "index.html")
                 val tmp = File(vdir, "index.html.part")
                 tmp.writeText(bodyHtml)
-                check(tmp.renameTo(index)) { "rename failed" }
+                // REPLACE_EXISTING so the PH.5 two-phase re-store (text-first body → image body) overwrites
+                // the prior index.html — File.renameTo does NOT overwrite on Windows (the JVM-test host).
+                Files.move(tmp.toPath(), index.toPath(), StandardCopyOption.REPLACE_EXISTING)
                 File(vdir, COMPLETE).writeText(source.name)
                 AppResult.Success(index)
             }.getOrElse { e -> AppResult.Failure(AppError.Storage(e.message)) }

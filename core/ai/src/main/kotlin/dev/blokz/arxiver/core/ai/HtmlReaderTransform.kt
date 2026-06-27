@@ -25,6 +25,17 @@ object HtmlReaderTransform {
 
     private const val MAX_LABEL = 120
 
+    /** PH.5: at most this many distinct same-origin figures are tokenized for fetch; the rest → placeholder. */
+    const val IMAGE_COUNT_CAP = 40
+
+    private const val FIGURE_PLACEHOLDER_TEXT = "Figure unavailable — download to view"
+
+    private val ALLOWED_IMG_HOSTS = setOf("arxiv.org", "ar5iv.labs.arxiv.org")
+
+    /** Raw-string external-URL detector for [assertNoExternalHost] (anchored right after the attr quote). */
+    private val EXTERNAL_ATTR =
+        Regex("""(?:src|href|xlink:href)\s*=\s*["']\s*(?:https?:)?//""", RegexOption.IGNORE_CASE)
+
     private val BIB_ID = Regex("""^bib\.bib\d+$""")
     private val SECTION_ID = Regex("""^S\d+(\.SS\d+)*$""")
     private val FIGURE_ID = Regex("""\.F\d+$""")
@@ -47,6 +58,7 @@ object HtmlReaderTransform {
         sanitizedBody: String,
         id: ArxivId,
         source: HtmlSource,
+        version: Int,
     ): ReaderDocument? {
         val doc =
             try {
@@ -73,10 +85,30 @@ object HtmlReaderTransform {
         // (c) Internalize every link (source-aware, id-scoped, total).
         rewriteHrefs(root, id, source)
 
-        // (d) Images → figcaption placeholder (MVP: no fetch; keep any surrounding <figure>/<figcaption>).
+        // (d) Images (PH.5): same-origin relative figures become opaque `data-img-key` tokens (no src)
+        // + a manifest entry the ViewModel fetches and HtmlImageInliner turns into a data:image URI.
+        // The sanitizer already stripped external/protocol-relative srcs, so a kept relative src always
+        // resolves within the source origin; data:image srcs are already self-contained (kept as-is);
+        // blank / over-cap / unresolvable → figcaption placeholder.
+        val pageUrl = pageBaseUrl(id, source, version)
+        val manifest = LinkedHashMap<String, ReaderImage>()
         for (img in root.select("img")) {
-            val placeholder = Element("span").addClass("ltx_placeholder").text("Figure unavailable — download to view")
-            img.replaceWith(placeholder)
+            val src = img.attr("src").trim()
+            when {
+                src.isEmpty() -> img.replaceWith(figurePlaceholder())
+                src.startsWith("data:", ignoreCase = true) -> {} // already inline + sanitizer-vetted
+                else -> {
+                    val abs = resolveImageUrl(src, pageUrl)
+                    val key = abs?.let(::sha256Hex)
+                    if (abs == null || key == null || (key !in manifest && manifest.size >= IMAGE_COUNT_CAP)) {
+                        img.replaceWith(figurePlaceholder())
+                    } else {
+                        img.removeAttr("src")
+                        img.attr("data-img-key", key)
+                        manifest.putIfAbsent(key, ReaderImage(localKey = key, fetchUrl = abs))
+                    }
+                }
+            }
         }
 
         // (e) <math> kept verbatim (native MathML; sanitizer preserved alttext/intent/display).
@@ -89,7 +121,13 @@ object HtmlReaderTransform {
 
         val bodyHtml = root.html().trim()
         if (bodyHtml.isBlank()) return null
-        return ReaderDocument(bodyHtml = bodyHtml, fidelity = fidelity, anchors = anchors, source = source)
+        return ReaderDocument(
+            bodyHtml = bodyHtml,
+            fidelity = fidelity,
+            anchors = anchors,
+            source = source,
+            images = manifest.values.toList(),
+        )
     }
 
     /** Pure, reusable by PH.6 / the cache-hit path over a stored body. */
@@ -208,4 +246,47 @@ object HtmlReaderTransform {
                 v.isNotEmpty() && EXTERNAL_REF.containsMatchIn(v)
             }
         }
+
+    /**
+     * The exact page URL the fetcher GET'd, used as the RFC-3986 base for image-`src` resolution — so
+     * resolution is byte-for-byte what a browser computes. Native serves at `…/html/<id>v<ver>` (no
+     * trailing slash) with **version-prefixed** relative srcs (`2412.19437v1/x1.png`), so the version
+     * dir comes from the src; ar5iv uses **absolute-path** srcs (`/html/<id>/assets/…`) that resolve
+     * against the origin regardless. Both verified against live arXiv/ar5iv (2026-06).
+     */
+    private fun pageBaseUrl(
+        id: ArxivId,
+        source: HtmlSource,
+        version: Int,
+    ): String =
+        when (source) {
+            HtmlSource.NATIVE -> id.htmlUrl(version)
+            HtmlSource.AR5IV -> "https://ar5iv.labs.arxiv.org/html/${id.value}"
+        }
+
+    /** Resolve [src] against [pageUrl]; keep only an https URL on an arXiv image host, else null → placeholder. */
+    private fun resolveImageUrl(
+        src: String,
+        pageUrl: String,
+    ): String? =
+        runCatching {
+            val u = java.net.URI(pageUrl).resolve(src)
+            if (u.scheme?.lowercase() == "https" && u.host?.lowercase() in ALLOWED_IMG_HOSTS) u.toString() else null
+        }.getOrNull()
+
+    private fun sha256Hex(s: String): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(s.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+
+    /** The figcaption placeholder for a stripped/over-cap/failed figure; shared with [HtmlImageInliner]. */
+    internal fun figurePlaceholder(): Element =
+        Element("span").addClass("ltx_placeholder").text(FIGURE_PLACEHOLDER_TEXT)
+
+    /**
+     * Cheap render-/cache-path gate (PH.5): true iff [bodyHtml] has no external URL on a `src`/`href`/
+     * `xlink:href` attribute. A raw-string regex (no jsoup parse) so it stays cheap over a multi-MB
+     * data:-laden cached body; `data:`/`arxiver:` values never match (no `//` right after the quote).
+     */
+    fun assertNoExternalHost(bodyHtml: String): Boolean = !EXTERNAL_ATTR.containsMatchIn(bodyHtml)
 }

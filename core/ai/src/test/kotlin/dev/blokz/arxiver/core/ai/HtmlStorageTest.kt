@@ -64,6 +64,19 @@ class HtmlStorageTest {
         }
 
     @Test
+    fun `re-storing overwrites the body atomically (PH5 two-phase text-then-images)`() =
+        runTest {
+            // Phase 1: placeholder body. Phase 2: the same version dir re-stored with inlined images.
+            assertIs<AppResult.Success<File>>(storage.store(id, 1, HtmlSource.NATIVE, "<p>placeholders</p>"))
+            assertIs<AppResult.Success<File>>(storage.store(id, 1, HtmlSource.NATIVE, "<p>data:images</p>"))
+
+            val cached = storage.localHtml(id, 1)
+            assertNotNull(cached)
+            assertEquals("<p>data:images</p>", cached.file.readText(), "the second store wins (overwrite-safe)")
+            assertEquals(HtmlSource.NATIVE, cached.source)
+        }
+
+    @Test
     fun `newest picks the highest version`() =
         runTest {
             storage.store(id, 1, HtmlSource.NATIVE, "v1")

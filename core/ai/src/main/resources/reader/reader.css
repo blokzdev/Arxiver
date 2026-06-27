@@ -77,10 +77,16 @@ math[display="block"], .ltx_Math[display="block"] {
   margin: 0.8em 0;
 }
 
-/* Figures + the MVP "download to view" placeholder for stripped images. */
+/* Figures + figcaption placeholder for over-cap / failed images (PH.5 inlines fetched ones as data:). */
 figure, .ltx_figure, .ltx_table {
   margin: 1.2em 0;
   text-align: center;
+}
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.4em auto;
 }
 figcaption, .ltx_caption {
   font-size: 0.9em;

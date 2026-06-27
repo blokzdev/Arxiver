@@ -62,7 +62,7 @@ open class HtmlFetcher(
             // Native exists + converts cleanly → done. Else (404 / sanitize null / transform null /
             // DEGRADED) fall through to ar5iv.
             if (nativeBody != null) {
-                val doc = build(nativeBody, id, HtmlSource.NATIVE)
+                val doc = build(nativeBody, id, HtmlSource.NATIVE, version)
                 if (doc != null && doc.fidelity.fidelity == Fidelity.OK) {
                     return@withContext HtmlFetchResult.Native(doc)
                 }
@@ -71,7 +71,7 @@ open class HtmlFetcher(
             // 3. ar5iv — accept even DEGRADED (the last HTML option before PDF).
             when (val ar5iv = get(AR5IV_BASE + id.value)) {
                 is Attempt.Ok ->
-                    build(ar5iv.body, id, HtmlSource.AR5IV)
+                    build(ar5iv.body, id, HtmlSource.AR5IV, version)
                         ?.let { HtmlFetchResult.Ar5iv(it) }
                         ?: HtmlFetchResult.FallbackToPdf
                 Attempt.NotFound -> HtmlFetchResult.FallbackToPdf
@@ -83,7 +83,8 @@ open class HtmlFetcher(
         rawBody: String,
         id: ArxivId,
         source: HtmlSource,
-    ): ReaderDocument? = HtmlSanitizer.sanitize(rawBody)?.let { HtmlReaderTransform.transform(it, id, source) }
+        version: Int,
+    ): ReaderDocument? = HtmlSanitizer.sanitize(rawBody)?.let { HtmlReaderTransform.transform(it, id, source, version) }
 
     /** One rate-limited GET. Distinguishes 404 (no HTML) from a transport error (offline/upstream). */
     private suspend fun get(url: String): Attempt {
