@@ -42,6 +42,7 @@ import dev.blokz.arxiver.feature.claude.RoutineSetupScreen
 import dev.blokz.arxiver.feature.claude.RoutinesScreen
 import dev.blokz.arxiver.feature.claude.TemplateCatalogScreen
 import dev.blokz.arxiver.feature.claude.TemplateDetailScreen
+import dev.blokz.arxiver.feature.html.HtmlReaderScreen
 import dev.blokz.arxiver.feature.knowledgemap.KnowledgeMapScreen
 import dev.blokz.arxiver.feature.library.FilteredPapersScreen
 import dev.blokz.arxiver.feature.library.LibraryScreen
@@ -69,6 +70,7 @@ object Routes {
     const val CATEGORY_FEED = "browse/category/{code}?title={title}"
     const val PAPER_DETAIL = "paper/{id}"
     const val PDF_VIEWER = "paper/{id}/pdf"
+    const val HTML_VIEWER = "paper/{id}/html"
     const val CONNECTIONS = "paper/{id}/graph"
     const val ROUTINES = "claude/routines"
     const val TEMPLATE_CATALOG = "claude/templates"
@@ -91,6 +93,8 @@ object Routes {
     fun paperDetail(id: ArxivId) = "paper/${Uri.encode(id.value)}"
 
     fun pdfViewer(id: String) = "paper/${Uri.encode(id)}/pdf"
+
+    fun htmlViewer(id: String) = "paper/${Uri.encode(id)}/html"
 
     fun connections(id: String) = "paper/${Uri.encode(id)}/graph"
 
@@ -276,6 +280,7 @@ fun ArxiverApp(
                     PaperDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenPdf = { id -> navController.navigate(Routes.pdfViewer(id)) },
+                        onOpenHtml = { id -> navController.navigate(Routes.htmlViewer(id)) },
                         onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                         onOpenConnections = { id -> navController.navigate(Routes.connections(id)) },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
@@ -284,6 +289,18 @@ fun ArxiverApp(
                 }
                 composable(Routes.PDF_VIEWER) {
                     PdfViewerScreen(onBack = { navController.popBackStack() })
+                }
+                composable(Routes.HTML_VIEWER) {
+                    HtmlReaderScreen(
+                        onBack = { navController.popBackStack() },
+                        onFallbackToPdf = { id ->
+                            navController.navigate(Routes.pdfViewer(id)) {
+                                // drop the dead HTML route so Back from the PDF returns to paper detail
+                                popUpTo(Routes.HTML_VIEWER) { inclusive = true }
+                            }
+                        },
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                    )
                 }
                 composable(Routes.ROUTINES) {
                     RoutinesScreen(

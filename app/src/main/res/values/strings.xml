@@ -68,6 +68,15 @@
     <string name="pdf_downloading">Downloading PDF…</string>
     <string name="pdf_page_indicator">%1$d / %2$d</string>
 
+    <!-- P-HTML PH.4: the arXiv HTML-edition reader (native arxiv.org/html → ar5iv fallback). -->
+    <string name="html_title">HTML</string>
+    <string name="html_rendering">Rendering…</string>
+    <string name="action_open_html">Read HTML</string>
+    <string name="action_read_pdf_instead">Read PDF instead</string>
+    <string name="html_banner_ar5iv">Showing the community ar5iv conversion — formatting may differ from the original.</string>
+    <string name="html_external_title">Open external link?</string>
+    <string name="html_external_open">Open</string>
+
     <string name="action_retry">Retry</string>
     <string name="action_share">Share</string>
     <string name="action_open_pdf">Read PDF</string>

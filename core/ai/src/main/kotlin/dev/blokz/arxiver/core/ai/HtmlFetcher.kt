@@ -34,13 +34,14 @@ sealed interface HtmlFetchResult {
  * [ReaderDocument]; the caller (PH.4) persists `doc.bodyHtml` once (sanitize-on-download-once) and never
  * stores raw bytes. Lives in `:core:ai` so it composes [HtmlSanitizer] + [HtmlReaderTransform].
  */
-class HtmlFetcher(
+open class HtmlFetcher(
     private val httpClient: OkHttpClient,
     private val rateLimiter: ArxivRateLimiter,
     private val dispatchers: DispatcherProvider,
     private val userAgent: String = ArxivApiClient.DEFAULT_USER_AGENT,
 ) {
-    suspend fun fetch(
+    // `open` so a ViewModel test can substitute a fake returning canned HtmlFetchResults.
+    open suspend fun fetch(
         id: ArxivId,
         version: Int,
     ): HtmlFetchResult =
