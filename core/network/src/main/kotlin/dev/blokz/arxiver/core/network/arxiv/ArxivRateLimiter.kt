@@ -11,15 +11,15 @@ import kotlinx.coroutines.sync.withLock
  *
  * @param nowMs injectable monotonic clock for tests.
  */
-class ArxivRateLimiter(
+open class ArxivRateLimiter(
     private val minSpacingMs: Long = MIN_SPACING_MS,
     private val nowMs: () -> Long = System::nanoTime.let { { it() / 1_000_000 } },
 ) {
     private val mutex = Mutex()
     private var lastRequestAtMs = Long.MIN_VALUE / 2
 
-    /** Suspends until a request slot is available, then claims it. */
-    suspend fun acquire() {
+    /** Suspends until a request slot is available, then claims it. `open` so tests can count calls. */
+    open suspend fun acquire() {
         mutex.withLock {
             val waitMs = lastRequestAtMs + minSpacingMs - nowMs()
             if (waitMs > 0) delay(waitMs)

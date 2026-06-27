@@ -78,7 +78,7 @@ class PdfViewerViewModelTest {
                 PdfViewerViewModel(
                     savedStateHandle = SavedStateHandle(mapOf("id" to "9999.99999")),
                     context = context,
-                    pdfDownloader = PdfDownloader(OkHttpClient(), dispatchers),
+                    pdfDownloader = PdfDownloader(OkHttpClient(), ArxivRateLimiter(minSpacingMs = 0), dispatchers),
                     paperRepository = paperRepo,
                     dispatchers = dispatchers,
                 )
