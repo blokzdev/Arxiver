@@ -428,7 +428,7 @@
     <string name="ask_pinned_to_notes">Added to notes</string>
     <!-- P-Rich R4: share / export -->
     <string name="ask_share_answer">Share</string>
-    <string name="cd_ask_share_conversation">Share this conversation</string>
+    <string name="cd_ask_share_conversation">Export or share this conversation</string>
     <!-- P-Share PS.2: read-aloud (TTS). The speak_* captions replace rich blocks TTS can't voice. -->
     <string name="ask_read_aloud">Read aloud</string>
     <string name="ask_stop_reading">Stop</string>
@@ -441,6 +441,14 @@
     <string name="ask_export_rendering">Rendering image…</string>
     <string name="ask_export_failed">Couldn\'t export the image</string>
     <string name="ask_export_subject">Arxiver answer</string>
+    <!-- P-Share PS.6: whole-conversation export (text / Markdown file / PDF) -->
+    <string name="ask_export_conversation_text">Share as text</string>
+    <string name="ask_export_conversation_markdown">Export Markdown file</string>
+    <string name="ask_export_conversation_pdf">Export as PDF</string>
+    <string name="ask_export_conversation_md_preparing">Preparing Markdown…</string>
+    <string name="ask_export_conversation_pdf_preparing">Preparing PDF…</string>
+    <string name="ask_export_conversation_failed">Couldn\'t export the conversation</string>
+    <string name="ask_export_conversation_job">Arxiver conversation</string>
     <string name="speak_diagram">Diagram.</string>
     <string name="speak_equation">Equation.</string>
     <string name="speak_image">Image.</string>

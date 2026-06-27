@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.feature.paper.ask
 
+import android.content.Context
 import android.content.res.Configuration
 import android.widget.Toast
 import androidx.compose.foundation.clickable
@@ -21,11 +22,13 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
@@ -86,15 +89,23 @@ import dev.blokz.arxiver.chat.ChatPreview
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.Citation
+import dev.blokz.arxiver.ui.EXPORT_DIR
+import dev.blokz.arxiver.ui.markdown.ConversationPdfPrinter
 import dev.blokz.arxiver.ui.markdown.MarkdownText
 import dev.blokz.arxiver.ui.markdown.RichBlockWebView
 import dev.blokz.arxiver.ui.markdown.RichContent
 import dev.blokz.arxiver.ui.markdown.RichImageExporter
 import dev.blokz.arxiver.ui.markdown.rememberRichTheme
+import dev.blokz.arxiver.ui.shareFile
 import dev.blokz.arxiver.ui.shareImage
+import dev.blokz.arxiver.ui.shareText
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 
 /**
  * Per-paper "Ask" sheet (P2.3): streams a grounded answer, gates cloud calls
@@ -115,8 +126,10 @@ fun AskSheet(
     onPinAnswer: ((String) -> Unit)? = null,
     /** Share a single answer as Markdown via the OS share sheet (P-Rich R4); null hides it. */
     onShareAnswer: ((AskMessage) -> Unit)? = null,
-    /** Share the whole conversation as Markdown via the OS share sheet (P-Rich R4); null hides it. */
-    onShareConversation: ((List<AskMessage>) -> Unit)? = null,
+    /** Display title for the whole-conversation export (paper title / collection name / session
+     *  label) — used as the share subject + the Markdown `# header` (P-Share PS.6). null still
+     *  exports, just without the header line. */
+    conversationTitle: String? = null,
     viewModel: AskViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -150,6 +163,40 @@ fun AskSheet(
                 context.shareImage(file, exportSubject)
             } else {
                 Toast.makeText(context, exportFailed, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    // Whole-conversation export (P-Share PS.6): share as Markdown text, export a Markdown *file*, or
+    // print/save-as-PDF. Built here (like onExportImage) so every Ask host inherits it for free — the
+    // host only supplies the display [conversationTitle]. User-initiated, OS-sheet/print only, no
+    // upload, the AI key is never involved; the PDF reuses the offline rich renderer (PS.4b).
+    val conversationLabels = rememberConversationMarkdownLabels()
+    val convMdPreparing = stringResource(R.string.ask_export_conversation_md_preparing)
+    val convPdfPreparing = stringResource(R.string.ask_export_conversation_pdf_preparing)
+    val convFailed = stringResource(R.string.ask_export_conversation_failed)
+    val convJobName = stringResource(R.string.ask_export_conversation_job)
+    val onExportConversation: (ConversationExportKind) -> Unit = { kind ->
+        val md = ConversationMarkdown.conversation(state.messages, conversationTitle, conversationLabels)
+        when (kind) {
+            ConversationExportKind.SHARE_TEXT -> context.shareText(md, subject = conversationTitle)
+            ConversationExportKind.MARKDOWN_FILE -> {
+                Toast.makeText(context, convMdPreparing, Toast.LENGTH_SHORT).show()
+                exportScope.launch {
+                    val file = writeConversationMarkdown(context, md)
+                    if (file != null) {
+                        context.shareFile(file, "text/markdown", subject = conversationTitle)
+                    } else {
+                        Toast.makeText(context, convFailed, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            ConversationExportKind.PDF -> {
+                Toast.makeText(context, convPdfPreparing, Toast.LENGTH_SHORT).show()
+                exportScope.launch {
+                    if (!ConversationPdfPrinter.print(context, md, convJobName)) {
+                        Toast.makeText(context, convFailed, Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
     }
@@ -193,7 +240,7 @@ fun AskSheet(
             onOpenCrossRef = onOpenCrossRef,
             onPinAnswer = onPinAnswer,
             onShareAnswer = onShareAnswer,
-            onShareConversation = onShareConversation,
+            onExportConversation = onExportConversation,
             onReadAloud = onReadAloud,
             speakingKey = speakingKey,
             onCopy = onCopy,
@@ -202,6 +249,32 @@ fun AskSheet(
         )
     }
 }
+
+/** What "export this conversation" produces (P-Share PS.6): a text share, a Markdown file, or a PDF. */
+enum class ConversationExportKind { SHARE_TEXT, MARKDOWN_FILE, PDF }
+
+/** Write [markdown] to a `.md` file in the shared cache export dir; null on failure (off the main thread). */
+private suspend fun writeConversationMarkdown(
+    context: Context,
+    markdown: String,
+): File? =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = File(context.cacheDir, EXPORT_DIR).apply { mkdirs() }
+            val file = File(dir, "conversation_${System.currentTimeMillis()}.md")
+            FileOutputStream(file).use { it.write(markdown.toByteArray()) }
+            file
+        }.getOrNull()
+    }
+
+@Composable
+private fun rememberConversationMarkdownLabels(): ConversationMarkdownLabels =
+    ConversationMarkdownLabels(
+        you = stringResource(R.string.ask_export_you),
+        assistant = stringResource(R.string.ask_export_assistant),
+        sources = stringResource(R.string.ask_export_sources),
+        footer = stringResource(R.string.ask_export_footer),
+    )
 
 /** Prepend a blockquote of [answer] (collapsed + capped) onto the [current] input for a quoted follow-up. */
 private fun quoteInto(
@@ -245,7 +318,7 @@ private fun AskSheetContent(
     onOpenCrossRef: ((String) -> Unit)? = null,
     onPinAnswer: ((String) -> Unit)? = null,
     onShareAnswer: ((AskMessage) -> Unit)? = null,
-    onShareConversation: ((List<AskMessage>) -> Unit)? = null,
+    onExportConversation: ((ConversationExportKind) -> Unit)? = null,
     onReadAloud: ((AskMessage) -> Unit)? = null,
     speakingKey: String? = null,
     onCopy: ((AskMessage) -> Unit)? = null,
@@ -267,15 +340,48 @@ private fun AskSheetContent(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.weight(1f),
             )
-            // Share the whole conversation as Markdown (P-Rich R4) — shown once a real answer exists.
-            val canShareConversation =
-                onShareConversation != null &&
+            // Export the whole conversation (P-Share PS.6) — shown once a real answer exists. The share
+            // icon opens a menu: share as Markdown text, export a Markdown file, or print/save as PDF.
+            val canExportConversation =
+                onExportConversation != null &&
                     state.messages.any {
                         it.role == AskRole.ASSISTANT && !it.streaming && !it.error && it.text.isNotBlank()
                     }
-            if (canShareConversation) {
-                IconButton(onClick = { onShareConversation!!(state.messages) }) {
-                    Icon(Icons.Filled.Share, stringResource(R.string.cd_ask_share_conversation))
+            if (canExportConversation) {
+                var exportMenuOpen by remember { mutableStateOf(false) }
+                Box {
+                    IconButton(onClick = { exportMenuOpen = true }) {
+                        Icon(Icons.Filled.Share, stringResource(R.string.cd_ask_share_conversation))
+                    }
+                    DropdownMenu(
+                        expanded = exportMenuOpen,
+                        onDismissRequest = { exportMenuOpen = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.ask_export_conversation_text)) },
+                            leadingIcon = { Icon(Icons.Filled.Share, null) },
+                            onClick = {
+                                exportMenuOpen = false
+                                onExportConversation!!(ConversationExportKind.SHARE_TEXT)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.ask_export_conversation_markdown)) },
+                            leadingIcon = { Icon(Icons.Filled.Description, null) },
+                            onClick = {
+                                exportMenuOpen = false
+                                onExportConversation!!(ConversationExportKind.MARKDOWN_FILE)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.ask_export_conversation_pdf)) },
+                            leadingIcon = { Icon(Icons.Filled.PictureAsPdf, null) },
+                            onClick = {
+                                exportMenuOpen = false
+                                onExportConversation!!(ConversationExportKind.PDF)
+                            },
+                        )
+                    }
                 }
             }
         }

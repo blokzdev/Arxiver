@@ -189,12 +189,8 @@ fun FilteredPapersScreen(
             onShareAnswer = { m ->
                 context.shareText(ConversationMarkdown.answer(m, exportLabels), subject = viewModel.title)
             },
-            onShareConversation = { msgs ->
-                context.shareText(
-                    ConversationMarkdown.conversation(msgs, viewModel.title, exportLabels),
-                    subject = viewModel.title,
-                )
-            },
+            // Whole-conversation export (text / Markdown file / PDF) is owned by AskSheet — P-Share PS.6.
+            conversationTitle = viewModel.title,
         )
     }
 

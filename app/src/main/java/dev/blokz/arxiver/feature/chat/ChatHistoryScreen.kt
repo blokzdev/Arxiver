@@ -186,12 +186,8 @@ fun ChatHistoryScreen(
             onShareAnswer = { m ->
                 context.shareText(ConversationMarkdown.answer(m, exportLabels), subject = row.label)
             },
-            onShareConversation = { msgs ->
-                context.shareText(
-                    ConversationMarkdown.conversation(msgs, row.label, exportLabels),
-                    subject = row.label,
-                )
-            },
+            // Whole-conversation export (text / Markdown file / PDF) is owned by AskSheet — P-Share PS.6.
+            conversationTitle = row.label,
         )
     }
 }
