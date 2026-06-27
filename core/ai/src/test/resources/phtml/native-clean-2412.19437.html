@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta content="text/html; charset=utf-8" http-equiv="content-type"/>
+<title>DeepSeek-V3 Technical Report</title>
+<!--Generated on Tue Feb 18 17:27:27 2025 by LaTeXML (version 0.8.8) http://dlmf.nist.gov/LaTeXML/.-->
+<meta content="width=device-width, initial-scale=1, shrink-to-fit=no" name="viewport"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+<link href="/static/browse/0.3.4/css/ar5iv.0.7.9.min.css" rel="stylesheet" type="text/css"/>
+<link href="/static/browse/0.3.4/css/ar5iv-fonts.0.7.9.min.css" rel="stylesheet" type="text/css"/>
+<link href="/static/browse/0.3.4/css/latexml_styles.css" rel="stylesheet" type="text/css"/>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.3/html2canvas.min.js"></script>
+<script src="/static/browse/0.3.4/js/addons_new.js"></script>
+<script src="/static/browse/0.3.4/js/feedbackOverlay.js"></script>
+<base href="/html/2412.19437v2/"/></head>
+<body>
+<nav class="ltx_page_navbar">
+<nav class="ltx_TOC">
+<ol class="ltx_toclist">
+<li class="ltx_tocentry ltx_tocentry_section"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S1" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">1 </span>Introduction</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_section">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2 </span>Architecture</span></a>
+<ol class="ltx_toclist ltx_toclist_section">
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1" title="In 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.1 </span>Basic Architecture</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1" title="In 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.1.1 </span>Multi-Head Latent Attention</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2" title="In 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.1.2 </span>DeepSeekMoE with Auxiliary-Loss-Free Load Balancing</span></a>
+<ol class="ltx_toclist ltx_toclist_subsubsection">
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px1" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">Basic Architecture of DeepSeekMoE.</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px2" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">Auxiliary-Loss-Free Load Balancing.</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px3" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">Complementary Sequence-Wise Auxiliary Loss.</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px4" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">Node-Limited Routing.</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px5" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">No Token-Dropping.</span></a></li>
+</ol>
+</li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2" title="In 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.2 </span>Multi-Token Prediction</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2.SSS0.Px1" title="In 2.2 Multi-Token Prediction ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">MTP Modules.</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2.SSS0.Px2" title="In 2.2 Multi-Token Prediction ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">MTP Training Objective.</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2.SSS0.Px3" title="In 2.2 Multi-Token Prediction ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">MTP in Inference.</span></a></li>
+</ol>
+</li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_section">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3 </span>Infrastructures</span></a>
+<ol class="ltx_toclist ltx_toclist_section">
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS1" title="In 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.1 </span>Compute Clusters</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2" title="In 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.2 </span>Training Framework</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS1" title="In 3.2 Training Framework ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.2.1 </span>DualPipe and Computation-Communication Overlap</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS2" title="In 3.2 Training Framework ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.2.2 </span>Efficient Implementation of Cross-Node All-to-All Communication</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS3" title="In 3.2 Training Framework ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.2.3 </span>Extremely Memory Saving with Minimal Overhead</span></a>
+<ol class="ltx_toclist ltx_toclist_subsubsection">
+<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS3.Px1" title="In 3.2.3 Extremely Memory Saving with Minimal Overhead ‣ 3.2 Training F
+<!-- [excerpt gap: nav/sections trimmed] -->
+<section class="ltx_subsubsection" id="S2.SS1.SSS1">
+<h4 class="ltx_title ltx_title_subsubsection">
+<span class="ltx_tag ltx_tag_subsubsection">2.1.1 </span>Multi-Head Latent Attention</h4>
+<div class="ltx_para" id="S2.SS1.SSS1.p1">
+<p class="ltx_p" id="S2.SS1.SSS1.p1.5">For attention, DeepSeek-V3 adopts the MLA architecture.
+Let <math alttext="d" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.1.m1.1"><semantics id="S2.SS1.SSS1.p1.1.m1.1a"><mi id="S2.SS1.SSS1.p1.1.m1.1.1" xref="S2.SS1.SSS1.p1.1.m1.1.1.cmml">d</mi><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.1.m1.1b"><ci id="S2.SS1.SSS1.p1.1.m1.1.1.cmml" xref="S2.SS1.SSS1.p1.1.m1.1.1">𝑑</ci></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.1.m1.1c">d</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.1.m1.1d">italic_d</annotation></semantics></math> denote the embedding dimension, <math alttext="n_{h}" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.2.m2.1"><semantics id="S2.SS1.SSS1.p1.2.m2.1a"><msub id="S2.SS1.SSS1.p1.2.m2.1.1" xref="S2.SS1.SSS1.p1.2.m2.1.1.cmml"><mi id="S2.SS1.SSS1.p1.2.m2.1.1.2" xref="S2.SS1.SSS1.p1.2.m2.1.1.2.cmml">n</mi><mi id="S2.SS1.SSS1.p1.2.m2.1.1.3" xref="S2.SS1.SSS1.p1.2.m2.1.1.3.cmml">h</mi></msub><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.2.m2.1b"><apply id="S2.SS1.SSS1.p1.2.m2.1.1.cmml" xref="S2.SS1.SSS1.p1.2.m2.1.1"><csymbol cd="ambiguous" id="S2.SS1.SSS1.p1.2.m2.1.1.1.cmml" xref="S2.SS1.SSS1.p1.2.m2.1.1">subscript</csymbol><ci id="S2.SS1.SSS1.p1.2.m2.1.1.2.cmml" xref="S2.SS1.SSS1.p1.2.m2.1.1.2">𝑛</ci><ci id="S2.SS1.SSS1.p1.2.m2.1.1.3.cmml" xref="S2.SS1.SSS1.p1.2.m2.1.1.3">ℎ</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.2.m2.1c">n_{h}</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.2.m2.1d">italic_n start_POSTSUBSCRIPT italic_h end_POSTSUBSCRIPT</annotation></semantics></math> denote the number of attention heads, <math alttext="d_{h}" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.3.m3.1"><semantics id="S2.SS1.SSS1.p1.3.m3.1a"><msub id="S2.SS1.SSS1.p1.3.m3.1.1" xref="S2.SS1.SSS1.p1.3.m3.1.1.cmml"><mi id="S2.SS1.SSS1.p1.3.m3.1.1.2" xref="S2.SS1.SSS1.p1.3.m3.1.1.2.cmml">d</mi><mi id="S2.SS1.SSS1.p1.3.m3.1.1.3" xref="S2.SS1.SSS1.p1.3.m3.1.1.3.cmml">h</mi></msub><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.3.m3.1b"><apply id="S2.SS1.SSS1.p1.3.m3.1.1.cmml" xref="S2.SS1.SSS1.p1.3.m3.1.1"><csymbol cd="ambiguous" id="S2.SS1.SSS1.p1.3.m3.1.1.1.cmml" xref="S2.SS1.SSS1.p1.3.m3.1.1">subscript</csymbol><ci id="S2.SS1.SSS1.p1.3.m3.1.1.2.cmml" xref="S2.SS1.SSS1.p1.3.m3.1.1.2">𝑑</ci><ci id="S2.SS1.SSS1.p1.3.m3.1.1.3.cmml" xref="S2.SS1.SSS1.p1.3.m3.1.1.3">ℎ</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.3.m3.1c">d_{h}</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.3.m3.1d">italic_d start_POSTSUBSCRIPT italic_h end_POSTSUBSCRIPT</annotation></semantics></math> denote the dimension per head, and <math alttext="\mathbf{h}_{t}\in\mathbb{R}^{d}" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.4.m4.1"><semantics id="S2.SS1.SSS1.p1.4.m4.1a"><mrow id="S2.SS1.SSS1.p1.4.m4.1.1" xref="S2.SS1.SSS1.p1.4.m4.1.1.cmml"><msub id="S2.SS1.SSS1.p1.4.m4.1.1.2" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.cmml"><mi id="S2.SS1.SSS1.p1.4.m4.1.1.2.2" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.2.cmml">𝐡</mi><mi id="S2.SS1.SSS1.p1.4.m4.1.1.2.3" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.3.cmml">t</mi></msub><mo id="S2.SS1.SSS1.p1.4.m4.1.1.1" xref="S2.SS1.SSS1.p1.4.m4.1.1.1.cmml">∈</mo><msup id="S2.SS1.SSS1.p1.4.m4.1.1.3" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.cmml"><mi id="S2.SS1.SSS1.p1.4.m4.1.1.3.2" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.2.cmml">ℝ</mi><mi id="S2.SS1.SSS1.p1.4.m4.1.1.3.3" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.3.cmml">d</mi></msup></mrow><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.4.m4.1b"><apply id="S2.SS1.SSS1.p1.4.m4.1.1.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1"><in id="S2.SS1.SSS1.p1.4.m4.1.1.1.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.1"></in><apply id="S2.SS1.SSS1.p1.4.m4.1.1.2.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.2"><csymbol cd="ambiguous" id="S2.SS1.SSS1.p1.4.m4.1.1.2.1.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.2">subscript</csymbol><ci id="S2.SS1.SSS1.p1.4.m4.1.1.2.2.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.2">𝐡</ci><ci id="S2.SS1.SSS1.p1.4.m4.1.1.2.3.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.3">𝑡</ci></apply><apply id="S2.SS1.SSS1.p1.4.m4.1.1.3.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.3"><csymbol cd="ambiguous" id="S2.SS1.SSS1.p1.4.m4.1.1.3.1.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.3">superscript</csymbol><ci id="S2.SS1.SSS1.p1.4.m4.1.1.3.2.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.2">ℝ</ci><ci id="S2.SS1.SSS1.p1.4.m4.1.1.3.3.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.3">𝑑</ci></apply></apply></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.4.m4.1c">\mathbf{h}_{t}\in\mathbb{R}^{d}</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.4.m4.1d">bold_h start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT ∈ blackboard_R start_POSTSUPERSCRIPT italic_d end_POSTSUPERSCRIPT</annotation></semantics></math> denote the attention input for the <math alttext="t" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.5.m5.1"><semantics id="S2.SS1.SSS1.p1.5.m5.1a"><mi id="S2.SS1.SSS1.p1.5.m5.1.1" xref="S2.SS1.SSS1.p1.5.m5.1.1.cmml">t</mi><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.5.m5.1b"><ci id="S2.SS1.SSS1.p1.5.m5.1.1.cmml" xref="S2.SS1.SSS1.p1.5.m5.1.1">𝑡</ci></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.5.m5.1c">t</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.5.m5.1d">italic_t</annotation></semantics></math>-th token at a given attention layer.
+The core of MLA is the low-rank joint compression for attention keys and values to reduce Key-Value (KV) cache during inference:</p>
+<!-- [excerpt gap: body trimmed; bibliography below] -->
+<section class="ltx_bibliography" id="bib" lang="en">
+<h2 class="ltx_title ltx_title_bibliography">References</h2>
+<ul class="ltx_biblist">
+<li class="ltx_bibitem" id="bib.bib1">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">AI@Meta (2024a)</span>
+<span class="ltx_bibblock">
+AI@Meta.
+
+</span>
+<span class="ltx_bibblock">Llama 3 model card, 2024a.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://github.com/meta-llama/llama3/blob/main/MODEL_CARD.md" title="">https://github.com/meta-llama/llama3/blob/main/MODEL_CARD.md</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib2">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">AI@Meta (2024b)</span>
+<span class="ltx_bibblock">
+AI@Meta.
+
+</span>
+<span class="ltx_bibblock">Llama 3.1 model card, 2024b.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://github.com/meta-llama/llama-models/blob/main/models/llama3_1/MODEL_CARD.md" title="">https://github.com/meta-llama/llama-models/blob/main/models/llama3_1/MODEL_CARD.md</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib3">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Anthropic (2024)</span>
+<span class="ltx_bibblock">
+Anthropic.
+
+</span>
+<span class="ltx_bibblock">Claude 3.5 sonnet, 2024.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://www.anthropic.com/news/claude-3-5-sonnet" title="">https://www.anthropic.com/news/claude-3-5-sonnet</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib4">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Austin et al. (2021)</span>
+<span class="ltx_bibblock">
+J. Austin, A. Odena, M. Nye, M. Bosma, H. Michalewski, D. Dohan, E. Jiang, C. Cai, M. Terry, Q. Le, et al.
+
+</span>
+<span class="ltx_bibblock">Program synthesis with large language models.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib4.1.1">arXiv preprint arXiv:2108.07732</em>, 2021.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib5">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Bai et al. (2022)</span>
+<span class="ltx_bibblock">
+Y. Bai, S. Kadavath, S. Kundu, A. Askell, J. Kernion, A. Jones, A. Chen, A. Goldie, A. Mirhoseini, C. McKinnon, et al.
+
+</span>
+<span class="ltx_bibblock">Constitutional AI: Harmlessness from AI feedback.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib5.1.1">arXiv preprint arXiv:2212.08073</em>, 2022.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib6">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Bai et al. (2024)</span>
+<span class="ltx_bibblock">
+Y. Bai, S. Tu, J. Zhang, H. Peng, X. Wang, X. Lv, S. Cao, J. Xu, L. Hou, Y. Dong, J. Tang, and J. Li.
+
+</span>
+<span class="ltx_bibblock">LongBench v2: Towards deeper understanding and reasoning on realistic long-context multitasks.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib6.1.1">arXiv preprint arXiv:2412.15204</em>, 2024.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib7">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Bauer et al. (2014)</span>
+<span class="ltx_bibblock">
+M. Bauer, S. Treichler, and A. Aiken.
+
+</span>
+<span class="ltx_bibblock">Singe: leveraging warp specialization for high performance on GPUs.
+
+</span>
+<span class="ltx_bibblock">In <em class="ltx_emph ltx_font_italic" id="bib.bib7.1.1">Proceedings of the 19th ACM SIGPLAN Symposium on Principles and Practice of Parallel Programming</em>, PPoPP ’14, page 119–130, New York, NY, USA, 2014. Association for Computing Machinery.
+
+</span>
+<span class="ltx_bibblock">ISBN 9781450326568.
+
+</span>
+<span class="ltx_bibblock"><a class="ltx_ref" href="https:/doi.org/10.1145/2555243.2555258" title="">10.1145/2555243.2555258</a>.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.1145/2555243.2555258" title="">https://doi.org/10.1145/2555243.2555258</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib8">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Bisk et al. (2020)</span>
+<span class="ltx_bibblock">
+Y. Bisk, R. Zellers, R. L. Bras, J. Gao, and Y. Choi.
+
+</span>
+<span class="ltx_bibblock">PIQA: reasoning about physical commonsense in natural language.
+
+</span>
+<span class="ltx_bibblock">In <em class="ltx_emph ltx_font_italic" id="bib.bib8.1.1">The Thirty-Fourth AAAI Conference on Artificial Intelligence, AAAI 2020, The Thirty-Second Innovative Applications of Artificial Intelligence Conference, IAAI 2020, The Tenth AAAI Symposium on Educational Advances in Artificial Intelligence, EAAI 2020, New York, NY, USA, February 7-12, 2020</em>, pages 7432–7439. AAAI Press, 2020.
+
+</span>
+<span class="ltx_bibblock"><a class="ltx_ref" href="https:/doi.org/10.1609/aaai.v34i05.6239" title="">10.1609/aaai.v34i05.6239</a>.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.1609/aaai.v34i05.6239" title="">https://doi.org/10.1609/aaai.v34i05.6239</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib9">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Chen et al. (2021)</span>
+<span class="ltx_bibblock">
+M. Chen, J. Tworek, H. Jun, Q. Yuan, H. P. de Oliveira Pinto, J. Kaplan, H. Edwards, Y. Burda, N. Joseph, G. Brockman, A. Ray, R. Puri, G. Krueger, M. Petrov, H. Khlaaf, G. Sastry, P. Mishkin, B. Chan, S. Gray, N. Ryder, M. Pavlov, A. Power, L. Kaiser, M. Bavarian, C. Winter, P. Tillet, F. P. Such, D. Cummings, M. Plappert, F. Chantzis, E. Barnes, A. Herbert-Voss, W. H. Guss, A. Nichol, A. Paino, N. Tezak, J. Tang, I. Babuschkin, S. Balaji, S. Jain, W. Saunders, C. Hesse, A. N. Carr, J. Leike, J. Achiam, V. Misra, E. Morikawa, A. Radford, M. Knight, M. Brundage, M. Murati, K. Mayer, P. Welinder, B. McGrew, D. Amodei, S. McCandlish, I. Sutskever, and W. Zaremba.
+
+</span>
+<span class="ltx_bibblock">Evaluating large language models trained on code.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib9.1.1">CoRR</em>, abs/2107.03374, 2021.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://arxiv.org/abs/2107.03374" title="">https://arxiv.org/abs/2107.03374</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib10">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Clark et al. (2018)</span>
+<span class="ltx_bibblock">
+P. Clark, I. Cowhey, O. Etzioni, T. Khot, A. Sabharwal, C. Schoenick, and O. Tafjord.
+
+</span>
+<span class="ltx_bibblock">Think you have solved question answering? try arc, the AI2 reasoning challenge.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib10.1.1">CoRR</em>, abs/1803.05457, 2018.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="http://arxiv.org/abs/1803.05457" title="">http://arxiv.org/abs/1803.05457</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib11">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Cobbe et al. (2021)</span>
+<span class="ltx_bibblock">
+K. Cobbe, V. Kosaraju, M. Bavarian, M. Chen, H. Jun, L. Kaiser, M. Plappert, J. Tworek, J. Hilton, R. Nakano, et al.
+
+</span>
+<span class="ltx_bibblock">Training verifiers to solve math word problems.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib11.1.1">arXiv preprint arXiv:2110.14168</em>, 2021.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib12">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Cui et al. (2019)</span>
+<span class="ltx_bibblock">
+Y. Cui, T. Liu, W. Che, L. Xiao, Z. Chen, W. Ma, S. Wang, and G. Hu.
+
+</span>
+<span class="ltx_bibblock">A span-extraction dataset for Chinese machine reading comprehension.
+
+</span>
+<span class="ltx_bibblock">In K. Inui, J. Jiang, V. Ng, and X. Wan, editors, <em class="ltx_emph ltx_font_italic" id="bib.bib12.1.1">Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing and the 9th International Joint Conference on Natural Language Processing (EMNLP-IJCNLP)</em>, pages 5883–5889, Hong Kong, China, Nov. 2019. Association for Computational Linguistics.
+
+</span>
+<span class="ltx_bibblock"><a class="ltx_ref" href="https:/doi.org/10.18653/v1/D19-1600" title="">10.18653/v1/D19-1600</a>.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://aclanthology.org/D19-1600" title="">https://aclanthology.org/D19-1600</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib13">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Dai et al. (2024)</span>
+<span class="ltx_bibblock">
+D. Dai, C. Deng, C. Zhao, R. X. Xu, H. Gao, D. Chen, J. Li, W. Zeng, X. Yu, Y. Wu, Z. Xie, Y. K. Li, P. Huang, F. Luo, C. Ruan, Z. Sui, and W. Liang.
+
+</span>
+<span class="ltx_bibblock">Deepseekmoe: Towards ultimate expert specialization in mixture-of-experts language models.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib13.1.1">CoRR</em>, abs/2401.06066, 2024.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.48550/arXiv.2401.06066" title="">https://doi.org/10.48550/arXiv.2401.06066</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib14">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">DeepSeek-AI (2024a)</span>
+<span class="ltx_bibblock">
+DeepSeek-AI.
+
+</span>
+<span class="ltx_bibblock">Deepseek-coder-v2: Breaking the barrier of closed-source models in code intelligence.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib14.1.1">CoRR</em>, abs/2406.11931, 2024a.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.48550/arXiv.2406.11931" title="">https://doi.org/10.48550/arXiv.2406.11931</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib15">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">DeepSeek-AI (2024b)</span>
+<span class="ltx_bibblock">
+DeepSeek-AI.
+
+</span>
+<span class="ltx_bibblock">Deepseek LLM: scaling open-source language models with longtermism.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib15.1.1">CoRR</em>, abs/2401.02954, 2024b.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.48550/arXiv.2401.02954" title="">https://doi.org/10.48550/arXiv.2401.02954</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib16">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">DeepSeek-AI (2024c)</span>
+<span class="ltx_bibblock">
+DeepSeek-AI.
+
+</span>
+<span class="ltx_bibblock">Deepseek-v2: A strong, economical, and efficient mixture-of-experts language model.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib16.1.1">CoRR</em>, abs/2405.04434, 2024c.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.48550/arXiv.2405.04434" title="">https://doi.org/10.48550/arXiv.2405.04434</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib17">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Dettmers et al. (2022)</span>
+<span class="ltx_bibblock">
+T. Dettmers, M. Lewis, Y. Belkada, and L. Zettlemoyer.
+
+</span>
+<span class="ltx_bibblock">Gpt3. int8 (): 8-bit matrix multiplication for transformers at scale.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib17.1.1">Advances in Neural Information Processing Systems</em>, 35:30318–30332, 2022.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib18">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Ding et al. (2024)</span>
+<span class="ltx_bibblock">
+H. Ding, Z. Wang, G. Paolini, V. Kumar, A. Deoras, D. Roth, and S. Soatto.
+
+</span>
+<span class="ltx_bibblock">Fewer truncations improve language modeling.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib18.1.1">arXiv preprint arXiv:2404.10830</em>, 2024.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib19">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Dua et al. (2019)</span>
+<span class="ltx_bibblock">
+D. Dua, Y. Wang, P. Dasigi, G. Stanovsky, S. Singh, and M. Gardner.
+
+</span>
+<span class="ltx_bibblock">DROP: A reading comprehension benchmark requiring discrete reasoning over paragraphs.
+
+</span>
+<span class="ltx_bibblock">In J. Burstein, C. Doran, and T. Solorio, editors, <em class="ltx_emph ltx_font_italic" id="bib.bib19.1.1">Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, NAACL-HLT 2019, Minneapolis, MN, USA, June 2-7, 2019, Volume 1 (Long and Short Papers)</em>, pages 2368–2378. Association for Computational Linguistics, 2019.
+
+</span>
+<span class="ltx_bibblock"><a class="ltx_ref" href="https:/doi.org/10.18653/V1/N19-1246" title="">10.18653/V1/N19-1246</a>.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.18653/v1/n19-1246" title="">https://doi.org/10.18653/v1/n19-1246</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib20">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Dubois et al. (2024)</span>
+<span class="ltx_bibblock">
+Y. Dubois, B. Galambosi, P. Liang, and T. B. Hashimoto.
+
+</span>
+<span class="ltx_bibblock">Length-controlled alpacaeval: A simple way to debias automatic evaluators.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib20.1.1">arXiv preprint arXiv:2404.04475</em>, 2024.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib21">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Fedus et al. (2021)</span>
+<span class="ltx_bibblock">
+W. Fedus, B. Zoph, and N. Shazeer.
+
+</span>
+<span class="ltx_bibblock">Switch transformers: Scaling to trillion parameter models with simple and efficient sparsity.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib21.1.1">CoRR</em>, abs/2101.03961, 2021.
+
+</span>
+<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://arxiv.org/abs/2101.03961" title="">https://arxiv.org/abs/2101.03961</a>.
+
+</span>
+</li>
+<li class="ltx_bibitem" id="bib.bib22">
+<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Fishman et al. (2024)</span>
+<span class="ltx_bibblock">
+M. Fishman, B. Chmiel, R. Banner, and D. Soudry.
+
+</span>
+<span class="ltx_bibblock">Scaling FP8 training to trillion-token llms.
+
+</span>
+<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib22.1.1">arXiv preprint arXiv:2409.12517</em>, 2024.
+
+</span>
+</li>
+</ul></section></article></body></html>

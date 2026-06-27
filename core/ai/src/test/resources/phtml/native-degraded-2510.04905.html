@@ -1,0 +1,366 @@
+<!DOCTYPE html><html lang="en">
+<head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8">
+<title>Retrieval-Augmented Code Generation: A Survey with Focus on Repository-Level Approaches</title>
+<!--Generated on Wed May 20 17:55:32 2026 by LaTeXML (version 0.8.8) http://dlmf.nist.gov/LaTeXML/.-->
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<link rel="stylesheet" href="/static/browse/0.3.4/css/arxiv-html-papers-20260131.css" type="text/css">
+<script src="/static/browse/0.3.4/js/arxiv-html-papers-20260131.js"></script>
+<script>
+  // Restore the saved color scheme preference, or
+  // enact the browser preference if "automatic", 
+  // without expecting DOM load to have completed.
+  //
+  // Also restore any saved readingmode and ToC display preferences.
+  function initializeReadingPreferences() {
+    let saved_theme = localStorage.getItem("ar5iv_theme") || "automatic";
+    if (saved_theme === "automatic") {
+      if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        saved_theme = "dark";
+      }
+    }
+    if (saved_theme == "dark") {
+      document.documentElement.setAttribute("data-theme", "dark");
+    } else {
+      document.documentElement.setAttribute("data-theme", "light");
+    }
+
+    const tocDisplay = localStorage.getItem('arxiv_html_paper_toc_display');
+    if (tocDisplay) {
+      document.documentElement.setAttribute("data-toc-display", tocDisplay);
+    }
+    const readingMode = localStorage.getItem('arxiv_html_paper_reading_mode');
+    if (readingMode) {
+      document.documentElement.setAttribute("data-reading-mode", readingMode);
+    }
+  }
+  // Run as soon as JS starts, to minimize repainting
+  initializeReadingPreferences();
+</script>
+<link rel="apple-touch-icon" sizes="180x180"
+  href="/static/browse/0.3.4/images/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32"
+  href="/static/browse/0.3.4/images/icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16"
+  href="/static/browse/0.3.4/images/icons/favicon-16x16.png">
+<link rel="manifest" href="/static/browse/0.3.4/images/icons/site.webmanifest">
+<link rel="mask-icon" href="/static/browse/0.3.4/images/icons/safari-pinned-tab.svg" color="#5bbad5">
+<link rel="stylesheet" type="text/css" media="screen" href="https://use.typekit.net/utz6mli.css">
+</head>
+<body>
+<dialog id="modal-form" aria-labelledby="modal-title" closedby="any">
+  <form id="modal-form-content" method="dialog" enctype="multipart/form-data">
+    <header class="modal-header">
+      <h5 id="modal-title" class="modal-title">Report GitHub Issue</h5>
+      <button type="submit" formnovalidate class="modal-close" aria-label="Close">×</button>
+    </header>
+
+    <div class="modal-body">
+      <label for="form_title">Title:</label>
+      <input class="form-control" id="form_title" name="form_title" required placeholder="Enter title">
+
+      <p id="selectedTextModalDescription" hidden>Content selection saved. Describe the issue below:</p>
+
+      <label for="description">Description:</label>
+      <textarea class="form-control" id="description" name="description" required maxlength="500"
+        placeholder="500 characters maximum"></textarea>
+    </div>
+
+    <footer class="modal-footer">
+      <button type="submit" value="internal-report" class="sr-only modal-submit">Submit without GitHub</button>
+      <button type="submit" value="github-report" class="modal-submit">Submit in GitHub</button>
+    </footer>
+  </form>
+</dialog>
+
+<header class="arxiv-html-header">
+  <div class="html-header-logo">
+    <a href="/">
+      <img alt="arXiv logo" class="logo desktop-only" width="100"
+        src="/static/browse/0.3.4/images/arxiv-logo-one-color-white.svg">
+      <span class="sr-only">Back to arXiv</span>
+    </a>
+  </div>
+<!-- [excerpt gap: nav/sections trimmed] -->
+<section id="S1.SS0.SSS0.Px1" class="ltx_paragraph">
+<h5 class="ltx_title ltx_title_paragraph">Challenges.</h5>
+
+<div id="S1.SS0.SSS0.Px1.p1" class="ltx_para">
+<p id="S1.SS0.SSS0.Px1.p1.1" class="ltx_p">The first challenge is <span id="S1.SS0.SSS0.Px1.p1.1.1" class="ltx_text ltx_font_italic">long-range dependency modeling</span>: critical information is distributed across files, documents, and dependencies, while changes in one file may affect distant modules, making it difficult to identify minimal but sufficient context and maintain cross-file consistency <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">assogba2025evaluating</span>]</cite>.
+The second is the <span id="S1.SS0.SSS0.Px1.p1.1.2" class="ltx_text ltx_font_italic">efficiency–correctness trade-off</span>: issue resolution prioritizes accuracy, whereas real-time completion demands low latency. This trade-off is further complicated by model limitations—strong models may memorize common libraries, while weaker ones suffer from context overload <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">wang-etal-2025-coderag</span>]</cite>. Scaling model size or context length only partially alleviates these issues and is often impractical for local deployment.
+Finally, <span id="S1.SS0.SSS0.Px1.p1.1.3" class="ltx_text ltx_font_italic">practical constraints</span> further limit applicability: privacy and compliance restrict cloud-based use of proprietary code <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">llm_privacy_surveys</span>, <span class="ltx_ref ltx_missing_citation ltx_ref_self">local_llm_privacy_benefits</span>]</cite>, and most LLMs are trained in outdated public repositories <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">otterly2024knowledge</span>]</cite>, reducing adaptability in real-world and enterprise settings.</p>
+</div>
+<div id="S1.SS0.SSS0.Px1.p2" class="ltx_para">
+<p id="S1.SS0.SSS0.Px1.p2.1" class="ltx_p">The above challenges indicate that, in real-world settings, code generation is no longer a simple problem, but a complex process involving context selection and external information acquisition. In this context, Retrieval-Augmented Generation (RAG) offers an effective way to address context limitations by dynamically incorporating external knowledge during reasoning. In the code domain, this paradigm has evolved into <span id="S1.SS0.SSS0.Px1.p2.1.1" class="ltx_text ltx_font_bold ltx_framed ltx_framed_underline">R</span><span id="S1.SS0.SSS0.Px1.p2.1.2" class="ltx_text ltx_font_bold">etrieval-<span id="S1.SS0.SSS0.Px1.p2.1.2.1" class="ltx_text ltx_framed ltx_framed_underline">A</span>ugmented <span id="S1.SS0.SSS0.Px1.p2.1.2.2" class="ltx_text ltx_framed ltx_framed_underline">C</span>ode <span id="S1.SS0.SSS0.Px1.p2.1.2.3" class="ltx_text ltx_framed ltx_framed_underline">G</span>eneration (RACG)</span>, which enhances generation quality by retrieving relevant code and structural information.</p>
+</div>
+<div id="S1.SS0.SSS0.Px1.p3" class="ltx_para">
+<p id="S1.SS0.SSS0.Px1.p3.1" class="ltx_p">However, in repository-level scenarios, RACG is no longer a simple two-stage “retrieve-then-generate” pipeline. Instead, it becomes a dynamic process that can be coupled with customized indexing and structure-aware retrieval. We characterize RACG as a unified process in which the model (i) constructs and retrieves context from large-scale code repositories, and (ii) generates or modifies code based on the retrieved information and current system state.
+In addition to this core process, various enhancements—such as iterative refinement, multi-source context acquisition, and tool-assisted reasoning—can be incorporated to improve performance <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">repocoder</span>, <span class="ltx_ref ltx_missing_citation ltx_ref_self">evor</span>, <span class="ltx_ref ltx_missing_citation ltx_ref_self">ma2025toolintegratedreinforcementlearningrepo</span>]</cite>. This formulation naturally aligns with <span id="S1.SS0.SSS0.Px1.p3.1.1" class="ltx_text ltx_font_bold ltx_framed ltx_framed_underline">R</span><span id="S1.SS0.SSS0.Px1.p3.1.2" class="ltx_text ltx_font_bold">epository-<span id="S1.SS0.SSS0.Px1.p3.1.2.1" class="ltx_text ltx_framed ltx_framed_underline">L</span>evel <span id="S1.SS0.SSS0.Px1.p3.1.2.2" class="ltx_text ltx_framed ltx_framed_underline">C</span>ode <span id="S1.SS0.SSS0.Px1.p3.1.2.3" class="ltx_text ltx_framed ltx_framed_underline">G</span>eneration (RLCG)</span>, which represents a new and challenging problem.</p>
+</div>
+<div id="S1.SS0.SSS0.Px1.p4" class="ltx_para">
+<p id="S1.SS0.SSS0.Px1.p4.1" class="ltx_p">Existing surveys have reviewed general RAG systems <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">gao2024retrievalaugmentedgenerationlargelanguage</span>, <span class="ltx_ref ltx_missing_citation ltx_ref_self">surveyrag</span>]</cite>, LLM-based code generation <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">surveycodegeneration</span>, <span class="ltx_ref ltx_missing_citation ltx_ref_self">dong2025surveycodegenerationllmbased</span>]</cite>, and code generation agents for software engineering <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">surveycodeagent</span>]</cite>. However, these works do not systematically examine how retrieval is used to construct, select, and integrate the repository-level context. This survey fills this gap by providing a systematic overview of Retrieval-Augmented Code Generation in repository-level scenarios, organized around three questions: (i) how RACG methods are designed; (ii) how they are formulated and evaluated; and (iii) concerns and necessity boundary. Table <a href="#S1.T1" title="Table 1 ‣ Challenges. ‣ 1 Introduction ‣ Retrieval-Augmented Code Generation: A Survey with Focus on Repository-Level Approaches" class="ltx_ref"><span class="ltx_text ltx_ref_tag">1</span></a> summarizes the positioning of this survey relative to previous work.</p>
+</div>
+<figure id="S1.F1" class="ltx_figure"><img src="2510.04905v3/x1.png" id="S1.F1.g1" class="ltx_graphics ltx_centering ltx_img_landscape" width="622" height="224" alt="Refer to caption">
+<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_figure"><span id="S1.F1.2.1.1" class="ltx_text" style="font-size:90%;">Figure 1</span>: </span><span id="S1.F1.3.2" class="ltx_text" style="font-size:90%;">Comparison between General Code Generation and Repository-Level Code Generation</span></figcaption>
+</figure>
+<figure id="S1.T1" class="ltx_table">
+<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_table"><span id="S1.T1.20.3.1" class="ltx_text" style="font-size:90%;">Table 1</span>: </span><span id="S1.T1.4.2" class="ltx_text" style="font-size:90%;">Comparison with related surveys. ✓ = fully covered, <math id="S1.T1.3.1.m1" class="ltx_Math" alttext="\sim" display="inline" intent=":literal"><semantics><mo>∼</mo><annotation encoding="application/x-tex">\sim</annotation></semantics></math> = partially covered, <math id="S1.T1.4.2.m2" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo>×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math> = not covered.</span></figcaption>
+<table id="S1.T1.18" class="ltx_tabular ltx_centering ltx_align_middle">
+<tr id="S1.T1.18.15" class="ltx_tr">
+<td id="S1.T1.18.15.1" class="ltx_td ltx_align_left ltx_border_tt"><span id="S1.T1.18.15.1.1" class="ltx_text ltx_font_bold" style="font-size:90%;">Survey</span></td>
+<td id="S1.T1.18.15.2" class="ltx_td ltx_align_center ltx_border_tt"><span id="S1.T1.18.15.2.1" class="ltx_text ltx_font_bold" style="font-size:90%;">RAG Focus</span></td>
+<td id="S1.T1.18.15.3" class="ltx_td ltx_align_center ltx_border_tt"><span id="S1.T1.18.15.3.1" class="ltx_text ltx_font_bold" style="font-size:90%;">Repo-Level</span></td>
+<td id="S1.T1.18.15.4" class="ltx_td ltx_align_center ltx_border_tt"><span id="S1.T1.18.15.4.1" class="ltx_text ltx_font_bold" style="font-size:90%;">Code Gen</span></td>
+<td id="S1.T1.18.15.5" class="ltx_td ltx_align_center ltx_border_tt"><span id="S1.T1.18.15.5.1" class="ltx_text ltx_font_bold" style="font-size:90%;">Agent Arch.</span></td>
+</tr>
+<tr id="S1.T1.7.3" class="ltx_tr">
+<td id="S1.T1.7.3.4" class="ltx_td ltx_align_left ltx_border_t">
+<span id="S1.T1.7.3.4.1" class="ltx_text" style="font-size:90%;">Gao et al. </span><cite class="ltx_cite ltx_citemacro_citep"><span id="S1.T1.7.3.4.2.1" class="ltx_text" style="font-size:90%;">[</span><span class="ltx_ref ltx_missing_citation ltx_ref_self">gao2024retrievalaugmentedgenerationlargelanguage</span><span id="S1.T1.7.3.4.4.3" class="ltx_text" style="font-size:90%;">]</span></cite>
+</td>
+<td id="S1.T1.7.3.5" class="ltx_td ltx_align_center ltx_border_t"><span id="S1.T1.7.3.5.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+<td id="S1.T1.5.1.1" class="ltx_td ltx_align_center ltx_border_t"><math id="S1.T1.5.1.1.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.6.2.2" class="ltx_td ltx_align_center ltx_border_t"><math id="S1.T1.6.2.2.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.7.3.3" class="ltx_td ltx_align_center ltx_border_t"><math id="S1.T1.7.3.3.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+</tr>
+<tr id="S1.T1.10.6" class="ltx_tr">
+<td id="S1.T1.10.6.4" class="ltx_td ltx_align_left">
+<span id="S1.T1.10.6.4.1" class="ltx_text" style="font-size:90%;">Fan et al. </span><cite class="ltx_cite ltx_citemacro_citep"><span id="S1.T1.10.6.4.2.1" class="ltx_text" style="font-size:90%;">[</span><span class="ltx_ref ltx_missing_citation ltx_ref_self">surveyrag</span><span id="S1.T1.10.6.4.4.3" class="ltx_text" style="font-size:90%;">]</span></cite>
+</td>
+<td id="S1.T1.10.6.5" class="ltx_td ltx_align_center"><span id="S1.T1.10.6.5.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+<td id="S1.T1.8.4.1" class="ltx_td ltx_align_center"><math id="S1.T1.8.4.1.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.9.5.2" class="ltx_td ltx_align_center"><math id="S1.T1.9.5.2.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.10.6.3" class="ltx_td ltx_align_center"><math id="S1.T1.10.6.3.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+</tr>
+<tr id="S1.T1.13.9" class="ltx_tr">
+<td id="S1.T1.13.9.4" class="ltx_td ltx_align_left">
+<span id="S1.T1.13.9.4.1" class="ltx_text" style="font-size:90%;">Jiang et al. </span><cite class="ltx_cite ltx_citemacro_citep"><span id="S1.T1.13.9.4.2.1" class="ltx_text" style="font-size:90%;">[</span><span class="ltx_ref ltx_missing_citation ltx_ref_self">surveycodegeneration</span><span id="S1.T1.13.9.4.4.3" class="ltx_text" style="font-size:90%;">]</span></cite>
+</td>
+<td id="S1.T1.11.7.1" class="ltx_td ltx_align_center"><math id="S1.T1.11.7.1.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.12.8.2" class="ltx_td ltx_align_center"><math id="S1.T1.12.8.2.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.13.9.5" class="ltx_td ltx_align_center"><span id="S1.T1.13.9.5.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+<td id="S1.T1.13.9.3" class="ltx_td ltx_align_center"><math id="S1.T1.13.9.3.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+</tr>
+<tr id="S1.T1.15.11" class="ltx_tr">
+<td id="S1.T1.15.11.3" class="ltx_td ltx_align_left">
+<span id="S1.T1.15.11.3.1" class="ltx_text" style="font-size:90%;">Dong et al. </span><cite class="ltx_cite ltx_citemacro_citep"><span id="S1.T1.15.11.3.2.1" class="ltx_text" style="font-size:90%;">[</span><span class="ltx_ref ltx_missing_citation ltx_ref_self">dong2025surveycodegenerationllmbased</span><span id="S1.T1.15.11.3.4.3" class="ltx_text" style="font-size:90%;">]</span></cite>
+</td>
+<td id="S1.T1.14.10.1" class="ltx_td ltx_align_center"><math id="S1.T1.14.10.1.m1" class="ltx_Math" alttext="\sim" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">∼</mo><annotation encoding="application/x-tex">\sim</annotation></semantics></math></td>
+<td id="S1.T1.15.11.2" class="ltx_td ltx_align_center"><math id="S1.T1.15.11.2.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.15.11.4" class="ltx_td ltx_align_center"><span id="S1.T1.15.11.4.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+<td id="S1.T1.15.11.5" class="ltx_td ltx_align_center"><span id="S1.T1.15.11.5.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+</tr>
+<tr id="S1.T1.18.14" class="ltx_tr">
+<td id="S1.T1.18.14.4" class="ltx_td ltx_align_left">
+<span id="S1.T1.18.14.4.1" class="ltx_text" style="font-size:90%;">He et al. </span><cite class="ltx_cite ltx_citemacro_citep"><span id="S1.T1.18.14.4.2.1" class="ltx_text" style="font-size:90%;">[</span><span class="ltx_ref ltx_missing_citation ltx_ref_self">surveycodeagent</span><span id="S1.T1.18.14.4.4.3" class="ltx_text" style="font-size:90%;">]</span></cite>
+</td>
+<td id="S1.T1.16.12.1" class="ltx_td ltx_align_center"><math id="S1.T1.16.12.1.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.17.13.2" class="ltx_td ltx_align_center"><math id="S1.T1.17.13.2.m1" class="ltx_Math" alttext="\times" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">×</mo><annotation encoding="application/x-tex">\times</annotation></semantics></math></td>
+<td id="S1.T1.18.14.3" class="ltx_td ltx_align_center"><math id="S1.T1.18.14.3.m1" class="ltx_Math" alttext="\sim" display="inline" intent=":literal"><semantics><mo mathsize="0.900em">∼</mo><annotation encoding="application/x-tex">\sim</annotation></semantics></math></td>
+<td id="S1.T1.18.14.5" class="ltx_td ltx_align_center"><span id="S1.T1.18.14.5.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+</tr>
+<tr id="S1.T1.18.16" class="ltx_tr">
+<td id="S1.T1.18.16.1" class="ltx_td ltx_align_left ltx_border_bb"><span id="S1.T1.18.16.1.1" class="ltx_text ltx_font_bold" style="font-size:90%;">This survey</span></td>
+<td id="S1.T1.18.16.2" class="ltx_td ltx_align_center ltx_border_bb"><span id="S1.T1.18.16.2.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+<td id="S1.T1.18.16.3" class="ltx_td ltx_align_center ltx_border_bb"><span id="S1.T1.18.16.3.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+<td id="S1.T1.18.16.4" class="ltx_td ltx_align_center ltx_border_bb"><span id="S1.T1.18.16.4.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+<td id="S1.T1.18.16.5" class="ltx_td ltx_align_center ltx_border_bb"><span id="S1.T1.18.16.5.1" class="ltx_text" style="font-size:90%;">✓</span></td>
+</tr>
+</table>
+</figure>
+</section>
+<section id="S1.SS0.SSS0.Px2" class="ltx_paragraph">
+<h5 class="ltx_title ltx_title_paragraph">Key Contributions.</h5>
+
+<div id="S1.SS0.SSS0.Px2.p1" class="ltx_para">
+<ul id="S1.I1" class="ltx_itemize">
+<li id="S1.I1.i1" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">•</span> 
+<div id="S1.I1.i1.p1" class="ltx_para">
+<p id="S1.I1.i1.p1.1" class="ltx_p">We establish Repository-Level Code Generation as a unified problem formulation, explicitly capturing cross-file dependencies, dynamic context, and system-level constraints.</p>
+</div>
+</li>
+<li id="S1.I1.i2" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">•</span> 
+<div id="S1.I1.i2.p1" class="ltx_para">
+<p id="S1.I1.i2.p1.1" class="ltx_p">We provide the first survey of Retrieval-Augmented Code Generation, reframing RAG as a coupled, evolving process rather than a static pipeline.</p>
+</div>
+</li>
+<li id="S1.I1.i3" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">•</span> 
+<div id="S1.I1.i3.p1" class="ltx_para">
+<p id="S1.I1.i3.p1.1" class="ltx_p">We introduce a unified analytical framework that organizes RACG along retrieval, control, and integration dimensions, covering both model design and agentic workflows.</p>
+</div>
+</li>
+<li id="S1.I1.i4" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">•</span> 
+<div id="S1.I1.i4.p1" class="ltx_para">
+<p id="S1.I1.i4.p1.1" class="ltx_p">We systematically evaluate existing methods, benchmarks, and system configurations, revealing key trade-offs between efficiency, scalability, and correctness.</p>
+</div>
+</li>
+<li id="S1.I1.i5" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">•</span> 
+<div id="S1.I1.i5.p1" class="ltx_para">
+<p id="S1.I1.i5.p1.1" class="ltx_p">We identify critical gaps in current research and outline future directions toward better RACG systems.</p>
+</div>
+</li>
+</ul>
+</div>
+</section>
+</section>
+<section id="S2" class="ltx_section">
+<h2 class="ltx_title ltx_title_section">
+<span class="ltx_tag ltx_tag_section">2 </span>Preliminary and Methodological Foundations</h2>
+
+<div id="S2.p1" class="ltx_para">
+<p id="S2.p1.1" class="ltx_p">This section formalizes the key concepts underlying Retrieval-Augmented Code Generation in repository-level settings. We focus on minimal yet sufficient abstractions that align with the paradigm introduced in Section <a href="#S1" title="1 Introduction ‣ Retrieval-Augmented Code Generation: A Survey with Focus on Repository-Level Approaches" class="ltx_ref"><span class="ltx_text ltx_ref_tag">1</span></a>. RLCG defines the task setting, while RACG describes a family of retrieval-augmented methodologies to solve repository-level code generation problems.</p>
+</div>
+<section id="S2.SS1" class="ltx_subsection">
+<h3 class="ltx_title ltx_title_subsection">
+<span class="ltx_tag ltx_tag_subsection">2.1 </span>Repository-Level Code Generation (RLCG)</h3>
+
+<div id="S2.SS1.p1" class="ltx_para">
+<p id="S2.SS1.p1.1" class="ltx_p">Repository-Level Code Generation (RLCG) refers to the generation or modification of code in the context of an entire software repository, rather than isolated functions or files.</p>
+</div>
+<div id="S2.SS1.p2" class="ltx_para">
+<p id="S2.SS1.p2.4" class="ltx_p">Formally, let a repository be denoted as <math id="S2.SS1.p2.1.m1" class="ltx_Math" alttext="\mathcal{R}=\{f_{1},f_{2},\dots,f_{n}\}" display="inline" intent=":literal"><semantics><mrow><mi class="ltx_font_mathcaligraphic">ℛ</mi><mo>=</mo><mrow><mo stretchy="false">{</mo><msub><mi>f</mi><mn>1</mn></msub><mo>,</mo><msub><mi>f</mi><mn>2</mn></msub><mo>,</mo><mi mathvariant="normal">…</mi><mo>,</mo><msub><mi>f</mi><mi>n</mi></msub><mo stretchy="false">}</mo></mrow></mrow><annotation encoding="application/x-tex">\mathcal{R}=\{f_{1},f_{2},\dots,f_{n}\}</annotation></semantics></math>, where each <math id="S2.SS1.p2.2.m2" class="ltx_Math" alttext="f_{i}" display="inline" intent=":literal"><semantics><msub><mi>f</mi><mi>i</mi></msub><annotation encoding="application/x-tex">f_{i}</annotation></semantics></math> represents a file containing code, documentation, or configuration. Given a task specification <math id="S2.SS1.p2.3.m3" class="ltx_Math" alttext="q" display="inline" intent=":literal"><semantics><mi>q</mi><annotation encoding="application/x-tex">q</annotation></semantics></math> (e.g., a bug report, feature request, unfinished code snippet), the objective of RLCG is to produce a modification <math id="S2.SS1.p2.4.m4" class="ltx_Math" alttext="\Delta\mathcal{R}" display="inline" intent=":literal"><semantics><mrow><mi mathvariant="normal">Δ</mi><mo lspace="0em" rspace="0em">​</mo><mi class="ltx_font_mathcaligraphic">ℛ</mi></mrow><annotation encoding="application/x-tex">\Delta\mathcal{R}</annotation></semantics></math> such that:</p>
+<table id="S2.E1" class="ltx_equation ltx_eqn_table">
+
+<tbody><tr class="ltx_equation ltx_eqn_row ltx_align_baseline">
+<td class="ltx_eqn_cell ltx_eqn_center_padleft"></td>
+<td class="ltx_eqn_cell ltx_align_center"><math id="S2.E1.m1" class="ltx_Math" alttext="\mathcal{R}^{\prime}=\mathcal{R}\oplus\Delta\mathcal{R}" display="block" intent=":literal"><semantics><mrow><msup><mi class="ltx_font_mathcaligraphic">ℛ</mi><mo>′</mo></msup><mo>=</mo><mrow><mi class="ltx_font_mathcaligraphic">ℛ</mi><mo>⊕</mo><mrow><mi mathvariant="normal">Δ</mi><mo lspace="0em" rspace="0em">​</mo><mi class="ltx_font_mathcaligraphic">ℛ</mi></mrow></mrow></mrow><annotation encoding="application/x-tex">\mathcal{R}^{\prime}=\mathcal{R}\oplus\Delta\mathcal{R}</annotation></semantics></math></td>
+<td class="ltx_eqn_cell ltx_eqn_center_padright"></td>
+<td rowspan="1" class="ltx_eqn_cell ltx_eqn_eqno ltx_align_middle ltx_align_right"><span class="ltx_tag ltx_tag_equation ltx_align_right">(1)</span></td>
+</tr></tbody>
+</table>
+<p id="S2.SS1.p2.5" class="ltx_p">satisfies both local correctness (syntactic and semantic validity) and global consistency across the repository.</p>
+</div>
+<div id="S2.SS1.p3" class="ltx_para">
+<p id="S2.SS1.p3.1" class="ltx_p">Typical applications include</p>
+<ul id="S2.I1" class="ltx_itemize">
+<li id="S2.I1.i1" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">•</span> 
+<div id="S2.I1.i1.p1" class="ltx_para">
+<p id="S2.I1.i1.p1.1" class="ltx_p"><span id="S2.I1.i1.p1.1.1" class="ltx_text ltx_font_italic">Cross-file Code Completion:</span> Predicting or synthesizing missing code segments by leveraging repository-wide context, from single lines to full functions.</p>
+</div>
+</li>
+<li id="S2.I1.i2" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">•</span> 
+<div id="S2.I1.i2.p1" class="ltx_para">
+<p id="S2.I1.i2.p1.1" class="ltx_p"><span id="S2.I1.i2.p1.1.1" class="ltx_text ltx_font_italic">Issue or PR Resolution:</span> Automatically fixing reported problems by locating relevant files and generating patches consistent with project conventions.</p>
+</div>
+</li>
+</ul>
+<p id="S2.SS1.p3.2" class="ltx_p">We discuss a broader range of applications in Section <a href="#S6.SS1" title="6.1 Downstream Tasks ‣ 6 Downstream Tasks and Benchmarks for RLCG ‣ Retrieval-Augmented Code Generation: A Survey with Focus on Repository-Level Approaches" class="ltx_ref"><span class="ltx_text ltx_ref_tag">6.1</span></a>.</p>
+</div>
+<div id="S2.SS1.p4" class="ltx_para">
+<p id="S2.SS1.p4.1" class="ltx_p">Unlike function-level generation, RLCG requires reasoning over long-range dependencies, cross-file interactions, and system-level constraints. The generation process is inherently state-dependent, as intermediate changes may alter the repository structure and influence subsequent decisions.</p>
+</div>
+</section>
+<section id="S2.SS2" class="ltx_subsection">
+<h3 class="ltx_title ltx_title_subsection">
+<span class="ltx_tag ltx_tag_subsection">2.2 </span>Retrieval-Augmented Code Generation (RACG)</h3>
+
+<figure id="S2.F2" class="ltx_figure"><img src="2510.04905v3/x2.png" id="S2.F2.g1" class="ltx_graphics ltx_centering ltx_img_landscape" width="748" height="205" alt="Refer to caption">
+<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_figure"><span id="S2.F2.2.1.1" class="ltx_text" style="font-size:90%;">Figure 2</span>: </span><span id="S2.F2.3.2" class="ltx_text" style="font-size:90%;">Retrieval-Augmented Code Generation, focusing on Repository-Level approaches.</span></figcaption>
+</figure>
+<div id="S2.SS2.p1" class="ltx_para">
+<p id="S2.SS2.p1.1" class="ltx_p">Retrieval-Augmented Code Generation enhances LLMs with external software knowledge via retrieval. Unlike pure LLM generation, RACG dynamically retrieves relevant information such as code, documentation, or graphs to construct context-aware prompts.</p>
+</div>
+<div id="S2.SS2.p2" class="ltx_para">
+<p id="S2.SS2.p2.3" class="ltx_p">In its basic form, RACG (Figure <a href="#S2.F2" title="Figure 2 ‣ 2.2 Retrieval-Augmented Code Generation (RACG) ‣ 2 Preliminary and Methodological Foundations ‣ Retrieval-Augmented Code Generation: A Survey with Focus on Repository-Level Approaches" class="ltx_ref"><span class="ltx_text ltx_ref_tag">2</span></a>) consists of two components: (i) <span id="S2.SS2.p2.3.1" class="ltx_text ltx_font_bold">Retriever</span> <math id="S2.SS2.p2.1.m1" class="ltx_Math" alttext="\mathcal{M}_{r}" display="inline" intent=":literal"><semantics><msub><mi class="ltx_font_mathcaligraphic">ℳ</mi><mi>r</mi></msub><annotation encoding="application/x-tex">\mathcal{M}_{r}</annotation></semantics></math>, which selects the relevant context <math id="S2.SS2.p2.2.m2" class="ltx_Math" alttext="C\subseteq\mathcal{R}" display="inline" intent=":literal"><semantics><mrow><mi>C</mi><mo>⊆</mo><mi class="ltx_font_mathcaligraphic">ℛ</mi></mrow><annotation encoding="application/x-tex">C\subseteq\mathcal{R}</annotation></semantics></math> given a query or intermediate state. It typically operates through several structured strategies, including <span id="S2.SS2.p2.3.2" class="ltx_text ltx_font_italic">identifier matching</span> based on exact names or signatures, <span id="S2.SS2.p2.3.3" class="ltx_text ltx_font_italic">sparse retrieval</span> using lexical or sparse-vector methods such as TF-IDF <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">manning2008introduction</span>]</cite> or BM25 <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">10.1007/978-1-4471-2099-5_24</span>]</cite>, <span id="S2.SS2.p2.3.4" class="ltx_text ltx_font_italic">dense retrieval</span> using neural embeddings such as CodeBERT <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">codebert</span>]</cite> or UniXcoder <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">guo-etal-2022-unixcoder</span>]</cite> with nearest-neighbor search, <span id="S2.SS2.p2.3.5" class="ltx_text ltx_font_italic">graph-based retrieval</span> leveraging structures such as abstract syntax trees and call graphs via traversal or subgraph matching, and <span id="S2.SS2.p2.3.6" class="ltx_text ltx_font_italic">hybrid retrieval</span> that integrates lexical, embedding, and structural signals to balance precision and recall. (ii) <span id="S2.SS2.p2.3.7" class="ltx_text ltx_font_bold">Generator</span> <math id="S2.SS2.p2.3.m3" class="ltx_Math" alttext="\mathcal{M}_{g}" display="inline" intent=":literal"><semantics><msub><mi class="ltx_font_mathcaligraphic">ℳ</mi><mi>g</mi></msub><annotation encoding="application/x-tex">\mathcal{M}_{g}</annotation></semantics></math> is a language model such as GPT-5.5 <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">openai2025gpt5</span>]</cite> or CodeLlama <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">codellama</span>]</cite> that produces code conditioned on the context retrieved.</p>
+</div>
+<div id="S2.SS2.p3" class="ltx_para">
+<p id="S2.SS2.p3.1" class="ltx_p">Traditional RAG follows a static pipeline:</p>
+<table id="S2.E2" class="ltx_equation ltx_eqn_table">
+
+<tbody><tr class="ltx_equation ltx_eqn_row ltx_align_baseline">
+<td class="ltx_eqn_cell ltx_eqn_center_padleft"></td>
+<td class="ltx_eqn_cell ltx_align_center"><math id="S2.E2.m1" class="ltx_Math" alttext="C=\mathcal{M}_{r}(q),\quad y=\mathcal{M}_{g}(q,C)" display="block" intent=":literal"><semantics><mrow><mrow><mi>C</mi><mo>=</mo><mrow><msub><mi class="ltx_font_mathcaligraphic">ℳ</mi><mi>r</mi></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>q</mi><mo stretchy="false">)</mo></mrow></mrow></mrow><mo rspace="1.167em">,</mo><mrow><mi>y</mi><mo>=</mo><mrow><msub><mi class="ltx_font_mathcaligraphic">ℳ</mi><mi>g</mi></msub><mo lspace="0em" rspace="0em">​</mo><mrow><mo stretchy="false">(</mo><mi>q</mi><mo>,</mo><mi>C</mi><mo stretchy="false">)</mo></mrow></mrow></mrow></mrow><annotation encoding="application/x-tex">C=\mathcal{M}_{r}(q),\quad y=\mathcal{M}_{g}(q,C)</annotation></semantics></math></td>
+<td class="ltx_eqn_cell ltx_eqn_center_padright"></td>
+<td rowspan="1" class="ltx_eqn_cell ltx_eqn_eqno ltx_align_middle ltx_align_right"><span class="ltx_tag ltx_tag_equation ltx_align_right">(2)</span></td>
+</tr></tbody>
+</table>
+</div>
+<div id="S2.SS2.p4" class="ltx_para">
+<p id="S2.SS2.p4.1" class="ltx_p">However, in repository-level settings, RACG departs from this simple paradigm. Instead of treating retrieval as a static preprocessing step, RACG operates as a coupled process where retrieval and generation are interdependent and evolve over time. Recent work also explores iterative or agent-style RACG frameworks <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">repocoder</span>, <span class="ltx_ref ltx_missing_citation ltx_ref_self">orcaloca</span>]</cite>.</p>
+</div>
+</section>
+</section>
+<section id="S3" class="ltx_section">
+<h2 class="ltx_title ltx_title_section">
+<span class="ltx_tag ltx_tag_section">3 </span>Methodology</h2>
+
+<div id="S3.p1" class="ltx_para">
+<p id="S3.p1.1" class="ltx_p">This section outlines the methodology used to conduct a systematic literature review.
+We adopt a structured review approach inspired by established guidelines in software engineering literature <cite class="ltx_cite ltx_citemacro_citep">[<span class="ltx_ref ltx_missing_citation ltx_ref_self">10.5555/2227115.2227123</span>, <span class="ltx_ref ltx_missing_citation ltx_ref_self">surveycodeagent</span>, <span class="ltx_ref ltx_missing_citation ltx_ref_self">surveycodegeneration</span>]</cite>.
+The methodology encompasses research question formulation, data collection, inclusion and exclusion filtering, quality assessment, snowballing, and topic categorization.</p>
+</div>
+<div id="S3.p2" class="ltx_para">
+<ul id="S3.I1" class="ltx_itemize">
+<li id="S3.I1.ix1" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">➠</span> 
+<div id="S3.I1.ix1.p1" class="ltx_para">
+<p id="S3.I1.ix1.p1.1" class="ltx_p"><span id="S3.I1.ix1.p1.1.1" class="ltx_text ltx_font_bold">RQ1: How does RACG evolve from simple retrieval paradigms to complex autonomous architectures?</span> 
+<br class="ltx_break">This question investigates the methodological shift from semantic retrieval to structure-aware graph retrieval. It further explores how training-based optimizations and agentic architectures address complex task resolution.</p>
+</div>
+</li>
+<li id="S3.I1.ix2" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">➠</span> 
+<div id="S3.I1.ix2.p1" class="ltx_para">
+<p id="S3.I1.ix2.p1.1" class="ltx_p"><span id="S3.I1.ix2.p1.1.1" class="ltx_text ltx_font_bold">RQ2: What are the core configurations, task environments, and evaluation practices for RACG systems?</span> 
+<br class="ltx_break">This question examines the ecosystem and implementation of RACG, covering the impact of diverse data sources and programming language paradigms. It also evaluates how downstream tasks and current benchmark metrics reflect the demands of practical software engineering.</p>
+</div>
+</li>
+<li id="S3.I1.ix3" class="ltx_item" style="list-style-type:none;">
+<span class="ltx_tag ltx_tag_item">➠</span> 
+<div id="S3.I1.ix3.p1" class="ltx_para">
+<p id="S3.I1.ix3.p1.1" class="ltx_p"><span id="S3.I1.ix3.p1.1.1" class="ltx_text ltx_font_bold">RQ3: What are the concerns of RACG systems and where is its necessity boundary?</span> 
+<br class="ltx_break">This question analyzes key system-level bottlenecks, including reliability, scalability, and structural complexity.
+It further examines when retrieval remains necessary versus when long-context modeling is sufficient, and outlines directions for bridging this gap toward real-world deployment.</p>
+</div>
+</li>
+</ul>
+</div>
+<!-- [excerpt gap: body trimmed; bibliography below] -->
+<section id="bib" class="ltx_bibliography">
+<h2 class="ltx_title ltx_title_bibliography">References</h2>
+
+<ul id="bib.L1" class="ltx_biblist">
+</ul>
+</section>
+<div class="ltx_pagination ltx_role_newpage"></div>
+</article>
+</div>
+</div>
+<footer class="arxiv-html-footer">
+  <div class="ltx_page_logo">
+    Experimental support, please
+    <a href="./2510.04905v3/__stdout.txt" class="ltx_ref"
+    target="_blank" rel="nofollow">view the build logs</a>
+    for errors. Generated by
+    <a href="https://math.nist.gov/~BMiller/LaTeXML/" target="_blank" class="ltx_ref ltx_LaTeXML_logo">
+      <span style="letter-spacing: -0.2em; margin-right: 0.1em;">
+        L
+        <span style="font-size: 70%; position: relative; bottom: 2.2pt;">A</span>
+        T
+        <span style="position: relative; bottom: -0.4ex;">E</span>
+      </span>
+      <span class="ltx_font_smallcaps">xml</span>
+      <img alt="[LOGO]"
+        src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAsAAAAOCAYAAAD5YeaVAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9wKExQZLWTEaOUAAAAddEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIFRoZSBHSU1Q72QlbgAAAdpJREFUKM9tkL+L2nAARz9fPZNCKFapUn8kyI0e4iRHSR1Kb8ng0lJw6FYHFwv2LwhOpcWxTjeUunYqOmqd6hEoRDhtDWdA8ApRYsSUCDHNt5ul13vz4w0vWCgUnnEc975arX6ORqN3VqtVZbfbTQC4uEHANM3jSqXymFI6yWazP2KxWAXAL9zCUa1Wy2tXVxheKA9YNoR8Pt+aTqe4FVVVvz05O6MBhqUIBGk8Hn8HAOVy+T+XLJfLS4ZhTiRJgqIoVBRFIoric47jPnmeB1mW/9rr9ZpSSn3Lsmir1fJZlqWlUonKsvwWwD8ymc/nXwVBeLjf7xEKhdBut9Hr9WgmkyGEkJwsy5eHG5vN5g0AKIoCAEgkEkin0wQAfN9/cXPdheu6P33fBwB4ngcAcByHJpPJl+fn54mD3Gg0NrquXxeLRQAAwzAYj8cwTZPwPH9/sVg8PXweDAauqqr2cDjEer1GJBLBZDJBs9mE4zjwfZ85lAGg2+06hmGgXq+j3+/DsixYlgVN03a9Xu8jgCNCyIegIAgx13Vfd7vdu+FweG8YRkjXdWy329+dTgeSJD3ieZ7RNO0VAXAPwDEAO5VKndi2fWrb9jWl9Esul6PZbDY9Go1OZ7PZ9z/lyuD3OozU2wAAAABJRU5ErkJggg==">
+    </a>.
+  </div>
+  <div class="keyboard-glossary">
+    <h2>Instructions for reporting errors</h2>
+    <p>We are continuing to improve HTML versions of papers, and your feedback helps enhance accessibility and mobile
+      support. To report errors in the HTML that will help us improve conversion and rendering, choose any of the
+      methods listed below:</p>
+    <ul>
+      <li>Click the "Report Issue" <span class="mobile-only">(<svg role="presentation"
+            style="display: inline-block; vertical-align: middle; fill: var(--text-color);" aria-hidden="true"
+            height="1em" viewBox="0 0 640 640">
+            <path
+              d="M224 160C224 107 267 64 320 64C373 64 416 107 416 160L416 163.6C416 179.3 403.3 192 387.6 192L252.5 192C236.8 192 224.1 179.3 224.1 163.6L224.1 160zM569.6 172.8C580.2 186.9 577.3 207 563.2 217.6L465.4 290.9C470.7 299.8 474.7 309.6 477.2 320L576 320C593.7 320 608 334.3 608 352C608 369.7 593.7 384 576 384L480 384L480 416C480 418.6 479.9 421.3 479.8 423.9L563.2 486.4C577.3 497 580.2 517.1 569.6 531.2C559 545.3 538.9 548.2 524.8 537.6L461.7 490.3C438.5 534.5 395.2 566.5 344 574.2L344 344C344 330.7 333.3 320 320 320C306.7 320 296 330.7 296 344L296 574.2C244.8 566.5 201.5 534.5 178.3 490.3L115.2 537.6C101.1 548.2 81 545.3 70.4 531.2C59.8 517.1 62.7 497 76.8 486.4L160.2 423.9C160.1 421.3 160 418.7 160 416L160 384L64 384C46.3 384 32 369.7 32 352C32 334.3 46.3 320 64 320L162.8 320C165.3 309.6 169.3 299.8 174.6 290.9L76.8 217.6C62.7 207 59.8 186.9 70.4 172.8C81 158.7 101.1 155.8 115.2 166.4L224 248C236.3 242.9 249.8 240 264 240L376 240C390.2 240 403.7 242.8 416 248L524.8 166.4C538.9 155.8 559 158.7 569.6 172.8z" />
+          </svg>)</span> button, located in the page header.</li>
+    </ul>
+</ul></section></article></body></html>
