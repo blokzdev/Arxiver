@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -109,6 +110,7 @@ private val dateFormat = DateTimeFormatter.ofPattern("d MMMM yyyy")
 fun PaperDetailScreen(
     onBack: () -> Unit,
     onOpenPdf: (String) -> Unit,
+    onOpenHtml: (String) -> Unit,
     onPaperClick: (String) -> Unit,
     onOpenConnections: (String) -> Unit,
     onOpenRoutines: () -> Unit,
@@ -289,6 +291,7 @@ fun PaperDetailScreen(
                             related = related,
                             scrollState = scrollState,
                             onOpenPdf = onOpenPdf,
+                            onOpenHtml = onOpenHtml,
                             onPaperClick = onPaperClick,
                             onOpenConnections = onOpenConnections,
                             onSetStatus = viewModel::setStatus,
@@ -373,6 +376,7 @@ private fun PaperDetailContent(
     related: List<RelatedPaper>,
     scrollState: androidx.compose.foundation.ScrollState,
     onOpenPdf: (String) -> Unit,
+    onOpenHtml: (String) -> Unit,
     onPaperClick: (String) -> Unit,
     onOpenConnections: (String) -> Unit,
     onSetStatus: (String) -> Unit,
@@ -416,7 +420,14 @@ private fun PaperDetailContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
+            FilledTonalButton(onClick = { onOpenHtml(paper.id.value) }) {
+                Icon(Icons.AutoMirrored.Filled.Article, contentDescription = null)
+                Text(
+                    text = stringResource(R.string.action_open_html),
+                    modifier = Modifier.padding(start = Spacing.sm),
+                )
+            }
             FilledTonalButton(onClick = { onOpenPdf(paper.id.value) }) {
                 Icon(Icons.Filled.PictureAsPdf, contentDescription = null)
                 Text(
@@ -836,6 +847,7 @@ private fun PaperDetailContentPreview() {
             related = emptyList(),
             scrollState = rememberScrollState(),
             onOpenPdf = {},
+            onOpenHtml = {},
             onPaperClick = {},
             onOpenConnections = {},
             onSetStatus = {},
