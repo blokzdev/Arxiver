@@ -1,0 +1,121 @@
+/*
+ * Bundled reader stylesheet for the P-HTML arXiv HTML-edition reader (Phase P-HTML PH.3).
+ * Offline-only: no @import, no external fonts/CDN. Colors come ONLY from the --reader-* custom
+ * properties that ReaderDocWriter injects from the runtime Material theme — never hard-coded hex.
+ * It is INLINED into a <style> by ReaderDocWriter (the reader base URL has allowFileAccessFromFileURLs
+ * = false, so a file:// <link> would not load). Styles the LaTeXML ltx_* class surface.
+ */
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 16px;
+  color: var(--reader-text);
+  background: var(--reader-bg);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 17px;
+  line-height: 1.65;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.ltx_document,
+article {
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+h1, h2, h3, h4, h5, h6,
+.ltx_title {
+  line-height: 1.25;
+  margin: 1.4em 0 0.5em;
+  font-weight: 600;
+}
+
+.ltx_title_document,
+.ltx_title_section { font-weight: 700; }
+
+p, .ltx_p, .ltx_para { margin: 0 0 0.9em; }
+
+a, a.ltx_ref { color: var(--reader-link); text-decoration: none; }
+a:active { opacity: 0.7; }
+
+/* External links carry a small cue; they open via an explicit confirm (PH.4). */
+a.ltx_external::after { content: " \2197"; font-size: 0.8em; opacity: 0.7; }
+
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.25em 0; }
+
+blockquote {
+  margin: 0.9em 0;
+  padding-left: 1em;
+  border-left: 3px solid var(--reader-muted);
+  color: var(--reader-muted);
+}
+
+code, pre, samp, kbd {
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  font-size: 0.92em;
+}
+pre, .ltx_verbatim {
+  background: var(--reader-code-bg);
+  padding: 0.75em;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+code { background: var(--reader-code-bg); padding: 0.1em 0.3em; border-radius: 4px; }
+pre code { background: none; padding: 0; }
+
+/* Native MathML (no KaTeX on this path). */
+math { font-size: 1.05em; }
+math[display="block"], .ltx_Math[display="block"] {
+  display: block;
+  overflow-x: auto;
+  margin: 0.8em 0;
+}
+
+/* Figures + the MVP "download to view" placeholder for stripped images. */
+figure, .ltx_figure, .ltx_table {
+  margin: 1.2em 0;
+  text-align: center;
+}
+figcaption, .ltx_caption {
+  font-size: 0.9em;
+  color: var(--reader-muted);
+  margin-top: 0.5em;
+}
+.ltx_placeholder {
+  display: inline-block;
+  padding: 0.6em 1em;
+  border: 1px dashed var(--reader-muted);
+  border-radius: 6px;
+  color: var(--reader-muted);
+  font-size: 0.9em;
+}
+
+/* Wide tables scroll horizontally rather than breaking the column. */
+.ltx_tabular, table {
+  border-collapse: collapse;
+  margin: 0 auto;
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.ltx_td, .ltx_th, td, th {
+  border: 1px solid var(--reader-muted);
+  padding: 0.35em 0.6em;
+  text-align: left;
+}
+.ltx_align_center { text-align: center; }
+.ltx_align_right { text-align: right; }
+
+/* Bibliography. */
+.ltx_bibliography .ltx_title { margin-top: 1.6em; }
+.ltx_biblist { padding-left: 1.2em; }
+.ltx_bibitem { margin: 0.5em 0; font-size: 0.95em; }
+
+/* A citation that the conversion couldn't resolve. */
+.ltx_missing_citation { color: var(--reader-muted); }

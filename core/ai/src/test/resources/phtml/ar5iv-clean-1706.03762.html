@@ -1,186 +1,86 @@
-<!DOCTYPE html><html lang="en">
-<head>
-<meta http-equiv="content-type" content="text/html; charset=UTF-8">
-<title>[1706.03762] Attention Is All You Need</title><meta property="og:description" content="The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through a…">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Attention Is All You Need">
-<meta name="twitter:image:src" content="https://ar5iv.labs.arxiv.org/assets/ar5iv_card.png">
-<meta name="twitter:image:alt" content="ar5iv logo">
-<meta property="og:title" content="Attention Is All You Need">
-<meta property="og:site_name" content="ar5iv">
-<meta property="og:image" content="https://ar5iv.labs.arxiv.org/assets/ar5iv_card.png">
-<meta property="og:type" content="article">
-<meta property="og:url" content="https://ar5iv.labs.arxiv.org/html/1706.03762">
-<link rel="canonical" target="_blank" href="https://ar5iv.labs.arxiv.org/html/1706.03762">
-
-<!--Generated on Sun Mar  3 23:17:54 2024 by LaTeXML (version 0.8.8) http://dlmf.nist.gov/LaTeXML/.-->
-<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-
-<script>
-  function detectColorScheme(){
-    var theme="light";
-    var current_theme = localStorage.getItem("ar5iv_theme");
-    if(current_theme){
-      if(current_theme == "dark"){
-        theme = "dark";
-      } }
-    else if(!window.matchMedia) { return false; }
-    else if(window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      theme = "dark"; }
-    if (theme=="dark") {
-      document.documentElement.setAttribute("data-theme", "dark");
-    } else {
-      document.documentElement.setAttribute("data-theme", "light"); } }
-
-  detectColorScheme();
-
-  function toggleColorScheme(){
-    var current_theme = localStorage.getItem("ar5iv_theme");
-    if (current_theme) {
-      if (current_theme == "light") {
-        localStorage.setItem("ar5iv_theme", "dark"); }
-      else {
-        localStorage.setItem("ar5iv_theme", "light"); } }
-    else {
-        localStorage.setItem("ar5iv_theme", "dark"); }
-    detectColorScheme(); }
-</script>
-<link media="all" rel="stylesheet" href="/assets/ar5iv-fonts.0.8.4.css"><link media="all" rel="stylesheet" href="/assets/ar5iv.0.8.4.css"><link media="all" rel="stylesheet" href="/assets/ar5iv-site.0.2.2.css">
-</head>
-<body>
-<div class="ltx_page_main">
-<div class="ltx_page_content">
-<article class="ltx_document ltx_authors_1line">
-<div id="p1" class="ltx_para">
-<p id="p1.1" class="ltx_p ltx_align_center"><span id="p1.1.1" class="ltx_text" style="color:#FF0000;">Provided proper attribution is provided, Google hereby grants permission to reproduce the tables and figures in this paper solely for use in journalistic or scholarly works.</span></p>
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fixture</title></head><body class="ltx_document"><nav class="ltx_page_navbar"><a class="ltx_ref" href="https://arxiv.org/abs/0000.00000" onclick="track(event)">arXiv</a></nav><nav class="ltx_TOC"><ul><li><a href="#S1">Intro</a></li></ul></nav><article class="ltx_document ltx_authors_1line">
+<div class="ltx_para" id="p1">
+<p class="ltx_p ltx_align_center" id="p1.1"><span class="ltx_text" id="p1.1.1" style="color:#FF0000;">Provided proper attribution is provided, Google hereby grants permission to reproduce the tables and figures in this paper solely for use in journalistic or scholarly works.</span></p>
 </div>
 <h1 class="ltx_title ltx_title_document">Attention Is All You Need</h1>
 <div class="ltx_authors">
 <span class="ltx_creator ltx_role_author">
 <span class="ltx_personname">
-<span id="id1.1.id1" class="ltx_ERROR undefined">\AND</span>Ashish Vaswani
-<br class="ltx_break">Google Brain
-<br class="ltx_break"><span id="id2.2.id2" class="ltx_text ltx_font_typewriter">avaswani@google.com
-<br class="ltx_break"></span>&amp;Noam Shazeer<span id="footnotex1" class="ltx_note ltx_role_footnotemark"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
-<br class="ltx_break">Google Brain
-<br class="ltx_break"><span id="id3.3.id3" class="ltx_text ltx_font_typewriter">noam@google.com
-<br class="ltx_break"></span>&amp;Niki Parmar<span id="footnotex2" class="ltx_note ltx_role_footnotemark"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
-<br class="ltx_break">Google Research
-<br class="ltx_break"><span id="id4.4.id4" class="ltx_text ltx_font_typewriter">nikip@google.com
-<br class="ltx_break"></span>&amp;Jakob Uszkoreit<span id="footnotex3" class="ltx_note ltx_role_footnotemark"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
-<br class="ltx_break">Google Research
-<br class="ltx_break"><span id="id5.5.id5" class="ltx_text ltx_font_typewriter">usz@google.com
-<br class="ltx_break"></span>&amp;Llion Jones<span id="footnotex4" class="ltx_note ltx_role_footnotemark"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
-<br class="ltx_break">Google Research
-<br class="ltx_break"><span id="id6.6.id6" class="ltx_text ltx_font_typewriter">llion@google.com
-<br class="ltx_break"></span>&amp;Aidan N. Gomez<span id="footnotex5" class="ltx_note ltx_role_footnotemark"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>   
-<br class="ltx_break">University of Toronto
-<br class="ltx_break"><span id="id7.7.id7" class="ltx_text ltx_font_typewriter">aidan@cs.toronto.edu</span>
-&amp;Łukasz Kaiser<span id="footnotex6" class="ltx_note ltx_role_footnotemark"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
-<br class="ltx_break">Google Brain
-<br class="ltx_break"><span id="id8.8.id8" class="ltx_text ltx_font_typewriter">lukaszkaiser@google.com
-<br class="ltx_break"></span>&amp;Illia Polosukhin<span id="footnotex7" class="ltx_note ltx_role_footnotemark"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>   
-<br class="ltx_break"><span id="id9.9.id9" class="ltx_text ltx_font_typewriter">illia.polosukhin@gmail.com
-<br class="ltx_break"></span>
+<span class="ltx_ERROR undefined" id="id1.1.id1">\AND</span>Ashish Vaswani
+<br class="ltx_break"/>Google Brain
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id2.2.id2">avaswani@google.com
+<br class="ltx_break"/></span>&amp;Noam Shazeer<span class="ltx_note ltx_role_footnotemark" id="footnotex1"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
+<br class="ltx_break"/>Google Brain
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id3.3.id3">noam@google.com
+<br class="ltx_break"/></span>&amp;Niki Parmar<span class="ltx_note ltx_role_footnotemark" id="footnotex2"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
+<br class="ltx_break"/>Google Research
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id4.4.id4">nikip@google.com
+<br class="ltx_break"/></span>&amp;Jakob Uszkoreit<span class="ltx_note ltx_role_footnotemark" id="footnotex3"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
+<br class="ltx_break"/>Google Research
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id5.5.id5">usz@google.com
+<br class="ltx_break"/></span>&amp;Llion Jones<span class="ltx_note ltx_role_footnotemark" id="footnotex4"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
+<br class="ltx_break"/>Google Research
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id6.6.id6">llion@google.com
+<br class="ltx_break"/></span>&amp;Aidan N. Gomez<span class="ltx_note ltx_role_footnotemark" id="footnotex5"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>   
+<br class="ltx_break"/>University of Toronto
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id7.7.id7">aidan@cs.toronto.edu</span>
+&amp;Łukasz Kaiser<span class="ltx_note ltx_role_footnotemark" id="footnotex6"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>
+<br class="ltx_break"/>Google Brain
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id8.8.id8">lukaszkaiser@google.com
+<br class="ltx_break"/></span>&amp;Illia Polosukhin<span class="ltx_note ltx_role_footnotemark" id="footnotex7"><sup class="ltx_note_mark">1</sup><span class="ltx_note_outer"><span class="ltx_note_content"><sup class="ltx_note_mark">1</sup><span class="ltx_note_type">footnotemark: </span><span class="ltx_tag ltx_tag_note">1</span></span></span></span>   
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id9.9.id9">illia.polosukhin@gmail.com
+<br class="ltx_break"/></span>
 </span><span class="ltx_author_notes">Equal contribution. Listing order is random. Jakob proposed replacing RNNs with self-attention and started the effort to evaluate this idea.
 Ashish, with Illia, designed and implemented the first Transformer models and has been crucially involved in every aspect of this work. Noam proposed scaled dot-product attention, multi-head attention and the parameter-free position representation and became the other person involved in nearly every detail. Niki designed, implemented, tuned and evaluated countless model variants in our original codebase and tensor2tensor. Llion also experimented with novel model variants, was responsible for our initial codebase, and efficient inference and visualizations. Lukasz and Aidan spent countless long days designing various parts of and implementing tensor2tensor, replacing our earlier codebase, greatly improving results and massively accelerating our research.
 Work performed while at Google Brain.Work performed while at Google Research.</span></span>
 </div>
-
 <div class="ltx_abstract">
 <h6 class="ltx_title ltx_title_abstract">Abstract</h6>
-<p id="id10.id1" class="ltx_p">The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes a new single-model state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the literature. We show that the Transformer generalizes well to other tasks by applying it successfully to English constituency parsing both with large and limited training data.</p>
+<p class="ltx_p" id="id10.id1">The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes a new single-model state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the literature. We show that the Transformer generalizes well to other tasks by applying it successfully to English constituency parsing both with large and limited training data.</p>
 </div>
-<!-- [excerpt gap: nav/sections trimmed] -->
-<section id="S1" class="ltx_section">
+<section class="ltx_section" id="S1">
 <h2 class="ltx_title ltx_title_section">
 <span class="ltx_tag ltx_tag_section">1 </span>Introduction</h2>
-
-<div id="S1.p1" class="ltx_para ltx_noindent">
-<p id="S1.p1.1" class="ltx_p">Recurrent neural networks, long short-term memory <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib13" title="" class="ltx_ref">13</a>]</cite> and gated recurrent <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib7" title="" class="ltx_ref">7</a>]</cite> neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib35" title="" class="ltx_ref">35</a>, <a href="#bib.bib2" title="" class="ltx_ref">2</a>, <a href="#bib.bib5" title="" class="ltx_ref">5</a>]</cite>. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib38" title="" class="ltx_ref">38</a>, <a href="#bib.bib24" title="" class="ltx_ref">24</a>, <a href="#bib.bib15" title="" class="ltx_ref">15</a>]</cite>.</p>
+<div class="ltx_para ltx_noindent" id="S1.p1">
+<p class="ltx_p" id="S1.p1.1">Recurrent neural networks, long short-term memory <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib13" title="">13</a>]</cite> and gated recurrent <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib7" title="">7</a>]</cite> neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib35" title="">35</a>, <a class="ltx_ref" href="#bib.bib2" title="">2</a>, <a class="ltx_ref" href="#bib.bib5" title="">5</a>]</cite>. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib38" title="">38</a>, <a class="ltx_ref" href="#bib.bib24" title="">24</a>, <a class="ltx_ref" href="#bib.bib15" title="">15</a>]</cite>.</p>
 </div>
-<div id="S1.p2" class="ltx_para ltx_noindent">
-<p id="S1.p2.3" class="ltx_p">Recurrent models typically factor computation along the symbol positions of the input and output sequences. Aligning the positions to steps in computation time, they generate a sequence of hidden states <math id="S1.p2.1.m1.1" class="ltx_Math" alttext="h_{t}" display="inline"><semantics id="S1.p2.1.m1.1a"><msub id="S1.p2.1.m1.1.1" xref="S1.p2.1.m1.1.1.cmml"><mi id="S1.p2.1.m1.1.1.2" xref="S1.p2.1.m1.1.1.2.cmml">h</mi><mi id="S1.p2.1.m1.1.1.3" xref="S1.p2.1.m1.1.1.3.cmml">t</mi></msub><annotation-xml encoding="MathML-Content" id="S1.p2.1.m1.1b"><apply id="S1.p2.1.m1.1.1.cmml" xref="S1.p2.1.m1.1.1"><csymbol cd="ambiguous" id="S1.p2.1.m1.1.1.1.cmml" xref="S1.p2.1.m1.1.1">subscript</csymbol><ci id="S1.p2.1.m1.1.1.2.cmml" xref="S1.p2.1.m1.1.1.2">ℎ</ci><ci id="S1.p2.1.m1.1.1.3.cmml" xref="S1.p2.1.m1.1.1.3">𝑡</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S1.p2.1.m1.1c">h_{t}</annotation></semantics></math>, as a function of the previous hidden state <math id="S1.p2.2.m2.1" class="ltx_Math" alttext="h_{t-1}" display="inline"><semantics id="S1.p2.2.m2.1a"><msub id="S1.p2.2.m2.1.1" xref="S1.p2.2.m2.1.1.cmml"><mi id="S1.p2.2.m2.1.1.2" xref="S1.p2.2.m2.1.1.2.cmml">h</mi><mrow id="S1.p2.2.m2.1.1.3" xref="S1.p2.2.m2.1.1.3.cmml"><mi id="S1.p2.2.m2.1.1.3.2" xref="S1.p2.2.m2.1.1.3.2.cmml">t</mi><mo id="S1.p2.2.m2.1.1.3.1" xref="S1.p2.2.m2.1.1.3.1.cmml">−</mo><mn id="S1.p2.2.m2.1.1.3.3" xref="S1.p2.2.m2.1.1.3.3.cmml">1</mn></mrow></msub><annotation-xml encoding="MathML-Content" id="S1.p2.2.m2.1b"><apply id="S1.p2.2.m2.1.1.cmml" xref="S1.p2.2.m2.1.1"><csymbol cd="ambiguous" id="S1.p2.2.m2.1.1.1.cmml" xref="S1.p2.2.m2.1.1">subscript</csymbol><ci id="S1.p2.2.m2.1.1.2.cmml" xref="S1.p2.2.m2.1.1.2">ℎ</ci><apply id="S1.p2.2.m2.1.1.3.cmml" xref="S1.p2.2.m2.1.1.3"><minus id="S1.p2.2.m2.1.1.3.1.cmml" xref="S1.p2.2.m2.1.1.3.1"></minus><ci id="S1.p2.2.m2.1.1.3.2.cmml" xref="S1.p2.2.m2.1.1.3.2">𝑡</ci><cn type="integer" id="S1.p2.2.m2.1.1.3.3.cmml" xref="S1.p2.2.m2.1.1.3.3">1</cn></apply></apply></annotation-xml><annotation encoding="application/x-tex" id="S1.p2.2.m2.1c">h_{t-1}</annotation></semantics></math> and the input for position <math id="S1.p2.3.m3.1" class="ltx_Math" alttext="t" display="inline"><semantics id="S1.p2.3.m3.1a"><mi id="S1.p2.3.m3.1.1" xref="S1.p2.3.m3.1.1.cmml">t</mi><annotation-xml encoding="MathML-Content" id="S1.p2.3.m3.1b"><ci id="S1.p2.3.m3.1.1.cmml" xref="S1.p2.3.m3.1.1">𝑡</ci></annotation-xml><annotation encoding="application/x-tex" id="S1.p2.3.m3.1c">t</annotation></semantics></math>. This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples.
-Recent work has achieved significant improvements in computational efficiency through factorization tricks <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib21" title="" class="ltx_ref">21</a>]</cite> and conditional computation <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib32" title="" class="ltx_ref">32</a>]</cite>, while also improving model performance in case of the latter. The fundamental constraint of sequential computation, however, remains.</p>
+<div class="ltx_para ltx_noindent" id="S1.p2">
+<p class="ltx_p" id="S1.p2.3">Recurrent models typically factor computation along the symbol positions of the input and output sequences. Aligning the positions to steps in computation time, they generate a sequence of hidden states <math alttext="h_{t}" class="ltx_Math" display="inline" id="S1.p2.1.m1.1"><semantics id="S1.p2.1.m1.1a"><msub id="S1.p2.1.m1.1.1" xref="S1.p2.1.m1.1.1.cmml"><mi id="S1.p2.1.m1.1.1.2" xref="S1.p2.1.m1.1.1.2.cmml">h</mi><mi id="S1.p2.1.m1.1.1.3" xref="S1.p2.1.m1.1.1.3.cmml">t</mi></msub><annotation-xml encoding="MathML-Content" id="S1.p2.1.m1.1b"><apply id="S1.p2.1.m1.1.1.cmml" xref="S1.p2.1.m1.1.1"><csymbol cd="ambiguous" id="S1.p2.1.m1.1.1.1.cmml" xref="S1.p2.1.m1.1.1">subscript</csymbol><ci id="S1.p2.1.m1.1.1.2.cmml" xref="S1.p2.1.m1.1.1.2">ℎ</ci><ci id="S1.p2.1.m1.1.1.3.cmml" xref="S1.p2.1.m1.1.1.3">𝑡</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S1.p2.1.m1.1c">h_{t}</annotation></semantics></math>, as a function of the previous hidden state <math alttext="h_{t-1}" class="ltx_Math" display="inline" id="S1.p2.2.m2.1"><semantics id="S1.p2.2.m2.1a"><msub id="S1.p2.2.m2.1.1" xref="S1.p2.2.m2.1.1.cmml"><mi id="S1.p2.2.m2.1.1.2" xref="S1.p2.2.m2.1.1.2.cmml">h</mi><mrow id="S1.p2.2.m2.1.1.3" xref="S1.p2.2.m2.1.1.3.cmml"><mi id="S1.p2.2.m2.1.1.3.2" xref="S1.p2.2.m2.1.1.3.2.cmml">t</mi><mo id="S1.p2.2.m2.1.1.3.1" xref="S1.p2.2.m2.1.1.3.1.cmml">−</mo><mn id="S1.p2.2.m2.1.1.3.3" xref="S1.p2.2.m2.1.1.3.3.cmml">1</mn></mrow></msub><annotation-xml encoding="MathML-Content" id="S1.p2.2.m2.1b"><apply id="S1.p2.2.m2.1.1.cmml" xref="S1.p2.2.m2.1.1"><csymbol cd="ambiguous" id="S1.p2.2.m2.1.1.1.cmml" xref="S1.p2.2.m2.1.1">subscript</csymbol><ci id="S1.p2.2.m2.1.1.2.cmml" xref="S1.p2.2.m2.1.1.2">ℎ</ci><apply id="S1.p2.2.m2.1.1.3.cmml" xref="S1.p2.2.m2.1.1.3"><minus id="S1.p2.2.m2.1.1.3.1.cmml" xref="S1.p2.2.m2.1.1.3.1"></minus><ci id="S1.p2.2.m2.1.1.3.2.cmml" xref="S1.p2.2.m2.1.1.3.2">𝑡</ci><cn id="S1.p2.2.m2.1.1.3.3.cmml" type="integer" xref="S1.p2.2.m2.1.1.3.3">1</cn></apply></apply></annotation-xml><annotation encoding="application/x-tex" id="S1.p2.2.m2.1c">h_{t-1}</annotation></semantics></math> and the input for position <math alttext="t" class="ltx_Math" display="inline" id="S1.p2.3.m3.1"><semantics id="S1.p2.3.m3.1a"><mi id="S1.p2.3.m3.1.1" xref="S1.p2.3.m3.1.1.cmml">t</mi><annotation-xml encoding="MathML-Content" id="S1.p2.3.m3.1b"><ci id="S1.p2.3.m3.1.1.cmml" xref="S1.p2.3.m3.1.1">𝑡</ci></annotation-xml><annotation encoding="application/x-tex" id="S1.p2.3.m3.1c">t</annotation></semantics></math>. This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples.
+Recent work has achieved significant improvements in computational efficiency through factorization tricks <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib21" title="">21</a>]</cite> and conditional computation <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib32" title="">32</a>]</cite>, while also improving model performance in case of the latter. The fundamental constraint of sequential computation, however, remains.</p>
 </div>
-<div id="S1.p3" class="ltx_para ltx_noindent">
-<p id="S1.p3.1" class="ltx_p">Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib2" title="" class="ltx_ref">2</a>, <a href="#bib.bib19" title="" class="ltx_ref">19</a>]</cite>. In all but a few cases <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib27" title="" class="ltx_ref">27</a>]</cite>, however, such attention mechanisms are used in conjunction with a recurrent network.</p>
+<div class="ltx_para ltx_noindent" id="S1.p3">
+<p class="ltx_p" id="S1.p3.1">Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib2" title="">2</a>, <a class="ltx_ref" href="#bib.bib19" title="">19</a>]</cite>. In all but a few cases <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib27" title="">27</a>]</cite>, however, such attention mechanisms are used in conjunction with a recurrent network.</p>
 </div>
-<div id="S1.p4" class="ltx_para ltx_noindent">
-<p id="S1.p4.1" class="ltx_p">In this work we propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output. The Transformer allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight P100 GPUs.</p>
+<div class="ltx_para ltx_noindent" id="S1.p4">
+<p class="ltx_p" id="S1.p4.1">In this work we propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output. The Transformer allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight P100 GPUs.</p>
 </div>
 </section>
-<section id="S2" class="ltx_section">
+<section class="ltx_section" id="S2">
 <h2 class="ltx_title ltx_title_section">
 <span class="ltx_tag ltx_tag_section">2 </span>Background</h2>
-
-<div id="S2.p1" class="ltx_para ltx_noindent">
-<p id="S2.p1.1" class="ltx_p">The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib16" title="" class="ltx_ref">16</a>]</cite>, ByteNet <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib18" title="" class="ltx_ref">18</a>]</cite> and ConvS2S <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib9" title="" class="ltx_ref">9</a>]</cite>, all of which use convolutional neural networks as basic building block, computing hidden representations in parallel for all input and output positions. In these models, the number of operations required to relate signals from two arbitrary input or output positions grows in the distance between positions, linearly for ConvS2S and logarithmically for ByteNet. This makes it more difficult to learn dependencies between distant positions <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib12" title="" class="ltx_ref">12</a>]</cite>. In the Transformer this is reduced to a constant number of operations, albeit at the cost of reduced effective resolution due to averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as described in section <a href="#S3.SS2" title="3.2 Attention ‣ 3 Model Architecture ‣ Attention Is All You Need" class="ltx_ref"><span class="ltx_text ltx_ref_tag">3.2</span></a>.</p>
+<div class="ltx_para ltx_noindent" id="S2.p1">
+<p class="ltx_p" id="S2.p1.1">The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib16" title="">16</a>]</cite>, ByteNet <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib18" title="">18</a>]</cite> and ConvS2S <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib9" title="">9</a>]</cite>, all of which use convolutional neural networks as basic building block, computing hidden representations in parallel for all input and output positions. In these models, the number of operations required to relate signals from two arbitrary input or output positions grows in the distance between positions, linearly for ConvS2S and logarithmically for ByteNet. This makes it more difficult to learn dependencies between distant positions <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib12" title="">12</a>]</cite>. In the Transformer this is reduced to a constant number of operations, albeit at the cost of reduced effective resolution due to averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as described in section <a class="ltx_ref" href="#S3.SS2" title="3.2 Attention ‣ 3 Model Architecture ‣ Attention Is All You Need"><span class="ltx_text ltx_ref_tag">3.2</span></a>.</p>
 </div>
-<div id="S2.p2" class="ltx_para ltx_noindent">
-<p id="S2.p2.1" class="ltx_p">Self-attention, sometimes called intra-attention is an attention mechanism relating different positions of a single sequence in order to compute a representation of the sequence. Self-attention has been used successfully in a variety of tasks including reading comprehension, abstractive summarization, textual entailment and learning task-independent sentence representations <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib4" title="" class="ltx_ref">4</a>, <a href="#bib.bib27" title="" class="ltx_ref">27</a>, <a href="#bib.bib28" title="" class="ltx_ref">28</a>, <a href="#bib.bib22" title="" class="ltx_ref">22</a>]</cite>.</p>
+<div class="ltx_para ltx_noindent" id="S2.p2">
+<p class="ltx_p" id="S2.p2.1">Self-attention, sometimes called intra-attention is an attention mechanism relating different positions of a single sequence in order to compute a representation of the sequence. Self-attention has been used successfully in a variety of tasks including reading comprehension, abstractive summarization, textual entailment and learning task-independent sentence representations <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib4" title="">4</a>, <a class="ltx_ref" href="#bib.bib27" title="">27</a>, <a class="ltx_ref" href="#bib.bib28" title="">28</a>, <a class="ltx_ref" href="#bib.bib22" title="">22</a>]</cite>.</p>
 </div>
-<div id="S2.p3" class="ltx_para ltx_noindent">
-<p id="S2.p3.1" class="ltx_p">End-to-end memory networks are based on a recurrent attention mechanism instead of sequence-aligned recurrence and have been shown to perform well on simple-language question answering and language modeling tasks <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib34" title="" class="ltx_ref">34</a>]</cite>.</p>
+<div class="ltx_para ltx_noindent" id="S2.p3">
+<p class="ltx_p" id="S2.p3.1">End-to-end memory networks are based on a recurrent attention mechanism instead of sequence-aligned recurrence and have been shown to perform well on simple-language question answering and language modeling tasks <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib34" title="">34</a>]</cite>.</p>
 </div>
-<div id="S2.p4" class="ltx_para ltx_noindent">
-<p id="S2.p4.1" class="ltx_p">To the best of our knowledge, however, the Transformer is the first transduction model relying entirely on self-attention to compute representations of its input and output without using sequence-aligned RNNs or convolution.
-In the following sections, we will describe the Transformer, motivate self-attention and discuss its advantages over models such as <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib17" title="" class="ltx_ref">17</a>, <a href="#bib.bib18" title="" class="ltx_ref">18</a>]</cite> and <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib9" title="" class="ltx_ref">9</a>]</cite>.</p>
-</div>
-</section>
-<section id="S3" class="ltx_section">
-<h2 class="ltx_title ltx_title_section">
-<span class="ltx_tag ltx_tag_section">3 </span>Model Architecture</h2>
-
-<figure id="S3.F1" class="ltx_figure"><img src="/html/1706.03762/assets/Figures/ModalNet-21.png" id="S3.F1.g1" class="ltx_graphics ltx_centering ltx_img_portrait" width="912" height="1344" alt="Refer to caption">
-<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_figure">Figure 1: </span>The Transformer - model architecture.</figcaption>
-</figure>
-<div id="S3.p1" class="ltx_para ltx_noindent">
-<p id="S3.p1.4" class="ltx_p">Most competitive neural sequence transduction models have an encoder-decoder structure <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib5" title="" class="ltx_ref">5</a>, <a href="#bib.bib2" title="" class="ltx_ref">2</a>, <a href="#bib.bib35" title="" class="ltx_ref">35</a>]</cite>. Here, the encoder maps an input sequence of symbol representations <math id="S3.p1.1.m1.3" class="ltx_Math" alttext="(x_{1},...,x_{n})" display="inline"><semantics id="S3.p1.1.m1.3a"><mrow id="S3.p1.1.m1.3.3.2" xref="S3.p1.1.m1.3.3.3.cmml"><mo stretchy="false" id="S3.p1.1.m1.3.3.2.3" xref="S3.p1.1.m1.3.3.3.cmml">(</mo><msub id="S3.p1.1.m1.2.2.1.1" xref="S3.p1.1.m1.2.2.1.1.cmml"><mi id="S3.p1.1.m1.2.2.1.1.2" xref="S3.p1.1.m1.2.2.1.1.2.cmml">x</mi><mn id="S3.p1.1.m1.2.2.1.1.3" xref="S3.p1.1.m1.2.2.1.1.3.cmml">1</mn></msub><mo id="S3.p1.1.m1.3.3.2.4" xref="S3.p1.1.m1.3.3.3.cmml">,</mo><mi mathvariant="normal" id="S3.p1.1.m1.1.1" xref="S3.p1.1.m1.1.1.cmml">…</mi><mo id="S3.p1.1.m1.3.3.2.5" xref="S3.p1.1.m1.3.3.3.cmml">,</mo><msub id="S3.p1.1.m1.3.3.2.2" xref="S3.p1.1.m1.3.3.2.2.cmml"><mi id="S3.p1.1.m1.3.3.2.2.2" xref="S3.p1.1.m1.3.3.2.2.2.cmml">x</mi><mi id="S3.p1.1.m1.3.3.2.2.3" xref="S3.p1.1.m1.3.3.2.2.3.cmml">n</mi></msub><mo stretchy="false" id="S3.p1.1.m1.3.3.2.6" xref="S3.p1.1.m1.3.3.3.cmml">)</mo></mrow><annotation-xml encoding="MathML-Content" id="S3.p1.1.m1.3b"><vector id="S3.p1.1.m1.3.3.3.cmml" xref="S3.p1.1.m1.3.3.2"><apply id="S3.p1.1.m1.2.2.1.1.cmml" xref="S3.p1.1.m1.2.2.1.1"><csymbol cd="ambiguous" id="S3.p1.1.m1.2.2.1.1.1.cmml" xref="S3.p1.1.m1.2.2.1.1">subscript</csymbol><ci id="S3.p1.1.m1.2.2.1.1.2.cmml" xref="S3.p1.1.m1.2.2.1.1.2">𝑥</ci><cn type="integer" id="S3.p1.1.m1.2.2.1.1.3.cmml" xref="S3.p1.1.m1.2.2.1.1.3">1</cn></apply><ci id="S3.p1.1.m1.1.1.cmml" xref="S3.p1.1.m1.1.1">…</ci><apply id="S3.p1.1.m1.3.3.2.2.cmml" xref="S3.p1.1.m1.3.3.2.2"><csymbol cd="ambiguous" id="S3.p1.1.m1.3.3.2.2.1.cmml" xref="S3.p1.1.m1.3.3.2.2">subscript</csymbol><ci id="S3.p1.1.m1.3.3.2.2.2.cmml" xref="S3.p1.1.m1.3.3.2.2.2">𝑥</ci><ci id="S3.p1.1.m1.3.3.2.2.3.cmml" xref="S3.p1.1.m1.3.3.2.2.3">𝑛</ci></apply></vector></annotation-xml><annotation encoding="application/x-tex" id="S3.p1.1.m1.3c">(x_{1},...,x_{n})</annotation></semantics></math> to a sequence of continuous representations <math id="S3.p1.2.m2.3" class="ltx_Math" alttext="\mathbf{z}=(z_{1},...,z_{n})" display="inline"><semantics id="S3.p1.2.m2.3a"><mrow id="S3.p1.2.m2.3.3" xref="S3.p1.2.m2.3.3.cmml"><mi id="S3.p1.2.m2.3.3.4" xref="S3.p1.2.m2.3.3.4.cmml">𝐳</mi><mo id="S3.p1.2.m2.3.3.3" xref="S3.p1.2.m2.3.3.3.cmml">=</mo><mrow id="S3.p1.2.m2.3.3.2.2" xref="S3.p1.2.m2.3.3.2.3.cmml"><mo stretchy="false" id="S3.p1.2.m2.3.3.2.2.3" xref="S3.p1.2.m2.3.3.2.3.cmml">(</mo><msub id="S3.p1.2.m2.2.2.1.1.1" xref="S3.p1.2.m2.2.2.1.1.1.cmml"><mi id="S3.p1.2.m2.2.2.1.1.1.2" xref="S3.p1.2.m2.2.2.1.1.1.2.cmml">z</mi><mn id="S3.p1.2.m2.2.2.1.1.1.3" xref="S3.p1.2.m2.2.2.1.1.1.3.cmml">1</mn></msub><mo id="S3.p1.2.m2.3.3.2.2.4" xref="S3.p1.2.m2.3.3.2.3.cmml">,</mo><mi mathvariant="normal" id="S3.p1.2.m2.1.1" xref="S3.p1.2.m2.1.1.cmml">…</mi><mo id="S3.p1.2.m2.3.3.2.2.5" xref="S3.p1.2.m2.3.3.2.3.cmml">,</mo><msub id="S3.p1.2.m2.3.3.2.2.2" xref="S3.p1.2.m2.3.3.2.2.2.cmml"><mi id="S3.p1.2.m2.3.3.2.2.2.2" xref="S3.p1.2.m2.3.3.2.2.2.2.cmml">z</mi><mi id="S3.p1.2.m2.3.3.2.2.2.3" xref="S3.p1.2.m2.3.3.2.2.2.3.cmml">n</mi></msub><mo stretchy="false" id="S3.p1.2.m2.3.3.2.2.6" xref="S3.p1.2.m2.3.3.2.3.cmml">)</mo></mrow></mrow><annotation-xml encoding="MathML-Content" id="S3.p1.2.m2.3b"><apply id="S3.p1.2.m2.3.3.cmml" xref="S3.p1.2.m2.3.3"><eq id="S3.p1.2.m2.3.3.3.cmml" xref="S3.p1.2.m2.3.3.3"></eq><ci id="S3.p1.2.m2.3.3.4.cmml" xref="S3.p1.2.m2.3.3.4">𝐳</ci><vector id="S3.p1.2.m2.3.3.2.3.cmml" xref="S3.p1.2.m2.3.3.2.2"><apply id="S3.p1.2.m2.2.2.1.1.1.cmml" xref="S3.p1.2.m2.2.2.1.1.1"><csymbol cd="ambiguous" id="S3.p1.2.m2.2.2.1.1.1.1.cmml" xref="S3.p1.2.m2.2.2.1.1.1">subscript</csymbol><ci id="S3.p1.2.m2.2.2.1.1.1.2.cmml" xref="S3.p1.2.m2.2.2.1.1.1.2">𝑧</ci><cn type="integer" id="S3.p1.2.m2.2.2.1.1.1.3.cmml" xref="S3.p1.2.m2.2.2.1.1.1.3">1</cn></apply><ci id="S3.p1.2.m2.1.1.cmml" xref="S3.p1.2.m2.1.1">…</ci><apply id="S3.p1.2.m2.3.3.2.2.2.cmml" xref="S3.p1.2.m2.3.3.2.2.2"><csymbol cd="ambiguous" id="S3.p1.2.m2.3.3.2.2.2.1.cmml" xref="S3.p1.2.m2.3.3.2.2.2">subscript</csymbol><ci id="S3.p1.2.m2.3.3.2.2.2.2.cmml" xref="S3.p1.2.m2.3.3.2.2.2.2">𝑧</ci><ci id="S3.p1.2.m2.3.3.2.2.2.3.cmml" xref="S3.p1.2.m2.3.3.2.2.2.3">𝑛</ci></apply></vector></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.p1.2.m2.3c">\mathbf{z}=(z_{1},...,z_{n})</annotation></semantics></math>. Given <math id="S3.p1.3.m3.1" class="ltx_Math" alttext="\mathbf{z}" display="inline"><semantics id="S3.p1.3.m3.1a"><mi id="S3.p1.3.m3.1.1" xref="S3.p1.3.m3.1.1.cmml">𝐳</mi><annotation-xml encoding="MathML-Content" id="S3.p1.3.m3.1b"><ci id="S3.p1.3.m3.1.1.cmml" xref="S3.p1.3.m3.1.1">𝐳</ci></annotation-xml><annotation encoding="application/x-tex" id="S3.p1.3.m3.1c">\mathbf{z}</annotation></semantics></math>, the decoder then generates an output sequence <math id="S3.p1.4.m4.3" class="ltx_Math" alttext="(y_{1},...,y_{m})" display="inline"><semantics id="S3.p1.4.m4.3a"><mrow id="S3.p1.4.m4.3.3.2" xref="S3.p1.4.m4.3.3.3.cmml"><mo stretchy="false" id="S3.p1.4.m4.3.3.2.3" xref="S3.p1.4.m4.3.3.3.cmml">(</mo><msub id="S3.p1.4.m4.2.2.1.1" xref="S3.p1.4.m4.2.2.1.1.cmml"><mi id="S3.p1.4.m4.2.2.1.1.2" xref="S3.p1.4.m4.2.2.1.1.2.cmml">y</mi><mn id="S3.p1.4.m4.2.2.1.1.3" xref="S3.p1.4.m4.2.2.1.1.3.cmml">1</mn></msub><mo id="S3.p1.4.m4.3.3.2.4" xref="S3.p1.4.m4.3.3.3.cmml">,</mo><mi mathvariant="normal" id="S3.p1.4.m4.1.1" xref="S3.p1.4.m4.1.1.cmml">…</mi><mo id="S3.p1.4.m4.3.3.2.5" xref="S3.p1.4.m4.3.3.3.cmml">,</mo><msub id="S3.p1.4.m4.3.3.2.2" xref="S3.p1.4.m4.3.3.2.2.cmml"><mi id="S3.p1.4.m4.3.3.2.2.2" xref="S3.p1.4.m4.3.3.2.2.2.cmml">y</mi><mi id="S3.p1.4.m4.3.3.2.2.3" xref="S3.p1.4.m4.3.3.2.2.3.cmml">m</mi></msub><mo stretchy="false" id="S3.p1.4.m4.3.3.2.6" xref="S3.p1.4.m4.3.3.3.cmml">)</mo></mrow><annotation-xml encoding="MathML-Content" id="S3.p1.4.m4.3b"><vector id="S3.p1.4.m4.3.3.3.cmml" xref="S3.p1.4.m4.3.3.2"><apply id="S3.p1.4.m4.2.2.1.1.cmml" xref="S3.p1.4.m4.2.2.1.1"><csymbol cd="ambiguous" id="S3.p1.4.m4.2.2.1.1.1.cmml" xref="S3.p1.4.m4.2.2.1.1">subscript</csymbol><ci id="S3.p1.4.m4.2.2.1.1.2.cmml" xref="S3.p1.4.m4.2.2.1.1.2">𝑦</ci><cn type="integer" id="S3.p1.4.m4.2.2.1.1.3.cmml" xref="S3.p1.4.m4.2.2.1.1.3">1</cn></apply><ci id="S3.p1.4.m4.1.1.cmml" xref="S3.p1.4.m4.1.1">…</ci><apply id="S3.p1.4.m4.3.3.2.2.cmml" xref="S3.p1.4.m4.3.3.2.2"><csymbol cd="ambiguous" id="S3.p1.4.m4.3.3.2.2.1.cmml" xref="S3.p1.4.m4.3.3.2.2">subscript</csymbol><ci id="S3.p1.4.m4.3.3.2.2.2.cmml" xref="S3.p1.4.m4.3.3.2.2.2">𝑦</ci><ci id="S3.p1.4.m4.3.3.2.2.3.cmml" xref="S3.p1.4.m4.3.3.2.2.3">𝑚</ci></apply></vector></annotation-xml><annotation encoding="application/x-tex" id="S3.p1.4.m4.3c">(y_{1},...,y_{m})</annotation></semantics></math> of symbols one element at a time. At each step the model is auto-regressive <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib10" title="" class="ltx_ref">10</a>]</cite>, consuming the previously generated symbols as additional input when generating the next.</p>
-</div>
-<div id="S3.p2" class="ltx_para ltx_noindent">
-<p id="S3.p2.1" class="ltx_p">The Transformer follows this overall architecture using stacked self-attention and point-wise, fully connected layers for both the encoder and decoder, shown in the left and right halves of Figure <a href="#S3.F1" title="Figure 1 ‣ 3 Model Architecture ‣ Attention Is All You Need" class="ltx_ref"><span class="ltx_text ltx_ref_tag">1</span></a>, respectively.</p>
-</div>
-<section id="S3.SS1" class="ltx_subsection">
-<h3 class="ltx_title ltx_title_subsection">
-<span class="ltx_tag ltx_tag_subsection">3.1 </span>Encoder and Decoder Stacks</h3>
-
-<section id="S3.SS1.SSS0.Px1" class="ltx_paragraph">
-<h5 class="ltx_title ltx_title_paragraph">Encoder:</h5>
-
-<div id="S3.SS1.SSS0.Px1.p1" class="ltx_para ltx_noindent">
-<p id="S3.SS1.SSS0.Px1.p1.4" class="ltx_p">The encoder is composed of a stack of <math id="S3.SS1.SSS0.Px1.p1.1.m1.1" class="ltx_Math" alttext="N=6" display="inline"><semantics id="S3.SS1.SSS0.Px1.p1.1.m1.1a"><mrow id="S3.SS1.SSS0.Px1.p1.1.m1.1.1" xref="S3.SS1.SSS0.Px1.p1.1.m1.1.1.cmml"><mi id="S3.SS1.SSS0.Px1.p1.1.m1.1.1.2" xref="S3.SS1.SSS0.Px1.p1.1.m1.1.1.2.cmml">N</mi><mo id="S3.SS1.SSS0.Px1.p1.1.m1.1.1.1" xref="S3.SS1.SSS0.Px1.p1.1.m1.1.1.1.cmml">=</mo><mn id="S3.SS1.SSS0.Px1.p1.1.m1.1.1.3" xref="S3.SS1.SSS0.Px1.p1.1.m1.1.1.3.cmml">6</mn></mrow><annotation-xml encoding="MathML-Content" id="S3.SS1.SSS0.Px1.p1.1.m1.1b"><apply id="S3.SS1.SSS0.Px1.p1.1.m1.1.1.cmml" xref="S3.SS1.SSS0.Px1.p1.1.m1.1.1"><eq id="S3.SS1.SSS0.Px1.p1.1.m1.1.1.1.cmml" xref="S3.SS1.SSS0.Px1.p1.1.m1.1.1.1"></eq><ci id="S3.SS1.SSS0.Px1.p1.1.m1.1.1.2.cmml" xref="S3.SS1.SSS0.Px1.p1.1.m1.1.1.2">𝑁</ci><cn type="integer" id="S3.SS1.SSS0.Px1.p1.1.m1.1.1.3.cmml" xref="S3.SS1.SSS0.Px1.p1.1.m1.1.1.3">6</cn></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.SS1.SSS0.Px1.p1.1.m1.1c">N=6</annotation></semantics></math> identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network. We employ a residual connection <cite class="ltx_cite ltx_citemacro_citep">[<a href="#bib.bib11" title="" class="ltx_ref">11</a>]</cite> around each of the two sub-layers, followed by layer normalization <cite class="ltx_cite ltx_citemacro_cite">[<a href="#bib.bib1" title="" class="ltx_ref">1</a>]</cite>. That is, the output of each sub-layer is <math id="S3.SS1.SSS0.Px1.p1.2.m2.2" class="ltx_Math" alttext="\mathrm{LayerNorm}(x+\mathrm{Sublayer}(x))" display="inline"><semantics id="S3.SS1.SSS0.Px1.p1.2.m2.2a"><mrow id="S3.SS1.SSS0.Px1.p1.2.m2.2.2" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.cmml"><mi id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.3" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.3.cmml">LayerNorm</mi><mo lspace="0em" rspace="0em" id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.2" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.2.cmml">​</mo><mrow id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.cmml"><mo stretchy="false" id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.2" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.cmml">(</mo><mrow id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.cmml"><mi id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.2" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.2.cmml">x</mi><mo id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.1" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.1.cmml">+</mo><mrow id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.cmml"><mi id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.2" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.2.cmml">Sublayer</mi><mo lspace="0em" rspace="0em" id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.1" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.1.cmml">​</mo><mrow id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.3.2" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.cmml"><mo stretchy="false" id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.3.2.1" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.cmml">(</mo><mi id="S3.SS1.SSS0.Px1.p1.2.m2.1.1" xref="S3.SS1.SSS0.Px1.p1.2.m2.1.1.cmml">x</mi><mo stretchy="false" id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.3.2.2" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.cmml">)</mo></mrow></mrow></mrow><mo stretchy="false" id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.3" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.cmml">)</mo></mrow></mrow><annotation-xml encoding="MathML-Content" id="S3.SS1.SSS0.Px1.p1.2.m2.2b"><apply id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2"><times id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.2.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.2"></times><ci id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.3.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.3">LayerNorm</ci><apply id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1"><plus id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.1.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.1"></plus><ci id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.2.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.2">𝑥</ci><apply id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3"><times id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.1.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.1"></times><ci id="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.2.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.2.2.1.1.1.3.2">Sublayer</ci><ci id="S3.SS1.SSS0.Px1.p1.2.m2.1.1.cmml" xref="S3.SS1.SSS0.Px1.p1.2.m2.1.1">𝑥</ci></apply></apply></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.SS1.SSS0.Px1.p1.2.m2.2c">\mathrm{LayerNorm}(x+\mathrm{Sublayer}(x))</annotation></semantics></math>, where <math id="S3.SS1.SSS0.Px1.p1.3.m3.1" class="ltx_Math" alttext="\mathrm{Sublayer}(x)" display="inline"><semantics id="S3.SS1.SSS0.Px1.p1.3.m3.1a"><mrow id="S3.SS1.SSS0.Px1.p1.3.m3.1.2" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2.cmml"><mi id="S3.SS1.SSS0.Px1.p1.3.m3.1.2.2" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2.2.cmml">Sublayer</mi><mo lspace="0em" rspace="0em" id="S3.SS1.SSS0.Px1.p1.3.m3.1.2.1" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2.1.cmml">​</mo><mrow id="S3.SS1.SSS0.Px1.p1.3.m3.1.2.3.2" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2.cmml"><mo stretchy="false" id="S3.SS1.SSS0.Px1.p1.3.m3.1.2.3.2.1" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2.cmml">(</mo><mi id="S3.SS1.SSS0.Px1.p1.3.m3.1.1" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.1.cmml">x</mi><mo stretchy="false" id="S3.SS1.SSS0.Px1.p1.3.m3.1.2.3.2.2" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2.cmml">)</mo></mrow></mrow><annotation-xml encoding="MathML-Content" id="S3.SS1.SSS0.Px1.p1.3.m3.1b"><apply id="S3.SS1.SSS0.Px1.p1.3.m3.1.2.cmml" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2"><times id="S3.SS1.SSS0.Px1.p1.3.m3.1.2.1.cmml" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2.1"></times><ci id="S3.SS1.SSS0.Px1.p1.3.m3.1.2.2.cmml" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.2.2">Sublayer</ci><ci id="S3.SS1.SSS0.Px1.p1.3.m3.1.1.cmml" xref="S3.SS1.SSS0.Px1.p1.3.m3.1.1">𝑥</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.SS1.SSS0.Px1.p1.3.m3.1c">\mathrm{Sublayer}(x)</annotation></semantics></math> is the function implemented by the sub-layer itself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding layers, produce outputs of dimension <math id="S3.SS1.SSS0.Px1.p1.4.m4.1" class="ltx_Math" alttext="d_{\text{model}}=512" display="inline"><semantics id="S3.SS1.SSS0.Px1.p1.4.m4.1a"><mrow id="S3.SS1.SSS0.Px1.p1.4.m4.1.1" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.cmml"><msub id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.cmml"><mi id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.2" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.2.cmml">d</mi><mtext id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.3" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.3a.cmml">model</mtext></msub><mo id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.1" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.1.cmml">=</mo><mn id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.3" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.3.cmml">512</mn></mrow><annotation-xml encoding="MathML-Content" id="S3.SS1.SSS0.Px1.p1.4.m4.1b"><apply id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.cmml" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1"><eq id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.1.cmml" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.1"></eq><apply id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.cmml" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2"><csymbol cd="ambiguous" id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.1.cmml" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2">subscript</csymbol><ci id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.2.cmml" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.2">𝑑</ci><ci id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.3a.cmml" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.3"><mtext mathsize="70%" id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.3.cmml" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.2.3">model</mtext></ci></apply><cn type="integer" id="S3.SS1.SSS0.Px1.p1.4.m4.1.1.3.cmml" xref="S3.SS1.SSS0.Px1.p1.4.m4.1.1.3">512</cn></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.SS1.SSS0.Px1.p1.4.m4.1c">d_{\text{model}}=512</annotation></semantics></math>.</p>
+<div class="ltx_para ltx_noindent" id="S2.p4">
+<p class="ltx_p" id="S2.p4.1">To the best of our knowledge, however, the Transformer is the first transduction model relying entirely on self-attention to compute representations of its input and output without using sequence-aligned RNNs or convolution.
+In the following sections, we will describe the Transformer, motivate self-attention and discuss its advantages over models such as <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib17" title="">17</a>, <a class="ltx_ref" href="#bib.bib18" title="">18</a>]</cite> and <cite class="ltx_cite ltx_citemacro_citep">[<a class="ltx_ref" href="#bib.bib9" title="">9</a>]</cite>.</p>
 </div>
 </section>
-<section id="S3.SS1.SSS0.Px2" class="ltx_paragraph">
-<h5 class="ltx_title ltx_title_paragraph">Decoder:</h5>
 
-<div id="S3.SS1.SSS0.Px2.p1" class="ltx_para ltx_noindent">
-<p id="S3.SS1.SSS0.Px2.p1.3" class="ltx_p">The decoder is also composed of a stack of <math id="S3.SS1.SSS0.Px2.p1.1.m1.1" class="ltx_Math" alttext="N=6" display="inline"><semantics id="S3.SS1.SSS0.Px2.p1.1.m1.1a"><mrow id="S3.SS1.SSS0.Px2.p1.1.m1.1.1" xref="S3.SS1.SSS0.Px2.p1.1.m1.1.1.cmml"><mi id="S3.SS1.SSS0.Px2.p1.1.m1.1.1.2" xref="S3.SS1.SSS0.Px2.p1.1.m1.1.1.2.cmml">N</mi><mo id="S3.SS1.SSS0.Px2.p1.1.m1.1.1.1" xref="S3.SS1.SSS0.Px2.p1.1.m1.1.1.1.cmml">=</mo><mn id="S3.SS1.SSS0.Px2.p1.1.m1.1.1.3" xref="S3.SS1.SSS0.Px2.p1.1.m1.1.1.3.cmml">6</mn></mrow><annotation-xml encoding="MathML-Content" id="S3.SS1.SSS0.Px2.p1.1.m1.1b"><apply id="S3.SS1.SSS0.Px2.p1.1.m1.1.1.cmml" xref="S3.SS1.SSS0.Px2.p1.1.m1.1.1"><eq id="S3.SS1.SSS0.Px2.p1.1.m1.1.1.1.cmml" xref="S3.SS1.SSS0.Px2.p1.1.m1.1.1.1"></eq><ci id="S3.SS1.SSS0.Px2.p1.1.m1.1.1.2.cmml" xref="S3.SS1.SSS0.Px2.p1.1.m1.1.1.2">𝑁</ci><cn type="integer" id="S3.SS1.SSS0.Px2.p1.1.m1.1.1.3.cmml" xref="S3.SS1.SSS0.Px2.p1.1.m1.1.1.3">6</cn></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.SS1.SSS0.Px2.p1.1.m1.1c">N=6</annotation></semantics></math> identical layers. In addition to the two sub-layers in each encoder layer, the decoder inserts a third sub-layer, which performs multi-head attention over the output of the encoder stack. Similar to the encoder, we employ residual connections around each of the sub-layers, followed by layer normalization. We also modify the self-attention sub-layer in the decoder stack to prevent positions from attending to subsequent positions. This masking, combined with fact that the output embeddings are offset by one position, ensures that the predictions for position <math id="S3.SS1.SSS0.Px2.p1.2.m2.1" class="ltx_Math" alttext="i" display="inline"><semantics id="S3.SS1.SSS0.Px2.p1.2.m2.1a"><mi id="S3.SS1.SSS0.Px2.p1.2.m2.1.1" xref="S3.SS1.SSS0.Px2.p1.2.m2.1.1.cmml">i</mi><annotation-xml encoding="MathML-Content" id="S3.SS1.SSS0.Px2.p1.2.m2.1b"><ci id="S3.SS1.SSS0.Px2.p1.2.m2.1.1.cmml" xref="S3.SS1.SSS0.Px2.p1.2.m2.1.1">𝑖</ci></annotation-xml><annotation encoding="application/x-tex" id="S3.SS1.SSS0.Px2.p1.2.m2.1c">i</annotation></semantics></math> can depend only on the known outputs at positions less than <math id="S3.SS1.SSS0.Px2.p1.3.m3.1" class="ltx_Math" alttext="i" display="inline"><semantics id="S3.SS1.SSS0.Px2.p1.3.m3.1a"><mi id="S3.SS1.SSS0.Px2.p1.3.m3.1.1" xref="S3.SS1.SSS0.Px2.p1.3.m3.1.1.cmml">i</mi><annotation-xml encoding="MathML-Content" id="S3.SS1.SSS0.Px2.p1.3.m3.1b"><ci id="S3.SS1.SSS0.Px2.p1.3.m3.1.1.cmml" xref="S3.SS1.SSS0.Px2.p1.3.m3.1.1">𝑖</ci></annotation-xml><annotation encoding="application/x-tex" id="S3.SS1.SSS0.Px2.p1.3.m3.1c">i</annotation></semantics></math>.</p>
-</div>
-</section>
-</section>
-<section id="S3.SS2" class="ltx_subsection">
-<h3 class="ltx_title ltx_title_subsection">
-<span class="ltx_tag ltx_tag_subsection">3.2 </span>Attention</h3>
 
-<div id="S3.SS2.p1" class="ltx_para ltx_noindent">
-<p id="S3.SS2.p1.1" class="ltx_p">An attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.</p>
-</div>
-<section id="S3.SS2.SSS1" class="ltx_subsubsection">
-<h4 class="ltx_title ltx_title_subsubsection">
-<span class="ltx_tag ltx_tag_subsubsection">3.2.1 </span>Scaled Dot-Product Attention</h4>
 
-<div id="S3.SS2.SSS1.p1" class="ltx_para ltx_noindent">
-<p id="S3.SS2.SSS1.p1.3" class="ltx_p">We call our particular attention "Scaled Dot-Product Attention" (Figure <a href="#S3.F2" title="Figure 2 ‣ 3.2.2 Multi-Head Attention ‣ 3.2 Attention ‣ 3 Model Architecture ‣ Attention Is All You Need" class="ltx_ref"><span class="ltx_text ltx_ref_tag">2</span></a>). The input consists of queries and keys of dimension <math id="S3.SS2.SSS1.p1.1.m1.1" class="ltx_Math" alttext="d_{k}" display="inline"><semantics id="S3.SS2.SSS1.p1.1.m1.1a"><msub id="S3.SS2.SSS1.p1.1.m1.1.1" xref="S3.SS2.SSS1.p1.1.m1.1.1.cmml"><mi id="S3.SS2.SSS1.p1.1.m1.1.1.2" xref="S3.SS2.SSS1.p1.1.m1.1.1.2.cmml">d</mi><mi id="S3.SS2.SSS1.p1.1.m1.1.1.3" xref="S3.SS2.SSS1.p1.1.m1.1.1.3.cmml">k</mi></msub><annotation-xml encoding="MathML-Content" id="S3.SS2.SSS1.p1.1.m1.1b"><apply id="S3.SS2.SSS1.p1.1.m1.1.1.cmml" xref="S3.SS2.SSS1.p1.1.m1.1.1"><csymbol cd="ambiguous" id="S3.SS2.SSS1.p1.1.m1.1.1.1.cmml" xref="S3.SS2.SSS1.p1.1.m1.1.1">subscript</csymbol><ci id="S3.SS2.SSS1.p1.1.m1.1.1.2.cmml" xref="S3.SS2.SSS1.p1.1.m1.1.1.2">𝑑</ci><ci id="S3.SS2.SSS1.p1.1.m1.1.1.3.cmml" xref="S3.SS2.SSS1.p1.1.m1.1.1.3">𝑘</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.SS2.SSS1.p1.1.m1.1c">d_{k}</annotation></semantics></math>, and values of dimension <math id="S3.SS2.SSS1.p1.2.m2.1" class="ltx_Math" alttext="d_{v}" display="inline"><semantics id="S3.SS2.SSS1.p1.2.m2.1a"><msub id="S3.SS2.SSS1.p1.2.m2.1.1" xref="S3.SS2.SSS1.p1.2.m2.1.1.cmml"><mi id="S3.SS2.SSS1.p1.2.m2.1.1.2" xref="S3.SS2.SSS1.p1.2.m2.1.1.2.cmml">d</mi><mi id="S3.SS2.SSS1.p1.2.m2.1.1.3" xref="S3.SS2.SSS1.p1.2.m2.1.1.3.cmml">v</mi></msub><annotation-xml encoding="MathML-Content" id="S3.SS2.SSS1.p1.2.m2.1b"><apply id="S3.SS2.SSS1.p1.2.m2.1.1.cmml" xref="S3.SS2.SSS1.p1.2.m2.1.1"><csymbol cd="ambiguous" id="S3.SS2.SSS1.p1.2.m2.1.1.1.cmml" xref="S3.SS2.SSS1.p1.2.m2.1.1">subscript</csymbol><ci id="S3.SS2.SSS1.p1.2.m2.1.1.2.cmml" xref="S3.SS2.SSS1.p1.2.m2.1.1.2">𝑑</ci><ci id="S3.SS2.SSS1.p1.2.m2.1.1.3.cmml" xref="S3.SS2.SSS1.p1.2.m2.1.1.3">𝑣</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.SS2.SSS1.p1.2.m2.1c">d_{v}</annotation></semantics></math>. We compute the dot products of the query with all keys, divide each by <math id="S3.SS2.SSS1.p1.3.m3.1" class="ltx_Math" alttext="\sqrt{d_{k}}" display="inline"><semantics id="S3.SS2.SSS1.p1.3.m3.1a"><msqrt id="S3.SS2.SSS1.p1.3.m3.1.1" xref="S3.SS2.SSS1.p1.3.m3.1.1.cmml"><msub id="S3.SS2.SSS1.p1.3.m3.1.1.2" xref="S3.SS2.SSS1.p1.3.m3.1.1.2.cmml"><mi id="S3.SS2.SSS1.p1.3.m3.1.1.2.2" xref="S3.SS2.SSS1.p1.3.m3.1.1.2.2.cmml">d</mi><mi id="S3.SS2.SSS1.p1.3.m3.1.1.2.3" xref="S3.SS2.SSS1.p1.3.m3.1.1.2.3.cmml">k</mi></msub></msqrt><annotation-xml encoding="MathML-Content" id="S3.SS2.SSS1.p1.3.m3.1b"><apply id="S3.SS2.SSS1.p1.3.m3.1.1.cmml" xref="S3.SS2.SSS1.p1.3.m3.1.1"><root id="S3.SS2.SSS1.p1.3.m3.1.1a.cmml" xref="S3.SS2.SSS1.p1.3.m3.1.1"></root><apply id="S3.SS2.SSS1.p1.3.m3.1.1.2.cmml" xref="S3.SS2.SSS1.p1.3.m3.1.1.2"><csymbol cd="ambiguous" id="S3.SS2.SSS1.p1.3.m3.1.1.2.1.cmml" xref="S3.SS2.SSS1.p1.3.m3.1.1.2">subscript</csymbol><ci id="S3.SS2.SSS1.p1.3.m3.1.1.2.2.cmml" xref="S3.SS2.SSS1.p1.3.m3.1.1.2.2">𝑑</ci><ci id="S3.SS2.SSS1.p1.3.m3.1.1.2.3.cmml" xref="S3.SS2.SSS1.p1.3.m3.1.1.2.3">𝑘</ci></apply></apply></annotation-xml><annotation encoding="application/x-tex" id="S3.SS2.SSS1.p1.3.m3.1c">\sqrt{d_{k}}</annotation></semantics></math>, and apply a softmax function to obtain the weights on the values.</p>
-</div>
-<!-- [excerpt gap: body trimmed; bibliography below] -->
-<section id="bib" class="ltx_bibliography">
+
+
+<section class="ltx_bibliography" id="bib">
 <h2 class="ltx_title ltx_title_bibliography">References</h2>
-
 <ul class="ltx_biblist">
-<li id="bib.bib1" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib1">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[1]</span>
 <span class="ltx_bibblock">
 Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton.
@@ -189,11 +89,11 @@ Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton.
 <span class="ltx_bibblock">Layer normalization.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib1.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1607.06450</span>, 2016.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib1.1.1">arXiv preprint arXiv:1607.06450</span>, 2016.
 
 </span>
 </li>
-<li id="bib.bib2" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib2">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[2]</span>
 <span class="ltx_bibblock">
 Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio.
@@ -203,11 +103,11 @@ Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio.
 translate.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib2.1.1" class="ltx_text ltx_font_italic">CoRR</span>, abs/1409.0473, 2014.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib2.1.1">CoRR</span>, abs/1409.0473, 2014.
 
 </span>
 </li>
-<li id="bib.bib3" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib3">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[3]</span>
 <span class="ltx_bibblock">
 Denny Britz, Anna Goldie, Minh-Thang Luong, and Quoc V. Le.
@@ -216,11 +116,11 @@ Denny Britz, Anna Goldie, Minh-Thang Luong, and Quoc V. Le.
 <span class="ltx_bibblock">Massive exploration of neural machine translation architectures.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib3.1.1" class="ltx_text ltx_font_italic">CoRR</span>, abs/1703.03906, 2017.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib3.1.1">CoRR</span>, abs/1703.03906, 2017.
 
 </span>
 </li>
-<li id="bib.bib4" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib4">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[4]</span>
 <span class="ltx_bibblock">
 Jianpeng Cheng, Li Dong, and Mirella Lapata.
@@ -229,11 +129,11 @@ Jianpeng Cheng, Li Dong, and Mirella Lapata.
 <span class="ltx_bibblock">Long short-term memory-networks for machine reading.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib4.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1601.06733</span>, 2016.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib4.1.1">arXiv preprint arXiv:1601.06733</span>, 2016.
 
 </span>
 </li>
-<li id="bib.bib5" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib5">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[5]</span>
 <span class="ltx_bibblock">
 Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Fethi Bougares, Holger
@@ -244,11 +144,11 @@ Schwenk, and Yoshua Bengio.
 statistical machine translation.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib5.1.1" class="ltx_text ltx_font_italic">CoRR</span>, abs/1406.1078, 2014.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib5.1.1">CoRR</span>, abs/1406.1078, 2014.
 
 </span>
 </li>
-<li id="bib.bib6" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib6">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[6]</span>
 <span class="ltx_bibblock">
 Francois Chollet.
@@ -257,11 +157,11 @@ Francois Chollet.
 <span class="ltx_bibblock">Xception: Deep learning with depthwise separable convolutions.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib6.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1610.02357</span>, 2016.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib6.1.1">arXiv preprint arXiv:1610.02357</span>, 2016.
 
 </span>
 </li>
-<li id="bib.bib7" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib7">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[7]</span>
 <span class="ltx_bibblock">
 Junyoung Chung, Çaglar Gülçehre, Kyunghyun Cho, and Yoshua
@@ -272,11 +172,11 @@ Bengio.
 modeling.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib7.1.1" class="ltx_text ltx_font_italic">CoRR</span>, abs/1412.3555, 2014.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib7.1.1">CoRR</span>, abs/1412.3555, 2014.
 
 </span>
 </li>
-<li id="bib.bib8" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib8">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[8]</span>
 <span class="ltx_bibblock">
 Chris Dyer, Adhiguna Kuncoro, Miguel Ballesteros, and Noah A. Smith.
@@ -285,11 +185,11 @@ Chris Dyer, Adhiguna Kuncoro, Miguel Ballesteros, and Noah A. Smith.
 <span class="ltx_bibblock">Recurrent neural network grammars.
 
 </span>
-<span class="ltx_bibblock">In <span id="bib.bib8.1.1" class="ltx_text ltx_font_italic">Proc. of NAACL</span>, 2016.
+<span class="ltx_bibblock">In <span class="ltx_text ltx_font_italic" id="bib.bib8.1.1">Proc. of NAACL</span>, 2016.
 
 </span>
 </li>
-<li id="bib.bib9" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib9">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[9]</span>
 <span class="ltx_bibblock">
 Jonas Gehring, Michael Auli, David Grangier, Denis Yarats, and Yann N. Dauphin.
@@ -298,11 +198,11 @@ Jonas Gehring, Michael Auli, David Grangier, Denis Yarats, and Yann N. Dauphin.
 <span class="ltx_bibblock">Convolutional sequence to sequence learning.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib9.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1705.03122v2</span>, 2017.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib9.1.1">arXiv preprint arXiv:1705.03122v2</span>, 2017.
 
 </span>
 </li>
-<li id="bib.bib10" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib10">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[10]</span>
 <span class="ltx_bibblock">
 Alex Graves.
@@ -311,11 +211,11 @@ Alex Graves.
 <span class="ltx_bibblock">Generating sequences with recurrent neural networks.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib10.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1308.0850</span>, 2013.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib10.1.1">arXiv preprint arXiv:1308.0850</span>, 2013.
 
 </span>
 </li>
-<li id="bib.bib11" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib11">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[11]</span>
 <span class="ltx_bibblock">
 Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.
@@ -324,12 +224,12 @@ Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun.
 <span class="ltx_bibblock">Deep residual learning for image recognition.
 
 </span>
-<span class="ltx_bibblock">In <span id="bib.bib11.1.1" class="ltx_text ltx_font_italic">Proceedings of the IEEE Conference on Computer Vision and
+<span class="ltx_bibblock">In <span class="ltx_text ltx_font_italic" id="bib.bib11.1.1">Proceedings of the IEEE Conference on Computer Vision and
 Pattern Recognition</span>, pages 770–778, 2016.
 
 </span>
 </li>
-<li id="bib.bib12" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib12">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[12]</span>
 <span class="ltx_bibblock">
 Sepp Hochreiter, Yoshua Bengio, Paolo Frasconi, and Jürgen Schmidhuber.
@@ -340,7 +240,7 @@ dependencies, 2001.
 
 </span>
 </li>
-<li id="bib.bib13" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib13">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[13]</span>
 <span class="ltx_bibblock">
 Sepp Hochreiter and Jürgen Schmidhuber.
@@ -349,11 +249,11 @@ Sepp Hochreiter and Jürgen Schmidhuber.
 <span class="ltx_bibblock">Long short-term memory.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib13.1.1" class="ltx_text ltx_font_italic">Neural computation</span>, 9(8):1735–1780, 1997.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib13.1.1">Neural computation</span>, 9(8):1735–1780, 1997.
 
 </span>
 </li>
-<li id="bib.bib14" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib14">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[14]</span>
 <span class="ltx_bibblock">
 Zhongqiang Huang and Mary Harper.
@@ -363,12 +263,12 @@ Zhongqiang Huang and Mary Harper.
 languages.
 
 </span>
-<span class="ltx_bibblock">In <span id="bib.bib14.1.1" class="ltx_text ltx_font_italic">Proceedings of the 2009 Conference on Empirical Methods in
+<span class="ltx_bibblock">In <span class="ltx_text ltx_font_italic" id="bib.bib14.1.1">Proceedings of the 2009 Conference on Empirical Methods in
 Natural Language Processing</span>, pages 832–841. ACL, August 2009.
 
 </span>
 </li>
-<li id="bib.bib15" class="ltx_bibitem">
+<li class="ltx_bibitem" id="bib.bib15">
 <span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[15]</span>
 <span class="ltx_bibblock">
 Rafal Jozefowicz, Oriol Vinyals, Mike Schuster, Noam Shazeer, and Yonghui Wu.
@@ -377,252 +277,37 @@ Rafal Jozefowicz, Oriol Vinyals, Mike Schuster, Noam Shazeer, and Yonghui Wu.
 <span class="ltx_bibblock">Exploring the limits of language modeling.
 
 </span>
-<span class="ltx_bibblock"><span id="bib.bib15.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1602.02410</span>, 2016.
+<span class="ltx_bibblock"><span class="ltx_text ltx_font_italic" id="bib.bib15.1.1">arXiv preprint arXiv:1602.02410</span>, 2016.
 
 </span>
 </li>
-<li id="bib.bib16" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[16]</span>
-<span class="ltx_bibblock">
-Łukasz Kaiser and Samy Bengio.
 
-</span>
-<span class="ltx_bibblock">Can active memory replace attention?
 
-</span>
-<span class="ltx_bibblock">In <span id="bib.bib16.1.1" class="ltx_text ltx_font_italic">Advances in Neural Information Processing Systems, (NIPS)</span>,
-2016.
 
-</span>
-</li>
-<li id="bib.bib17" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[17]</span>
-<span class="ltx_bibblock">
-Łukasz Kaiser and Ilya Sutskever.
 
-</span>
-<span class="ltx_bibblock">Neural GPUs learn algorithms.
 
-</span>
-<span class="ltx_bibblock">In <span id="bib.bib17.1.1" class="ltx_text ltx_font_italic">International Conference on Learning Representations
-(ICLR)</span>, 2016.
 
-</span>
-</li>
-<li id="bib.bib18" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[18]</span>
-<span class="ltx_bibblock">
-Nal Kalchbrenner, Lasse Espeholt, Karen Simonyan, Aaron van den Oord, Alex
-Graves, and Koray Kavukcuoglu.
 
-</span>
-<span class="ltx_bibblock">Neural machine translation in linear time.
 
-</span>
-<span class="ltx_bibblock"><span id="bib.bib18.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1610.10099v2</span>, 2017.
 
-</span>
-</li>
-<li id="bib.bib19" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[19]</span>
-<span class="ltx_bibblock">
-Yoon Kim, Carl Denton, Luong Hoang, and Alexander M. Rush.
 
-</span>
-<span class="ltx_bibblock">Structured attention networks.
 
-</span>
-<span class="ltx_bibblock">In <span id="bib.bib19.1.1" class="ltx_text ltx_font_italic">International Conference on Learning Representations</span>, 2017.
 
-</span>
-</li>
-<li id="bib.bib20" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[20]</span>
-<span class="ltx_bibblock">
-Diederik Kingma and Jimmy Ba.
 
-</span>
-<span class="ltx_bibblock">Adam: A method for stochastic optimization.
 
-</span>
-<span class="ltx_bibblock">In <span id="bib.bib20.1.1" class="ltx_text ltx_font_italic">ICLR</span>, 2015.
 
-</span>
-</li>
-<li id="bib.bib21" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[21]</span>
-<span class="ltx_bibblock">
-Oleksii Kuchaiev and Boris Ginsburg.
 
-</span>
-<span class="ltx_bibblock">Factorization tricks for LSTM networks.
 
-</span>
-<span class="ltx_bibblock"><span id="bib.bib21.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1703.10722</span>, 2017.
 
-</span>
-</li>
-<li id="bib.bib22" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[22]</span>
-<span class="ltx_bibblock">
-Zhouhan Lin, Minwei Feng, Cicero Nogueira dos Santos, Mo Yu, Bing Xiang, Bowen
-Zhou, and Yoshua Bengio.
 
-</span>
-<span class="ltx_bibblock">A structured self-attentive sentence embedding.
 
-</span>
-<span class="ltx_bibblock"><span id="bib.bib22.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1703.03130</span>, 2017.
 
-</span>
-</li>
-<li id="bib.bib23" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[23]</span>
-<span class="ltx_bibblock">
-Minh-Thang Luong, Quoc V. Le, Ilya Sutskever, Oriol Vinyals, and Lukasz Kaiser.
 
-</span>
-<span class="ltx_bibblock">Multi-task sequence to sequence learning.
 
-</span>
-<span class="ltx_bibblock"><span id="bib.bib23.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1511.06114</span>, 2015.
 
-</span>
-</li>
-<li id="bib.bib24" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[24]</span>
-<span class="ltx_bibblock">
-Minh-Thang Luong, Hieu Pham, and Christopher D Manning.
 
-</span>
-<span class="ltx_bibblock">Effective approaches to attention-based neural machine translation.
+</ul>
+</section>
+<div class="ltx_pagination ltx_role_newpage"></div>
 
-</span>
-<span class="ltx_bibblock"><span id="bib.bib24.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1508.04025</span>, 2015.
-
-</span>
-</li>
-<li id="bib.bib25" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[25]</span>
-<span class="ltx_bibblock">
-Mitchell P Marcus, Mary Ann Marcinkiewicz, and Beatrice Santorini.
-
-</span>
-<span class="ltx_bibblock">Building a large annotated corpus of english: The penn treebank.
-
-</span>
-<span class="ltx_bibblock"><span id="bib.bib25.1.1" class="ltx_text ltx_font_italic">Computational linguistics</span>, 19(2):313–330, 1993.
-
-</span>
-</li>
-<li id="bib.bib26" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[26]</span>
-<span class="ltx_bibblock">
-David McClosky, Eugene Charniak, and Mark Johnson.
-
-</span>
-<span class="ltx_bibblock">Effective self-training for parsing.
-
-</span>
-<span class="ltx_bibblock">In <span id="bib.bib26.1.1" class="ltx_text ltx_font_italic">Proceedings of the Human Language Technology Conference of
-the NAACL, Main Conference</span>, pages 152–159. ACL, June 2006.
-
-</span>
-</li>
-<li id="bib.bib27" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[27]</span>
-<span class="ltx_bibblock">
-Ankur Parikh, Oscar Täckström, Dipanjan Das, and Jakob Uszkoreit.
-
-</span>
-<span class="ltx_bibblock">A decomposable attention model.
-
-</span>
-<span class="ltx_bibblock">In <span id="bib.bib27.1.1" class="ltx_text ltx_font_italic">Empirical Methods in Natural Language Processing</span>, 2016.
-
-</span>
-</li>
-<li id="bib.bib28" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[28]</span>
-<span class="ltx_bibblock">
-Romain Paulus, Caiming Xiong, and Richard Socher.
-
-</span>
-<span class="ltx_bibblock">A deep reinforced model for abstractive summarization.
-
-</span>
-<span class="ltx_bibblock"><span id="bib.bib28.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1705.04304</span>, 2017.
-
-</span>
-</li>
-<li id="bib.bib29" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[29]</span>
-<span class="ltx_bibblock">
-Slav Petrov, Leon Barrett, Romain Thibaux, and Dan Klein.
-
-</span>
-<span class="ltx_bibblock">Learning accurate, compact, and interpretable tree annotation.
-
-</span>
-<span class="ltx_bibblock">In <span id="bib.bib29.1.1" class="ltx_text ltx_font_italic">Proceedings of the 21st International Conference on
-Computational Linguistics and 44th Annual Meeting of the ACL</span>, pages
-433–440. ACL, July 2006.
-
-</span>
-</li>
-<li id="bib.bib30" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[30]</span>
-<span class="ltx_bibblock">
-Ofir Press and Lior Wolf.
-
-</span>
-<span class="ltx_bibblock">Using the output embedding to improve language models.
-
-</span>
-<span class="ltx_bibblock"><span id="bib.bib30.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1608.05859</span>, 2016.
-
-</span>
-</li>
-<li id="bib.bib31" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[31]</span>
-<span class="ltx_bibblock">
-Rico Sennrich, Barry Haddow, and Alexandra Birch.
-
-</span>
-<span class="ltx_bibblock">Neural machine translation of rare words with subword units.
-
-</span>
-<span class="ltx_bibblock"><span id="bib.bib31.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1508.07909</span>, 2015.
-
-</span>
-</li>
-<li id="bib.bib32" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[32]</span>
-<span class="ltx_bibblock">
-Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le,
-Geoffrey Hinton, and Jeff Dean.
-
-</span>
-<span class="ltx_bibblock">Outrageously large neural networks: The sparsely-gated
-mixture-of-experts layer.
-
-</span>
-<span class="ltx_bibblock"><span id="bib.bib32.1.1" class="ltx_text ltx_font_italic">arXiv preprint arXiv:1701.06538</span>, 2017.
-
-</span>
-</li>
-<li id="bib.bib33" class="ltx_bibitem">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">[33]</span>
-<span class="ltx_bibblock">
-Nitish Srivastava, Geoffrey E Hinton, Alex Krizhevsky, Ilya Sutskever, and
-Ruslan Salakhutdinov.
-
-</span>
-<span class="ltx_bibblock">Dropout: a simple way to prevent neural networks from overfitting.
-
-</span>
-<span class="ltx_bibblock"><span id="bib.bib33.1.1" class="ltx_text ltx_font_italic">Journal of Machine Learning Research</span>, 15(1):1929–1958, 2014.
-
-</span>
-</li>
-</ul></section></article></body></html>
+</article></body></html>

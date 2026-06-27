@@ -1,22 +1,272 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta content="text/html; charset=utf-8" http-equiv="content-type"/>
-<title>DeepSeek-V3 Technical Report</title>
-<!--Generated on Tue Feb 18 17:27:27 2025 by LaTeXML (version 0.8.8) http://dlmf.nist.gov/LaTeXML/.-->
-<meta content="width=device-width, initial-scale=1, shrink-to-fit=no" name="viewport"/>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" type="text/css"/>
-<link href="/static/browse/0.3.4/css/ar5iv.0.7.9.min.css" rel="stylesheet" type="text/css"/>
-<link href="/static/browse/0.3.4/css/ar5iv-fonts.0.7.9.min.css" rel="stylesheet" type="text/css"/>
-<link href="/static/browse/0.3.4/css/latexml_styles.css" rel="stylesheet" type="text/css"/>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.3.3/html2canvas.min.js"></script>
-<script src="/static/browse/0.3.4/js/addons_new.js"></script>
-<script src="/static/browse/0.3.4/js/feedbackOverlay.js"></script>
-<base href="/html/2412.19437v2/"/></head>
-<body>
-<nav class="ltx_page_navbar">
-<nav class="ltx_TOC">
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Fixture</title><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script></head><body class="ltx_document"><nav class="ltx_page_navbar"><a class="ltx_ref" href="https://arxiv.org/abs/0000.00000" onclick="track(event)">arXiv</a></nav><nav class="ltx_TOC"><ul><li><a href="#S1">Intro</a></li></ul></nav><article class="ltx_document ltx_authors_1line">
+<div class="ltx_para" id="p1">
+<span class="ltx_ERROR undefined" id="p1.1">\reportnumber</span>
+<p class="ltx_p" id="p1.2">001 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</p>
+</div>
+<h1 class="ltx_title ltx_title_document">DeepSeek-V3 Technical Report</h1>
+<div class="ltx_authors">
+<span class="ltx_creator ltx_role_author">
+<span class="ltx_personname">
+DeepSeek-AI
+
+<br class="ltx_break"/><span class="ltx_text ltx_font_typewriter" id="id1.1.id1" style="font-size:90%;">research@deepseek.com<span class="ltx_text ltx_font_serif" id="id1.1.id1.1">
+</span></span>
+</span><span class="ltx_author_notes">
+<span class="ltx_contact ltx_role_affiliation">
+</span></span></span>
+</div>
+<div class="ltx_abstract">
+<h6 class="ltx_title ltx_title_abstract">Abstract</h6>
+<p class="ltx_p" id="id2.id1">We present DeepSeek-V3, a strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token.
+To achieve efficient inference and cost-effective training, DeepSeek-V3 adopts Multi-head Latent Attention (MLA) and DeepSeekMoE architectures, which were thoroughly validated in DeepSeek-V2.
+Furthermore, DeepSeek-V3 pioneers an auxiliary-loss-free strategy for load balancing and sets a multi-token prediction training objective for stronger performance.
+We pre-train DeepSeek-V3 on 14.8 trillion diverse and high-quality tokens, followed by Supervised Fine-Tuning and Reinforcement Learning stages to fully harness its capabilities.
+Comprehensive evaluations reveal that DeepSeek-V3 outperforms other open-source models and achieves performance comparable to leading closed-source models.
+Despite its excellent performance, DeepSeek-V3 requires only 2.788M H800 GPU hours for its full training.
+In addition, its training process is remarkably stable.
+Throughout the entire training process, we did not experience any irrecoverable loss spikes or perform any rollbacks.
+The model checkpoints are available at <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://github.com/deepseek-ai/DeepSeek-V3" title="">https://github.com/deepseek-ai/DeepSeek-V3</a>.</p>
+</div>
+<div class="ltx_para" id="p2">
+<span class="ltx_ERROR undefined" id="p2.1" lang="en">{CJK*}</span>
+<p class="ltx_p" id="p2.2"><span class="ltx_text" id="p2.2.1" lang="en">UTF8gbsn</span></p>
+</div>
+<figure class="ltx_figure" id="S0.F1" lang="en"><img alt="Refer to caption" class="ltx_graphics ltx_img_landscape" height="485" id="S0.F1.g1" src="x1.png" width="830"/>
+<figcaption class="ltx_caption"><span class="ltx_tag ltx_tag_figure">Figure 1: </span>
+Benchmark performance of DeepSeek-V3 and its counterparts.
+</figcaption>
+</figure>
+<div class="ltx_pagination ltx_role_newpage"></div>
+<nav class="ltx_TOC ltx_list_toc ltx_toc_toc" lang="en"><h6 class="ltx_title ltx_title_contents">Contents</h6>
 <ol class="ltx_toclist">
 <li class="ltx_tocentry ltx_tocentry_section"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S1" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">1 </span>Introduction</span></a></li>
 <li class="ltx_tocentry ltx_tocentry_section">
@@ -26,26 +276,10 @@
 <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1" title="In 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.1 </span>Basic Architecture</span></a>
 <ol class="ltx_toclist ltx_toclist_subsection">
 <li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS1" title="In 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.1.1 </span>Multi-Head Latent Attention</span></a></li>
-<li class="ltx_tocentry ltx_tocentry_subsubsection">
-<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2" title="In 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.1.2 </span>DeepSeekMoE with Auxiliary-Loss-Free Load Balancing</span></a>
-<ol class="ltx_toclist ltx_toclist_subsubsection">
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px1" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">Basic Architecture of DeepSeekMoE.</span></a></li>
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px2" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">Auxiliary-Loss-Free Load Balancing.</span></a></li>
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px3" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">Complementary Sequence-Wise Auxiliary Loss.</span></a></li>
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px4" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">Node-Limited Routing.</span></a></li>
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2.Px5" title="In 2.1.2 DeepSeekMoE with Auxiliary-Loss-Free Load Balancing ‣ 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">No Token-Dropping.</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS1.SSS2" title="In 2.1 Basic Architecture ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.1.2 </span>DeepSeekMoE with Auxiliary-Loss-Free Load Balancing</span></a></li>
 </ol>
 </li>
-</ol>
-</li>
-<li class="ltx_tocentry ltx_tocentry_subsection">
-<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2" title="In 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.2 </span>Multi-Token Prediction</span></a>
-<ol class="ltx_toclist ltx_toclist_subsection">
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2.SSS0.Px1" title="In 2.2 Multi-Token Prediction ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">MTP Modules.</span></a></li>
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2.SSS0.Px2" title="In 2.2 Multi-Token Prediction ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">MTP Training Objective.</span></a></li>
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2.SSS0.Px3" title="In 2.2 Multi-Token Prediction ‣ 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title">MTP in Inference.</span></a></li>
-</ol>
-</li>
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S2.SS2" title="In 2 Architecture ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">2.2 </span>Multi-Token Prediction</span></a></li>
 </ol>
 </li>
 <li class="ltx_tocentry ltx_tocentry_section">
@@ -57,19 +291,189 @@
 <ol class="ltx_toclist ltx_toclist_subsection">
 <li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS1" title="In 3.2 Training Framework ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.2.1 </span>DualPipe and Computation-Communication Overlap</span></a></li>
 <li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS2" title="In 3.2 Training Framework ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.2.2 </span>Efficient Implementation of Cross-Node All-to-All Communication</span></a></li>
-<li class="ltx_tocentry ltx_tocentry_subsubsection">
-<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS3" title="In 3.2 Training Framework ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.2.3 </span>Extremely Memory Saving with Minimal Overhead</span></a>
-<ol class="ltx_toclist ltx_toclist_subsubsection">
-<li class="ltx_tocentry ltx_tocentry_paragraph"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS3.Px1" title="In 3.2.3 Extremely Memory Saving with Minimal Overhead ‣ 3.2 Training F
-<!-- [excerpt gap: nav/sections trimmed] -->
-<section class="ltx_subsubsection" id="S2.SS1.SSS1">
-<h4 class="ltx_title ltx_title_subsubsection">
-<span class="ltx_tag ltx_tag_subsubsection">2.1.1 </span>Multi-Head Latent Attention</h4>
-<div class="ltx_para" id="S2.SS1.SSS1.p1">
-<p class="ltx_p" id="S2.SS1.SSS1.p1.5">For attention, DeepSeek-V3 adopts the MLA architecture.
-Let <math alttext="d" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.1.m1.1"><semantics id="S2.SS1.SSS1.p1.1.m1.1a"><mi id="S2.SS1.SSS1.p1.1.m1.1.1" xref="S2.SS1.SSS1.p1.1.m1.1.1.cmml">d</mi><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.1.m1.1b"><ci id="S2.SS1.SSS1.p1.1.m1.1.1.cmml" xref="S2.SS1.SSS1.p1.1.m1.1.1">𝑑</ci></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.1.m1.1c">d</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.1.m1.1d">italic_d</annotation></semantics></math> denote the embedding dimension, <math alttext="n_{h}" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.2.m2.1"><semantics id="S2.SS1.SSS1.p1.2.m2.1a"><msub id="S2.SS1.SSS1.p1.2.m2.1.1" xref="S2.SS1.SSS1.p1.2.m2.1.1.cmml"><mi id="S2.SS1.SSS1.p1.2.m2.1.1.2" xref="S2.SS1.SSS1.p1.2.m2.1.1.2.cmml">n</mi><mi id="S2.SS1.SSS1.p1.2.m2.1.1.3" xref="S2.SS1.SSS1.p1.2.m2.1.1.3.cmml">h</mi></msub><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.2.m2.1b"><apply id="S2.SS1.SSS1.p1.2.m2.1.1.cmml" xref="S2.SS1.SSS1.p1.2.m2.1.1"><csymbol cd="ambiguous" id="S2.SS1.SSS1.p1.2.m2.1.1.1.cmml" xref="S2.SS1.SSS1.p1.2.m2.1.1">subscript</csymbol><ci id="S2.SS1.SSS1.p1.2.m2.1.1.2.cmml" xref="S2.SS1.SSS1.p1.2.m2.1.1.2">𝑛</ci><ci id="S2.SS1.SSS1.p1.2.m2.1.1.3.cmml" xref="S2.SS1.SSS1.p1.2.m2.1.1.3">ℎ</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.2.m2.1c">n_{h}</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.2.m2.1d">italic_n start_POSTSUBSCRIPT italic_h end_POSTSUBSCRIPT</annotation></semantics></math> denote the number of attention heads, <math alttext="d_{h}" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.3.m3.1"><semantics id="S2.SS1.SSS1.p1.3.m3.1a"><msub id="S2.SS1.SSS1.p1.3.m3.1.1" xref="S2.SS1.SSS1.p1.3.m3.1.1.cmml"><mi id="S2.SS1.SSS1.p1.3.m3.1.1.2" xref="S2.SS1.SSS1.p1.3.m3.1.1.2.cmml">d</mi><mi id="S2.SS1.SSS1.p1.3.m3.1.1.3" xref="S2.SS1.SSS1.p1.3.m3.1.1.3.cmml">h</mi></msub><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.3.m3.1b"><apply id="S2.SS1.SSS1.p1.3.m3.1.1.cmml" xref="S2.SS1.SSS1.p1.3.m3.1.1"><csymbol cd="ambiguous" id="S2.SS1.SSS1.p1.3.m3.1.1.1.cmml" xref="S2.SS1.SSS1.p1.3.m3.1.1">subscript</csymbol><ci id="S2.SS1.SSS1.p1.3.m3.1.1.2.cmml" xref="S2.SS1.SSS1.p1.3.m3.1.1.2">𝑑</ci><ci id="S2.SS1.SSS1.p1.3.m3.1.1.3.cmml" xref="S2.SS1.SSS1.p1.3.m3.1.1.3">ℎ</ci></apply></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.3.m3.1c">d_{h}</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.3.m3.1d">italic_d start_POSTSUBSCRIPT italic_h end_POSTSUBSCRIPT</annotation></semantics></math> denote the dimension per head, and <math alttext="\mathbf{h}_{t}\in\mathbb{R}^{d}" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.4.m4.1"><semantics id="S2.SS1.SSS1.p1.4.m4.1a"><mrow id="S2.SS1.SSS1.p1.4.m4.1.1" xref="S2.SS1.SSS1.p1.4.m4.1.1.cmml"><msub id="S2.SS1.SSS1.p1.4.m4.1.1.2" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.cmml"><mi id="S2.SS1.SSS1.p1.4.m4.1.1.2.2" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.2.cmml">𝐡</mi><mi id="S2.SS1.SSS1.p1.4.m4.1.1.2.3" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.3.cmml">t</mi></msub><mo id="S2.SS1.SSS1.p1.4.m4.1.1.1" xref="S2.SS1.SSS1.p1.4.m4.1.1.1.cmml">∈</mo><msup id="S2.SS1.SSS1.p1.4.m4.1.1.3" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.cmml"><mi id="S2.SS1.SSS1.p1.4.m4.1.1.3.2" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.2.cmml">ℝ</mi><mi id="S2.SS1.SSS1.p1.4.m4.1.1.3.3" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.3.cmml">d</mi></msup></mrow><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.4.m4.1b"><apply id="S2.SS1.SSS1.p1.4.m4.1.1.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1"><in id="S2.SS1.SSS1.p1.4.m4.1.1.1.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.1"></in><apply id="S2.SS1.SSS1.p1.4.m4.1.1.2.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.2"><csymbol cd="ambiguous" id="S2.SS1.SSS1.p1.4.m4.1.1.2.1.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.2">subscript</csymbol><ci id="S2.SS1.SSS1.p1.4.m4.1.1.2.2.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.2">𝐡</ci><ci id="S2.SS1.SSS1.p1.4.m4.1.1.2.3.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.2.3">𝑡</ci></apply><apply id="S2.SS1.SSS1.p1.4.m4.1.1.3.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.3"><csymbol cd="ambiguous" id="S2.SS1.SSS1.p1.4.m4.1.1.3.1.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.3">superscript</csymbol><ci id="S2.SS1.SSS1.p1.4.m4.1.1.3.2.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.2">ℝ</ci><ci id="S2.SS1.SSS1.p1.4.m4.1.1.3.3.cmml" xref="S2.SS1.SSS1.p1.4.m4.1.1.3.3">𝑑</ci></apply></apply></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.4.m4.1c">\mathbf{h}_{t}\in\mathbb{R}^{d}</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.4.m4.1d">bold_h start_POSTSUBSCRIPT italic_t end_POSTSUBSCRIPT ∈ blackboard_R start_POSTSUPERSCRIPT italic_d end_POSTSUPERSCRIPT</annotation></semantics></math> denote the attention input for the <math alttext="t" class="ltx_Math" display="inline" id="S2.SS1.SSS1.p1.5.m5.1"><semantics id="S2.SS1.SSS1.p1.5.m5.1a"><mi id="S2.SS1.SSS1.p1.5.m5.1.1" xref="S2.SS1.SSS1.p1.5.m5.1.1.cmml">t</mi><annotation-xml encoding="MathML-Content" id="S2.SS1.SSS1.p1.5.m5.1b"><ci id="S2.SS1.SSS1.p1.5.m5.1.1.cmml" xref="S2.SS1.SSS1.p1.5.m5.1.1">𝑡</ci></annotation-xml><annotation encoding="application/x-tex" id="S2.SS1.SSS1.p1.5.m5.1c">t</annotation><annotation encoding="application/x-llamapun" id="S2.SS1.SSS1.p1.5.m5.1d">italic_t</annotation></semantics></math>-th token at a given attention layer.
-The core of MLA is the low-rank joint compression for attention keys and values to reduce Key-Value (KV) cache during inference:</p>
-<!-- [excerpt gap: body trimmed; bibliography below] -->
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS2.SSS3" title="In 3.2 Training Framework ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.2.3 </span>Extremely Memory Saving with Minimal Overhead</span></a></li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS3" title="In 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.3 </span>FP8 Training</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS3.SSS1" title="In 3.3 FP8 Training ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.3.1 </span>Mixed Precision Framework</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS3.SSS2" title="In 3.3 FP8 Training ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.3.2 </span>Improved Precision from Quantization and Multiplication</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS3.SSS3" title="In 3.3 FP8 Training ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.3.3 </span>Low-Precision Storage and Communication</span></a></li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS4" title="In 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.4 </span>Inference and Deployment</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS4.SSS1" title="In 3.4 Inference and Deployment ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.4.1 </span>Prefilling</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS4.SSS2" title="In 3.4 Inference and Deployment ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.4.2 </span>Decoding</span></a></li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS5" title="In 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.5 </span>Suggestions on Hardware Design</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS5.SSS1" title="In 3.5 Suggestions on Hardware Design ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.5.1 </span>Communication Hardware</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S3.SS5.SSS2" title="In 3.5 Suggestions on Hardware Design ‣ 3 Infrastructures ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">3.5.2 </span>Compute Hardware</span></a></li>
+</ol>
+</li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_section">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4 </span>Pre-Training</span></a>
+<ol class="ltx_toclist ltx_toclist_section">
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS1" title="In 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.1 </span>Data Construction</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS2" title="In 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.2 </span>Hyper-Parameters</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS3" title="In 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.3 </span>Long Context Extension</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS4" title="In 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.4 </span>Evaluations</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS4.SSS1" title="In 4.4 Evaluations ‣ 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.4.1 </span>Evaluation Benchmarks</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS4.SSS2" title="In 4.4 Evaluations ‣ 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.4.2 </span>Evaluation Results</span></a></li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS5" title="In 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.5 </span>Discussion</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS5.SSS1" title="In 4.5 Discussion ‣ 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.5.1 </span>Ablation Studies for Multi-Token Prediction</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS5.SSS2" title="In 4.5 Discussion ‣ 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.5.2 </span>Ablation Studies for the Auxiliary-Loss-Free Balancing Strategy</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S4.SS5.SSS3" title="In 4.5 Discussion ‣ 4 Pre-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">4.5.3 </span>Batch-Wise Load Balance VS. Sequence-Wise Load Balance</span></a></li>
+</ol>
+</li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_section">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5 </span>Post-Training</span></a>
+<ol class="ltx_toclist ltx_toclist_section">
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS1" title="In 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.1 </span>Supervised Fine-Tuning</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS2" title="In 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.2 </span>Reinforcement Learning</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS2.SSS1" title="In 5.2 Reinforcement Learning ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.2.1 </span>Reward Model</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS2.SSS2" title="In 5.2 Reinforcement Learning ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.2.2 </span>Group Relative Policy Optimization</span></a></li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS3" title="In 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.3 </span>Evaluations</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS3.SSS1" title="In 5.3 Evaluations ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.3.1 </span>Evaluation Settings</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS3.SSS2" title="In 5.3 Evaluations ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.3.2 </span>Standard Evaluation</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS3.SSS3" title="In 5.3 Evaluations ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.3.3 </span>Open-Ended Evaluation</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS3.SSS4" title="In 5.3 Evaluations ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.3.4 </span>DeepSeek-V3 as a Generative Reward Model</span></a></li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_subsection">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS4" title="In 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.4 </span>Discussion</span></a>
+<ol class="ltx_toclist ltx_toclist_subsection">
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS4.SSS1" title="In 5.4 Discussion ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.4.1 </span>Distillation from DeepSeek-R1</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS4.SSS2" title="In 5.4 Discussion ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.4.2 </span>Self-Rewarding</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsubsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S5.SS4.SSS3" title="In 5.4 Discussion ‣ 5 Post-Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">5.4.3 </span>Multi-Token Prediction Evaluation</span></a></li>
+</ol>
+</li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_section"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S6" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">6 </span>Conclusion, Limitations, and Future Directions</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_appendix"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#A1" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">A </span>Contributions and Acknowledgments</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_appendix">
+<a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#A2" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">B </span>Ablation Studies for Low-Precision Training</span></a>
+<ol class="ltx_toclist ltx_toclist_appendix">
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#A2.SS1" title="In Appendix B Ablation Studies for Low-Precision Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">B.1 </span>FP8 v.s. BF16 Training</span></a></li>
+<li class="ltx_tocentry ltx_tocentry_subsection"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#A2.SS2" title="In Appendix B Ablation Studies for Low-Precision Training ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">B.2 </span>Discussion About Block-Wise Quantization</span></a></li>
+</ol>
+</li>
+<li class="ltx_tocentry ltx_tocentry_appendix"><a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#A3" title="In DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_title"><span class="ltx_tag ltx_tag_ref">C </span>Expert Specialization Patterns of the 16B Aux-Loss-Based and Aux-Loss-Free Models</span></a></li>
+</ol></nav>
+<div class="ltx_pagination ltx_role_newpage"></div>
+<section class="ltx_section" id="S1" lang="en">
+<h2 class="ltx_title ltx_title_section">
+<span class="ltx_tag ltx_tag_section">1 </span>Introduction</h2>
+<div class="ltx_para" id="S1.p1">
+<p class="ltx_p" id="S1.p1.1">In recent years, Large Language Models (LLMs) have been undergoing rapid iteration and evolution <cite class="ltx_cite ltx_citemacro_citep">(OpenAI, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib64" title="">2024a</a>; Anthropic, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib3" title="">2024</a>; Google, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib27" title="">2024</a>)</cite>, progressively diminishing the gap towards Artificial General Intelligence (AGI).
+Beyond closed-source models, open-source models, including DeepSeek series <cite class="ltx_cite ltx_citemacro_citep">(DeepSeek-AI, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib15" title="">2024b</a>, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib16" title="">c</a>; Guo et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib30" title="">2024</a>; DeepSeek-AI, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib14" title="">2024a</a>)</cite>, LLaMA series <cite class="ltx_cite ltx_citemacro_citep">(Touvron et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib90" title="">2023a</a>, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib91" title="">b</a>; AI@Meta, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib1" title="">2024a</a>, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib2" title="">b</a>)</cite>, Qwen series <cite class="ltx_cite ltx_citemacro_citep">(Qwen, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib72" title="">2023</a>, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib73" title="">2024a</a>, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib74" title="">2024b</a>)</cite>, and Mistral series <cite class="ltx_cite ltx_citemacro_citep">(Jiang et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib38" title="">2023</a>; Mistral, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib58" title="">2024</a>)</cite>, are also making significant strides, endeavoring to close the gap with their closed-source counterparts.
+To further push the boundaries of open-source model capabilities, we scale up our models and introduce DeepSeek-V3, a large Mixture-of-Experts (MoE) model with 671B parameters, of which 37B are activated for each token.</p>
+</div>
+<div class="ltx_para" id="S1.p2">
+<p class="ltx_p" id="S1.p2.1">With a forward-looking perspective, we consistently strive for strong model performance and economical costs.
+Therefore, in terms of architecture, DeepSeek-V3 still adopts Multi-head Latent Attention (MLA) <cite class="ltx_cite ltx_citemacro_citep">(DeepSeek-AI, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib16" title="">2024c</a>)</cite> for efficient inference and DeepSeekMoE <cite class="ltx_cite ltx_citemacro_citep">(Dai et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib13" title="">2024</a>)</cite> for cost-effective training.
+These two architectures have been validated in DeepSeek-V2 <cite class="ltx_cite ltx_citemacro_citep">(DeepSeek-AI, <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib16" title="">2024c</a>)</cite>, demonstrating their capability to maintain robust model performance while achieving efficient training and inference.
+Beyond the basic architecture, we implement two additional strategies to further enhance the model capabilities.
+Firstly, DeepSeek-V3 pioneers an auxiliary-loss-free strategy <cite class="ltx_cite ltx_citemacro_citep">(Wang et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib93" title="">2024a</a>)</cite> for load balancing, with the aim of minimizing the adverse impact on model performance that arises from the effort to encourage load balancing.
+Secondly, DeepSeek-V3 employs a multi-token prediction training objective, which we have observed to enhance the overall performance on evaluation benchmarks.</p>
+</div>
+<div class="ltx_para" id="S1.p3">
+<p class="ltx_p" id="S1.p3.1">In order to achieve efficient training, we support the FP8 mixed precision training and implement comprehensive optimizations for the training framework.
+Low-precision training has emerged as a promising solution for efficient training <cite class="ltx_cite ltx_citemacro_citep">(Kalamkar et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib40" title="">2019</a>; Narang et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib59" title="">2017</a>; Peng et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib69" title="">2023b</a>; Dettmers et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib17" title="">2022</a>)</cite>, its evolution being closely tied to advancements in hardware capabilities <cite class="ltx_cite ltx_citemacro_citep">(Micikevicius et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib57" title="">2022</a>; Luo et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib55" title="">2024</a>; Rouhani et al., <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#bib.bib77" title="">2023a</a>)</cite>.
+In this work, we introduce an FP8 mixed precision training framework and, for the first time, validate its effectiveness on an extremely large-scale model.
+Through the support for FP8 computation and storage, we achieve both accelerated training and reduced GPU memory usage.
+As for the training framework, we design the DualPipe algorithm for efficient pipeline parallelism, which has fewer pipeline bubbles and hides most of the communication during training through computation-communication overlap.
+This overlap ensures that, as the model further scales up, as long as we maintain a constant computation-to-communication ratio, we can still employ fine-grained experts across nodes while achieving a near-zero all-to-all communication overhead.
+In addition, we also develop efficient cross-node all-to-all communication kernels to fully utilize InfiniBand (IB) and NVLink bandwidths.
+Furthermore, we meticulously optimize the memory footprint, making it possible to train DeepSeek-V3 without using costly tensor parallelism.
+Combining these efforts, we achieve high training efficiency.</p>
+</div>
+<div class="ltx_para" id="S1.p4">
+<p class="ltx_p" id="S1.p4.1">During pre-training, we train DeepSeek-V3 on 14.8T high-quality and diverse tokens.
+The pre-training process is remarkably stable.
+Throughout the entire training process, we did not encounter any irrecoverable loss spikes or have to roll back.
+Next, we conduct a two-stage context length extension for DeepSeek-V3. In the first stage, the maximum context length is extended to 32K, and in the second stage, it is further extended to 128K.
+Following this, we conduct post-training, including Supervised Fine-Tuning (SFT) and Reinforcement Learning (RL) on the base model of DeepSeek-V3, to align it with human preferences and further unlock its potential.
+During the post-training stage, we distill the reasoning capability from the DeepSeek-R1 series of models, and meanwhile carefully maintain the balance between model accuracy and generation length.</p>
+</div>
+<div class="ltx_para" id="S1.p5">
+<p class="ltx_p" id="S1.p5.1">We evaluate DeepSeek-V3 on a comprehensive array of benchmarks.
+Despite its economical training costs, comprehensive evaluations reveal that DeepSeek-V3-Base has emerged as the strongest open-source base model currently available, especially in code and math.
+Its chat version also outperforms other open-source models and achieves performance comparable to leading closed-source models, including GPT-4o and Claude-3.5-Sonnet, on a series of standard and open-ended benchmarks.</p>
+</div>
+<figure class="ltx_table" id="S1.T1">
+<table class="ltx_tabular ltx_centering ltx_guessed_headers ltx_align_middle" id="S1.T1.1">
+<thead class="ltx_thead">
+<tr class="ltx_tr" id="S1.T1.1.1.1">
+<th class="ltx_td ltx_align_left ltx_th ltx_th_column ltx_th_row ltx_border_r ltx_border_tt" id="S1.T1.1.1.1.1"><span class="ltx_text ltx_font_bold" id="S1.T1.1.1.1.1.1">Training Costs</span></th>
+<th class="ltx_td ltx_align_center ltx_th ltx_th_column ltx_border_tt" id="S1.T1.1.1.1.2"><span class="ltx_text ltx_font_bold" id="S1.T1.1.1.1.2.1">Pre-Training</span></th>
+<th class="ltx_td ltx_align_center ltx_th ltx_th_column ltx_border_tt" id="S1.T1.1.1.1.3"><span class="ltx_text ltx_font_bold" id="S1.T1.1.1.1.3.1">Context Extension</span></th>
+<th class="ltx_td ltx_align_center ltx_th ltx_th_column ltx_border_r ltx_border_tt" id="S1.T1.1.1.1.4"><span class="ltx_text ltx_font_bold" id="S1.T1.1.1.1.4.1">Post-Training</span></th>
+<th class="ltx_td ltx_align_center ltx_th ltx_th_column ltx_border_tt" id="S1.T1.1.1.1.5"><span class="ltx_text ltx_font_bold" id="S1.T1.1.1.1.5.1">Total</span></th>
+</tr>
+</thead>
+<tbody class="ltx_tbody">
+<tr class="ltx_tr" id="S1.T1.1.2.1">
+<th class="ltx_td ltx_align_left ltx_th ltx_th_row ltx_border_r ltx_border_t" id="S1.T1.1.2.1.1">in H800 GPU Hours</th>
+<td class="ltx_td ltx_align_center ltx_border_t" id="S1.T1.1.2.1.2">2664K</td>
+<td class="ltx_td ltx_align_center ltx_border_t" id="S1.T1.1.2.1.3">119K</td>
+<td class="ltx_td ltx_align_center ltx_border_r ltx_border_t" id="S1.T1.1.2.1.4">5K</td>
+<td class="ltx_td ltx_align_center ltx_border_t" id="S1.T1.1.2.1.5">2788K</td>
+</tr>
+<tr class="ltx_tr" id="S1.T1.1.3.2">
+<th class="ltx_td ltx_align_left ltx_th ltx_th_row ltx_border_bb ltx_border_r" id="S1.T1.1.3.2.1">in USD</th>
+<td class="ltx_td ltx_align_center ltx_border_bb" id="S1.T1.1.3.2.2">$5.328M</td>
+<td class="ltx_td ltx_align_center ltx_border_bb" id="S1.T1.1.3.2.3">$0.238M</td>
+<td class="ltx_td ltx_align_center ltx_border_bb ltx_border_r" id="S1.T1.1.3.2.4">$0.01M</td>
+<td class="ltx_td ltx_align_center ltx_border_bb" id="S1.T1.1.3.2.5">$5.576M</td>
+</tr>
+</tbody>
+</table>
+<figcaption class="ltx_caption ltx_centering"><span class="ltx_tag ltx_tag_table">Table 1: </span>
+Training costs of DeepSeek-V3, assuming the rental price of H800 is $2 per GPU hour.
+</figcaption>
+</figure>
+<div class="ltx_para" id="S1.p6">
+<p class="ltx_p" id="S1.p6.1">Lastly, we emphasize again the economical training costs of DeepSeek-V3, summarized in Table <a class="ltx_ref" href="https://arxiv.org/html/2412.19437v2#S1.T1" title="Table 1 ‣ 1 Introduction ‣ DeepSeek-V3 Technical Report"><span class="ltx_text ltx_ref_tag">1</span></a>, achieved through our optimized co-design of algorithms, frameworks, and hardware.
+During the pre-training stage, training DeepSeek-V3 on each trillion tokens requires only 180K H800 GPU hours, i.e., 3.7 days on our cluster with 2048 H800 GPUs.
+Consequently, our pre-training stage is completed in less than two months and costs 2664K GPU hours.
+Combined with 119K GPU hours for the context length extension and 5K GPU hours for post-training, DeepSeek-V3 costs only 2.788M GPU hours for its full training.
+Assuming the rental price of the H800 GPU is $2 per GPU hour, our total training costs amount to only $5.576M.
+Note that the aforementioned costs include only the official training of DeepSeek-V3, excluding the costs associated with prior research and ablation experiments on architectures, algorithms, or data.</p>
+</div>
+
+
+
+
+
+</section>
+
+
+
+
+
 <section class="ltx_bibliography" id="bib" lang="en">
 <h2 class="ltx_title ltx_title_bibliography">References</h2>
 <ul class="ltx_biblist">
@@ -256,155 +660,103 @@ Y. Cui, T. Liu, W. Che, L. Xiao, Z. Chen, W. Ma, S. Wang, and G. Hu.
 
 </span>
 </li>
-<li class="ltx_bibitem" id="bib.bib13">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Dai et al. (2024)</span>
-<span class="ltx_bibblock">
-D. Dai, C. Deng, C. Zhao, R. X. Xu, H. Gao, D. Chen, J. Li, W. Zeng, X. Yu, Y. Wu, Z. Xie, Y. K. Li, P. Huang, F. Luo, C. Ruan, Z. Sui, and W. Liang.
 
-</span>
-<span class="ltx_bibblock">Deepseekmoe: Towards ultimate expert specialization in mixture-of-experts language models.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib13.1.1">CoRR</em>, abs/2401.06066, 2024.
 
-</span>
-<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.48550/arXiv.2401.06066" title="">https://doi.org/10.48550/arXiv.2401.06066</a>.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib14">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">DeepSeek-AI (2024a)</span>
-<span class="ltx_bibblock">
-DeepSeek-AI.
 
-</span>
-<span class="ltx_bibblock">Deepseek-coder-v2: Breaking the barrier of closed-source models in code intelligence.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib14.1.1">CoRR</em>, abs/2406.11931, 2024a.
 
-</span>
-<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.48550/arXiv.2406.11931" title="">https://doi.org/10.48550/arXiv.2406.11931</a>.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib15">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">DeepSeek-AI (2024b)</span>
-<span class="ltx_bibblock">
-DeepSeek-AI.
 
-</span>
-<span class="ltx_bibblock">Deepseek LLM: scaling open-source language models with longtermism.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib15.1.1">CoRR</em>, abs/2401.02954, 2024b.
 
-</span>
-<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.48550/arXiv.2401.02954" title="">https://doi.org/10.48550/arXiv.2401.02954</a>.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib16">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">DeepSeek-AI (2024c)</span>
-<span class="ltx_bibblock">
-DeepSeek-AI.
 
-</span>
-<span class="ltx_bibblock">Deepseek-v2: A strong, economical, and efficient mixture-of-experts language model.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib16.1.1">CoRR</em>, abs/2405.04434, 2024c.
 
-</span>
-<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.48550/arXiv.2405.04434" title="">https://doi.org/10.48550/arXiv.2405.04434</a>.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib17">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Dettmers et al. (2022)</span>
-<span class="ltx_bibblock">
-T. Dettmers, M. Lewis, Y. Belkada, and L. Zettlemoyer.
 
-</span>
-<span class="ltx_bibblock">Gpt3. int8 (): 8-bit matrix multiplication for transformers at scale.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib17.1.1">Advances in Neural Information Processing Systems</em>, 35:30318–30332, 2022.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib18">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Ding et al. (2024)</span>
-<span class="ltx_bibblock">
-H. Ding, Z. Wang, G. Paolini, V. Kumar, A. Deoras, D. Roth, and S. Soatto.
 
-</span>
-<span class="ltx_bibblock">Fewer truncations improve language modeling.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib18.1.1">arXiv preprint arXiv:2404.10830</em>, 2024.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib19">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Dua et al. (2019)</span>
-<span class="ltx_bibblock">
-D. Dua, Y. Wang, P. Dasigi, G. Stanovsky, S. Singh, and M. Gardner.
 
-</span>
-<span class="ltx_bibblock">DROP: A reading comprehension benchmark requiring discrete reasoning over paragraphs.
 
-</span>
-<span class="ltx_bibblock">In J. Burstein, C. Doran, and T. Solorio, editors, <em class="ltx_emph ltx_font_italic" id="bib.bib19.1.1">Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, NAACL-HLT 2019, Minneapolis, MN, USA, June 2-7, 2019, Volume 1 (Long and Short Papers)</em>, pages 2368–2378. Association for Computational Linguistics, 2019.
 
-</span>
-<span class="ltx_bibblock"><a class="ltx_ref" href="https:/doi.org/10.18653/V1/N19-1246" title="">10.18653/V1/N19-1246</a>.
 
-</span>
-<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://doi.org/10.18653/v1/n19-1246" title="">https://doi.org/10.18653/v1/n19-1246</a>.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib20">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Dubois et al. (2024)</span>
-<span class="ltx_bibblock">
-Y. Dubois, B. Galambosi, P. Liang, and T. B. Hashimoto.
 
-</span>
-<span class="ltx_bibblock">Length-controlled alpacaeval: A simple way to debias automatic evaluators.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib20.1.1">arXiv preprint arXiv:2404.04475</em>, 2024.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib21">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Fedus et al. (2021)</span>
-<span class="ltx_bibblock">
-W. Fedus, B. Zoph, and N. Shazeer.
 
-</span>
-<span class="ltx_bibblock">Switch transformers: Scaling to trillion parameter models with simple and efficient sparsity.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib21.1.1">CoRR</em>, abs/2101.03961, 2021.
 
-</span>
-<span class="ltx_bibblock">URL <a class="ltx_ref ltx_url ltx_font_typewriter" href="https://arxiv.org/abs/2101.03961" title="">https://arxiv.org/abs/2101.03961</a>.
 
-</span>
-</li>
-<li class="ltx_bibitem" id="bib.bib22">
-<span class="ltx_tag ltx_role_refnum ltx_tag_bibitem">Fishman et al. (2024)</span>
-<span class="ltx_bibblock">
-M. Fishman, B. Chmiel, R. Banner, and D. Soudry.
 
-</span>
-<span class="ltx_bibblock">Scaling FP8 training to trillion-token llms.
 
-</span>
-<span class="ltx_bibblock"><em class="ltx_emph ltx_font_italic" id="bib.bib22.1.1">arXiv preprint arXiv:2409.12517</em>, 2024.
 
-</span>
-</li>
-</ul></section></article></body></html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+</ul>
+</section>
+<div class="ltx_pagination ltx_role_newpage"></div>
+
+
+
+
+</article></body></html>

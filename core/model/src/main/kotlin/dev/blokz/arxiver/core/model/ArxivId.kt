@@ -14,6 +14,9 @@ value class ArxivId(val value: String) {
 
     fun pdfUrl(version: Int? = null): String = "https://arxiv.org/pdf/$value" + (version?.let { "v$it" } ?: "")
 
+    /** The arXiv native HTML-edition URL (P-HTML). `version = null` resolves to the latest. */
+    fun htmlUrl(version: Int? = null): String = "https://arxiv.org/html/$value" + (version?.let { "v$it" } ?: "")
+
     companion object {
         private val MODERN = Regex("""\d{4}\.\d{4,5}""")
         private val LEGACY = Regex("""[a-z-]+(\.[A-Z]{2})?/\d{7}""")
