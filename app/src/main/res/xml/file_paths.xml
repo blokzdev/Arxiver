@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- P-Share PS.4: the FileProvider exposes ONLY the cache's ask_exports/ dir (user-shared images). -->
+<paths>
+    <cache-path
+        name="ask_exports"
+        path="ask_exports/" />
+</paths>
