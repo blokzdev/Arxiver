@@ -36,12 +36,18 @@ object StructuredTableTransform {
 
     /**
      * Replace each `TABLE:: … ::TABLE` block in [body] with a guaranteed-valid GFM table (confident
-     * parse) or a grounded bulleted list (low confidence); leave all other text verbatim. No fence →
-     * [body] returned unchanged. Idempotent: a rendered table/list line never *trims* to a bare
-     * `TABLE::` (the fence is matched on a trimmed full-line basis), so a second pass is a no-op.
+     * parse) or a grounded bulleted list (low confidence); leave all other text verbatim. No sentinel
+     * artifact → [body] returned unchanged. Idempotent: a rendered table/list line never *trims* to a
+     * bare `TABLE::` (the fence is matched on a trimmed full-line basis), so a second pass is a no-op.
+     *
+     * **Hardened against fence confusion (device-found, K11):** a small model sometimes opens a block
+     * with the *closing* fence `::TABLE` (or emits a stray block with no opener at all), which the
+     * happy path missed — leaking raw `~|~`/`::TABLE` to the user. So the gate now triggers on *any*
+     * sentinel token, a block opens on *either* fence line, and a final scrub guarantees no bare `~|~`
+     * ever survives even if it appears outside any fence.
      */
     fun transform(body: String): String {
-        if (!body.contains(OPEN)) return body
+        if (!body.contains(OPEN) && !body.contains(CLOSE) && !body.contains(SENTINEL)) return body
         val lines = body.lines()
         val out = ArrayList<String>(lines.size)
         // A rendered block must be set off by a blank line on each side, or commonmark folds a GFM
@@ -49,7 +55,10 @@ object StructuredTableTransform {
         var separateNext = false
         var i = 0
         while (i < lines.size) {
-            if (lines[i].trim() == OPEN) {
+            // Tolerant opener: a stray `::TABLE` (fence confusion) opens a block too. A properly-opened
+            // `TABLE::` block's own `::TABLE` closer is consumed by the inner loop below (i jumps past
+            // it), so it never reaches here as a spurious opener.
+            if (lines[i].trim() == OPEN || lines[i].trim() == CLOSE) {
                 val block = ArrayList<String>()
                 var j = i + 1
                 var closed = false
@@ -83,7 +92,16 @@ object StructuredTableTransform {
                 i++
             }
         }
-        return out.joinToString("\n")
+        // Belt-and-suspenders: the tolerant fences above salvage the common malformed-block case into a
+        // real table, but a bare `~|~` row outside *any* fence would still slip through — collapse it to
+        // a readable separator so the machine sentinel never reaches the user (device-found, K11).
+        val joined = out.joinToString("\n")
+        return if (joined.contains(SENTINEL)) {
+            // Collapse the sentinel + its surrounding spaces (but not newlines) to a readable separator.
+            joined.replace(Regex("""[ \t]*${Regex.escape(SENTINEL)}[ \t]*"""), " — ")
+        } else {
+            joined
+        }
     }
 
     /** Parse the inner block (between the fences) into a normalized [ComparisonTable] + a confidence. */
