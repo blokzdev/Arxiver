@@ -345,12 +345,8 @@ fun PaperDetailScreen(
                 onShareAnswer = { m ->
                     context.shareText(ConversationMarkdown.answer(m, exportLabels), subject = paper.title)
                 },
-                onShareConversation = { msgs ->
-                    context.shareText(
-                        ConversationMarkdown.conversation(msgs, paper.title, exportLabels),
-                        subject = paper.title,
-                    )
-                },
+                // Whole-conversation export (text / Markdown file / PDF) is owned by AskSheet — P-Share PS.6.
+                conversationTitle = paper.title,
             )
         }
     }
