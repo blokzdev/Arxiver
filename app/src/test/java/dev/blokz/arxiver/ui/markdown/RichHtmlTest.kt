@@ -3,7 +3,6 @@ package dev.blokz.arxiver.ui.markdown
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Pure tests for the rich (KaTeX WebView) HTML builder + the rich-content gate (P-Rich R1). */
@@ -131,35 +130,16 @@ class RichHtmlTest {
         assertFalse(out.contains("arxiver://cite/2"), "the svg-internal [2] is NOT a citation")
     }
 
-    // --- P-Share PS.4: image-export capture signal ---
-
-    private fun captureHtml(markdown: String): String =
-        RichHtml.answerHtml(markdown, "#111", "#00f", "#eee", "#ccc", forCapture = true)
+    // --- P-Share PS.4b: image-export capture geometry ---
 
     @Test
-    fun `the on-screen path emits no capture signal (byte-unchanged behaviour)`() {
-        assertFalse(
-            html("Hello \$x\$").contains("arxiver://rendered"),
-            "default render never carries the capture signal",
-        )
-    }
-
-    @Test
-    fun `capture mode emits a one-shot rendered signal after render settles`() {
-        val out = captureHtml("```mermaid\ngraph TD; A-->B\n```")
-        assertTrue(out.contains("arxiver://rendered/"), "fires the capture-complete signal")
-        assertTrue(out.contains("requestAnimationFrame"), "double-rAF after layout")
-        assertTrue(out.contains("setTimeout"), "has a safety timeout so it can never hang")
-        // Still offline — no CDN crept into the capture variant.
-        assertFalse(out.contains("http://") || out.contains("https://"), "no network in the capture HTML")
-        assertTrue(out.contains("mermaid.run"), "the on-screen render path is intact under capture")
-    }
-
-    @Test
-    fun `RichRenderSignal parses only a well-formed rendered url`() {
-        assertEquals(1234, RichRenderSignal.heightPx("arxiver://rendered/1234"))
-        assertNull(RichRenderSignal.heightPx("arxiver://height/55"))
-        assertNull(RichRenderSignal.heightPx("arxiver://rendered/notanumber"))
-        assertNull(RichRenderSignal.heightPx("arxiver://rendered/"))
+    fun `deviceHeightPx scales CSS px by density and clamps`() {
+        // 1 CSS px == 1 dp at initial-scale=1 → device px = ceil(css * density).
+        assertEquals(500, RichRenderSignal.deviceHeightPx(cssPx = 200, density = 2.5f))
+        assertEquals(263, RichRenderSignal.deviceHeightPx(cssPx = 100, density = 2.625f))
+        // Never zero (a degenerate empty body still yields a 1px-tall bitmap, not a crash).
+        assertEquals(1, RichRenderSignal.deviceHeightPx(cssPx = 0, density = 3f))
+        // Runaway-tall answers are clamped to the OOM ceiling.
+        assertEquals(RichRenderSignal.MAX_CAPTURE_PX, RichRenderSignal.deviceHeightPx(cssPx = 99_999, density = 4f))
     }
 }

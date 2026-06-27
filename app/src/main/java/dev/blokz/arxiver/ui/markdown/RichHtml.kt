@@ -43,8 +43,6 @@ object RichHtml {
         mutedColor: String,
         dark: Boolean = false,
         crossRefColor: String = citationColor,
-        /** PS.4: capture mode fires one `arxiver://rendered/<px>` after KaTeX + Mermaid settle. */
-        forCapture: Boolean = false,
     ): String {
         // ```math fences -> $$..$$ for KaTeX; ```mermaid code -> a <pre class="mermaid"> for Mermaid.
         val normalized = MATH_FENCE.replace(markdown) { "\$\$\n${it.groupValues[1]}\n\$\$" }
@@ -68,7 +66,6 @@ object RichHtml {
             mutedColor,
             dark,
             crossRefColor,
-            forCapture,
         )
     }
 
@@ -118,34 +115,10 @@ object RichHtml {
         mutedColor: String,
         dark: Boolean,
         crossRefColor: String,
-        forCapture: Boolean,
     ): String {
         val displayDelim = "${'$'}${'$'}"
         val inlineDelim = "${'$'}"
         val mermaidTheme = if (dark) "dark" else "default"
-        // Capture (PS.4): after fonts load + every Mermaid block has rendered its <svg> (polled, no
-        // re-run so the on-screen script is untouched), fire a ONE-SHOT arxiver://rendered/<px> — the
-        // host waits for exactly this before it snapshots the bitmap (solving the async-render race).
-        val captureScript =
-            if (!forCapture) {
-                ""
-            } else {
-                """
-                <script>
-                (function(){var sent=false;
-                function fire(){if(sent)return;sent=true;
-                var h=Math.ceil(document.body.getBoundingClientRect().height);
-                requestAnimationFrame(function(){requestAnimationFrame(function(){
-                location.href='arxiver://rendered/'+h;});});}
-                function ready(){var m=document.querySelectorAll('pre.mermaid');
-                for(var i=0;i<m.length;i++){if(!m[i].querySelector('svg'))return false;}return true;}
-                var f=(document.fonts&&document.fonts.ready)?document.fonts.ready:Promise.resolve();
-                f.then(function(){var t=0;(function p(){
-                if(ready()||t>40){fire();}else{t++;setTimeout(p,100);}})();});
-                setTimeout(fire,4000);})();
-                </script>
-                """.trimIndent()
-            }
         return """
             <!DOCTYPE html><html><head><meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -189,17 +162,27 @@ object RichHtml {
               window.addEventListener('load',rh);
               if(document.fonts&&document.fonts.ready){document.fonts.ready.then(rh);}
               setTimeout(rh,300);
-            </script>$captureScript
+            </script>
             </body></html>
             """.trimIndent()
     }
 }
 
-/** Parses the PS.4 capture-complete signal `arxiver://rendered/<px>` → the content height (CSS px), or null. */
+/** Geometry for the off-screen image capture (P-Share PS.4b — [RichImageExporter]). */
 object RichRenderSignal {
-    private val RENDERED = Regex("""^arxiver://rendered/(\d{1,7})$""")
+    /** Hard ceiling on a capture bitmap's height (device px) so a runaway-tall answer can't OOM. */
+    const val MAX_CAPTURE_PX = 12_000
 
-    fun heightPx(url: String): Int? = RENDERED.find(url.trim())?.groupValues?.get(1)?.toIntOrNull()
+    /**
+     * Device-pixel height for a capture bitmap from the measured **CSS-px** content height. The WebView
+     * renders at `initial-scale=1` (1 CSS px == 1 dp), so device px = ceil(cssPx × density), clamped to
+     * `[1, maxPx]`.
+     */
+    fun deviceHeightPx(
+        cssPx: Int,
+        density: Float,
+        maxPx: Int = MAX_CAPTURE_PX,
+    ): Int = Math.ceil(cssPx * density.toDouble()).toInt().coerceIn(1, maxPx)
 }
 
 /** Whether an answer needs the rich (WebView) renderer rather than native markdown. */

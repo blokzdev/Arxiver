@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.feature.paper.ask
 
 import android.content.res.Configuration
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
@@ -57,11 +59,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -85,8 +89,12 @@ import dev.blokz.arxiver.data.Citation
 import dev.blokz.arxiver.ui.markdown.MarkdownText
 import dev.blokz.arxiver.ui.markdown.RichBlockWebView
 import dev.blokz.arxiver.ui.markdown.RichContent
+import dev.blokz.arxiver.ui.markdown.RichImageExporter
+import dev.blokz.arxiver.ui.markdown.rememberRichTheme
+import dev.blokz.arxiver.ui.shareImage
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
+import kotlinx.coroutines.launch
 
 /**
  * Per-paper "Ask" sheet (P2.3): streams a grounded answer, gates cloud calls
@@ -125,6 +133,26 @@ fun AskSheet(
     val clipboard = LocalClipboardManager.current
     val onCopy: (AskMessage) -> Unit = { m -> clipboard.setText(AnnotatedString(m.text)) }
     val onQuote: (AskMessage) -> Unit = { m -> viewModel.setInput(quoteInto(m.text, state.input)) }
+    // Export a rendered answer to a PNG (P-Share PS.4b) — off-screen WebView capture → share sheet.
+    // User-initiated, OS-sheet only, no upload, the AI key is never involved. A Toast covers the
+    // few-second render; a null file (no Activity / render never settled) falls back to a Toast.
+    val context = LocalContext.current
+    val exportScope = rememberCoroutineScope()
+    val richTheme = rememberRichTheme()
+    val exportRendering = stringResource(R.string.ask_export_rendering)
+    val exportFailed = stringResource(R.string.ask_export_failed)
+    val exportSubject = stringResource(R.string.ask_export_subject)
+    val onExportImage: (AskMessage) -> Unit = { m ->
+        Toast.makeText(context, exportRendering, Toast.LENGTH_SHORT).show()
+        exportScope.launch {
+            val file = RichImageExporter.capture(context, m.text, richTheme)
+            if (file != null) {
+                context.shareImage(file, exportSubject)
+            } else {
+                Toast.makeText(context, exportFailed, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     // Stop reading when the sheet is dismissed or the app leaves the foreground.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -170,6 +198,7 @@ fun AskSheet(
             speakingKey = speakingKey,
             onCopy = onCopy,
             onQuote = onQuote,
+            onExportImage = onExportImage,
         )
     }
 }
@@ -221,6 +250,7 @@ private fun AskSheetContent(
     speakingKey: String? = null,
     onCopy: ((AskMessage) -> Unit)? = null,
     onQuote: ((AskMessage) -> Unit)? = null,
+    onExportImage: ((AskMessage) -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -281,6 +311,7 @@ private fun AskSheetContent(
                     isSpeaking = speakingKey != null && speakingKey == message.text.hashCode().toString(),
                     onCopy = onCopy,
                     onQuote = onQuote,
+                    onExportImage = onExportImage,
                     onFollowUp = if (index == lastAssistant) onFollowUp else null,
                     followUpsEnabled = chipsEnabled,
                 )
@@ -387,6 +418,7 @@ private fun AskBubble(
     isSpeaking: Boolean = false,
     onCopy: ((AskMessage) -> Unit)? = null,
     onQuote: ((AskMessage) -> Unit)? = null,
+    onExportImage: ((AskMessage) -> Unit)? = null,
     onFollowUp: ((String) -> Unit)? = null,
     followUpsEnabled: Boolean = true,
 ) {
@@ -451,6 +483,9 @@ private fun AskBubble(
                         onReadAloud = onReadAloud,
                         isSpeaking = isSpeaking,
                         onQuote = onQuote,
+                        // Export-as-image only for answers that actually carry a diagram/equation/vector
+                        // (the "charts/graphs/artifacts" worth a PNG); prose has Copy + Share-as-Markdown.
+                        onExportImage = if (RichContent.has(body)) onExportImage else null,
                     )
                 }
                 // Suggested follow-up questions (P-Rich R3b.2): a settled, non-empty answer on the
@@ -532,10 +567,11 @@ private fun BubbleActions(
     onReadAloud: ((AskMessage) -> Unit)? = null,
     isSpeaking: Boolean = false,
     onQuote: ((AskMessage) -> Unit)? = null,
+    onExportImage: ((AskMessage) -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var pinned by remember(message.text) { mutableStateOf(false) }
-    val hasOverflow = onPinAnswer != null || onQuote != null
+    val hasOverflow = onPinAnswer != null || onQuote != null || onExportImage != null
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         ActionIcon(Icons.Filled.ContentCopy, R.string.ask_copy) { onCopy(message) }
@@ -577,6 +613,16 @@ private fun BubbleActions(
                             onClick = {
                                 menuOpen = false
                                 onQuote(message)
+                            },
+                        )
+                    }
+                    if (onExportImage != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.ask_export_image)) },
+                            leadingIcon = { Icon(Icons.Filled.Image, null) },
+                            onClick = {
+                                menuOpen = false
+                                onExportImage(message)
                             },
                         )
                     }

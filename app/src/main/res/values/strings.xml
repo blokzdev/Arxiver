@@ -427,6 +427,11 @@
     <string name="ask_copy">Copy</string>
     <string name="ask_quote">Quote in a follow-up</string>
     <string name="ask_more_actions">More actions</string>
+    <!-- P-Share PS.4b: export a rendered answer as an image -->
+    <string name="ask_export_image">Export as image</string>
+    <string name="ask_export_rendering">Rendering image…</string>
+    <string name="ask_export_failed">Couldn\'t export the image</string>
+    <string name="ask_export_subject">Arxiver answer</string>
     <string name="speak_diagram">Diagram.</string>
     <string name="speak_equation">Equation.</string>
     <string name="speak_image">Image.</string>
