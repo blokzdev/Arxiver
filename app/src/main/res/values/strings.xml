@@ -423,6 +423,10 @@
     <!-- P-Share PS.2: read-aloud (TTS). The speak_* captions replace rich blocks TTS can't voice. -->
     <string name="ask_read_aloud">Read aloud</string>
     <string name="ask_stop_reading">Stop</string>
+    <!-- P-Share PS.3: per-bubble contextual actions -->
+    <string name="ask_copy">Copy</string>
+    <string name="ask_quote">Quote in a follow-up</string>
+    <string name="ask_more_actions">More actions</string>
     <string name="speak_diagram">Diagram.</string>
     <string name="speak_equation">Equation.</string>
     <string name="speak_image">Image.</string>

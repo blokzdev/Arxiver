@@ -4,8 +4,8 @@ import android.content.res.Configuration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -19,8 +19,11 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
@@ -29,6 +32,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -44,7 +49,6 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -56,7 +60,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -114,6 +121,10 @@ fun AskSheet(
     val onReadAloud: (AskMessage) -> Unit = { m ->
         viewModel.toggleReadAloud(m.text.hashCode().toString(), SpeakableText.forAnswer(m.text, speakableLabels))
     }
+    // Per-bubble Copy (the markdown answer) + Quote (a blockquote of it, prepended into the input).
+    val clipboard = LocalClipboardManager.current
+    val onCopy: (AskMessage) -> Unit = { m -> clipboard.setText(AnnotatedString(m.text)) }
+    val onQuote: (AskMessage) -> Unit = { m -> viewModel.setInput(quoteInto(m.text, state.input)) }
     // Stop reading when the sheet is dismissed or the app leaves the foreground.
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -157,9 +168,23 @@ fun AskSheet(
             onShareConversation = onShareConversation,
             onReadAloud = onReadAloud,
             speakingKey = speakingKey,
+            onCopy = onCopy,
+            onQuote = onQuote,
         )
     }
 }
+
+/** Prepend a blockquote of [answer] (collapsed + capped) onto the [current] input for a quoted follow-up. */
+private fun quoteInto(
+    answer: String,
+    current: String,
+): String {
+    val excerpt = answer.replace(Regex("\\s+"), " ").trim().take(QUOTE_MAX)
+    val ellipsis = if (answer.trim().length > QUOTE_MAX) "…" else ""
+    return "> $excerpt$ellipsis\n\n$current"
+}
+
+private const val QUOTE_MAX = 200
 
 @Composable
 private fun rememberSpeakableLabels(): SpeakableLabels =
@@ -194,6 +219,8 @@ private fun AskSheetContent(
     onShareConversation: ((List<AskMessage>) -> Unit)? = null,
     onReadAloud: ((AskMessage) -> Unit)? = null,
     speakingKey: String? = null,
+    onCopy: ((AskMessage) -> Unit)? = null,
+    onQuote: ((AskMessage) -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -252,6 +279,8 @@ private fun AskSheetContent(
                     onShareAnswer = onShareAnswer,
                     onReadAloud = onReadAloud,
                     isSpeaking = speakingKey != null && speakingKey == message.text.hashCode().toString(),
+                    onCopy = onCopy,
+                    onQuote = onQuote,
                     onFollowUp = if (index == lastAssistant) onFollowUp else null,
                     followUpsEnabled = chipsEnabled,
                 )
@@ -356,6 +385,8 @@ private fun AskBubble(
     onShareAnswer: ((AskMessage) -> Unit)? = null,
     onReadAloud: ((AskMessage) -> Unit)? = null,
     isSpeaking: Boolean = false,
+    onCopy: ((AskMessage) -> Unit)? = null,
+    onQuote: ((AskMessage) -> Unit)? = null,
     onFollowUp: ((String) -> Unit)? = null,
     followUpsEnabled: Boolean = true,
 ) {
@@ -376,6 +407,10 @@ private fun AskBubble(
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (message.error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 )
+                // User questions gain a single Copy action (P-Share PS.3); errors stay action-free.
+                if (isUser && onCopy != null && message.text.isNotBlank()) {
+                    BubbleActions(message = message, onCopy = onCopy)
+                }
             } else {
                 // Assistant answers render as markdown (P-Rich R0); a tapped [n] opens Sources.
                 val onCite: ((Int) -> Unit)? =
@@ -404,72 +439,19 @@ private fun AskBubble(
                         onToggle = { sourcesExpanded = !sourcesExpanded },
                     )
                 }
-                // Action row under a settled, non-empty answer: pin-to-notes (P-Rich R3a, paper
-                // scope only — onPinAnswer null in collection chat) + share-as-Markdown (P-Rich R4).
-                // Pin's confirmation is shown in-sheet (the app snackbar sits behind the modal) by
-                // flipping the button to a "done" state; share's confirmation is the OS chooser.
+                // Per-bubble contextual actions (P-Share PS.3): a compact inline row (Copy · Read-aloud ·
+                // Share) + an overflow menu (Pin-to-notes · Quote) under a settled, non-empty answer.
                 val canAct = !message.streaming && !message.error && message.text.isNotBlank()
-                if (canAct && (onPinAnswer != null || onShareAnswer != null || onReadAloud != null)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
-                        if (onPinAnswer != null) {
-                            var pinned by remember(message.text) { mutableStateOf(false) }
-                            TextButton(
-                                onClick = {
-                                    if (!pinned) {
-                                        onPinAnswer(message.text)
-                                        pinned = true
-                                    }
-                                },
-                                enabled = !pinned,
-                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
-                            ) {
-                                Icon(
-                                    if (pinned) Icons.Filled.Check else Icons.Outlined.PushPin,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Text(
-                                    stringResource(
-                                        if (pinned) R.string.ask_pinned_to_notes else R.string.ask_pin_to_notes,
-                                    ),
-                                    modifier = Modifier.padding(start = Spacing.xs),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                        }
-                        if (onShareAnswer != null) {
-                            TextButton(
-                                onClick = { onShareAnswer(message) },
-                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
-                            ) {
-                                Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Text(
-                                    stringResource(R.string.ask_share_answer),
-                                    modifier = Modifier.padding(start = Spacing.xs),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                        }
-                        if (onReadAloud != null) {
-                            TextButton(
-                                onClick = { onReadAloud(message) },
-                                contentPadding = PaddingValues(horizontal = Spacing.sm, vertical = 0.dp),
-                            ) {
-                                Icon(
-                                    if (isSpeaking) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Text(
-                                    stringResource(
-                                        if (isSpeaking) R.string.ask_stop_reading else R.string.ask_read_aloud,
-                                    ),
-                                    modifier = Modifier.padding(start = Spacing.xs),
-                                    style = MaterialTheme.typography.labelMedium,
-                                )
-                            }
-                        }
-                    }
+                if (canAct && onCopy != null) {
+                    BubbleActions(
+                        message = message,
+                        onCopy = onCopy,
+                        onShareAnswer = onShareAnswer,
+                        onPinAnswer = onPinAnswer,
+                        onReadAloud = onReadAloud,
+                        isSpeaking = isSpeaking,
+                        onQuote = onQuote,
+                    )
                 }
                 // Suggested follow-up questions (P-Rich R3b.2): a settled, non-empty answer on the
                 // latest turn offers tappable next questions that re-enter the grounded ask() path.
@@ -532,6 +514,86 @@ private fun CitationSources(
                 }
             }
         }
+    }
+}
+
+/**
+ * The per-bubble contextual-actions surface (P-Share PS.3): a compact inline icon row of the
+ * most-used actions + an overflow ⋮ menu for the rest. User questions pass only [onCopy] (→ a lone
+ * Copy); assistant answers pass the full set. Each callback being null hides its action.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BubbleActions(
+    message: AskMessage,
+    onCopy: (AskMessage) -> Unit,
+    onShareAnswer: ((AskMessage) -> Unit)? = null,
+    onPinAnswer: ((String) -> Unit)? = null,
+    onReadAloud: ((AskMessage) -> Unit)? = null,
+    isSpeaking: Boolean = false,
+    onQuote: ((AskMessage) -> Unit)? = null,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var pinned by remember(message.text) { mutableStateOf(false) }
+    val hasOverflow = onPinAnswer != null || onQuote != null
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        ActionIcon(Icons.Filled.ContentCopy, R.string.ask_copy) { onCopy(message) }
+        if (onReadAloud != null) {
+            ActionIcon(
+                if (isSpeaking) Icons.Filled.Stop else Icons.AutoMirrored.Filled.VolumeUp,
+                if (isSpeaking) R.string.ask_stop_reading else R.string.ask_read_aloud,
+            ) { onReadAloud(message) }
+        }
+        if (onShareAnswer != null) {
+            ActionIcon(Icons.Filled.Share, R.string.ask_share_answer) { onShareAnswer(message) }
+        }
+        if (hasOverflow) {
+            Box {
+                ActionIcon(Icons.Filled.MoreVert, R.string.ask_more_actions) { menuOpen = true }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    if (onPinAnswer != null) {
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    stringResource(
+                                        if (pinned) R.string.ask_pinned_to_notes else R.string.ask_pin_to_notes,
+                                    ),
+                                )
+                            },
+                            enabled = !pinned,
+                            leadingIcon = { Icon(if (pinned) Icons.Filled.Check else Icons.Outlined.PushPin, null) },
+                            onClick = {
+                                menuOpen = false
+                                onPinAnswer(message.text)
+                                pinned = true
+                            },
+                        )
+                    }
+                    if (onQuote != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.ask_quote)) },
+                            leadingIcon = { Icon(Icons.Filled.FormatQuote, null) },
+                            onClick = {
+                                menuOpen = false
+                                onQuote(message)
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActionIcon(
+    icon: ImageVector,
+    labelRes: Int,
+    onClick: () -> Unit,
+) {
+    IconButton(onClick = onClick, modifier = Modifier.size(36.dp)) {
+        Icon(icon, contentDescription = stringResource(labelRes), modifier = Modifier.size(18.dp))
     }
 }
 
