@@ -9,6 +9,7 @@ import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.ml.ModelState
+import dev.blokz.arxiver.data.PdfStorage
 import dev.blokz.arxiver.data.SettingsRepository
 import dev.blokz.arxiver.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -118,7 +118,7 @@ class SettingsViewModel
         fun clearPdfCache() {
             viewModelScope.launch {
                 withContext(dispatchers.io) {
-                    File(context.filesDir, "pdfs").deleteRecursively()
+                    PdfStorage.dir(context).deleteRecursively()
                 }
                 refreshPdfCacheSize()
             }
@@ -128,7 +128,7 @@ class SettingsViewModel
             viewModelScope.launch {
                 pdfCacheMb.value =
                     withContext(dispatchers.io) {
-                        val dir = File(context.filesDir, "pdfs")
+                        val dir = PdfStorage.dir(context)
                         (dir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }) / (1024 * 1024)
                     }
             }
