@@ -23,8 +23,10 @@ import org.json.JSONObject
  * - `paper/<id>` → [onPaperClick] (open a cross-referenced paper in-app).
  * - `external?url=…` → [onExternalUrl] (the screen confirms, then opens via an Intent — never auto-open).
  * Unlike [dev.blokz.arxiver.ui.markdown.RichBlockWebView] this does **not** self-size — it fills its
- * route and scrolls. Base URL is null in PH.4 (no sub-resources: CSS is inlined, images are
- * placeholders); PH.5 switches it to the per-paper virtual origin when images land.
+ * route and scrolls. Base URL stays **null** (PH.5): images are pre-fetched and base64-**inlined** as
+ * `data:image` URIs into the body, so there are still no sub-resources and BOTH `blockNetworkLoads` and
+ * `blockNetworkImage` stay armed — the reserved PH.5 virtual-origin (which would have forced
+ * `blockNetworkImage=false`) is retired in favour of `data:` inlining.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable

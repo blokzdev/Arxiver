@@ -40,6 +40,7 @@ class ReaderDocWriterTest {
         val style = d.selectFirst("style")!!.data()
         assertTrue(style.contains("--reader-text:#111111"), "theme var injected")
         assertTrue(style.contains("var(--reader-text)"), "reader.css references the var (inlined)")
+        assertTrue(style.contains("max-width: 100%"), "PH.5 img sizing rule present in the bundled css")
 
         assertTrue(d.selectFirst("body")!!.html().contains("hello world"), "body preserved")
 

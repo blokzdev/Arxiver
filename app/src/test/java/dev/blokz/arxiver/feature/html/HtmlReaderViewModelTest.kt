@@ -7,9 +7,12 @@ import dev.blokz.arxiver.core.ai.Fidelity
 import dev.blokz.arxiver.core.ai.FidelityReport
 import dev.blokz.arxiver.core.ai.HtmlFetchResult
 import dev.blokz.arxiver.core.ai.HtmlFetcher
+import dev.blokz.arxiver.core.ai.HtmlImageFetcher
 import dev.blokz.arxiver.core.ai.HtmlSource
 import dev.blokz.arxiver.core.ai.HtmlStorage
+import dev.blokz.arxiver.core.ai.InlinedImage
 import dev.blokz.arxiver.core.ai.ReaderDocument
+import dev.blokz.arxiver.core.ai.ReaderImage
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
@@ -88,14 +91,29 @@ class HtmlReaderViewModelTest {
             ): HtmlFetchResult = result
         }
 
-    private fun vmWith(fetcher: HtmlFetcher) =
-        HtmlReaderViewModel(
-            savedStateHandle = SavedStateHandle(mapOf("id" to PAPER_ID)),
-            htmlFetcher = fetcher,
-            htmlStorage = storage,
-            paperRepository = paperRepo,
-            dispatchers = dispatchers,
-        )
+    /** A fake image fetcher that returns canned bytes and emits each via the callback (HtmlImageFetcher.fetchAll is `open`). */
+    private fun imageFetcherReturning(result: Map<String, InlinedImage>): HtmlImageFetcher =
+        object : HtmlImageFetcher(OkHttpClient(), ArxivRateLimiter(minSpacingMs = 0), dispatchers) {
+            override suspend fun fetchAll(
+                images: List<ReaderImage>,
+                onImage: (String, InlinedImage) -> Unit,
+            ): Map<String, InlinedImage> {
+                result.forEach { (k, v) -> onImage(k, v) }
+                return result
+            }
+        }
+
+    private fun vmWith(
+        fetcher: HtmlFetcher,
+        imageFetcher: HtmlImageFetcher = imageFetcherReturning(emptyMap()),
+    ) = HtmlReaderViewModel(
+        savedStateHandle = SavedStateHandle(mapOf("id" to PAPER_ID)),
+        htmlFetcher = fetcher,
+        htmlImageFetcher = imageFetcher,
+        htmlStorage = storage,
+        paperRepository = paperRepo,
+        dispatchers = dispatchers,
+    )
 
     private fun doc(source: HtmlSource) =
         ReaderDocument(
@@ -161,6 +179,49 @@ class HtmlReaderViewModelTest {
             val effect = vm.effects.first()
             assertTrue(effect is HtmlReaderEffect.FallbackToPdf)
             assertEquals(PAPER_ID, effect.id)
+        }
+
+    @Test
+    fun `figures are fetched and inlined as data uris in the second phase`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404)) // paper lookup misses → version 1
+            val withImages =
+                ReaderDocument(
+                    bodyHtml = """<figure><img data-img-key="k1"></figure>""",
+                    fidelity = FidelityReport(Fidelity.OK, null, 0, 0, 0),
+                    anchors = emptyList(),
+                    source = HtmlSource.NATIVE,
+                    images = listOf(ReaderImage("k1", "https://arxiv.org/html/2412.19437v1/x1.png")),
+                )
+            val vm =
+                vmWith(
+                    fetcherReturning(HtmlFetchResult.Native(withImages)),
+                    imageFetcherReturning(mapOf("k1" to InlinedImage("png", "AAAA"))),
+                )
+
+            // Phase 2 re-exposes the body with the figure inlined as a data: URI.
+            val state = vm.uiState.first { it.doc?.bodyHtml?.contains("data:image/png;base64,AAAA") == true }
+            assertNull(state.error)
+            assertTrue(state.doc!!.bodyHtml.contains("<img"), "the figure is a real <img> again")
+        }
+
+    @Test
+    fun `a poisoned cache body is dropped and the document re-fetched`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404)) // paper lookup misses → version 1
+            // Seed the version-1 cache with a body carrying an external host (simulated tamper).
+            storage.store(
+                ArxivId(PAPER_ID),
+                1,
+                HtmlSource.NATIVE,
+                """<p><img src="https://evil.example/track.gif"></p>""",
+            )
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Native(doc(HtmlSource.NATIVE))))
+
+            val state = vm.uiState.first { !it.loading }
+            assertNull(state.error)
+            assertTrue(state.doc!!.bodyHtml.contains("body"), "the clean re-fetch is shown")
+            assertTrue(!state.doc!!.bodyHtml.contains("evil.example"), "the poisoned cache is not rendered")
         }
 
     private companion object {

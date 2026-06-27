@@ -497,6 +497,15 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun htmlImageFetcher(
+        @ArxivClient httpClient: OkHttpClient,
+        rateLimiter: ArxivRateLimiter,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ai.HtmlImageFetcher =
+        dev.blokz.arxiver.core.ai.HtmlImageFetcher(httpClient, rateLimiter, dispatchers)
+
+    @Provides
+    @Singleton
     fun htmlStorage(
         @ApplicationContext context: Context,
         dispatchers: DispatcherProvider,

@@ -33,16 +33,39 @@ data class FidelityReport(
 )
 
 /**
- * The transformed reader body (citations/anchors internalized to `arxiver://`, images → placeholders,
- * `<math>` kept verbatim, zero external host) + its fidelity + anchors + source. [ReaderDocWriter]
- * wraps [bodyHtml] into the full self-contained document; the caller persists [bodyHtml] (sanitize +
- * transform happen once, on download).
+ * One same-origin figure the transform kept (PH.5): its absolute [fetchUrl] (the only place that URL
+ * ever lives — never in [ReaderDocument.bodyHtml], which carries an opaque `data-img-key` token) and a
+ * stable [localKey] tying the manifest → fetch result → inliner. Pure data; an **intra-download
+ * handoff** from [HtmlReaderTransform] to the image fetcher + [HtmlImageInliner] — never persisted.
+ */
+data class ReaderImage(
+    val localKey: String,
+    val fetchUrl: String,
+)
+
+/** A fetched raster image ready to inline as a `data:image/<mimeSubtype>;base64,<base64>` URI (PH.5). */
+data class InlinedImage(
+    val mimeSubtype: String,
+    val base64: String,
+)
+
+/**
+ * The transformed reader body (citations/anchors internalized to `arxiver://`, `<math>` kept verbatim,
+ * zero external host) + its fidelity + anchors + source. [ReaderDocWriter] wraps [bodyHtml] into the
+ * full self-contained document; the caller persists [bodyHtml] (sanitize + transform happen once, on
+ * download).
+ *
+ * PH.5: figures are kept as `<img data-img-key=…>` tokens (no `src`) and listed in [images] — an
+ * **intra-download manifest** the ViewModel feeds to the image fetcher + [HtmlImageInliner], which
+ * rewrites each token to a `data:image` URI (or a figcaption placeholder on miss). [images] is **never
+ * persisted** and is empty on the cache-hit path (the stored body already carries the final `data:` bytes).
  */
 data class ReaderDocument(
     val bodyHtml: String,
     val fidelity: FidelityReport,
     val anchors: List<ReaderAnchor>,
     val source: HtmlSource,
+    val images: List<ReaderImage> = emptyList(),
 )
 
 /**

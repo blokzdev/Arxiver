@@ -28,9 +28,11 @@ class HtmlReaderTransformTest {
         fixture: String,
         id: String,
         source: HtmlSource,
+        version: Int = 1,
     ): ReaderDocument {
         val sanitized = HtmlSanitizer.sanitize(res(fixture)) ?: error("sanitize null for $fixture")
-        return HtmlReaderTransform.transform(sanitized, ArxivId(id), source) ?: error("transform null for $fixture")
+        return HtmlReaderTransform.transform(sanitized, ArxivId(id), source, version)
+            ?: error("transform null for $fixture")
     }
 
     private fun assertNoExternalHost(bodyHtml: String) {
@@ -73,15 +75,23 @@ class HtmlReaderTransformTest {
 
     @Test
     fun `native degraded is flagged DEGRADED but still produces a document`() {
-        val doc = prepare("native-degraded-2510.04905.html", "2510.04905", HtmlSource.NATIVE)
+        val doc = prepare("native-degraded-2510.04905.html", "2510.04905", HtmlSource.NATIVE, version = 3)
         assertEquals(Fidelity.DEGRADED, doc.fidelity.fidelity)
         assertNotNull(doc.fidelity.reason)
         assertTrue(doc.fidelity.missingCitationCount > 0)
         assertNoExternalHost(doc.bodyHtml)
-        // 4 images → placeholders, no <img>
+        // PH.5: same-origin figures become opaque tokens (no src) + manifest entries resolved against the
+        // exact native page URL (version-prefixed src, no-trailing-slash base → no doubled version dir).
         val d = reparse(doc.bodyHtml)
-        assertTrue(d.select("img").isEmpty(), "images replaced")
-        assertTrue(d.select(".ltx_placeholder").isNotEmpty(), "placeholders present")
+        val tokens = d.select("img[data-img-key]")
+        assertTrue(tokens.isNotEmpty(), "images tokenized")
+        assertTrue(tokens.none { it.hasAttr("src") }, "tokens carry no src")
+        assertEquals(tokens.size, doc.images.size, "one manifest entry per kept figure")
+        assertTrue(
+            doc.images.all { it.fetchUrl.startsWith("https://arxiv.org/html/2510.04905v3/") },
+            doc.images.map { it.fetchUrl }.toString(),
+        )
+        assertTrue(doc.images.any { it.fetchUrl == "https://arxiv.org/html/2510.04905v3/x1.png" })
     }
 
     // --- focused inline cases ----------------------------------------------------------------------
@@ -90,7 +100,8 @@ class HtmlReaderTransformTest {
         body: String,
         id: String = "2412.19437",
         source: HtmlSource = HtmlSource.NATIVE,
-    ) = HtmlReaderTransform.transform(body, ArxivId(id), source)!!
+        version: Int = 1,
+    ) = HtmlReaderTransform.transform(body, ArxivId(id), source, version)!!
 
     @Test
     fun `bare fragment and bib cites become anchor uris`() {
@@ -146,17 +157,81 @@ class HtmlReaderTransformTest {
     }
 
     @Test
-    fun `images become placeholders and the figcaption is kept`() {
-        val d =
-            reparse(
-                t(
-                    """<figure id="S1.F1"><img src="2412.19437v1/x1.png">""" +
-                        """<figcaption>Cap</figcaption></figure>""",
-                ).bodyHtml,
+    fun `a native version-prefixed figure becomes a token resolved against the no-slash page url`() {
+        // Real native src is version-prefixed; resolving it against the no-trailing-slash page URL must
+        // NOT double the version dir (the load-bearing PH.5 resolution fix).
+        val doc =
+            t(
+                """<figure id="S1.F1"><img src="2412.19437v1/x1.png" width="830" height="485" alt="Fig">""" +
+                    """<figcaption>Cap</figcaption></figure>""",
+                version = 1,
             )
-        assertTrue(d.select("img").isEmpty())
-        assertTrue(d.select(".ltx_placeholder").isNotEmpty())
+        val d = reparse(doc.bodyHtml)
+        val img = d.selectFirst("img[data-img-key]")!!
+        assertFalse(img.hasAttr("src"), "token carries no src")
+        assertEquals("830", img.attr("width")) // dimensions + alt kept for CLS + a11y
+        assertEquals("Fig", img.attr("alt"))
+        assertEquals(1, doc.images.size)
+        assertEquals("https://arxiv.org/html/2412.19437v1/x1.png", doc.images.first().fetchUrl)
+        assertEquals(img.attr("data-img-key"), doc.images.first().localKey)
         assertTrue(d.select("figcaption").text().contains("Cap"))
+    }
+
+    @Test
+    fun `an ar5iv absolute-path figure resolves against the ar5iv origin`() {
+        val doc =
+            t(
+                """<figure><img src="/html/1706.03762/assets/x1.png"></figure>""",
+                id = "1706.03762",
+                source = HtmlSource.AR5IV,
+            )
+        assertEquals(
+            "https://ar5iv.labs.arxiv.org/html/1706.03762/assets/x1.png",
+            doc.images.single().fetchUrl,
+        )
+    }
+
+    @Test
+    fun `a data image src is kept inline and never enters the manifest`() {
+        val doc = t("""<figure><img src="data:image/png;base64,AAAA"></figure>""")
+        val d = reparse(doc.bodyHtml)
+        assertEquals("data:image/png;base64,AAAA", d.selectFirst("img")!!.attr("src"))
+        assertTrue(doc.images.isEmpty())
+    }
+
+    @Test
+    fun `an absolute external img is rejected to a placeholder and never fetched`() {
+        // The transform's own host allowlist (defence-in-depth; the sanitizer also strips external srcs).
+        val doc = t("""<figure><img src="https://evil.example/track.gif"></figure>""")
+        val d = reparse(doc.bodyHtml)
+        assertTrue(d.select("img").isEmpty(), "external img not kept")
+        assertTrue(d.select(".ltx_placeholder").isNotEmpty())
+        assertTrue(doc.images.isEmpty())
+        assertNoExternalHost(doc.bodyHtml)
+    }
+
+    @Test
+    fun `identical figure srcs dedup to one manifest entry`() {
+        val doc = t("""<p><img src="2412.19437v1/x1.png"><img src="2412.19437v1/x1.png"></p>""")
+        assertEquals(1, doc.images.size, "deduped by resolved url")
+        val keys = reparse(doc.bodyHtml).select("img[data-img-key]").map { it.attr("data-img-key") }.toSet()
+        assertEquals(1, keys.size, "both tokens share the key")
+    }
+
+    @Test
+    fun `figures past the count cap fall back to placeholders`() {
+        val body =
+            buildString {
+                append("<div>")
+                repeat(HtmlReaderTransform.IMAGE_COUNT_CAP + 5) { append("""<img src="2412.19437v1/x$it.png">""") }
+                append("</div>")
+            }
+        val doc = t(body)
+        assertEquals(HtmlReaderTransform.IMAGE_COUNT_CAP, doc.images.size, "manifest capped")
+        val d = reparse(doc.bodyHtml)
+        assertEquals(HtmlReaderTransform.IMAGE_COUNT_CAP, d.select("img[data-img-key]").size)
+        assertEquals(5, d.select(".ltx_placeholder").size, "the tail is placeholders")
+        assertTrue(HtmlReaderTransform.assertNoExternalHost(doc.bodyHtml), "tokens are not external")
     }
 
     @Test
@@ -212,7 +287,7 @@ class HtmlReaderTransformTest {
 
     @Test
     fun `blank or content-less input returns null`() {
-        assertNull(HtmlReaderTransform.transform("", ArxivId("2412.19437"), HtmlSource.NATIVE))
-        assertNull(HtmlReaderTransform.transform("   ", ArxivId("2412.19437"), HtmlSource.NATIVE))
+        assertNull(HtmlReaderTransform.transform("", ArxivId("2412.19437"), HtmlSource.NATIVE, 1))
+        assertNull(HtmlReaderTransform.transform("   ", ArxivId("2412.19437"), HtmlSource.NATIVE, 1))
     }
 }

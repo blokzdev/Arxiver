@@ -8,8 +8,12 @@ import dev.blokz.arxiver.core.ai.Fidelity
 import dev.blokz.arxiver.core.ai.FidelityReport
 import dev.blokz.arxiver.core.ai.HtmlFetchResult
 import dev.blokz.arxiver.core.ai.HtmlFetcher
+import dev.blokz.arxiver.core.ai.HtmlImageFetcher
+import dev.blokz.arxiver.core.ai.HtmlImageInliner
+import dev.blokz.arxiver.core.ai.HtmlReaderTransform
 import dev.blokz.arxiver.core.ai.HtmlSource
 import dev.blokz.arxiver.core.ai.HtmlStorage
+import dev.blokz.arxiver.core.ai.InlinedImage
 import dev.blokz.arxiver.core.ai.ReaderDocument
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.DispatcherProvider
@@ -23,14 +27,17 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /**
- * Resolves a paper's reader document for [HtmlReaderScreen] (Phase P-HTML PH.4): cache hit (HtmlStorage)
- * → else fetch (native→ar5iv→PDF/error) → persist (best-effort) → expose the [ReaderDocument]. The
- * screen turns the doc into HTML via `ReaderDocWriter.write(doc, theme)` in a `remember(doc, theme)`,
- * so theming/light-dark recompute for free and this ViewModel stays pure (no Compose/theme dependency).
- * The one-shot `FallbackToPdf` nav is a [Channel] effect (not state) so it fires exactly once.
+ * Resolves a paper's reader document for [HtmlReaderScreen] (Phase P-HTML PH.4/PH.5): cache hit
+ * (HtmlStorage, re-gated for external hosts) → else fetch (native→ar5iv→PDF/error). On a fresh fetch the
+ * figures arrive in **two phases** (PH.5): expose the figcaption-placeholder body immediately (text +
+ * math paint without waiting on rate-limited images), then fetch the images (serial, deadline-bounded),
+ * inline them as `data:` URIs, re-persist, and re-expose. The screen turns the doc into HTML via
+ * `ReaderDocWriter.write(doc, theme)` in a `remember(doc, theme)`, so theming recomputes for free and
+ * this ViewModel stays Compose-free. The one-shot `FallbackToPdf` nav is a [Channel] effect (not state).
  */
 data class HtmlReaderUiState(
     val loading: Boolean = true,
@@ -49,6 +56,7 @@ class HtmlReaderViewModel
     constructor(
         savedStateHandle: SavedStateHandle,
         private val htmlFetcher: HtmlFetcher,
+        private val htmlImageFetcher: HtmlImageFetcher,
         private val htmlStorage: HtmlStorage,
         private val paperRepository: PaperRepository,
         private val dispatchers: DispatcherProvider,
@@ -81,7 +89,9 @@ class HtmlReaderViewModel
                 val cached =
                     withContext(dispatchers.io) {
                         (htmlStorage.localHtml(paperId, version) ?: htmlStorage.newest(paperId))?.let { c ->
-                            reconstruct(c.file.readText(), c.source)
+                            val body = c.file.readText()
+                            // Re-gate the persisted body (cheap regex): a poisoned cache never renders.
+                            if (HtmlReaderTransform.assertNoExternalHost(body)) reconstruct(body, c.source) else null
                         }
                     }
                 if (cached != null) {
@@ -103,9 +113,26 @@ class HtmlReaderViewModel
             source: HtmlSource,
             doc: ReaderDocument,
         ) {
-            // Persist the sanitized+transformed body once (best-effort; a Storage failure still renders).
-            htmlStorage.store(paperId, version, source, doc.bodyHtml)
-            _uiState.update { it.copy(loading = false, doc = doc) }
+            // Phase 1 — figures as placeholders: a self-contained body that is the safe offline baseline.
+            // Persist + expose immediately so text + math paint without waiting on the (rate-limited) images.
+            val placeholderBody = HtmlImageInliner.inline(doc.bodyHtml, emptyMap())
+            htmlStorage.store(paperId, version, source, placeholderBody)
+            _uiState.update {
+                it.copy(loading = false, doc = doc.copy(bodyHtml = placeholderBody, images = emptyList()))
+            }
+            if (doc.images.isEmpty()) return
+
+            // Phase 2 — fetch the figures (serial, rate-limited), deadline-bounded so a survey paper can't
+            // hold the shared slot for minutes; partials survive the deadline via the per-image callback.
+            val resolved = LinkedHashMap<String, InlinedImage>()
+            withTimeoutOrNull(IMAGE_FETCH_DEADLINE_MS) {
+                htmlImageFetcher.fetchAll(doc.images) { key, image -> resolved[key] = image }
+            }
+            if (resolved.isEmpty()) return // offline / all failed → keep the placeholder body + cache
+
+            val imageBody = HtmlImageInliner.inline(doc.bodyHtml, resolved)
+            htmlStorage.store(paperId, version, source, imageBody)
+            _uiState.update { it.copy(doc = doc.copy(bodyHtml = imageBody, images = emptyList())) }
         }
 
         /** A cache hit has the body + source on disk; fidelity is fetch-time-only and anchors are a PH.6 concern. */
@@ -119,4 +146,11 @@ class HtmlReaderViewModel
                 anchors = emptyList(),
                 source = source,
             )
+
+        private companion object {
+            /** Wall-clock cap on phase-2 figure fetching so a survey paper can't hold the shared ≥3s slot
+             * for minutes; on the ≥3s limiter this admits ~8–10 figures, the rest stay placeholders (PH.6
+             * refresh). PROVISIONAL — ratify against a real figure-heavy paper (HUMAN.md / VERIFICATION §M). */
+            const val IMAGE_FETCH_DEADLINE_MS = 30_000L
+        }
     }
