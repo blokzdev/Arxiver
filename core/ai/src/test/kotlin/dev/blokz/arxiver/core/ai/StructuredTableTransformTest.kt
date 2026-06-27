@@ -203,4 +203,44 @@ class StructuredTableTransformTest {
         val out = StructuredTableTransform.transform(block("Model ~|~ Score\nLoRA ~|~ 0.94*\nFull ~|~ 0.96"))
         assertTrue(out.contains("| LoRA | 0.94* |"), "the 0.94* marker survives cleanCell: $out")
     }
+
+    // --- device-found fence confusion (K11): a small model opened a block with the *closing* fence ---
+
+    @Test
+    fun `a stray block opened by the closing fence is salvaged into a table, not leaked (device-found K11)`() {
+        // Gemma sometimes opens a second block with `::TABLE` and the body has no `TABLE::` opener at all.
+        val out =
+            StructuredTableTransform.transform(
+                "::TABLE\nSetting ~|~ Single ~|~ Multi\nEffect ~|~ improves [1] ~|~ diminishes [1]\n::TABLE",
+            )
+        assertTrue(out.contains("| Setting | Single | Multi |"), out)
+        assertFalse(out.contains("~|~"), "no raw sentinel leaks: $out")
+        assertFalse(out.contains("::TABLE"), "no orphan fence leaks: $out")
+    }
+
+    @Test
+    fun `a direct GFM table followed by a stray sentinel block leaks neither (the exact K11 case)`() {
+        // The model emitted a valid GFM table AND a stray `::TABLE` block (fence confusion).
+        val out =
+            StructuredTableTransform.transform(
+                "| Setting | Observation |\n| :--- | :--- |\n| Single | improves [1] |\n\n" +
+                    "::TABLE\nSetting ~|~ Single ~|~ Multi\nEffect ~|~ a [1] ~|~ b [1]\n::TABLE",
+            )
+        assertTrue(out.contains("| Setting | Observation |"), "the model's own GFM table is untouched: $out")
+        assertFalse(out.contains("~|~"), "no raw sentinel leaks: $out")
+        assertFalse(out.lines().any { it.trim() == "::TABLE" }, "no orphan fence line: $out")
+    }
+
+    @Test
+    fun `a bare sentinel row with no fence at all is scrubbed, never shown raw`() {
+        val out = StructuredTableTransform.transform("Quick note: A ~|~ B ~|~ C with no fence.")
+        assertFalse(out.contains("~|~"), "the raw sentinel is collapsed: $out")
+        assertTrue(out.contains("A — B — C"), out)
+    }
+
+    @Test
+    fun `salvaging a stray fence block is idempotent`() {
+        val once = StructuredTableTransform.transform("::TABLE\nA ~|~ B\nx ~|~ y [1]\n::TABLE")
+        assertEquals(once, StructuredTableTransform.transform(once))
+    }
 }
