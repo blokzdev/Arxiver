@@ -30,12 +30,17 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -60,11 +65,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -73,7 +80,9 @@ import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
+import dev.blokz.arxiver.core.model.Citation
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.data.PdfStorage
 import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
@@ -85,6 +94,7 @@ import dev.blokz.arxiver.ui.feedback.FeedbackAction
 import dev.blokz.arxiver.ui.feedback.FeedbackMessage
 import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
+import dev.blokz.arxiver.ui.sharePdf
 import dev.blokz.arxiver.ui.shareText
 import dev.blokz.arxiver.ui.theme.ArxiverMotion
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
@@ -108,10 +118,15 @@ fun PaperDetailScreen(
     var showDispatch by remember { mutableStateOf(false) }
     var showAsk by remember { mutableStateOf(false) }
     var showOrganize by remember { mutableStateOf(false) }
+    var showActionsMenu by remember { mutableStateOf(false) }
     val feedback = LocalFeedbackController.current
+    val clipboard = LocalClipboardManager.current
     val savedMessage = stringResource(R.string.today_snackbar_saved)
     val addToLabel = stringResource(R.string.action_add_to_collection)
     val pinnedToNotesMessage = stringResource(R.string.ask_pinned_to_notes)
+    val referenceCopiedMessage = stringResource(R.string.paper_reference_copied)
+    val bibtexCopiedMessage = stringResource(R.string.paper_bibtex_copied)
+    val pdfNotDownloadedMessage = stringResource(R.string.paper_pdf_not_downloaded)
     val exportLabels =
         ConversationMarkdownLabels(
             you = stringResource(R.string.ask_export_you),
@@ -204,6 +219,49 @@ fun PaperDetailScreen(
                             },
                         ) {
                             Icon(Icons.Filled.Share, stringResource(R.string.action_share))
+                        }
+                        Box {
+                            IconButton(onClick = { showActionsMenu = true }) {
+                                Icon(Icons.Filled.MoreVert, stringResource(R.string.cd_more_actions))
+                            }
+                            DropdownMenu(
+                                expanded = showActionsMenu,
+                                onDismissRequest = { showActionsMenu = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_share_pdf)) },
+                                    leadingIcon = { Icon(Icons.Filled.PictureAsPdf, null) },
+                                    onClick = {
+                                        showActionsMenu = false
+                                        val pdf = PdfStorage.localPdf(context, paper.id.value)
+                                        if (pdf != null) {
+                                            context.sharePdf(pdf, subject = paper.title)
+                                        } else {
+                                            // Offline-safe fallback: share the arXiv PDF link, no silent download.
+                                            context.shareText(paper.pdfUrl, subject = paper.title)
+                                            feedback.show(FeedbackMessage(text = pdfNotDownloadedMessage))
+                                        }
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_copy_reference)) },
+                                    leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
+                                    onClick = {
+                                        showActionsMenu = false
+                                        clipboard.setText(AnnotatedString(Citation.reference(paper)))
+                                        feedback.show(FeedbackMessage(text = referenceCopiedMessage))
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_copy_bibtex)) },
+                                    leadingIcon = { Icon(Icons.Filled.Code, null) },
+                                    onClick = {
+                                        showActionsMenu = false
+                                        clipboard.setText(AnnotatedString(Citation.bibtex(paper)))
+                                        feedback.show(FeedbackMessage(text = bibtexCopiedMessage))
+                                    },
+                                )
+                            }
                         }
                     }
                 },

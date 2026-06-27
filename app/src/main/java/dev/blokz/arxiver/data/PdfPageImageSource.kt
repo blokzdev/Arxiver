@@ -54,17 +54,9 @@ class PdfPageImageSource(
     private val context: Context,
     private val dispatchers: DispatcherProvider,
 ) : PageImageSource {
-    /** Newest local PDF for [paperId] (filename `<id with / → _>v<version>.pdf`), or null. */
-    private fun localPdf(paperId: String): File? {
-        val prefix = paperId.replace('/', '_') + "v"
-        return File(context.filesDir, "pdfs")
-            .listFiles { f -> f.isFile && f.name.startsWith(prefix) && f.name.endsWith(".pdf") && f.length() > 0 }
-            ?.maxByOrNull { it.lastModified() }
-    }
-
     override suspend fun pageCountIfLocal(paperId: String): Int? =
         withContext(dispatchers.io) {
-            val file = localPdf(paperId) ?: return@withContext null
+            val file = PdfStorage.localPdf(context, paperId) ?: return@withContext null
             withRenderer(file) { it.pageCount }
         }
 
@@ -73,7 +65,7 @@ class PdfPageImageSource(
         pageIndex: Int,
     ): ChatImage? =
         withContext(dispatchers.io) {
-            val file = localPdf(paperId) ?: return@withContext null
+            val file = PdfStorage.localPdf(context, paperId) ?: return@withContext null
             withRenderer(file) { renderer ->
                 if (pageIndex !in 0 until renderer.pageCount) return@withRenderer null
                 renderer.openPage(pageIndex).use { page ->

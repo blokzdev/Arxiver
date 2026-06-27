@@ -40,8 +40,9 @@
                 tools:node="remove" />
         </provider>
 
-        <!-- P-Share PS.4: shares user-exported images (rendered answers / diagrams) via the OS sheet.
-             Scoped to cache/ask_exports only; not exported; URIs granted read per-share. -->
+        <!-- P-Share PS.4/PS.5: shares user-exported images (cache/ask_exports) + already-downloaded
+             paper PDFs (files/pdfs) via the OS sheet. Scoped to those two dirs (see file_paths.xml);
+             not exported; URIs granted read per-share. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

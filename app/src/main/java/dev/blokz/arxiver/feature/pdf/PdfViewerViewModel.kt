@@ -12,6 +12,7 @@ import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.network.pdf.PdfDownloader
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.data.PdfStorage
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -63,7 +64,7 @@ class PdfViewerViewModel
                     return@launch
                 }
                 val safeName = paperId.value.replace('/', '_') + "v${paper.latestVersion}.pdf"
-                val destination = File(File(context.filesDir, "pdfs"), safeName)
+                val destination = File(PdfStorage.dir(context), safeName)
                 when (val result = pdfDownloader.download(paper.pdfUrl, destination)) {
                     is AppResult.Success ->
                         _uiState.update { it.copy(file = result.value, downloading = false) }

@@ -72,6 +72,15 @@
     <string name="action_share">Share</string>
     <string name="action_open_pdf">Read PDF</string>
 
+    <!-- P-Share PS.5: paper-level save/share + citation actions (overflow on the paper detail bar). -->
+    <string name="cd_more_actions">More actions</string>
+    <string name="action_share_pdf">Share PDF</string>
+    <string name="action_copy_reference">Copy reference</string>
+    <string name="action_copy_bibtex">Copy BibTeX</string>
+    <string name="paper_reference_copied">Reference copied</string>
+    <string name="paper_bibtex_copied">BibTeX copied</string>
+    <string name="paper_pdf_not_downloaded">PDF not downloaded — sharing the link instead</string>
+
     <string name="cd_refresh_inbox">Refresh inbox</string>
     <string name="cd_weekly_review">Send weekly review to Claude</string>
     <string name="cd_save_paper">Save to library</string>
