@@ -19,6 +19,8 @@ Claude (Opus 4.8, Ultracode mode) runs this repo as **PM + tech lead and the acc
 
 **Scale the ceremony to risk:** high-risk / irreversible / cross-cutting → full Workflow + a hard adversarial pass; low-risk / local → a lighter pass; trivial-mechanical, conversational, or self-governance → solo (don't convene a committee to fix a typo). Step 2 (the personal adversarial pass) is **never skipped on anything load-bearing**; its depth scales. When the user turns **Ultracode off**, revert to the lean loop (solo implementation, single build-gate verification, normal PR) and re-enable when complexity warrants.
 
+> A portable, project-agnostic export of this loop (with a cycles-within-cycles diagram) lives in [`docs/ULTRALOOP.md`](docs/ULTRALOOP.md) — for pasting into other projects. This section is the in-repo authority; keep the two aligned in the same commit when the loop is refined.
+
 ## The loop (checkpoint protocol)
 
 Every working session, and repeatedly within a session:
