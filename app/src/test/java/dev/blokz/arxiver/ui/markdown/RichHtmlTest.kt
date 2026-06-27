@@ -1,7 +1,9 @@
 package dev.blokz.arxiver.ui.markdown
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** Pure tests for the rich (KaTeX WebView) HTML builder + the rich-content gate (P-Rich R1). */
@@ -127,5 +129,37 @@ class RichHtmlTest {
         assertTrue(out.contains("arxiver://cite/1") && out.contains("arxiver://cite/3"), "prose citations linked")
         assertTrue(out.contains("d=\"M0 0 [2]\""), "a [2] inside the svg path is preserved")
         assertFalse(out.contains("arxiver://cite/2"), "the svg-internal [2] is NOT a citation")
+    }
+
+    // --- P-Share PS.4: image-export capture signal ---
+
+    private fun captureHtml(markdown: String): String =
+        RichHtml.answerHtml(markdown, "#111", "#00f", "#eee", "#ccc", forCapture = true)
+
+    @Test
+    fun `the on-screen path emits no capture signal (byte-unchanged behaviour)`() {
+        assertFalse(
+            html("Hello \$x\$").contains("arxiver://rendered"),
+            "default render never carries the capture signal",
+        )
+    }
+
+    @Test
+    fun `capture mode emits a one-shot rendered signal after render settles`() {
+        val out = captureHtml("```mermaid\ngraph TD; A-->B\n```")
+        assertTrue(out.contains("arxiver://rendered/"), "fires the capture-complete signal")
+        assertTrue(out.contains("requestAnimationFrame"), "double-rAF after layout")
+        assertTrue(out.contains("setTimeout"), "has a safety timeout so it can never hang")
+        // Still offline — no CDN crept into the capture variant.
+        assertFalse(out.contains("http://") || out.contains("https://"), "no network in the capture HTML")
+        assertTrue(out.contains("mermaid.run"), "the on-screen render path is intact under capture")
+    }
+
+    @Test
+    fun `RichRenderSignal parses only a well-formed rendered url`() {
+        assertEquals(1234, RichRenderSignal.heightPx("arxiver://rendered/1234"))
+        assertNull(RichRenderSignal.heightPx("arxiver://height/55"))
+        assertNull(RichRenderSignal.heightPx("arxiver://rendered/notanumber"))
+        assertNull(RichRenderSignal.heightPx("arxiver://rendered/"))
     }
 }
