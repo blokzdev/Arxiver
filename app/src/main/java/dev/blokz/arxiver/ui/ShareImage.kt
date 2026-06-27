@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.ui
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
@@ -25,6 +26,10 @@ fun Context.shareImage(
         Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
             putExtra(Intent.EXTRA_STREAM, uri)
+            // ClipData carries the same read grant to the **chooser's preview** process, not just the
+            // chosen target — without it the share-sheet thumbnail hits a FileProvider Permission Denial
+            // (device-verified K17). The flag still scopes the grant to per-share read-only.
+            clipData = ClipData.newUri(contentResolver, subject ?: "image", uri)
             subject?.let { putExtra(Intent.EXTRA_SUBJECT, it) }
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }

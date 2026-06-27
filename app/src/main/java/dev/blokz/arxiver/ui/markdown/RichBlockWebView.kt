@@ -41,19 +41,17 @@ fun RichBlockWebView(
     onCitationClick: ((Int) -> Unit)? = null,
     onArxivPaperClick: ((String) -> Unit)? = null,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    val dark = isSystemInDarkTheme()
+    val theme = rememberRichTheme()
     val html =
-        remember(markdown, scheme.onSurface, scheme.primary, scheme.tertiary, scheme.surfaceVariant, dark) {
+        remember(markdown, theme) {
             RichHtml.answerHtml(
                 markdown = markdown,
-                textColor = scheme.onSurface.toCssHex(),
-                citationColor = scheme.primary.toCssHex(),
-                codeBackground = scheme.surfaceVariant.toCssHex(),
-                mutedColor = scheme.outlineVariant.toCssHex(),
-                dark = dark,
-                // Distinct accent so an arXiv cross-ref reads as navigation, not a [n] citation.
-                crossRefColor = scheme.tertiary.toCssHex(),
+                textColor = theme.textColor,
+                citationColor = theme.citationColor,
+                codeBackground = theme.codeBackground,
+                mutedColor = theme.mutedColor,
+                dark = theme.dark,
+                crossRefColor = theme.crossRefColor,
             )
         }
     var heightDp by remember { mutableIntStateOf(0) }
@@ -64,21 +62,7 @@ fun RichBlockWebView(
         modifier = modifier.fillMaxWidth().then(if (heightDp > 0) Modifier.height(heightDp.dp) else Modifier),
         factory = { context ->
             WebView(context).apply {
-                setBackgroundColor(0) // transparent
-                isVerticalScrollBarEnabled = false
-                isHorizontalScrollBarEnabled = false
-                settings.apply {
-                    javaScriptEnabled = true // KaTeX only; the page runs no model-supplied JS
-                    blockNetworkLoads = true
-                    allowContentAccess = false
-                    allowFileAccess = true // for the bundled file:///android_asset/ KaTeX
-                    @Suppress("DEPRECATION")
-                    allowFileAccessFromFileURLs = false
-                    @Suppress("DEPRECATION")
-                    allowUniversalAccessFromFileURLs = false
-                    domStorageEnabled = false
-                    cacheMode = WebSettings.LOAD_NO_CACHE
-                }
+                applyRichSandbox()
                 webViewClient =
                     object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(
@@ -109,4 +93,73 @@ fun RichBlockWebView(
 }
 
 /** Compose color -> CSS `#RRGGBB` (alpha dropped; the WebView background is transparent). */
-private fun Color.toCssHex(): String = "#%06X".format(0xFFFFFF and toArgb())
+internal fun Color.toCssHex(): String = "#%06X".format(0xFFFFFF and toArgb())
+
+/**
+ * Applies the **offline sandbox** shared by the on-screen [RichBlockWebView] and the off-screen
+ * [RichImageExporter] (P-Share PS.4b): JS on for the bundled KaTeX/Mermaid only, **all network
+ * blocked**, no content/cross-file access, bundled `file:///android_asset/` loads only. Extracted
+ * so the capture WebView can never silently drift from `blockNetworkLoads = true`.
+ */
+@SuppressLint("SetJavaScriptEnabled")
+internal fun WebView.applyRichSandbox() {
+    setBackgroundColor(0) // transparent; the host paints the background
+    isVerticalScrollBarEnabled = false
+    isHorizontalScrollBarEnabled = false
+    settings.apply {
+        javaScriptEnabled = true // KaTeX/Mermaid only; the page runs no model-supplied JS
+        blockNetworkLoads = true
+        allowContentAccess = false
+        allowFileAccess = true // for the bundled file:///android_asset/ KaTeX + Mermaid
+        @Suppress("DEPRECATION")
+        allowFileAccessFromFileURLs = false
+        @Suppress("DEPRECATION")
+        allowUniversalAccessFromFileURLs = false
+        domStorageEnabled = false
+        cacheMode = WebSettings.LOAD_NO_CACHE
+    }
+}
+
+/**
+ * The themed colors a rich block renders with — one source of truth shared by the on-screen
+ * [RichBlockWebView] and the off-screen [RichImageExporter], so an **exported image matches the
+ * screen**. Hex strings feed [RichHtml]; [backgroundArgb] is the opaque fill painted behind the
+ * (transparent) WebView for a standalone PNG.
+ */
+data class RichTheme(
+    val textColor: String,
+    val citationColor: String,
+    val codeBackground: String,
+    val mutedColor: String,
+    val crossRefColor: String,
+    val dark: Boolean,
+    val backgroundArgb: Int,
+)
+
+/** Resolves the current [RichTheme] from the Material color scheme + light/dark. */
+@Composable
+internal fun rememberRichTheme(): RichTheme {
+    val scheme = MaterialTheme.colorScheme
+    val dark = isSystemInDarkTheme()
+    return remember(
+        scheme.onSurface,
+        scheme.primary,
+        scheme.surfaceVariant,
+        scheme.outlineVariant,
+        scheme.tertiary,
+        scheme.surfaceContainerHigh,
+        dark,
+    ) {
+        RichTheme(
+            textColor = scheme.onSurface.toCssHex(),
+            citationColor = scheme.primary.toCssHex(),
+            codeBackground = scheme.surfaceVariant.toCssHex(),
+            mutedColor = scheme.outlineVariant.toCssHex(),
+            // Distinct accent so an arXiv cross-ref reads as navigation, not a [n] citation.
+            crossRefColor = scheme.tertiary.toCssHex(),
+            dark = dark,
+            // Match the assistant bubble (surfaceContainerHigh); force opaque so the PNG isn't see-through.
+            backgroundArgb = scheme.surfaceContainerHigh.toArgb() or (0xFF shl 24),
+        )
+    }
+}
