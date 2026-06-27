@@ -485,4 +485,20 @@ object AppModule {
         rateLimiter: ArxivRateLimiter,
         dispatchers: DispatcherProvider,
     ): ArxivApiClient = ArxivApiClient(httpClient, rateLimiter, dispatchers)
+
+    @Provides
+    @Singleton
+    fun htmlFetcher(
+        @ArxivClient httpClient: OkHttpClient,
+        rateLimiter: ArxivRateLimiter,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ai.HtmlFetcher =
+        dev.blokz.arxiver.core.ai.HtmlFetcher(httpClient, rateLimiter, dispatchers)
+
+    @Provides
+    @Singleton
+    fun htmlStorage(
+        @ApplicationContext context: Context,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.ai.HtmlStorage = dev.blokz.arxiver.core.ai.HtmlStorage(context.filesDir, dispatchers)
 }
