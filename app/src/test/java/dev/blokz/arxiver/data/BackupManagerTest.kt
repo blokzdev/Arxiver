@@ -9,6 +9,9 @@ import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.elementDescriptors
+import kotlinx.serialization.descriptors.elementNames
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -191,4 +194,48 @@ class BackupManagerTest {
             val result = runCatching { backupManager.import("""{"schema":"other/v9","exportedAt":"x","papers":[]}""") }
             assertTrue(result.isFailure)
         }
+
+    // --- P-Chat PC.0: the chat-never-in-backup red line, converted from code-absence to a test ---
+
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @Test
+    fun `the importable backup schema carries exactly the six known surfaces - chat can never leak in`() {
+        // Descriptor-based on purpose: a raw-JSON substring match would false-positive on any
+        // paper whose title mentions "chat". If a future field is ever added deliberately, this
+        // test forces the decision to be explicit — chat/session/message fields stay forbidden.
+        val elements = ArxiverBackup.serializer().descriptor.elementNames.toSet()
+        assertEquals(
+            setOf("schema", "exportedAt", "papers", "follows", "collections", "routines"),
+            elements,
+        )
+    }
+
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    @Test
+    fun `no element at any depth of the export schemas is chat-shaped`() {
+        // The top-level pin above can't see NESTED DTOs — a future `chats` field on
+        // ExportedPaper or BackupCollection would serialize into the importable backup
+        // with it still green. Walk the whole descriptor tree of BOTH export schemas.
+        fun collect(
+            d: SerialDescriptor,
+            names: MutableSet<String>,
+            seen: MutableSet<String>,
+        ) {
+            if (!seen.add(d.serialName)) return
+            names.addAll(d.elementNames)
+            d.elementDescriptors.forEach { collect(it, names, seen) }
+        }
+
+        val forbidden = listOf("chat", "session", "message", "conversation")
+        for (root in listOf(ArxiverBackup.serializer(), LibraryExport.serializer())) {
+            val names = mutableSetOf<String>()
+            collect(root.descriptor, names, mutableSetOf())
+            val leaks = names.filter { n -> forbidden.any { n.lowercase().contains(it) } }
+            assertTrue(
+                leaks.isEmpty(),
+                "chat-shaped element(s) inside ${root.descriptor.serialName}: $leaks — " +
+                    "chat content must never enter an importable/exportable schema",
+            )
+        }
+    }
 }

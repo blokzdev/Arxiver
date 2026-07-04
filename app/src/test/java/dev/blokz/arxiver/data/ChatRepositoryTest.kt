@@ -320,4 +320,31 @@ class ChatRepositoryTest {
                 repo(FakeProvider { flowOf(ChatChunk.Done()) }).prepared(RetrievalScope.Paper("p2"), null, "q")
             assertEquals(sentinelBody, settleStructured(fullPrep, sentinelBody), "cloud FULL is never transformed")
         }
+
+    @Test
+    fun `a Done with no text persists the assistant turn as error - never an empty complete row`() =
+        runTest {
+            val repo = repo(FakeProvider { flowOf(ChatChunk.Done()) })
+
+            repo.stream(repo.prepared(RetrievalScope.Paper("p1"), null, "q")).toList()
+
+            val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
+            val assistant = db.chatDao().messagesFor(sid).last()
+            assertEquals("", assistant.content)
+            assertEquals("error", assistant.status, "an empty-complete row would dodge every ghost filter")
+        }
+
+    @Test
+    fun `ensureSession returns the exact id the streamed turn then writes into`() =
+        runTest {
+            val repo = repo(FakeProvider { flowOf(ChatChunk.Delta("a"), ChatChunk.Done()) })
+
+            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "q")
+            val sid = repo.ensureSession(prep)
+            assertEquals(sid, repo.ensureSession(prep.copy(sessionId = sid)), "an existing binding is identity")
+
+            repo.stream(prep.copy(sessionId = sid)).toList()
+            assertEquals(listOf(sid), repo.observeSessions(RetrievalScope.Paper("p1")).first().map { it.id })
+            assertEquals(2, db.chatDao().messagesFor(sid).size)
+        }
 }

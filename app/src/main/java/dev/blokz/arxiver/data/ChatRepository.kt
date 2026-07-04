@@ -174,6 +174,28 @@ class ChatRepository(
         }
 
     /**
+     * Resolve-or-create the session a turn will stream into, returning the EXACT id (PC.0).
+     * Called by the ViewModel right before [stream] so a first turn binds its surface to the
+     * session it actually creates — never re-resolved from the scope's most-recent session,
+     * which with two hosts live on one scope can belong to the OTHER surface. Creation stays
+     * at send time (post-confirm for cloud), so an abandoned confirm never leaves an empty row.
+     */
+    suspend fun ensureSession(prepared: PreparedChat): Long =
+        prepared.sessionId ?: withContext(dispatchers.io) {
+            val now = clock()
+            val (scopeKind, scopeId) = prepared.scope.toRow()
+            chatDao.insertSession(
+                ChatSessionEntity(
+                    scope = scopeKind,
+                    scopeId = scopeId,
+                    providerId = prepared.providerId.name,
+                    createdAt = now,
+                    lastMessageAt = now,
+                ),
+            )
+        }
+
+    /**
      * Streams the assistant reply, persisting turns. Re-emits the provider's
      * [ChatChunk]s; an [AiException] propagates after the partial turn is saved as
      * `error`, and cancellation leaves the partial as `incomplete`.
@@ -218,16 +240,25 @@ class ChatRepository(
                 prepared.provider.chat(prepared.request).collect { chunk ->
                     when (chunk) {
                         is ChatChunk.Delta -> answer.append(chunk.text)
-                        is ChatChunk.Done ->
+                        is ChatChunk.Done -> {
                             // Persist the settled body: strip any model FOLLOWUPS:: sentinel (P-Rich
                             // R3b.2), then on a STRUCTURED turn render the TABLE:: intermediate to a
                             // valid table/list (PA.4). The ViewModel display path runs the SAME two
                             // transforms on the same input, so DB == UI == export (no resurrection).
+                            // A Done with NO usable text persists as `error`, matching the error
+                            // bubble the live UI already shows — an ''/complete row would dodge
+                            // every ghost filter AND feed an empty turn into later context (PC.0).
+                            val settled = settleStructured(prepared, extractFollowUps(answer.toString()).first)
                             chatDao.updateMessage(
                                 assistantId,
-                                settleStructured(prepared, extractFollowUps(answer.toString()).first),
-                                ChatMessageEntity.STATUS_COMPLETE,
+                                settled,
+                                if (settled.isBlank()) {
+                                    ChatMessageEntity.STATUS_ERROR
+                                } else {
+                                    ChatMessageEntity.STATUS_COMPLETE
+                                },
                             )
+                        }
                     }
                     emit(chunk)
                 }
