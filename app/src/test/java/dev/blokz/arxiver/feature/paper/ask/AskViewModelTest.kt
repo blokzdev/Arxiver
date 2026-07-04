@@ -40,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -697,5 +698,158 @@ class AskViewModelTest {
             vm.offerQuote(AskQuoteRequest(id = 2L, text = "same text"))
 
             assertEquals("> same text\n\ndraft", vm.uiState.value.input)
+        }
+
+    // --- P-Chat PC.0: cross-surface write-redirect fix + ghost-bubble hydrate filter ---
+
+    private suspend fun seedSession(lastMessageAt: Long): Long =
+        chatDao.insertSession(
+            ChatSessionEntity(
+                scope = ChatSessionEntity.SCOPE_PAPER,
+                scopeId = "2401.00001",
+                providerId = "CLAUDE",
+                createdAt = lastMessageAt,
+                lastMessageAt = lastMessageAt,
+            ),
+        )
+
+    @Test
+    fun `a bound session never re-syncs to the scope's newest session after a turn`() =
+        runTest(dispatcher) {
+            // The factory's start() resumes the scope's most-recent session — A, the only one.
+            val sessionA = seedSession(lastMessageAt = 1_000)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Delta("answer"), ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+            advanceUntilIdle()
+
+            // Another surface (the P-Chat full-screen route) makes a NEWER session on the same
+            // scope. MAX_VALUE so it stays newest even after send #1 touches A with wall-clock time.
+            val sessionB = seedSession(lastMessageAt = Long.MAX_VALUE)
+
+            // Send #1: lands in A; the pre-fix finally block would now re-sync the binding to B.
+            vm.setInput("first question")
+            vm.send()
+            advanceUntilIdle()
+            // Send #2: the regression bite — under the bug this lands in B.
+            vm.setInput("second question")
+            vm.send()
+            advanceUntilIdle()
+
+            val turnsInA = chatDao.messagesFor(sessionA).filter { it.role == ChatMessageEntity.ROLE_USER }
+            assertEquals(
+                listOf("first question", "second question"),
+                turnsInA.map { it.content },
+                "every turn stays in the session THIS surface displays, never the scope's newest",
+            )
+            assertTrue(chatDao.messagesFor(sessionB).isEmpty(), "the other surface's session is untouched")
+        }
+
+    @Test
+    fun `a first turn adopts the session stream lazily created - and keeps it`() =
+        runTest(dispatcher) {
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Delta("a"), ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+            advanceUntilIdle()
+
+            vm.setInput("first")
+            vm.send()
+            advanceUntilIdle()
+            vm.setInput("second")
+            vm.send()
+            advanceUntilIdle()
+
+            val sessions = chatDao.observeAllSessions().first()
+            assertEquals(1, sessions.size, "both turns share the one lazily-created session")
+            assertEquals(4, chatDao.messagesFor(sessions.single().id).size)
+        }
+
+    @Test
+    fun `hydrate drops exactly the empty-incomplete assistant ghost`() =
+        runTest(dispatcher) {
+            val session = seedSession(lastMessageAt = 1_000)
+
+            suspend fun msg(
+                role: String,
+                content: String,
+                status: String,
+                at: Long,
+            ) = chatDao.insertMessage(
+                ChatMessageEntity(
+                    sessionId = session,
+                    role = role,
+                    content = content,
+                    status = status,
+                    createdAt = at,
+                ),
+            )
+            msg(ChatMessageEntity.ROLE_USER, "question", ChatMessageEntity.STATUS_COMPLETE, 1)
+            msg(ChatMessageEntity.ROLE_ASSISTANT, "", ChatMessageEntity.STATUS_INCOMPLETE, 2) // the ghost
+            msg(ChatMessageEntity.ROLE_ASSISTANT, "partial answer…", ChatMessageEntity.STATUS_INCOMPLETE, 3)
+            msg(ChatMessageEntity.ROLE_ASSISTANT, "", ChatMessageEntity.STATUS_ERROR, 4)
+
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+            advanceUntilIdle()
+
+            val texts = vm.uiState.value.messages.map { it.text }
+            assertEquals(listOf("question", "partial answer…", ""), texts, "only the empty-incomplete row dropped")
+        }
+
+    @Test
+    fun `a first turn binds the exact session it creates - not the scope's newest`() =
+        runTest(dispatcher) {
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Delta("a"), ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+            advanceUntilIdle()
+
+            // Another surface creates a NEWER session on the same scope before this surface's
+            // first turn — the deleted most-recent "learn" heuristic would adopt it post-turn.
+            val foreign = seedSession(lastMessageAt = Long.MAX_VALUE)
+
+            vm.setInput("first")
+            vm.send()
+            advanceUntilIdle()
+            vm.setInput("second")
+            vm.send()
+            advanceUntilIdle()
+
+            val own = chatDao.observeAllSessions().first().map { it.id }.single { it != foreign }
+            assertEquals(4, chatDao.messagesFor(own).size, "both turns in the session this surface created")
+            assertTrue(chatDao.messagesFor(foreign).isEmpty(), "the foreign session is never written")
+        }
+
+    @Test
+    fun `a send issued before hydration completes still lands in the resumed session`() =
+        runTest(dispatcher) {
+            val sessionA = seedSession(lastMessageAt = 1_000)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Delta("a"), ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+            // Deliberately NO advanceUntilIdle: hydration is still pending at send time.
+            vm.setInput("early question")
+            vm.send()
+            advanceUntilIdle()
+
+            assertEquals(1, chatDao.observeAllSessions().first().size, "a racing send never forks a session")
+            assertTrue(chatDao.messagesFor(sessionA).any { it.content == "early question" })
         }
 }

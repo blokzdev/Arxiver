@@ -25,14 +25,12 @@ import dev.blokz.arxiver.data.RelationGraphSource
 import dev.blokz.arxiver.data.settleStructured
 import dev.blokz.arxiver.rag.ScopeIndexer
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 enum class AskRole { USER, ASSISTANT }
@@ -93,6 +91,11 @@ class AskViewModel
         private var sessionId: Long? = null
         private var streamJob: Job? = null
         private var indexJob: Job? = null
+
+        // The start()-time history hydration; every turn entry point joins it (alongside
+        // indexJob) so a send racing sheet-open can never snapshot a null binding and fork
+        // a phantom session while the resumed session's id is still being read (PC.0).
+        private var hydrateJob: Job? = null
         private var pendingPrepared: PreparedChat? = null
 
         // The mode pinned for the parked cloud request — read at ask() time, NOT from the live
@@ -137,12 +140,26 @@ class AskViewModel
                     runCatching { scopeIndexer.ensureIndexed(scope) }
                     _uiState.update { it.copy(indexing = false) }
                 }
-            viewModelScope.launch {
-                val resume = sessionId ?: chatRepository.observeSessions(scope).first().firstOrNull()?.id
-                this@AskViewModel.sessionId = resume ?: return@launch
-                val history = chatRepository.observeMessages(resume).first().map { it.toAskMessage() }
-                _uiState.update { it.copy(messages = history) }
-            }
+            hydrateJob =
+                viewModelScope.launch {
+                    val resume = sessionId ?: chatRepository.observeSessions(scope).first().firstOrNull()?.id
+                    this@AskViewModel.sessionId = resume ?: return@launch
+                    val history =
+                        chatRepository.observeMessages(resume).first()
+                            // A mid-stream process death leaves a 0-char `incomplete` assistant row —
+                            // the ghost bubble (seen live on device, 2026-07-04). Drop exactly that
+                            // shape at hydrate: non-empty partials and error rows survive, and the LIVE
+                            // streaming bubble renders from in-memory state so an active turn can never
+                            // be hidden (P-Chat PC.0). prepare() already excludes non-complete rows
+                            // from context, so this is display hygiene, not a data change.
+                            .filterNot {
+                                it.role == ChatMessageEntity.ROLE_ASSISTANT &&
+                                    it.status == ChatMessageEntity.STATUS_INCOMPLETE &&
+                                    it.content.isEmpty()
+                            }
+                            .map { it.toAskMessage() }
+                    _uiState.update { it.copy(messages = history) }
+                }
             // R3d.4: gate the vision preset for a paper scope. Both probes are network-free
             // (pageCountIfLocal globs filesDir/pdfs; resolveVisionCapable is local store reads),
             // so they never trip the arXiv limiter and run in parallel with indexing. Collection
@@ -201,6 +218,7 @@ class AskViewModel
             _uiState.update { it.copy(error = null, notConfigured = false, preparing = true) }
             viewModelScope.launch {
                 indexJob?.join()
+                hydrateJob?.join()
                 when (val result = relationGraphSource.graphForPaper(paper.paperId)) {
                     is GraphResult.Ready -> {
                         val mermaid = RelationGraphBuilder.toMermaid(result.graph)
@@ -249,6 +267,7 @@ class AskViewModel
                 // Wait for on-open scope indexing so retrieval sees the freshly-embedded
                 // chunks; an un-embedded inbox paper would otherwise retrieve nothing.
                 indexJob?.join()
+                hydrateJob?.join()
                 val mode = _uiState.value.mode
                 val result =
                     chatRepository.prepare(scope, sessionId, question, _uiState.value.includeNotes, mode)
@@ -273,6 +292,7 @@ class AskViewModel
             _uiState.update { it.copy(error = null, notConfigured = false, preparing = true) }
             viewModelScope.launch {
                 indexJob?.join()
+                hydrateJob?.join()
                 // Action-time re-check (the sheet-open gate can go stale: an on-device engine may
                 // finish loading mid-sheet and, with prefer-on-device on, win at prepare time — the
                 // assembler would then silently drop the image). Surface it + hide the chip instead.
@@ -348,7 +368,13 @@ class AskViewModel
                 viewModelScope.launch {
                     val answer = StringBuilder()
                     try {
-                        chatRepository.stream(prepared).collect { chunk ->
+                        // Bind this surface's session BEFORE the turn streams (PC.0): a first
+                        // turn adopts the EXACT id ensureSession creates — never re-resolved
+                        // from the scope's most-recent session, which with two hosts live on
+                        // one scope (the sheet + P-Chat's full-screen route) can belong to the
+                        // other surface. Later sends reuse the binding unconditionally.
+                        val sid = sessionId ?: chatRepository.ensureSession(prepared).also { sessionId = it }
+                        chatRepository.stream(prepared.copy(sessionId = sid)).collect { chunk ->
                             when (chunk) {
                                 is ChatChunk.Delta -> {
                                     answer.append(chunk.text)
@@ -371,8 +397,8 @@ class AskViewModel
                         updateAssistant(answer.toString(), streaming = false, error = true)
                         _uiState.update { it.copy(error = e.error.toMessageRes()) }
                     } finally {
-                        // Settle the turn (cancellation leaves the partial incomplete), preserving
-                        // its text/error, then refresh the session id for follow-ups.
+                        // Settle the turn (cancellation leaves the partial incomplete),
+                        // preserving its text/error.
                         _uiState.update { state ->
                             val i = state.messages.indexOfLast { it.role == AskRole.ASSISTANT }
                             val messages =
@@ -382,9 +408,6 @@ class AskViewModel
                                     state.messages.toMutableList().also { it[i] = it[i].copy(streaming = false) }
                                 }
                             state.copy(streaming = false, messages = messages)
-                        }
-                        withContext(NonCancellable) {
-                            sessionId = chatRepository.observeSessions(scope).first().firstOrNull()?.id ?: sessionId
                         }
                     }
                 }
