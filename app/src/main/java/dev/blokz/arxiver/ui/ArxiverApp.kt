@@ -293,6 +293,7 @@ fun ArxiverApp(
                 composable(Routes.HTML_VIEWER) {
                     HtmlReaderScreen(
                         onBack = { navController.popBackStack() },
+                        onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
                         onFallbackToPdf = { id ->
                             navController.navigate(Routes.pdfViewer(id)) {
                                 // drop the dead HTML route so Back from the PDF returns to paper detail

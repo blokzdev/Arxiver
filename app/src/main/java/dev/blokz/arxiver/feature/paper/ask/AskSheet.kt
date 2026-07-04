@@ -130,10 +130,13 @@ fun AskSheet(
      *  label) — used as the share subject + the Markdown `# header` (P-Share PS.6). null still
      *  exports, just without the header line. */
     conversationTitle: String? = null,
+    /** A consume-once quote offer (PH.7 reader selection→Ask); idempotent by [AskQuoteRequest.id]. */
+    initialQuote: AskQuoteRequest? = null,
     viewModel: AskViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     LaunchedEffect(scope, sessionId) { viewModel.start(scope, sessionId) }
+    LaunchedEffect(initialQuote) { initialQuote?.let(viewModel::offerQuote) }
 
     // Read-aloud (P-Share PS.2): keyed by answer content so the play/stop toggle survives recomposition;
     // the speakable form is extracted at the UI edge (labels are localized strings).
@@ -275,18 +278,6 @@ private fun rememberConversationMarkdownLabels(): ConversationMarkdownLabels =
         sources = stringResource(R.string.ask_export_sources),
         footer = stringResource(R.string.ask_export_footer),
     )
-
-/** Prepend a blockquote of [answer] (collapsed + capped) onto the [current] input for a quoted follow-up. */
-private fun quoteInto(
-    answer: String,
-    current: String,
-): String {
-    val excerpt = answer.replace(Regex("\\s+"), " ").trim().take(QUOTE_MAX)
-    val ellipsis = if (answer.trim().length > QUOTE_MAX) "…" else ""
-    return "> $excerpt$ellipsis\n\n$current"
-}
-
-private const val QUOTE_MAX = 200
 
 @Composable
 private fun rememberSpeakableLabels(): SpeakableLabels =

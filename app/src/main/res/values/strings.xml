@@ -90,6 +90,19 @@
     <string name="html_toc_untitled_figure">Figure</string>
     <string name="html_toc_untitled_table">Table</string>
 
+    <!-- P-HTML PH.7: find-in-page + selection→Ask. -->
+    <string name="html_find_hint">Find in paper</string>
+    <string name="html_find_match">%1$d of %2$d</string>
+    <string name="html_find_no_matches">No matches</string>
+    <string name="html_find_match_announce">Match %1$d of %2$d</string>
+    <string name="html_find_no_matches_announce">No matches found</string>
+    <string name="cd_find_in_page">Find in paper</string>
+    <string name="cd_find_next">Next match</string>
+    <string name="cd_find_previous">Previous match</string>
+    <string name="cd_find_close">Close find</string>
+    <string name="html_ask_selection">Ask about this</string>
+    <string name="cd_reader_ask">Ask about this paper</string>
+
     <string name="action_retry">Retry</string>
     <string name="action_share">Share</string>
     <string name="action_open_pdf">Read PDF</string>

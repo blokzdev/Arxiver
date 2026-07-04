@@ -49,6 +49,37 @@ internal object ReaderScrollJs {
             "return JSON.stringify({a:best,o:best?Math.round(-bestTop):0,f:f});})()"
     }
 
+    /**
+     * Read the current selection, CAPPED IN-PAGE (PH.7): `.slice(0, SELECTION_READ_CAP)` runs inside
+     * the snippet so a select-all on a multi-MB `data:`-inlined paper never crosses the bridge at
+     * size — the JSON-encoded return is bounded before it leaves the page.
+     */
+    fun selection(): String = "(function(){return window.getSelection().toString().slice(0,$SELECTION_READ_CAP);})()"
+
+    /**
+     * Parse + sanitize the untrusted selection return (PH.7). Order is load-bearing:
+     * 1. Unicode-aware whitespace collapse — `\\p{Z}` catches U+00A0/U+2028/U+2029 that Java's plain
+     *    `\\s` misses (defuses blockquote breakout + the confirm-card visual-lie vector);
+     * 2. THEN strip format/control chars (`\\p{Cf}` zero-width/bidi overrides, `\\p{Cc}` raw
+     *    controls) — after the collapse, or `\n`/`\t` (which are Cc) would be deleted instead of
+     *    becoming spaces and words would glue together;
+     * 3. trim, re-cap (belt-and-suspenders), null-if-blank.
+     */
+    fun parseSelectionResult(raw: String?): String? =
+        runCatching {
+            if (raw.isNullOrBlank() || raw == "null") return@runCatching null
+            val unquoted = JSONTokener(raw).nextValue() as? String ?: return@runCatching null
+            unquoted
+                .replace(Regex("[\\s\\p{Z}\\u0085]+"), " ")
+                .replace(Regex("[\\p{Cf}\\p{Cc}]"), "")
+                .trim()
+                .take(SELECTION_READ_CAP)
+                .ifBlank { null }
+        }.getOrNull()
+
+    /** In-page selection cap (chars). PROVISIONAL — device-ratified (VERIFICATION §M). */
+    const val SELECTION_READ_CAP = 2000
+
     /** Parse the probe's untrusted return; null on any garbage. Values clamped; anchor NOT yet trusted. */
     fun parseProbeResult(raw: String?): ReaderPosition? =
         runCatching {

@@ -113,6 +113,7 @@ class HtmlReaderViewModelTest {
         htmlImageFetcher = imageFetcher,
         htmlStorage = storage,
         paperRepository = paperRepo,
+        libraryRepository = dev.blokz.arxiver.data.LibraryRepository(db.libraryDao(), db.inboxDao()),
         dispatchers = dispatchers,
         applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO),
     )

@@ -41,6 +41,51 @@ internal class ReaderScrollController {
     /** True once a REAL user scroll arrived after the last restore — skips the delayed re-apply. */
     internal var tickedSinceRestore = false
 
+    /** Fires once per generation when the document becomes visible — PH.7 re-issues find here. */
+    var onRevealed: (() -> Unit)? = null
+    private var revealedGeneration = -1
+
+    /** Generation the last findAllAsync was issued for; stale FindListener callbacks are dropped. */
+    private var findIssuedGeneration = -1
+
+    /** True iff the current document owns the last-issued find (gates FindListener dispatches). */
+    val findStampCurrent: Boolean get() = findIssuedGeneration == generation
+
+    fun findAll(query: String) {
+        findIssuedGeneration = generation
+        webView?.findAllAsync(query)
+    }
+
+    fun findNext(forward: Boolean) {
+        webView?.findNext(forward)
+    }
+
+    fun clearFind() {
+        findIssuedGeneration = -1
+        webView?.clearMatches()
+    }
+
+    /**
+     * Read the current text selection (PH.7) — generation-stamped like [probe], but a stale result
+     * is DELIVERED as null (never swallowed) so the caller can always finish the ActionMode; text
+     * from a dead document can never seed the new document's sheet.
+     */
+    fun readSelection(onResult: (String?) -> Unit) {
+        val wv = webView ?: return onResult(null)
+        val stamped = generation
+        wv.evaluateJavascript(ReaderScrollJs.selection()) { raw ->
+            onResult(if (generation == stamped) ReaderScrollJs.parseSelectionResult(raw) else null)
+        }
+    }
+
+    /** The single reveal funnel — all three reveal paths route here; fires [onRevealed] once per load. */
+    private fun reveal(wv: WebView) {
+        wv.alpha = 1f
+        if (revealedGeneration == generation) return
+        revealedGeneration = generation
+        onRevealed?.invoke()
+    }
+
     /** The user's own TOC/cite tap — the only animated scroll in the reader. */
     fun jumpTo(anchorId: String) {
         webView?.evaluateJavascript(ReaderScrollJs.jump(anchorId, smooth = true), null)
@@ -78,14 +123,14 @@ internal class ReaderScrollController {
         val applies = target != null && (target.anchorId != null || target.fraction >= minFraction)
         if (!applies) {
             restorePending = false
-            wv.alpha = 1f
+            reveal(wv)
             return
         }
         tickedSinceRestore = false
         wv.evaluateJavascript(ReaderScrollJs.restore(target!!)) {
             if (generation != stamped) return@evaluateJavascript
             restorePending = false
-            wv.alpha = 1f
+            reveal(wv)
             onApplied()
             // One re-apply after layout settles, skipped if the user scrolled in the meantime.
             wv.postDelayed({
@@ -104,8 +149,10 @@ internal class ReaderScrollController {
         if (conceal) {
             wv.alpha = 0f
             val stamped = generation
-            // Failsafe: a stuck restore must never leave the reader blank.
-            wv.postDelayed({ if (generation == stamped) wv.alpha = 1f }, REVEAL_FAILSAFE_MS)
+            // Failsafe: a stuck restore must never leave the reader blank. Routed through the
+            // reveal() funnel — once-per-generation semantics prevent a double find re-issue
+            // when the failsafe fires after a successful restore already revealed.
+            wv.postDelayed({ if (generation == stamped) reveal(wv) }, REVEAL_FAILSAFE_MS)
         }
     }
 
@@ -120,11 +167,14 @@ internal class ReaderScrollController {
 internal fun HtmlReaderWebView(
     html: String,
     controller: ReaderScrollController,
+    askSelectionLabel: String,
     onPaperClick: (String) -> Unit,
     onExternalUrl: (String) -> Unit,
     onAnchorTap: (String) -> Unit,
     onScrollTick: () -> Unit,
     onPageReady: () -> Unit,
+    onFindResult: (Int, Int, Boolean) -> Unit,
+    onAskSelection: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val onPaper by rememberUpdatedState(onPaperClick)
@@ -132,14 +182,32 @@ internal fun HtmlReaderWebView(
     val onAnchor by rememberUpdatedState(onAnchorTap)
     val onTick by rememberUpdatedState(onScrollTick)
     val onReady by rememberUpdatedState(onPageReady)
+    val onFind by rememberUpdatedState(onFindResult)
+    val onAsk by rememberUpdatedState(onAskSelection)
 
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
-            WebView(context).apply {
+            ReaderWebView(context).apply {
                 applyRichSandbox()
                 settings.blockNetworkImage = true // belt-and-suspenders over blockNetworkLoads
                 controller.webView = this
+                askLabel = askSelectionLabel
+                // Read-then-finish (PH.7): mode.finish() clears the selection on the renderer with
+                // no ordering guarantee vs evaluateJavascript — so read FIRST, finish in the read
+                // callback (UI thread), then hand off. Stale/blank → quiet no-op, mode still closed.
+                // (`this.` is load-bearing: the composable's parameter shadows the receiver property.)
+                this.onAskSelection = { mode ->
+                    controller.readSelection { text ->
+                        mode.finish()
+                        text?.takeIf { it.isNotBlank() }?.let { onAsk(it) }
+                    }
+                }
+                // Stale-generation FindListener dispatches (a reload mid-count) are dropped — the
+                // same stamping discipline as the position probe.
+                setFindListener { active, total, done ->
+                    if (controller.findStampCurrent) onFind(active, total, done)
+                }
                 // Ticks are dropped while a load/restore is pending — the load-reset scroll(≈0)
                 // event must never demote a saved position to top-of-page.
                 setOnScrollChangeListener { _, _, _, _, _ ->
@@ -189,6 +257,7 @@ internal fun HtmlReaderWebView(
         },
         onRelease = {
             controller.restorePending = false
+            controller.clearFind()
             controller.webView = null
             it.destroy()
         },
