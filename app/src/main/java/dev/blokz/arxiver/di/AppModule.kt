@@ -343,6 +343,16 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun applicationScope(
+        dispatchers: dev.blokz.arxiver.core.common.DispatcherProvider,
+    ): kotlinx.coroutines.CoroutineScope =
+        // Outlives any ViewModel — used for work that must survive scope cancellation (e.g. the
+        // reader's final reading-position flush in onCleared; P-HTML PH.6). SupervisorJob so one
+        // failed job never kills the scope.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + dispatchers.io)
+
+    @Provides
+    @Singleton
     fun semanticScholarClient(
         httpClient: OkHttpClient,
         dispatchers: DispatcherProvider,

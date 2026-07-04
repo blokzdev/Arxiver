@@ -86,4 +86,63 @@ class HtmlStorageTest {
             assertNotNull(newest)
             assertTrue(newest.file.readText().contains("v3"), "highest version by number")
         }
+
+    // --- PH.6: the .position sidecar + CachedHtml.version -------------------------------------------
+
+    @Test
+    fun `position round-trips and overwrites atomically`() =
+        runTest {
+            storage.storePosition(id, 1, ReaderPosition("S2.SS1", 340, 0.41f))
+            assertEquals(ReaderPosition("S2.SS1", 340, 0.41f), storage.readPosition(id, 1))
+
+            storage.storePosition(id, 1, ReaderPosition(null, 0, 0.9f))
+            assertEquals(ReaderPosition(null, 0, 0.9f), storage.readPosition(id, 1))
+            val vdir = File(filesDir, "html/2412.19437v1")
+            assertTrue(vdir.listFiles()!!.none { it.name.endsWith(".part") }, "no tmp residue")
+        }
+
+    @Test
+    fun `absent or corrupt position reads null — open at top`() =
+        runTest {
+            assertNull(storage.readPosition(id, 1))
+            val vdir = File(filesDir, "html/2412.19437v1").apply { mkdirs() }
+            File(vdir, ".position").writeText("not|a|valid")
+            assertNull(storage.readPosition(id, 1))
+            File(vdir, ".position").writeText("2|S1|10|0.5") // unknown format version
+            assertNull(storage.readPosition(id, 1))
+        }
+
+    @Test
+    fun `the sidecar survives a phase-2 re-store and is invisible to the cache gates`() =
+        runTest {
+            storage.store(id, 1, HtmlSource.NATIVE, "<p>phase 1</p>")
+            storage.storePosition(id, 1, ReaderPosition("S1", 12, 0.1f))
+            storage.store(id, 1, HtmlSource.NATIVE, "<p>phase 2 with figures</p>")
+
+            assertEquals(ReaderPosition("S1", 12, 0.1f), storage.readPosition(id, 1))
+            assertEquals("<p>phase 2 with figures</p>", storage.localHtml(id, 1)!!.file.readText())
+        }
+
+    @Test
+    fun `positions are isolated per version`() =
+        runTest {
+            storage.storePosition(id, 1, ReaderPosition("S1", 1, 0.1f))
+            storage.storePosition(id, 2, ReaderPosition("S9", 9, 0.9f))
+            assertEquals("S1", storage.readPosition(id, 1)!!.anchorId)
+            assertEquals("S9", storage.readPosition(id, 2)!!.anchorId)
+        }
+
+    @Test
+    fun `CachedHtml carries the served version from localHtml and newest — legacy slash-v ids included`() =
+        runTest {
+            storage.store(id, 3, HtmlSource.NATIVE, "<p>v3</p>")
+            assertEquals(3, storage.localHtml(id, 3)!!.version)
+
+            val legacy = ArxivId("solv-int/9701001")
+            storage.store(legacy, 2, HtmlSource.AR5IV, "<p>legacy v2</p>")
+            storage.store(legacy, 1, HtmlSource.AR5IV, "<p>legacy v1</p>")
+            val newest = storage.newest(legacy)!!
+            assertEquals(2, newest.version)
+            assertEquals("<p>legacy v2</p>", newest.file.readText())
+        }
 }

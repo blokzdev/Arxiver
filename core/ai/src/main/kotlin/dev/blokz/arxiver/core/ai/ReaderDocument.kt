@@ -80,3 +80,18 @@ data class ReaderTheme(
     val muted: String,
     val codeBackground: String,
 )
+
+/**
+ * A per-paper-version reading position (P-HTML PH.6). Payload = the nearest anchor at/above the
+ * viewport top + the CSS-px offset past it — robust to the PH.5 phase-2 figure inflation, font-scale
+ * changes, and theme swaps, where any raw scroll ratio lands in the wrong paragraph. [fraction] is the
+ * document-scroll fraction floor used only when no anchor stands (anchor-less papers).
+ *
+ * Lives ONLY in the `.position` sidecar beside `index.html` ([HtmlStorage]) — never in the importable
+ * backup (`ArxiverBackup`), mirroring the rendered-HTML backup wall (SPEC-P-HTML §10).
+ */
+data class ReaderPosition(
+    val anchorId: String?,
+    val offsetCssPx: Int,
+    val fraction: Float,
+)

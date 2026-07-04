@@ -28,7 +28,8 @@ object HtmlReaderTransform {
     /** PH.5: at most this many distinct same-origin figures are tokenized for fetch; the rest → placeholder. */
     const val IMAGE_COUNT_CAP = 40
 
-    private const val FIGURE_PLACEHOLDER_TEXT = "Figure unavailable — download to view"
+    // PH.6: no "download to view" promise — the refresh affordance is a recorded deferral, not shipped.
+    private const val FIGURE_PLACEHOLDER_TEXT = "Figure unavailable"
 
     private val ALLOWED_IMG_HOSTS = setOf("arxiv.org", "ar5iv.labs.arxiv.org")
 
@@ -129,6 +130,15 @@ object HtmlReaderTransform {
             images = manifest.values.toList(),
         )
     }
+
+    /**
+     * Cache-hit overload (PH.6): re-derives anchors from a persisted body so a cached open gets a
+     * real TOC (PH.4's reconstruct fabricated an empty list). Must live in :core:ai — jsoup is
+     * implementation-scoped here and invisible to :app. Parity with transform-time anchors is exact
+     * by construction (extraction runs post-img-tokenization at step (g)); garbage → emptyList.
+     */
+    fun extractAnchors(bodyHtml: String): List<ReaderAnchor> =
+        runCatching { extractAnchors(Jsoup.parseBodyFragment(bodyHtml).body()) }.getOrDefault(emptyList())
 
     /** Pure, reusable by PH.6 / the cache-hit path over a stored body. */
     fun extractAnchors(root: Element): List<ReaderAnchor> =

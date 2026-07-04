@@ -93,6 +93,21 @@ Pure `HtmlReaderTransform` (`:core:ai`), runs **after** the sanitizer on the san
 
 ## 10. Storage & cache
 
+- **Reading-position sidecar (PH.6):** `filesDir/html/<id_>v<ver>/.position`, one versioned line
+  (`1|<anchorId-or-empty>|<offsetCssPx>|<fraction>`), written with the same atomic tmp→`Files.move
+  (REPLACE_EXISTING)` idiom as `index.html` and keyed on the version **actually served** (`newest()`
+  can serve an older dir than the paper's latestVersion; the fetch path inherits the fetcher's
+  versioned→bare-404-retry wart — pre-existing, out of scope). Invisible to the cache gates
+  (`index.html` + `.complete` only) and survives the PH.5 two-phase re-store; absent/corrupt → open
+  at top. Backup posture: excluded from OS backup by construction (`data_extraction_rules` root-`.`)
+  and NEVER enters `ArxiverBackup` — the rendered-HTML backup wall applies in full. **Rejected
+  stores:** a Room `reading_positions` table (migration ceremony for one row per paper, plus a
+  verified FK wart — the reader opens papers that may lack a `papers` row — kept as the
+  trigger-gated upgrade if a continue-reading shelf / cross-surface progress feature is scheduled)
+  and DataStore (unbounded per-paper key growth, whole-file rewrite per save).
+- **Anchors on cache hits (PH.6):** re-derived from the persisted body via the pure
+  `extractAnchors(bodyHtml)` overload (jsoup stays `:core:ai`-internal), off-main; an anchors
+  sidecar is the recorded fast-path upgrade if device timing shows the per-open parse matters.
 - **Filesystem-only `HtmlStorage`** mirroring `PdfStorage` (`filesDir/html/<id_>v<ver>/index.html`, newest-version lookup) — **no Room schema change** (a Room `html_cache` table is deferred to elevation, gated on a concrete trigger like LRU eviction / a downloaded-papers index; if ever added, it is additive — schema JSON + migration + harness — and **never** added to the backup DTO).
 - **`.complete` completeness invariant:** `index.html` is written via atomic temp→rename, then a `.complete` sentinel is written **last** and gates `localHtml()`/`newest()` lookup — so a process-killed partial is never a render-ready hit under `blockNetworkLoads=true`. The sentinel's **content is the `HtmlSource`** (`NATIVE`/`AR5IV`), so the PH.4 "experimental ar5iv" banner survives a cache hit with no extra file. Fidelity is **fetch-time-only** (a cached doc was already accepted); anchors are re-derivable via `extractAnchors`.
 - **Backup wall:** the importable backup is a **hand-curated DTO** (`ArxiverBackup` — papers/follows/collections/routines); rendered HTML is **never** added to its serialized fields. OS auto-backup is **already fully excluded** — `app/src/main/res/xml/data_extraction_rules.xml` excludes `domain="root" path="."` for both cloud-backup and device-transfer (and `android:allowBackup=false`), so `filesDir/html` (and `filesDir/pdfs`) are covered by construction; no per-path rule is added.
@@ -104,12 +119,39 @@ Pure `HtmlReaderTransform` (`:core:ai`), runs **after** the sanitizer on the san
 - An **additive "Read HTML" affordance** next to `onOpenPdf` in `PaperDetailScreen` (no hero reshape, no promotion over PDF in MVP). Promotion / a PDF↔HTML `SegmentedButton` is deferred to elevation once device data justifies it.
 - **Fallback chain as first-class UX:** native→ar5iv→PDF presented honestly (a quiet banner, e.g. "Showing experimental HTML (ar5iv)" / "HTML unavailable — opening PDF"); a user-initiated **"Open PDF instead"** is always reachable; auto-fallback navigates with `popUpTo(HTML_VIEWER){inclusive=true}` (sane back-stack). `ExpandableAbstract` is the final degrade target.
 - `arxiver://paper/<id>` cross-refs reuse the existing `onArxivPaperClick` interception.
-- Loading / error / degraded states; light/dark; **reading position**: PH.4 ships the named **"rotation resets to top"** limitation (no scroll-save — the WebView is recreated on config change); full per-paper persistence is PH.6. **TalkBack** reads the reader; font-scale respected.
+- Loading / error / degraded states; light/dark; **TalkBack** reads the reader; font-scale respected.
+- **Reading position (PH.6 — the PH.4 "rotation resets to top" limitation is closed):** per-paper
+  position = **nearest anchor at/above the viewport top + CSS-px offset**, with a scroll-fraction
+  floor for anchor-less papers — robust to the PH.5 phase-2 figure inflation (any raw ratio lands in
+  the wrong paragraph once multi-MB `data:` figures inline above the reading point). Captured
+  host-side by a scroll-idle probe (no page-resident JS); restored at **every** load completion
+  (`onPageFinished` reads the ViewModel's **current** target — phase-2 swap, rotation, theme toggle,
+  and process death all funnel through the same hook). **Single-slot arbitration:** an explicit
+  TOC/cite jump holds the slot through a settle window (`JUMP_SETTLE_MS`, PROVISIONAL) against probe
+  demotion; **restore never writes the slot**. Restores are always instant (`behavior:'auto'`) —
+  only the user's own tap animates. A **conceal-reveal** reload (alpha-gated until the restore
+  applies, 500 ms failsafe) removes the flash-to-top. Persistence: debounced to the `.position`
+  sidecar + a final `onCleared` flush on the injected application scope.
+- **TOC (PH.6):** a TopAppBar icon (always visible while a doc shows — a stable affordance even for
+  anchor-poor papers) opens a **`ModalBottomSheet`** (the app's one contextual-surface vocabulary —
+  the ROADMAP row's "Compose drawer" wording is a recorded deviation) over the pure golden-tested
+  `TocModel`: doc-order sections with dot-depth indentation, figure/table groups, the bibliography
+  **collapsed to one row**, `heading()` semantics on group headers, ≥48 dp rows, blank labels →
+  typed generic strings (never raw LaTeXML ids), tap = dismiss-then-act + a TalkBack "Jumped to …"
+  announcement.
 - **PH.4 fallback presentation (as built):** the ar5iv banner reads *"Showing the community ar5iv conversion — formatting may differ from the original"* (`liveRegion=Polite`); **"Read PDF instead"** is an **always-present toolbar action** (every state, not just error) so the PDF floor is one tap away; the external-link action is a **confirm `AlertDialog`** → `ACTION_VIEW` in `runCatching` (never auto-open).
 
 ## 12. WebView sandbox hardening
 
-Reuse `applyRichSandbox()` (`blockNetworkLoads=true`, `allowContentAccess=false`, `allowFileAccessFromFileURLs=false`, `allowUniversalAccessFromFileURLs=false`, `domStorageEnabled=false`, `cacheMode=LOAD_NO_CACHE`, no `@JavascriptInterface`) and additionally set **`blockNetworkImage=true`**. The reader loads via `loadDataWithBaseURL(null, …)` — **`baseUrl = null` in both PH.4 and PH.5**: there are **no sub-resources** at all (reader.css is inlined into one `<style>`; PH.5 figures are **base64 `data:` URIs inlined into the body**, not fetched). The reserved PH.5 **virtual origin is retired** — it would have been an https origin suppressed by `blockNetworkImage=true` (forcing it off, i.e. disarming an egress control), whereas `data:` keeps **both `blockNetworkLoads=true` and `blockNetworkImage=true` armed** over a null (opaque) origin with no SOP/fetch surface and no `shouldInterceptRequest`. Since sub-resource loads bypass `shouldOverrideUrlLoading`, **`blockNetworkLoads` is the load-bearing egress backstop**; verify **no network egress in airplane mode**. A cheap `assertNoExternalHost` re-gate on the cache-read path drops a poisoned cached body before render. The page talks back only via the `arxiver://` scheme (`anchor`, `paper`, `external`).
+Reuse `applyRichSandbox()` (`blockNetworkLoads=true`, `allowContentAccess=false`, `allowFileAccessFromFileURLs=false`, `allowUniversalAccessFromFileURLs=false`, `domStorageEnabled=false`, `cacheMode=LOAD_NO_CACHE`, no `@JavascriptInterface`) and additionally set **`blockNetworkImage=true`**. The reader loads via `loadDataWithBaseURL(null, …)` — **`baseUrl = null` in both PH.4 and PH.5**: there are **no sub-resources** at all (reader.css is inlined into one `<style>`; PH.5 figures are **base64 `data:` URIs inlined into the body**, not fetched). The reserved PH.5 **virtual origin is retired** — it would have been an https origin suppressed by `blockNetworkImage=true` (forcing it off, i.e. disarming an egress control), whereas `data:` keeps **both `blockNetworkLoads=true` and `blockNetworkImage=true` armed** over a null (opaque) origin with no SOP/fetch surface and no `shouldInterceptRequest`. Since sub-resource loads bypass `shouldOverrideUrlLoading`, **`blockNetworkLoads` is the load-bearing egress backstop**; verify **no network egress in airplane mode**. A cheap `assertNoExternalHost` re-gate on the cache-read path drops a poisoned cached body before render. The page talks back only via the `arxiver://` scheme (`anchor`, `paper`, `external`) — plus, from
+PH.6, the app's FIRST ValueCallback data return: the **host-initiated position probe**
+(`evaluateJavascript` reading anchor rects). Posture: host-driven JS only (the page CSP
+`script-src 'none'` and the no-page-initiated-bridge invariant stand; no `@JavascriptInterface`);
+every injected id goes through `JSONObject.quote`; the returned value is treated as hostile —
+parsed defensively, the anchor id validated against the known `doc.anchors` set, offset/fraction
+clamped, never rendered or executed. Probe/restore/jump results are **generation-stamped**: a
+counter incremented per `loadDataWithBaseURL` gates every callback, so no component ever acts on a
+document other than the one loaded.
 
 ## 13. Selection → Ask (elevation, PH.7)
 

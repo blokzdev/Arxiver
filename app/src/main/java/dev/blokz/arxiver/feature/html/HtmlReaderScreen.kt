@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Toc
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,8 +26,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,15 +44,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.ai.HtmlSource
 import dev.blokz.arxiver.core.ai.ReaderDocWriter
+import dev.blokz.arxiver.core.ai.TocModel
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
+import kotlinx.coroutines.delay
 
 /**
- * The HTML-edition reader (Phase P-HTML PH.4): renders the sanitized + transformed [ReaderDocWriter]
- * output in the offline [HtmlReaderWebView]. native→ar5iv→PDF fallback is driven by the ViewModel's
- * one-shot effect; the toolbar always offers "Read PDF instead" (never strand); ar5iv is shown with an
- * honest banner; external links require a confirm before opening.
+ * The HTML-edition reader (Phase P-HTML PH.4/PH.6): renders the sanitized + transformed
+ * [ReaderDocWriter] output in the offline [HtmlReaderWebView]. native→ar5iv→PDF fallback is driven by
+ * the ViewModel's one-shot effect; the toolbar always offers "Read PDF instead" (never strand); ar5iv
+ * is shown with an honest banner; external links require a confirm before opening. PH.6 adds the TOC
+ * sheet (always reachable while a doc shows — a stable affordance even for anchor-poor papers) and the
+ * scroll-idle position probe that feeds the ViewModel's reading-position slot.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,12 +70,30 @@ fun HtmlReaderScreen(
     val theme = rememberReaderTheme()
     val context = LocalContext.current
     var externalUrl by remember { mutableStateOf<String?>(null) }
+    var showToc by rememberSaveable { mutableStateOf(false) }
+    val controller = remember { ReaderScrollController() }
+    var scrollTick by remember { mutableLongStateOf(0L) }
+    val anchorIds = remember(state.doc) { state.doc?.anchors?.map { it.id } ?: emptyList() }
+    val tocEntries = remember(state.doc) { TocModel.buildToc(state.doc?.anchors ?: emptyList()) }
 
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->
             when (effect) {
                 is HtmlReaderEffect.FallbackToPdf -> onFallbackToPdf(effect.id)
+                is HtmlReaderEffect.JumpToAnchor -> {
+                    controller.jumpTo(effect.anchorId)
+                    controller.announce(context.getString(R.string.html_toc_jumped, effect.label))
+                }
             }
+        }
+    }
+
+    // Scroll-idle debounce: each tick restarts the wait; quiet → probe the reading position.
+    LaunchedEffect(scrollTick) {
+        if (scrollTick == 0L) return@LaunchedEffect
+        delay(PROBE_DEBOUNCE_MS)
+        controller.probe(anchorIds) { raw ->
+            viewModel.onPositionProbed(ReaderScrollJs.parseProbeResult(raw))
         }
     }
 
@@ -82,6 +107,11 @@ fun HtmlReaderScreen(
                     }
                 },
                 actions = {
+                    if (state.doc != null) {
+                        IconButton(onClick = { showToc = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Toc, stringResource(R.string.cd_toc))
+                        }
+                    }
                     IconButton(onClick = viewModel::openPdfInstead) {
                         Icon(Icons.Filled.PictureAsPdf, stringResource(R.string.action_read_pdf_instead))
                     }
@@ -100,14 +130,37 @@ fun HtmlReaderScreen(
                         if (doc.source == HtmlSource.AR5IV) Ar5ivBanner()
                         HtmlReaderWebView(
                             html = html,
+                            controller = controller,
                             onPaperClick = onPaperClick,
                             onExternalUrl = { externalUrl = it },
+                            onAnchorTap = viewModel::onJump,
+                            onScrollTick = { scrollTick++ },
+                            onPageReady = {
+                                // Read the VM's CURRENT target at load-completion time — never a
+                                // value captured at expose time (the PH.6 restore invariant).
+                                controller.onPageReady(
+                                    target = viewModel.restoreTarget(),
+                                    minFraction = HtmlReaderViewModel.MIN_RESTORE_FRACTION,
+                                    onApplied = viewModel::onRestoreApplied,
+                                )
+                            },
                             modifier = Modifier.fillMaxSize(),
                         )
                     }
                 }
             }
         }
+    }
+
+    if (showToc && state.doc != null) {
+        TocSheet(
+            entries = tocEntries,
+            onSelect = { entry, label ->
+                showToc = false // dismiss-then-act
+                viewModel.onTocSelect(entry.anchorId, label)
+            },
+            onDismiss = { showToc = false },
+        )
     }
 
     externalUrl?.let { url ->
@@ -127,6 +180,9 @@ fun HtmlReaderScreen(
         )
     }
 }
+
+/** Scroll-quiet window before a position probe fires. PROVISIONAL — device-ratified (§M). */
+private const val PROBE_DEBOUNCE_MS = 400L
 
 @Composable
 private fun LoadingState() {
