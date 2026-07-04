@@ -165,6 +165,17 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [~] **M-PH7-6 Reader-hosted Ask parity (PH.7)** — pin-to-notes lands in the paper's notes with the snackbar; share/export work; cross-ref opens the paper; the session resumes the SAME conversation the detail screen shows; the top-bar Ask works with no selection. _(P-HTML PH.7)_
 - [ ] **M-PH5-6 First-paint latency + no starvation (PH.5)** — text + math paint promptly on first download (two-phase), figures pop in after; the **30s deadline** stops a pathological survey paper from holding the shared ≥3s slot indefinitely, and a **concurrent FollowSync still progresses** during a figure-heavy open. _(P-HTML PH.5)_
 
+## M-PC1. Full-screen conversation route (P-Chat PC.1) _(ROADMAP P-Chat)_
+
+- [ ] **M-PC1-1 Composer/IME with adjustResize** — on ChatSessionScreen the keyboard must never bury the composer; check for a navbar-height gap above the keyboard (double inset consumption: Scaffold padding + consumeWindowInsets + imePadding). **Also sanity-check existing inputs** (search field, routine setup, Ask sheet) — `adjustResize` is activity-wide and new in PC.1.
+- [ ] **M-PC1-2 Long-conversation scroll UX** on the route, incl. scroll position across a tab switch away/back — **gates the recorded LazyColumn + pinned-composer decision**.
+- [ ] **M-PC1-3 Cross-ref back-pop** — tap an arXiv ref in an answer → paper detail → back pops into the intact conversation (no dismissal, unlike the sheet hosts).
+- [ ] **M-PC1-4 VM-reuse regression** — history → session A → back → session B shows B's transcript (the deleted sheet host's bug must stay dead).
+- [ ] **M-PC1-5 Fork + process-death restore** — "New conversation" → one turn → kill the app → relaunch → the same forked session continues (no second fork; `boundSessionId` restore).
+- [ ] **M-PC1-6 Resume without flash** — history → a long session: a brief spinner then turns; the empty hint must not flash (presets are standing chrome and stay). A single first-composition frame of default state is possible by construction — check it is imperceptible.
+- [ ] **M-PC1-7 TalkBack** on ChatSessionScreen actionables (back, New conversation, export menu, composer).
+- [ ] **M-PC1-8 Read-aloud stops when covered** — share sheet / print dialog over the activity stops speech (ON_STOP observer on a full screen; pre-existing behavior worth one look).
+
 ## L. Feedback, selection, swipe & background tasks (v2.0-alpha / Phase UX2) _(SPEC-UI §4/§4a/§5)_
 > CI covers the pure/logic pieces: `FeedbackControllerTest`, `SelectionStateTest`,
 > `SwipeablePaperRowTest` (a11y-action builder), `OrganizeViewModelTest` (tri-state/idempotence),

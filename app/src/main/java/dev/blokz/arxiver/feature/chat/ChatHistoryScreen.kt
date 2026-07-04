@@ -27,12 +27,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -47,12 +43,8 @@ import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.ChatRepository
 import dev.blokz.arxiver.data.LibraryRepository
-import dev.blokz.arxiver.feature.paper.ask.AskSheet
-import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
-import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdownLabels
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.SkeletonList
-import dev.blokz.arxiver.ui.shareText
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.flow.SharingStarted
@@ -119,19 +111,10 @@ class ChatHistoryViewModel
 @Composable
 fun ChatHistoryScreen(
     onBack: () -> Unit,
-    onOpenAiSettings: () -> Unit,
+    onOpenSession: (Long, String?) -> Unit,
     viewModel: ChatHistoryViewModel = hiltViewModel(),
 ) {
     val rows by viewModel.rows.collectAsState()
-    var active by remember { mutableStateOf<ChatHistoryRow?>(null) }
-    val context = LocalContext.current
-    val exportLabels =
-        ConversationMarkdownLabels(
-            you = stringResource(R.string.ask_export_you),
-            assistant = stringResource(R.string.ask_export_assistant),
-            sources = stringResource(R.string.ask_export_sources),
-            footer = stringResource(R.string.ask_export_footer),
-        )
 
     Scaffold(
         topBar = {
@@ -164,31 +147,13 @@ fun ChatHistoryScreen(
                     items(current, key = { it.sessionId }) { row ->
                         ChatHistoryRowItem(
                             row,
-                            onClick = { active = row },
+                            onClick = { onOpenSession(row.sessionId, row.label) },
                             onDelete = { viewModel.delete(row.sessionId) },
                         )
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
                 }
         }
-    }
-
-    active?.let { row ->
-        AskSheet(
-            scope = row.scope,
-            sessionId = row.sessionId,
-            onDismiss = { active = null },
-            onConfigureProvider = {
-                active = null
-                onOpenAiSettings()
-            },
-            // Share an answer / the whole conversation as Markdown via the OS sheet — P-Rich R4.
-            onShareAnswer = { m ->
-                context.shareText(ConversationMarkdown.answer(m, exportLabels), subject = row.label)
-            },
-            // Whole-conversation export (text / Markdown file / PDF) is owned by AskSheet — P-Share PS.6.
-            conversationTitle = row.label,
-        )
     }
 }
 

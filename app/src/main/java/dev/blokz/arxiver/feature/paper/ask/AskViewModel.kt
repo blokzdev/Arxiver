@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.feature.paper.ask
 
 import androidx.annotation.StringRes
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -53,6 +54,8 @@ data class AskUiState(
     val includeNotes: Boolean = true,
     /** True while the scope's papers are being chunk-embedded on open (collections). */
     val indexing: Boolean = false,
+    /** True while start()-time session resolution/hydration is reading the DB (PC.1). */
+    val hydrating: Boolean = false,
     val preparing: Boolean = false,
     val streaming: Boolean = false,
     /** Non-null while a cloud call awaits the "what leaves the device" confirm. */
@@ -68,6 +71,28 @@ data class AskUiState(
     val pageCount: Int = 0,
     @StringRes val error: Int? = null,
 )
+
+/**
+ * How an Ask host binds its conversation (P-Chat PC.1). Every variant carries the [scope]
+ * because binding also drives indexing and vision gating. Sealed so a "fork new + resume id"
+ * contradiction is unrepresentable.
+ */
+sealed interface SessionStart {
+    val scope: RetrievalScope
+
+    /** Hydrate exactly [sessionId] (history row / full-screen route resume). */
+    data class Resume(override val scope: RetrievalScope, val sessionId: Long) : SessionStart
+
+    /** Resume the scope's most-recent session — the quick-ask sheet default. */
+    data class MostRecentFor(override val scope: RetrievalScope) : SessionStart
+
+    /**
+     * Start unbound: the first send lazily creates the session (fork-new-session), and the
+     * created id is persisted to [SavedStateHandle] so process death on the route resumes
+     * the SAME conversation instead of forking again.
+     */
+    data class New(override val scope: RetrievalScope) : SessionStart
+}
 
 /**
  * Drives the per-paper "Ask" sheet (P2.3) over [ChatRepository]. `prepare` is
@@ -86,6 +111,7 @@ class AskViewModel
         private val pageImageSource: PageImageSource,
         private val relationGraphSource: RelationGraphSource,
         private val tts: dev.blokz.arxiver.tts.ReadAloud,
+        private val savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private lateinit var scope: RetrievalScope
         private var sessionId: Long? = null
@@ -124,41 +150,60 @@ class AskViewModel
         }
 
         /**
-         * Bind the sheet to a [scope] (a paper or a collection). Hydrates [sessionId]'s
-         * turns when given (history resume), else the scope's most-recent session, and
-         * ensures the scope's papers are chunk-embedded in the background.
+         * Bind this host to its conversation (PC.1): [SessionStart.Resume] hydrates exactly
+         * one session, [SessionStart.MostRecentFor] the scope's latest (the sheet default),
+         * and [SessionStart.New] starts unbound — the first send creates the session (lazy,
+         * so an abandoned screen never leaves an empty row) and [bindSession] persists the id
+         * for process-death restore. Also kicks off scope indexing and vision gating.
+         * Bind-once: subsequent calls no-op — which is why the full-screen route must never
+         * be registered launchSingleTop (a reused entry would show conversation A for B).
          */
-        fun start(
-            scope: RetrievalScope,
-            sessionId: Long? = null,
-        ) {
+        fun start(sessionStart: SessionStart) {
             if (::scope.isInitialized) return
-            this.scope = scope
+            this.scope = sessionStart.scope
+            val scope = sessionStart.scope
             indexJob =
                 viewModelScope.launch {
                     _uiState.update { it.copy(indexing = true) }
                     runCatching { scopeIndexer.ensureIndexed(scope) }
                     _uiState.update { it.copy(indexing = false) }
                 }
+            // Set synchronously (not inside the launch) to close the start()-to-dispatch
+            // window. One residual frame remains by construction — start() runs in a
+            // LaunchedEffect, AFTER the host's first composition has painted default state —
+            // imperceptible at device refresh rates; observable tracked by M-PC1-6.
+            _uiState.update { it.copy(hydrating = true) }
             hydrateJob =
                 viewModelScope.launch {
-                    val resume = sessionId ?: chatRepository.observeSessions(scope).first().firstOrNull()?.id
-                    this@AskViewModel.sessionId = resume ?: return@launch
-                    val history =
-                        chatRepository.observeMessages(resume).first()
-                            // A mid-stream process death leaves a 0-char `incomplete` assistant row —
-                            // the ghost bubble (seen live on device, 2026-07-04). Drop exactly that
-                            // shape at hydrate: non-empty partials and error rows survive, and the LIVE
-                            // streaming bubble renders from in-memory state so an active turn can never
-                            // be hidden (P-Chat PC.0). prepare() already excludes non-complete rows
-                            // from context, so this is display hygiene, not a data change.
-                            .filterNot {
-                                it.role == ChatMessageEntity.ROLE_ASSISTANT &&
-                                    it.status == ChatMessageEntity.STATUS_INCOMPLETE &&
-                                    it.content.isEmpty()
+                    try {
+                        val resume =
+                            when (sessionStart) {
+                                is SessionStart.Resume -> sessionStart.sessionId
+                                is SessionStart.MostRecentFor ->
+                                    chatRepository.observeSessions(scope).first().firstOrNull()?.id
+                                // A New screen restored after process death re-binds the session
+                                // its first send created; a fresh New stays unbound.
+                                is SessionStart.New -> savedStateHandle[KEY_BOUND_SESSION_ID]
                             }
-                            .map { it.toAskMessage() }
-                    _uiState.update { it.copy(messages = history) }
+                        this@AskViewModel.sessionId = resume ?: return@launch
+                        val history =
+                            chatRepository.observeMessages(resume).first()
+                                // A mid-stream process death leaves a 0-char `incomplete` assistant row —
+                                // the ghost bubble (seen live on device, 2026-07-04). Drop exactly that
+                                // shape at hydrate: non-empty partials and error rows survive, and the LIVE
+                                // streaming bubble renders from in-memory state so an active turn can never
+                                // be hidden (P-Chat PC.0). prepare() already excludes non-complete rows
+                                // from context, so this is display hygiene, not a data change.
+                                .filterNot {
+                                    it.role == ChatMessageEntity.ROLE_ASSISTANT &&
+                                        it.status == ChatMessageEntity.STATUS_INCOMPLETE &&
+                                        it.content.isEmpty()
+                                }
+                                .map { it.toAskMessage() }
+                        _uiState.update { it.copy(messages = history) }
+                    } finally {
+                        _uiState.update { it.copy(hydrating = false) }
+                    }
                 }
             // R3d.4: gate the vision preset for a paper scope. Both probes are network-free
             // (pageCountIfLocal globs filesDir/pdfs; resolveVisionCapable is local store reads),
@@ -171,6 +216,21 @@ class AskViewModel
                     _uiState.update { it.copy(pageCount = pages, visionAvailable = visionProvider && pages > 0) }
                 }
             }
+        }
+
+        /** Sheet-host convenience: [sessionId] resumes exactly that session, else the scope's latest. */
+        fun start(
+            scope: RetrievalScope,
+            sessionId: Long? = null,
+        ) = start(sessionId?.let { SessionStart.Resume(scope, it) } ?: SessionStart.MostRecentFor(scope))
+
+        /**
+         * Bind this surface to [id] and persist it: a [SessionStart.New] route whose first send
+         * created the session must resume IT across process death, never fork again (PC.1).
+         */
+        private fun bindSession(id: Long) {
+            sessionId = id
+            savedStateHandle[KEY_BOUND_SESSION_ID] = id
         }
 
         fun setInput(text: String) = _uiState.update { it.copy(input = text) }
@@ -226,7 +286,7 @@ class AskViewModel
                             _uiState.update { it.copy(preparing = false, error = R.string.ask_graph_no_relations) }
                             return@launch
                         }
-                        sessionId = chatRepository.insertArtifactTurn(scope, sessionId, question, mermaid)
+                        bindSession(chatRepository.insertArtifactTurn(scope, sessionId, question, mermaid))
                         _uiState.update {
                             it.copy(
                                 preparing = false,
@@ -373,7 +433,7 @@ class AskViewModel
                         // from the scope's most-recent session, which with two hosts live on
                         // one scope (the sheet + P-Chat's full-screen route) can belong to the
                         // other surface. Later sends reuse the binding unconditionally.
-                        val sid = sessionId ?: chatRepository.ensureSession(prepared).also { sessionId = it }
+                        val sid = sessionId ?: chatRepository.ensureSession(prepared).also { bindSession(it) }
                         chatRepository.stream(prepared.copy(sessionId = sid)).collect { chunk ->
                             when (chunk) {
                                 is ChatChunk.Delta -> {
@@ -483,6 +543,9 @@ class AskViewModel
             }
 
         companion object {
+            /** SavedStateHandle key for the session a New route's first send created (PC.1). */
+            internal const val KEY_BOUND_SESSION_ID = "boundSessionId"
+
             const val SUMMARIZE_PROMPT =
                 "Summarize this paper in 3–4 sentences for a researcher skimming it: the problem, " +
                     "the approach, and the key result."
