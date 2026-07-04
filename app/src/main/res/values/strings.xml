@@ -3,8 +3,7 @@
     <string name="app_name">Arxiver</string>
 
     <string name="nav_today">Today</string>
-    <string name="nav_browse">Browse</string>
-    <string name="nav_search">Search</string>
+    <string name="nav_explore">Explore</string>
     <string name="nav_library">Library</string>
 
     <plurals name="browse_following_count">
@@ -136,8 +135,8 @@
     <string name="cd_delete_collection">Delete collection %1$s</string>
 
     <string name="today_no_follows_title">Nothing to triage yet</string>
-    <string name="today_no_follows_body">Follow categories in Browse and new papers will arrive here automatically.</string>
-    <string name="today_go_browse">Browse categories</string>
+    <string name="today_no_follows_body">Follow categories in Explore and new papers will arrive here automatically.</string>
+    <string name="today_go_browse">Explore categories</string>
     <string name="today_likely_relevant">Likely relevant</string>
     <string name="today_more_from_follows">More from your follows</string>
     <string name="today_inbox_zero_title">You\'re all caught up</string>
@@ -537,7 +536,7 @@
 
     <string name="onboarding_pitch">Your personal arXiv engine: follow fields, triage daily papers, build a deeply-indexed local library, and dispatch anything to your Claude.</string>
     <string name="onboarding_pick_categories">Pick a few fields to follow</string>
-    <string name="onboarding_more_in_browse">The full category directory lives in Browse.</string>
+    <string name="onboarding_more_in_browse">The full category directory lives in Explore.</string>
     <string name="onboarding_claude_note">Optional: connect Claude later — pick a routine template under Library → Claude routines and the guided setup takes you the rest of the way.</string>
     <string name="onboarding_start">Start reading</string>
 

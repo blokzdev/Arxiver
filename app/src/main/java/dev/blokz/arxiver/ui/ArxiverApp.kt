@@ -35,7 +35,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.search.RetrievalScope
-import dev.blokz.arxiver.feature.browse.BrowseScreen
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
 import dev.blokz.arxiver.feature.chat.CHAT_SCOPE_KIND_COLLECTION
 import dev.blokz.arxiver.feature.chat.CHAT_SCOPE_KIND_PAPER
@@ -54,7 +53,7 @@ import dev.blokz.arxiver.feature.onboarding.OnboardingScreen
 import dev.blokz.arxiver.feature.paper.ConnectionsScreen
 import dev.blokz.arxiver.feature.paper.PaperDetailScreen
 import dev.blokz.arxiver.feature.pdf.PdfViewerScreen
-import dev.blokz.arxiver.feature.search.SearchScreen
+import dev.blokz.arxiver.feature.search.ExploreScreen
 import dev.blokz.arxiver.feature.settings.AiProviderSettingsScreen
 import dev.blokz.arxiver.feature.settings.SettingsScreen
 import dev.blokz.arxiver.feature.today.TodayScreen
@@ -156,7 +155,9 @@ fun ArxiverApp(
         deepLinkPaperId?.let { navController.navigate(Routes.paperDetail(it)) }
     }
 
-    val showBottomBar = TopLevelDestination.entries.any { it.route == currentDestination?.route }
+    // Compare the BASE route (before any optional query args): Explore is registered as
+    // "explore?reset={reset}", so currentDestination.route carries the arg suffix (PC.2).
+    val showBottomBar = TopLevelDestination.entries.any { it.route == currentDestination?.route?.substringBefore("?") }
 
     val feedbackController = hiltViewModel<FeedbackViewModel>().controller
 
@@ -256,37 +257,42 @@ fun ArxiverApp(
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         onGoBrowse = {
-                            navController.navigate(TopLevelDestination.Browse.route) {
+                            // Reaches the taxonomy (now Explore's Library resting state); ?reset=true
+                            // forces the blank-query Library scope so a stale query can't hide it (PC.2).
+                            // Deliberately WITHOUT restoreState: restoreState would restore the saved
+                            // Explore entry verbatim (reset=false) and discard this reset=true arg
+                            // (verified against Navigation 2.9.0), silently defeating the reset. A
+                            // fresh entry gets a fresh, blank SearchViewModel + honors reset=true.
+                            navController.navigate("${TopLevelDestination.Explore.route}?reset=true") {
                                 popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                 launchSingleTop = true
-                                restoreState = true
                             }
                         },
                     )
                 }
+                // Explore (PC.2): Search + Browse merged. The tab route carries an optional
+                // ?reset=true (the Today "no follows" CTA) to force the taxonomy resting state.
                 composable(
-                    route = TopLevelDestination.Browse.route,
+                    route = "${TopLevelDestination.Explore.route}?reset={reset}",
+                    arguments =
+                        listOf(
+                            navArgument("reset") {
+                                type = NavType.BoolType
+                                defaultValue = false
+                            },
+                        ),
                     enterTransition = fadeThroughEnter,
                     exitTransition = fadeThroughExit,
                     popEnterTransition = fadeThroughEnter,
                     popExitTransition = fadeThroughExit,
-                ) {
-                    BrowseScreen(
+                ) { backStackEntry ->
+                    ExploreScreen(
+                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                         onCategoryClick = { code, title ->
                             navController.navigate(Routes.categoryFeed(code, title))
                         },
-                    )
-                }
-                composable(
-                    route = TopLevelDestination.Search.route,
-                    enterTransition = fadeThroughEnter,
-                    exitTransition = fadeThroughExit,
-                    popEnterTransition = fadeThroughEnter,
-                    popExitTransition = fadeThroughExit,
-                ) {
-                    SearchScreen(
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
+                        resetToLibrary = backStackEntry.arguments?.getBoolean("reset") == true,
                     )
                 }
                 composable(
@@ -426,7 +432,7 @@ private fun ArxiverBottomBar(navController: NavHostController) {
         TopLevelDestination.entries.forEach { destination ->
             val selected =
                 currentDestination?.hierarchy
-                    ?.any { it.route == destination.route } == true
+                    ?.any { it.route?.substringBefore("?") == destination.route } == true
             NavigationBarItem(
                 selected = selected,
                 onClick = {
