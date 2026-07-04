@@ -25,8 +25,7 @@ class QwenEngineTest {
             override val main = Dispatchers.Unconfined
         }
 
-    private fun engine(): QwenEngine {
-        val dir = Files.createTempDirectory("qwen-test").toFile()
+    private fun engine(dir: java.io.File = Files.createTempDirectory("qwen-test").toFile()): QwenEngine {
         val downloader = ModelDownloader(OkHttpClient(), dispatchers, dir, QwenEngine.SPEC)
         return QwenEngine(downloader, dispatchers, dir)
     }
@@ -58,5 +57,17 @@ class QwenEngineTest {
     fun `not ready until the model file is present`() =
         runBlocking {
             assertFalse(engine().isReady(), "no model file in a fresh temp dir")
+        }
+
+    @Test
+    fun `ready once the pinned model file exists — presence-only, by contract`() =
+        runBlocking {
+            // Readiness is DELIBERATELY file-presence only: the SHA-256 is enforced at download time
+            // (ModelDownloader renames .part→final only on a hash match), and a pre-existing file takes
+            // the exists() fast path without re-verification (a corrupt file fails at engine init).
+            // This pins the contract the emulator placeholder-push verification trick relies on.
+            val dir = Files.createTempDirectory("qwen-test").toFile()
+            dir.resolve(QwenEngine.SPEC.fileName).writeBytes(byteArrayOf(1, 2, 3))
+            assertTrue(engine(dir).isReady(), "presence of the pinned filename flips readiness")
         }
 }

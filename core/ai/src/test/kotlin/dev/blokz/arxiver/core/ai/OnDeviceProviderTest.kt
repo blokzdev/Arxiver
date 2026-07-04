@@ -168,6 +168,26 @@ class OnDeviceProviderTest {
         assertTrue(!gemma.generated)
     }
 
+    // --- PA.3 hotfix: isReady() is the single source of on-device readiness ---
+
+    @Test
+    fun `isReady is true when ANY engine is ready — including a light-only device`() =
+        runBlocking {
+            // The user-reported config: no Gemma, no Nano, only the Qwen light tier downloaded.
+            val gemma = FakeEngine(InferenceTier.GEMMA, ready = false, reply = "gemma")
+            val light = FakeEngine(InferenceTier.LIGHT, ready = true, reply = "light")
+            val nano = FakeEngine(InferenceTier.NANO, ready = false, reply = "nano")
+            assertTrue(OnDeviceProvider(listOf(gemma, light, nano), dispatchers).isReady())
+        }
+
+    @Test
+    fun `isReady is false only when NO engine is ready`() =
+        runBlocking {
+            val gemma = FakeEngine(InferenceTier.GEMMA, ready = false, reply = "gemma")
+            val nano = FakeEngine(InferenceTier.NANO, ready = false, reply = "nano")
+            assertTrue(!OnDeviceProvider(listOf(gemma, nano), dispatchers).isReady())
+        }
+
     // --- P-Atlas PA.2: richness resolution matches the engine that would stream ---
 
     @Test

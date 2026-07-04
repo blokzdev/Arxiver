@@ -89,7 +89,7 @@ Environment note: cloud sessions need the Android SDK; if `sdkmanager` is absent
 ## Red lines (security/privacy)
 
 - Routine tokens: only ever in `EncryptedSharedPreferences` via `TokenVault`. Never in DB, logs, payload history, exports, backups, or test fixtures. Structural tests enforce payload redaction — keep them passing.
-- No analytics/telemetry dependencies. Network calls only to: export.arxiv.org, api.semanticscholar.org, user-configured routine URLs, and the pinned model-download URL.
+- No analytics/telemetry dependencies. Network calls only to: the arXiv group (export.arxiv.org, arxiv.org, ar5iv.labs.arxiv.org — egress-gated via `AllowedHosts` on the `@ArxivClient` client), api.semanticscholar.org, user-configured routine URLs, the BYOK AI provider APIs (api.anthropic.com, generativelanguage.googleapis.com — only ever with a user-supplied key), and the pinned model-download URLs (huggingface.co: bge, Gemma 4, Qwen3-0.6B).
 - arXiv rate limit (≥3s global spacing) is non-negotiable; all arXiv calls go through the shared rate limiter — never add a bypass "just for one call".
 - No secrets in the repo: signing via CI secrets; `local.properties` untracked.
 

@@ -503,7 +503,10 @@ private fun TestResult(test: ConnectionTest) {
     }
 }
 
-/** Usable = a model is installed (Gemma) or Nano is available on this device. */
+/**
+ * Usable = any on-device model installed (Gemma or Qwen light) or Nano available. Display-only
+ * mirror — the resolution authority is `OnDeviceProvider.isReady()` (same any-engine semantics).
+ */
 private val OnDeviceInfo.isUsable: Boolean
     get() =
         gemmaState is ModelState.Ready ||

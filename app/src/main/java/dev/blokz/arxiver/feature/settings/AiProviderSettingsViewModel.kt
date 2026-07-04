@@ -66,8 +66,8 @@ data class AiProviderSettingsUiState(
 /**
  * "AI providers" settings (SPEC-AI-PROVIDERS §4). Cloud providers: connect a
  * BYOK key (write-only), test, pick the default. On-device (P1.2): shows device
- * capability + the recommended tier, drives the Gemma download/delete and the
- * Nano enable, and lets the user pick the preferred on-device engine when more
+ * capability + the recommended tier, drives the Gemma and Qwen-light download/delete
+ * and the Nano enable, and lets the user pick the preferred on-device engine when more
  * than one is ready. A test connection runs entirely locally for on-device.
  */
 @HiltViewModel

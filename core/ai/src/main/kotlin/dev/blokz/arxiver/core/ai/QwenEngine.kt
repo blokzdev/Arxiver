@@ -79,6 +79,8 @@ class QwenEngine(
                         is AppResult.Success -> result.value
                         is AppResult.Failure -> throw AiException(result.error)
                     }
+                // A full disk makes the native cache write SIGABRT (uncatchable) — fail softly first.
+                EngineCachePreflight.check(modelFile, cacheDir)
                 Engine(
                     EngineConfig(
                         modelPath = modelFile.absolutePath,
