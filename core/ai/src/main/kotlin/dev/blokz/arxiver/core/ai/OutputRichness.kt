@@ -5,7 +5,7 @@ package dev.blokz.arxiver.core.ai
  * that will actually run, so each model is only asked for output it can emit reliably:
  *
  * - [PLAIN]: the base prompt only (already invites Markdown tables). Tiny models — system Gemini
- *   Nano and the future light tier.
+ *   Nano and the Qwen3-0.6B light tier (PA.3).
  * - [STRUCTURED]: base + a table-focused nudge (with a 1-shot example), **no LaTeX / no Mermaid** —
  *   research puts valid Mermaid at ~60% and LaTeX at ~9.7% error for a ~2B model. Gemma E2B.
  * - [FULL]: base + the cloud rich invitation (LaTeX + Mermaid). Cloud BYOK providers (Claude, Gemini).

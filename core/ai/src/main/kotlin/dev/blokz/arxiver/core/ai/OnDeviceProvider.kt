@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.flow
  * The on-device [AiProvider] (SPEC-AI-PROVIDERS §3). Among the engines that are
  * **ready**, it uses the user's [preferredTier] if that engine is ready,
  * otherwise the first in default priority order (DI registers them Gemma-first,
- * Nano second). No key, no network. [capability]'s `richness` is a PLAIN placeholder —
+ * Qwen light second, Nano third). No key, no network. [capability]'s `richness` is a PLAIN placeholder —
  * the real per-turn richness comes from [resolveRichness] (the wrapped engines differ;
  * P-Atlas PA.2), which `ChatRepository.prepare` reads to shape the system prompt.
  */
@@ -36,6 +36,16 @@ class OnDeviceProvider(
             val engine = pickReadyEngine() ?: throw AiException(AppError.Unexpected())
             emitAll(engine.generate(request))
         }
+
+    /**
+     * True when ANY wired engine can serve a turn — **the single source of on-device readiness**.
+     * `ProviderResolver`'s `onDeviceReady` seam MUST delegate here, never hand-enumerate engines:
+     * a hand-written `gemma.isReady() || nano.isReady()` silently went stale when the Qwen light
+     * tier landed (PA.3), leaving a Qwen-only device at "not configured" while [chat] would have
+     * happily served via [pickReadyEngine]. Deriving from the same [engines] list chat() uses makes
+     * that divergence structurally impossible.
+     */
+    suspend fun isReady(): Boolean = engines.any { it.isReady() }
 
     /**
      * The output richness of the engine that would serve a turn right now (P-Atlas PA.2). Read at

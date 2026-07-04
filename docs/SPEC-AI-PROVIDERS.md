@@ -45,7 +45,7 @@ Three tiers, best-first; the platform detects capability and recommends, the use
   - **Gemini** — Gemini Developer API: `POST https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent` with the user's key (`x-goog-api-key`).
   - **Explicitly not Firebase AI Logic / `firebase-ai`**: that SDK proxies a *developer's* Firebase-project key (with App Check), which is not end-user BYOK. The deprecated `generative-ai-android` SDK is also avoided. Hitting the REST endpoints directly over OkHttp matches Arxiver's existing light client pattern (`ArxivApiClient`/`SemanticScholarClient`) and avoids a Firebase dependency.
 
-**Capability detection & degradation.** `DeviceCapability` reads total RAM (`ActivityManager.MemoryInfo.totalMem`) and ML-Kit GenAI availability → an `InferenceTier` recommendation. Default on-device order: **Gemma 4 E2B → Nano → cloud BYOK → none** (Gemma preferred over Nano when downloaded — higher-quality/longer output; Nano is the zero-download fallback and the recommendation when Gemma isn't installed). The user picks a provider in Settings, and when both on-device engines are ready can override the engine (Auto/Gemma/Nano, persisted as `preferred_ondevice_tier`). If a tier becomes unavailable (model deleted, key cleared, device unsupported), fall back down the order with a clear message.
+**Capability detection & degradation.** `DeviceCapability` reads total RAM (`ActivityManager.MemoryInfo.totalMem`) and ML-Kit GenAI availability → an `InferenceTier` recommendation. Default on-device order: **Gemma 4 E2B → LIGHT (Qwen3-0.6B) → Nano → cloud BYOK → none** (Gemma preferred when downloaded — higher-quality/longer output; the **LIGHT tier** is `Qwen3-0.6B.litertlm`, 614 MB INT8, filename+SHA-256-pinned, RAM floor `LIGHT_RAM_FLOOR_MB = 3072` reaching the 3–4 GB segment Gemma's 4096 floor excludes, `richness = PLAIN`, stored in its own `models/light` dir so the two `.litertlm` files never purge each other; Nano is the zero-download fallback). The user picks a provider in Settings, and when **≥2 on-device engines are ready** can override the engine (chips per ready tier: Auto/Gemma/Qwen light/Nano, persisted as `preferred_ondevice_tier`). If a tier becomes unavailable (model deleted, key cleared, device unsupported), fall back down the order with a clear message.
 
 ## 4. Key storage
 
@@ -59,8 +59,8 @@ back to the UI.
 
 ## 5. Privacy — "what leaves the device" (realized in P2.2)
 
-- On-device tiers (Nano, Gemma) send **nothing** off the device — that's the privacy default;
-  `ChatRepository.prepare` flags `isCloud` so the UI skips the preview for on-device.
+- On-device tiers (Nano, Gemma, Qwen light) send **nothing** off the device — that's the privacy
+  default; `ChatRepository.prepare` flags `isCloud` so the UI skips the preview for on-device.
 - Before any **cloud** call, the `ChatPreviewBuilder` produces the exact body — the system
   instruction + messages (retrieved chunks already folded in) — for a confirm sheet, using the
   `explicitNulls = false` structural-redaction config (mirrors `PayloadBuilder`). The provider key
@@ -71,8 +71,10 @@ back to the UI.
   confirm before a cloud reply and streams on-device with no confirm; the **prefer-on-device**
   toggle (Settings) is the opt-in that routes to on-device when ready.
 - No-telemetry red line holds. Allowed network hosts extend only to: `api.anthropic.com`,
-  `generativelanguage.googleapis.com`, and the pinned Gemma 4 model download URL (in addition
-  to the existing export.arxiv.org / api.semanticscholar.org / routine URLs / pinned bge URL).
+  `generativelanguage.googleapis.com`, and the pinned **Gemma 4 + Qwen3-0.6B** model download
+  URLs (both on `huggingface.co`, the already-allowlisted pinned-model host — the light tier
+  adds **no new egress host**) — in addition to the existing export.arxiv.org /
+  api.semanticscholar.org / routine URLs / pinned bge URL.
 
 ## 6. RAG integration (feeds P2)
 
@@ -93,9 +95,14 @@ embeddings API we depend on — retrieval never leaves the device, only generati
   the provider → build the §5 preview. Declining the preview persists nothing.
 - **provider resolution** (`ProviderResolver`): respect the user's `selectedAiProvider` by default;
   a **`preferOnDeviceWhenReady`** opt-in (Settings) makes an on-device engine win whenever ready
-  (privacy/cost). On-device readiness comes from the engines (`isReady()`), not `isConfigured`
-  (a key-less provider always reports configured). No usable provider → `NotConfigured` ("configure
-  a provider" UI state).
+  (privacy/cost). On-device readiness is **`OnDeviceProvider.isReady()`** — true when ANY wired
+  engine is ready — and the resolver's `onDeviceReady` seam MUST delegate there; for readiness
+  resolution, engines are **never enumerated outside `OnDeviceProvider`'s wired DI list** (a
+  hand-enumerated `gemma || nano` seam went stale when the Qwen light tier landed, leaving
+  Qwen-only devices at `NotConfigured` — the 2026-07-03 hotfix). Readiness never comes from
+  `isConfigured` (a key-less provider always reports configured). Display/eligibility surfaces
+  (`DeviceCapabilityProbe`, Settings) legitimately enumerate per-engine state — resolution doesn't.
+  No usable provider → `NotConfigured` ("configure a provider" UI state).
 - **stream**: persist the user turn, stream `AiProvider.chat`, persist the assistant turn with a
   `status` (`incomplete` while streaming → `complete` on done; `error` on `AiException`; cancellation
   leaves the partial `incomplete`).
@@ -111,7 +118,7 @@ A turn's system prompt is shaped per **engine**, not per provider — replacing 
 **non-defaulted** field on `ProviderCapability` so every provider declares it:
 
 - **PLAIN** — the base `SYSTEM_PROMPT` only (which already invites Markdown tables). System Gemini
-  Nano and any future light tier.
+  Nano and the light tier (Qwen3-0.6B, PA.3).
 - **STRUCTURED** — base + a compact table-focused nudge **with a 1-shot example**, and explicitly
   **no LaTeX / no Mermaid**. Gemma E2B. Rationale (2025–2026 research): a ~2B model emits valid
   Markdown tables ~70–85% of the time (a 1-shot exemplar lifts it), but valid Mermaid only ~60%
@@ -140,11 +147,17 @@ deterministic-artifact thesis to tables. STRUCTURED is the seam it hooks into.
 - **Cloud transports**: `AnthropicProvider`/`GeminiProvider` against `MockWebServer` (success, SSE stream parse, auth-rejected → typed error, offline/5xx → `AppError`).
 - **Redaction**: golden tests that the cloud request body contains exactly the intended context and no gated user data / no key (mirror `PayloadBuilderTest`).
 - **Tier selection**: `DeviceCapability`/`InferenceTier` unit tests over RAM + AICore-availability inputs and the degradation order.
-- **On-device** (LiteRT-LM init, Gemma generation, Nano availability, real RAM/NPU behavior): device-bound → tracked in `VERIFICATION.md` under a new AI-inference tier section; not in CI.
+- **Provider resolution**: `ProviderResolver` policy unit tests, **plus a composition regression test** that wires the REAL `OnDeviceProvider` into the `onDeviceReady` seam exactly as DI does, with a sole-ready engine (the Qwen-only device state), asserting resolution to `ON_DEVICE` (the 2026-07-03 hotfix pin — the boolean-seam policy tests alone cannot see a stale DI wiring).
+- **On-device** (LiteRT-LM init, Gemma generation, Nano availability, real RAM/NPU behavior): device-bound → tracked in `VERIFICATION.md` under a new AI-inference tier section; not in CI. Device verification of an additive tier must include the **tier-alone** configuration, not just coexistence (K10's Gemma-coexisting run masked the resolver bug).
 
 ## 8. Extensibility & versioning
 
 Adding a provider = implement `AiProvider` + register it in `AppModule`; the chat UI and RAG
-are unchanged. Per-provider wire formats and model ids are pinned in the provider impl. Any
-breaking change to the chat-history or knowledge-base schema follows the Room migration red
-line (migration + committed schema JSON), specified in the P2 subphase.
+are unchanged. Adding an on-device **engine** = append it to `OnDeviceProvider`'s engines list
+in `AppModule`: chat routing and resolver readiness both derive from that single list
+(`pickReadyEngine()` / `isReady()`). The download/capability/settings surfaces (qualified
+`ModelDownloader` + worker, `DeviceCapability` floor, `TierSelector` order, settings UI) are
+separate additive seams — see ROADMAP PA.3a/PA.3b for the template. Per-provider wire formats
+and model ids are pinned in the provider impl. Any breaking change to the chat-history or
+knowledge-base schema follows the Room migration red line (migration + committed schema JSON),
+specified in the P2 subphase.

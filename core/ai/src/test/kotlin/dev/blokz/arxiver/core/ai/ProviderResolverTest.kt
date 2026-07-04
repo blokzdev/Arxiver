@@ -112,4 +112,58 @@ class ProviderResolverTest {
                 ).resolve()
             assertTrue(r is ProviderResolution.NotConfigured)
         }
+
+    // --- PA.3 hotfix regression: the resolver seam mirrors the PRODUCTION wiring shape ---
+    // AppModule once hand-enumerated `gemma.isReady() || nano.isReady()` for onDeviceReady, so a
+    // device with ONLY the Qwen light tier downloaded resolved NotConfigured while OnDeviceProvider
+    // would happily have served the turn. This test composes the real OnDeviceProvider into the
+    // seam exactly as DI now does (`onDeviceProvider.isReady()`), with only LIGHT ready — the
+    // boolean-seam tests above can never catch that wiring class.
+
+    private class LightOnlyEngine : OnDeviceEngine {
+        override val tier = InferenceTier.LIGHT
+        override val richness = OutputRichness.PLAIN
+
+        override suspend fun isReady(): Boolean = true
+
+        override fun generate(request: ChatRequest): Flow<ChatChunk> = emptyFlow()
+    }
+
+    private class UnreadyEngine(override val tier: InferenceTier) : OnDeviceEngine {
+        override val richness = OutputRichness.PLAIN
+
+        override suspend fun isReady(): Boolean = false
+
+        override fun generate(request: ChatRequest): Flow<ChatChunk> = emptyFlow()
+    }
+
+    @Test
+    fun `a light-only device resolves to on-device via the production readiness delegation`() =
+        runTest {
+            val dispatchers =
+                object : dev.blokz.arxiver.core.common.DispatcherProvider {
+                    override val io = kotlinx.coroutines.Dispatchers.Unconfined
+                    override val default = kotlinx.coroutines.Dispatchers.Unconfined
+                    override val main = kotlinx.coroutines.Dispatchers.Unconfined
+                }
+            // No Gemma, no Nano, no cloud key — the exact user-reported device state.
+            val provider =
+                OnDeviceProvider(
+                    engines =
+                        listOf(
+                            UnreadyEngine(InferenceTier.GEMMA),
+                            LightOnlyEngine(),
+                            UnreadyEngine(InferenceTier.NANO),
+                        ),
+                    dispatchers = dispatchers,
+                )
+            val r =
+                ProviderResolver(
+                    registry = ProviderRegistry(listOf(claude, gemini, provider), FakeKeyStore()),
+                    selected = { null },
+                    preferOnDevice = { false },
+                    onDeviceReady = { provider.isReady() },
+                ).resolve()
+            assertEquals(ProviderId.ON_DEVICE, (r as ProviderResolution.Resolved).provider.id)
+        }
 }

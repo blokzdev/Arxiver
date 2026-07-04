@@ -335,12 +335,12 @@
     <string name="settings_import_failed">Import failed — is this an Arxiver backup file?</string>
     <string name="settings_claude_section">Claude</string>
     <string name="settings_ai_section">AI</string>
-    <string name="settings_ai_providers_link">AI providers (bring your own key)</string>
+    <string name="settings_ai_providers_link">AI providers (your key or on-device)</string>
 
     <!-- AI providers (P1.1b) -->
     <string name="ai_providers_title">AI providers</string>
-    <string name="ai_providers_intro">Connect your own API key to use a cloud AI provider. Arxiver ships with no keys and adds no AI cost — you bring your own. Keys are stored encrypted on this device and never leave it.</string>
-    <string name="ai_providers_privacy_note">Testing a connection sends a tiny prompt to the provider with your key — no paper content. On-device options that send nothing off the device arrive in a later update.</string>
+    <string name="ai_providers_intro">Connect your own API key to use a cloud AI provider. Arxiver ships with no keys and adds no AI cost — you bring your own. Keys are stored encrypted on this device and never leave it. Or download an on-device model below — no key or account needed.</string>
+    <string name="ai_providers_privacy_note">Testing a connection sends a tiny prompt to the provider with your key — no paper content. On-device models run entirely on this phone — nothing leaves your device.</string>
     <string name="ai_provider_claude">Claude (Anthropic)</string>
     <string name="ai_provider_gemini">Gemini (Google)</string>
     <string name="ai_provider_on_device">On-device</string>

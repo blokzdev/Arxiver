@@ -94,13 +94,17 @@ model.generateContentStream("prompt").collect { chunk ->
 ```
 
 ## How this maps to Arxiver (`:core:ai`)
-- Both engines implement an internal `OnDeviceEngine { isReady(); generate(ChatRequest): Flow<ChatChunk> }`.
+- THREE engines implement `OnDeviceEngine { tier; richness; isReady(); generate(ChatRequest): Flow<ChatChunk> }`:
+  `GemmaEngine` + `QwenEngine` (LiteRT-LM) and `NanoEngine` (ML Kit GenAI).
 - `OnDeviceProvider` (AiProvider, `ProviderId.ON_DEVICE`, `requiresKey=false`, `onDevice=true`)
-  delegates to the first ready engine, Nano preferred over Gemma.
+  picks among ready engines in DI order **Gemma → Qwen (LIGHT) → Nano**, with the user's
+  `preferredTier` override. Readiness for provider resolution is `OnDeviceProvider.isReady()`
+  (any wired engine ready) — never a hand-enumerated engine seam (the 2026-07-03 hotfix).
 - `DeviceCapabilityProbe` reads total RAM (`ActivityManager.MemoryInfo.totalMem`) + Nano
-  `checkStatus()` + Gemma `ModelState`; `TierSelector` recommends Nano → Gemma → cloud → none.
-- Privacy: on-device tiers make **no network calls**. Only new allowed host is the Gemma
-  model-download URL (HuggingFace LiteRT community).
+  `checkStatus()` + the Gemma and Qwen-light `ModelState`s; `TierSelector` recommends
+  Gemma → LIGHT → Nano → cloud → none.
+- Privacy: on-device tiers make **no network calls**. The only allowed download host is
+  huggingface.co, carrying TWO pinned model URLs (Gemma 4 + Qwen3-0.6B).
 
 ## Sources
 - LiteRT-LM Android: https://developers.google.com/edge/litert-lm/android

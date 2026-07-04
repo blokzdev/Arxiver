@@ -440,14 +440,15 @@ object AppModule {
     fun providerResolver(
         registry: dev.blokz.arxiver.core.ai.ProviderRegistry,
         store: dev.blokz.arxiver.data.AiProviderStore,
-        gemmaEngine: dev.blokz.arxiver.core.ai.GemmaEngine,
-        nanoEngine: dev.blokz.arxiver.core.ai.NanoEngine,
+        onDeviceProvider: dev.blokz.arxiver.core.ai.OnDeviceProvider,
     ): dev.blokz.arxiver.core.ai.ProviderResolver =
         dev.blokz.arxiver.core.ai.ProviderResolver(
             registry = registry,
             selected = { store.selectedAiProvider.first() },
             preferOnDevice = { store.preferOnDeviceWhenReady.first() },
-            onDeviceReady = { gemmaEngine.isReady() || nanoEngine.isReady() },
+            // Delegate to the SAME engines list chat() serves from — never hand-enumerate engines
+            // here (a stale `gemma || nano` left Qwen-only devices at "not configured"; PA.3 hotfix).
+            onDeviceReady = { onDeviceProvider.isReady() },
         )
 
     @Provides

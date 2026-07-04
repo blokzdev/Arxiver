@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 /**
  * Downloads the Gemma 4 E2B `.litertlm` model (P1.2b). Bound to the unmetered +
  * storage-not-low constraint via [SyncScheduler.downloadOnDeviceModel]; the
- * ~1.87 GB fetch is SHA-256 verified by [ModelDownloader]. Retries on failure.
+ * ~2.59 GB fetch is SHA-256 verified by [ModelDownloader]. Retries on failure.
  *
  * Runs as a foreground service with a local progress notification (UX2.8) so the long download
  * survives backgrounding/Doze; the notification is on-device only (no telemetry).

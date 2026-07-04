@@ -7,7 +7,8 @@ import dev.blokz.arxiver.core.ml.ModelDownloader
 /**
  * Reads the live [DeviceCapability] (SPEC-AI-PROVIDERS §3): total RAM from
  * `ActivityManager`, Nano status from [NanoAvailability], whether the Gemma
- * model file is present, and whether any cloud key is set.
+ * and Qwen-light model files are present, and whether any cloud key is set.
+ * Display/recommendation reader only — resolution readiness is [OnDeviceProvider.isReady].
  */
 class AndroidDeviceCapabilityProbe(
     private val context: Context,

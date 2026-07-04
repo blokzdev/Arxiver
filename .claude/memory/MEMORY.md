@@ -11,4 +11,5 @@
 - [Local build JDK 17](local-build-jdk17.md) — build locally on JDK 17 (CI's JVM); JDK 21 causes a Windows daemon file-lock + a coroutine-test flake
 - [Gemma STRUCTURED table validity](gemma-structured-table-validity.md) — PA.0a: Gemma E2B emits valid grounded Markdown tables with the PA.2 exemplar nudge; no LaTeX/Mermaid
 - [LiteRT-LM Kotlin lacks constrained decoding](litert-lm-kotlin-no-constrained-decoding.md) — PA.0c: #1662 open; PA.4 pivoted to "app-draws-the-structure" (constrained decoding is the wrong tool at our scale)
-- [Qwen light-tier ModelSpec](qwen-light-tier-modelspec.md) — PA.0b: pin litert-community/Qwen3-0.6B → Qwen3-0.6B.litertlm (614 MB CPU); avoid the .mediatek NPU sibling
+- [Qwen light-tier ModelSpec](qwen-light-tier-modelspec.md) — shipped in QwenEngine.SPEC: litert-community/Qwen3-0.6B → Qwen3-0.6B.litertlm (614 MB CPU); avoid the .mediatek NPU sibling; readiness via OnDeviceProvider.isReady()
+- [Readiness consumer-sweep rule](readiness-consumer-sweep.md) — PA.6 incident: when an abstraction's summary grows, sweep the summary's CONSUMERS; device-verify additive tiers ALONE, not just coexisting
