@@ -77,6 +77,19 @@
     <string name="html_external_title">Open external link?</string>
     <string name="html_external_open">Open</string>
 
+    <!-- P-HTML PH.6: TOC + reading position. -->
+    <string name="html_toc_title">Contents</string>
+    <string name="cd_toc">Table of contents</string>
+    <string name="html_toc_sections">Sections</string>
+    <string name="html_toc_figures">Figures</string>
+    <string name="html_toc_tables">Tables</string>
+    <string name="html_toc_bibliography">Bibliography</string>
+    <string name="html_toc_empty">No sections detected in this paper\'s HTML.</string>
+    <string name="html_toc_jumped">Jumped to %1$s</string>
+    <string name="html_toc_untitled_section">Untitled section</string>
+    <string name="html_toc_untitled_figure">Figure</string>
+    <string name="html_toc_untitled_table">Table</string>
+
     <string name="action_retry">Retry</string>
     <string name="action_share">Share</string>
     <string name="action_open_pdf">Read PDF</string>

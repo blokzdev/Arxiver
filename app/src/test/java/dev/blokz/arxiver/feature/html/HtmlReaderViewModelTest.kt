@@ -13,6 +13,7 @@ import dev.blokz.arxiver.core.ai.HtmlStorage
 import dev.blokz.arxiver.core.ai.InlinedImage
 import dev.blokz.arxiver.core.ai.ReaderDocument
 import dev.blokz.arxiver.core.ai.ReaderImage
+import dev.blokz.arxiver.core.ai.ReaderPosition
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
@@ -113,6 +114,7 @@ class HtmlReaderViewModelTest {
         htmlStorage = storage,
         paperRepository = paperRepo,
         dispatchers = dispatchers,
+        applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO),
     )
 
     private fun doc(source: HtmlSource) =
@@ -222,6 +224,126 @@ class HtmlReaderViewModelTest {
             assertNull(state.error)
             assertTrue(state.doc!!.bodyHtml.contains("body"), "the clean re-fetch is shown")
             assertTrue(!state.doc!!.bodyHtml.contains("evil.example"), "the poisoned cache is not rendered")
+        }
+
+    // --- PH.6: anchors on cache hits + the reading-position policy ------------------------------
+
+    private fun bodyWithAnchors() =
+        "<section id=\"S1\"><h2 class=\"ltx_title\">Introduction</h2></section>" +
+            "<section id=\"S2\"><h2 class=\"ltx_title\">Method</h2></section>"
+
+    private suspend fun seedCache(body: String = bodyWithAnchors()) {
+        storage.store(ArxivId(PAPER_ID), 1, HtmlSource.NATIVE, body)
+    }
+
+    @Test
+    fun `a cache hit carries real re-derived anchors, not an empty list`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            seedCache()
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Error(AppError.Offline)))
+
+            val state = vm.uiState.first { !it.loading }
+            assertEquals(listOf("S1", "S2"), state.doc!!.anchors.map { it.id })
+        }
+
+    @Test
+    fun `a pre-stored sidecar seeds the restore target on a cache hit`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            seedCache()
+            storage.storePosition(ArxivId(PAPER_ID), 1, ReaderPosition("S2", 120, 0.6f))
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Error(AppError.Offline)))
+
+            vm.uiState.first { !it.loading }
+            assertEquals(ReaderPosition("S2", 120, 0.6f), vm.restoreTarget())
+        }
+
+    @Test
+    fun `probes validate the anchor against the current doc and clamp values`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            seedCache()
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Error(AppError.Offline)))
+            vm.uiState.first { !it.loading }
+
+            vm.onPositionProbed(ReaderPosition("NOT_A_REAL_ANCHOR", -9, 3f))
+
+            assertEquals(ReaderPosition(null, 0, 1f), vm.restoreTarget())
+        }
+
+    @Test
+    fun `an explicit jump holds the slot against probes until the settle window passes`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            seedCache()
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Error(AppError.Offline)))
+            vm.uiState.first { !it.loading }
+
+            var clock = 100_000L
+            vm.now = { clock }
+
+            vm.onJump("S2")
+            assertEquals("S2", vm.restoreTarget()!!.anchorId)
+
+            // Inside the settle window: the probe must NOT demote the jump.
+            clock += 500
+            vm.onPositionProbed(ReaderPosition("S1", 10, 0.1f))
+            assertEquals("S2", vm.restoreTarget()!!.anchorId)
+
+            // A re-apply resets the settle clock; still held.
+            vm.onRestoreApplied()
+            clock += 2_000
+            vm.onPositionProbed(ReaderPosition("S1", 10, 0.1f))
+            assertEquals("S2", vm.restoreTarget()!!.anchorId)
+
+            // Past the (reset) window: the probe demotes — normal reading resumes.
+            clock += 3_000
+            vm.onPositionProbed(ReaderPosition("S1", 10, 0.1f))
+            assertEquals("S1", vm.restoreTarget()!!.anchorId)
+        }
+
+    @Test
+    fun `onTocSelect claims the slot and emits the jump effect with its label`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            seedCache()
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Error(AppError.Offline)))
+            vm.uiState.first { !it.loading }
+
+            vm.onTocSelect("S2", "Method")
+
+            val effect = vm.effects.first()
+            assertTrue(effect is HtmlReaderEffect.JumpToAnchor)
+            assertEquals("S2", effect.anchorId)
+            assertEquals("Method", effect.label)
+            assertEquals("S2", vm.restoreTarget()!!.anchorId)
+        }
+
+    @Test
+    fun `a settled probe is persisted to the sidecar keyed on the served version`() =
+        runBlocking {
+            // The persist loop's debounce delay() runs on viewModelScope (Main). The default test
+            // Main is an UnconfinedTestDispatcher whose VIRTUAL clock real-time sleeping never
+            // advances — use a real dispatcher for this case so the debounce actually elapses.
+            Dispatchers.resetMain()
+            Dispatchers.setMain(Dispatchers.Default)
+            server.enqueue(MockResponse().setResponseCode(404))
+            seedCache() // served version = 1
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Error(AppError.Offline)))
+            vm.uiState.first { !it.loading }
+
+            vm.onPositionProbed(ReaderPosition("S1", 42, 0.2f))
+
+            // Poll for the debounced (1s) write + IO hop.
+            var pos: ReaderPosition? = null
+            repeat(50) {
+                if (pos == null) {
+                    kotlinx.coroutines.delay(100)
+                    pos = storage.readPosition(ArxivId(PAPER_ID), 1)
+                }
+            }
+            assertEquals(ReaderPosition("S1", 42, 0.2f), pos)
         }
 
     private companion object {
