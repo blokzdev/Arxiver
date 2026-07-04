@@ -59,6 +59,8 @@ data class HtmlReaderUiState(
     val loading: Boolean = true,
     val doc: ReaderDocument? = null,
     val error: AppError? = null,
+    /** For the reader-hosted AskSheet (conversation/share title); null while loading (PH.7). */
+    val paperTitle: String? = null,
 )
 
 sealed interface HtmlReaderEffect {
@@ -78,10 +80,11 @@ class HtmlReaderViewModel
         private val htmlImageFetcher: HtmlImageFetcher,
         private val htmlStorage: HtmlStorage,
         private val paperRepository: PaperRepository,
+        private val libraryRepository: dev.blokz.arxiver.data.LibraryRepository,
         private val dispatchers: DispatcherProvider,
         private val applicationScope: CoroutineScope,
     ) : ViewModel() {
-        private val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
+        internal val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
 
         private val _uiState = MutableStateFlow(HtmlReaderUiState())
         val uiState: StateFlow<HtmlReaderUiState> = _uiState.asStateFlow()
@@ -104,6 +107,11 @@ class HtmlReaderViewModel
         }
 
         fun retry() = load()
+
+        /** Pin an Ask answer into this paper's notes (PH.7; PaperDetailViewModel's exact layering). */
+        fun pinNote(content: String) {
+            viewModelScope.launch { libraryRepository.addNote(paperId.value, content) }
+        }
 
         fun openPdfInstead() {
             viewModelScope.launch { _effects.send(HtmlReaderEffect.FallbackToPdf(paperId.value)) }
@@ -174,8 +182,11 @@ class HtmlReaderViewModel
             _uiState.update { it.copy(loading = true, doc = null, error = null) }
             viewModelScope.launch {
                 // latestVersion drives the cache key + the fetch URL; ?:1 is safe (the fetcher does a
-                // versioned→bare-latest 404 retry, so an imperfect version self-heals).
-                val version = paperRepository.paper(paperId)?.latestVersion ?: 1
+                // versioned→bare-latest 404 retry, so an imperfect version self-heals). The same row
+                // fetch also carries the title for the reader-hosted AskSheet (PH.7 — no extra hit).
+                val paper = paperRepository.paper(paperId)
+                val version = paper?.latestVersion ?: 1
+                _uiState.update { it.copy(paperTitle = paper?.title) }
 
                 val cached =
                     withContext(dispatchers.io) {

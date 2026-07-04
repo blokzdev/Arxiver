@@ -661,4 +661,41 @@ class AskViewModelTest {
             assertEquals(false, state.preparing)
             assertTrue(state.messages.isEmpty())
         }
+
+    // --- PH.7: offerQuote consume-once-by-id (the reader selection prefill seam) ---
+
+    @Test
+    fun `offerQuote applies once per id and never re-applies over user edits`() =
+        runTest(dispatcher) {
+            val vm =
+                vm(
+                    onDeviceProvider { kotlinx.coroutines.flow.flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+
+            vm.offerQuote(AskQuoteRequest(id = 1L, text = "the attention mechanism"))
+            assertTrue(vm.uiState.value.input.startsWith("> the attention mechanism"))
+
+            vm.setInput("my edited question")
+            vm.offerQuote(AskQuoteRequest(id = 1L, text = "the attention mechanism"))
+            assertEquals("my edited question", vm.uiState.value.input, "same id never re-applies")
+        }
+
+    @Test
+    fun `a new id applies even for identical text, prepending onto the current input`() =
+        runTest(dispatcher) {
+            val vm =
+                vm(
+                    onDeviceProvider { kotlinx.coroutines.flow.flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+
+            vm.offerQuote(AskQuoteRequest(id = 1L, text = "same text"))
+            vm.setInput("draft")
+            vm.offerQuote(AskQuoteRequest(id = 2L, text = "same text"))
+
+            assertEquals("> same text\n\ndraft", vm.uiState.value.input)
+        }
 }

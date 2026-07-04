@@ -66,4 +66,52 @@ class ReaderScrollJsTest {
         assertNull(ReaderScrollJs.parseProbeResult("not json at all"))
         assertNull(ReaderScrollJs.parseProbeResult("\"not an object\""))
     }
+
+    // --- PH.7: the selection read (the second sanctioned ValueCallback data return) ---
+
+    @Test
+    fun `selection snippet caps in-page so a select-all never crosses the bridge at size`() {
+        val js = ReaderScrollJs.selection()
+        assertTrue(js.contains(".slice(0,${ReaderScrollJs.SELECTION_READ_CAP})"))
+        assertTrue(js.contains("window.getSelection()"))
+    }
+
+    @Test
+    fun `parseSelectionResult round-trips plain text`() {
+        assertEquals(
+            "the attention mechanism scales quadratically",
+            ReaderScrollJs.parseSelectionResult("\"the attention mechanism scales quadratically\""),
+        )
+    }
+
+    @Test
+    fun `parseSelectionResult collapses Unicode whitespace Java's backslash-s misses`() {
+        // U+2028 line separator, U+2029 paragraph separator, U+00A0 NBSP: each must become one
+        // space (no visual line break survives into the blockquote or confirm card).
+        val hostile = "\"before\\u2028middle\\u2029and\\u00A0after\""
+        assertEquals("before middle and after", ReaderScrollJs.parseSelectionResult(hostile))
+    }
+
+    @Test
+    fun `parseSelectionResult strips bidi overrides and zero-width chars AFTER collapsing`() {
+        // U+202E RTL override + U+200B zero-width space must vanish; the tab (Cc) collapsed to a
+        // space FIRST — words never glue together.
+        val hostile = "\"pay\\u202Eme\\u200B now\\tplease\""
+        assertEquals("payme now please", ReaderScrollJs.parseSelectionResult(hostile))
+    }
+
+    @Test
+    fun `parseSelectionResult nulls garbage, blank, and non-string returns`() {
+        assertNull(ReaderScrollJs.parseSelectionResult(null))
+        assertNull(ReaderScrollJs.parseSelectionResult("null"))
+        assertNull(ReaderScrollJs.parseSelectionResult("42"))
+        assertNull(ReaderScrollJs.parseSelectionResult("{\"not\":\"a string\"}"))
+        assertNull(ReaderScrollJs.parseSelectionResult("\"   \\u200B  \""))
+    }
+
+    @Test
+    fun `parseSelectionResult re-caps a payload that dodged the in-page slice`() {
+        val oversized = "\"" + "z".repeat(5000) + "\""
+        assertEquals(ReaderScrollJs.SELECTION_READ_CAP, ReaderScrollJs.parseSelectionResult(oversized)!!.length)
+    }
 }

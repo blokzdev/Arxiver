@@ -158,6 +158,17 @@ class AskViewModel
 
         fun setInput(text: String) = _uiState.update { it.copy(input = text) }
 
+        // PH.7: consumed offer ids — the same AskQuoteRequest re-delivered by recomposition/rotation
+        // must never re-apply over user edits; a NEW selection gets a fresh id and always applies.
+        private var consumedQuoteId: Long? = null
+
+        /** Prefill the input with a quoted reader excerpt — consume-once by [AskQuoteRequest.id]. */
+        fun offerQuote(quote: AskQuoteRequest) {
+            if (quote.id == consumedQuoteId) return
+            consumedQuoteId = quote.id
+            setInput(quoteInto(quote.text, _uiState.value.input, READER_SELECTION_QUOTE_MAX))
+        }
+
         fun setIncludeNotes(value: Boolean) = _uiState.update { it.copy(includeNotes = value) }
 
         fun setMode(mode: ChatMode) = _uiState.update { it.copy(mode = mode) }

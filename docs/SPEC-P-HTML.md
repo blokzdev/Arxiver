@@ -149,13 +149,64 @@ PH.6, the app's FIRST ValueCallback data return: the **host-initiated position p
 `script-src 'none'` and the no-page-initiated-bridge invariant stand; no `@JavascriptInterface`);
 every injected id goes through `JSONObject.quote`; the returned value is treated as hostile —
 parsed defensively, the anchor id validated against the known `doc.anchors` set, offset/fraction
-clamped, never rendered or executed. Probe/restore/jump results are **generation-stamped**: a
+clamped, never rendered or executed. PH.7 adds the SECOND sanctioned ValueCallback data return — the **selection read**
+(`ReaderScrollJs.selection()`, capped in-page, Unicode-sanitized on return; §13) — under the same
+posture: host-initiated only, hostile-return discipline, generation-stamped, delivered-null-on-
+stale (never swallowed, so the ActionMode always closes). Probe/restore/jump results are **generation-stamped**: a
 counter incremented per `loadDataWithBaseURL` gates every callback, so no component ever acts on a
 document other than the one loaded.
 
-## 13. Selection → Ask (elevation, PH.7)
+## 13. Selection → Ask + find-in-page (PH.7, as built)
 
-Selection→Ask bridges **untrusted document text** into the AI input path, so: read the selection on the Kotlin side via **native `ActionMode`/process-text — never a page-JS `arxiver://` bridge** (preserves the no-JS-data-bridge invariant); feed the existing `AskSheet.onQuote` (the reader hosts its own `AskSheet` + `RetrievalScope.Paper` with the 4 callbacks — not free reuse); treat the excerpt as untrusted (cap + escape); route any **cloud** send through the existing "what leaves the device" confirm card.
+**Selection→Ask.** A `ReaderWebView : WebView` subclass wraps the selection ActionMode
+(2-arg `startActionMode` only — the 1-arg overload delegates into it; the wrapper is a
+`Callback2` so the floating toolbar keeps anchoring to the live selection rect) and adds ONE
+app-owned item, **"Ask about this"**, ordered after the system items (Copy keeps its
+muscle-memory slot). The item's click **never finishes the mode synchronously** — finishing
+clears the selection on the renderer with no ordering guarantee vs the read. Instead the host
+reads the selection via the sanctioned host-initiated `evaluateJavascript` channel
+(`ReaderScrollJs.selection()`), finishes the mode in the read callback, and opens the
+reader-hosted `AskSheet`. **Degradation-first:** any platform shift that drops the item fails
+safe to system Copy + the always-present toolbar Ask icon (the guaranteed TalkBack path).
+
+**Excerpt trust pipeline** (the untrusted-excerpt contract — "escape" means exactly this):
+1. **Capped in-page**: `.slice(0, SELECTION_READ_CAP=2000)` inside the snippet — a select-all on
+   a multi-MB `data:` paper never crosses the bridge at size;
+2. **Unicode-sanitized** (`parseSelectionResult`): collapse `[\s\p{Z}\u0085]+` → " " FIRST
+   (U+2028/U+2029/NBSP — a plain `\s` misses them; defuses blockquote breakout + confirm-card
+   visual lies), THEN strip `[\p{Cf}\p{Cc}]` (zero-width, bidi overrides), trim, re-cap,
+   null-if-blank;
+3. **Blockquote-framed** via the shared `quoteInto` (reader cap `READER_SELECTION_QUOTE_MAX=500`,
+   PROVISIONAL) — prefill only, into **plain-text sinks** (TextField, plain-Text user bubble,
+   monospace confirm card); the DIRECT path renders no rich content;
+4. **Never auto-sent** — Send requires a user tap; this human-in-the-loop plus the confirm is the
+   load-bearing prompt-injection mitigation (auto-ask-on-selection is a red-line change);
+5. **Cloud confirm inherited verbatim** — the excerpt rides the question through
+   `ChatRepository.prepare` → `ChatPreviewBuilder` → the confirm card, byte-identical (pinned by a
+   confirm-fidelity golden). Accepted residual (documented): the echo path — a model may quote the
+   excerpt back through the sandboxed rich renderer; mitigated by the offline sandbox + per-cloud-
+   turn confirm + never-auto-send.
+
+**Prefill seam:** `AskSheet(initialQuote: AskQuoteRequest?)` → `AskViewModel.offerQuote`,
+**consume-once by id** — recomposition/rotation re-delivers the same id and never stomps user
+edits; a new selection gets a fresh id. Deliberately NOT routed through `start()` (its idempotence
+guard would drop every offer after a VM's first). The reader hosts `AskSheet` as its 4th host
+(`RetrievalScope.Paper`, sessionId=null = resume the paper's most-recent conversation — the same
+one the detail screen uses, which is why one ActionMode item suffices), with pin-to-notes, share,
+cross-ref, provider-settings nav, and the paper title wired.
+
+**Find-in-page.** A toolbar Search action swaps the ENTIRE topBar for a same-height find bar
+(the WebView never resizes — zero PH.6 reflow): pill query field (auto-focused), live "n of m"
+count from a pure reducer (silence is never "0 results" — Chromium delays short-query counting;
+"no matches" latches only on `isDoneCounting`; a zero-match state can never render "1/0"),
+next/previous, Back closes the bar first. `findAllAsync` results are **generation-stamped** like
+every other WebView callback; matches die on every reload and an active find **re-issues once per
+generation via the controller's `onRevealed` hook** — which fires from the single `reveal()`
+funnel covering all three PH.6 reveal paths, so the re-issued find's match-scroll runs AFTER the
+position restore and deterministically wins (the match scroll ticks `tickedSinceRestore`, which
+skips the delayed re-apply). Query/open state survive rotation and process death
+(`rememberSaveable`); counts are document-lifetime. No match-case toggle (Chromium hardcodes
+case-insensitive).
 
 ## 14. Testing strategy
 
