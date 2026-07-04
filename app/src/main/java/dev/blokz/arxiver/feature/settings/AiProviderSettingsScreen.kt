@@ -28,11 +28,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
@@ -63,6 +67,19 @@ fun AiProviderSettingsScreen(
     viewModel: AiProviderSettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // "Model ready" snackbar on the Downloading→Ready edge (PA.6 follow-up): the reporting user
+    // had zero in-app completion signal — the parent SettingsScreen's host is a different
+    // destination, so this screen carries its own.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        viewModel.modelReadyEvents.collect { nameRes ->
+            snackbarHostState.showSnackbar(
+                context.getString(R.string.ai_ondevice_ready_snackbar, context.getString(nameRes)),
+            )
+        }
+    }
 
     // The model download runs as a foreground service with a progress notification (UX2.8). On
     // Android 13+ we ask for POST_NOTIFICATIONS first, then download regardless of the answer
@@ -94,6 +111,7 @@ fun AiProviderSettingsScreen(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         AiProviderSettingsContent(
             state = state,
@@ -120,7 +138,7 @@ private fun AiProviderSettingsContent(
     modifier: Modifier = Modifier,
     onSaveKey: (ProviderId, String) -> Unit,
     onClearKey: (ProviderId) -> Unit,
-    onTestConnection: (ProviderId) -> Unit,
+    onTestConnection: (ProviderId, InferenceTier?) -> Unit,
     onSelectDefault: (ProviderId) -> Unit,
     onDownloadModel: (InferenceTier) -> Unit,
     onDeleteModel: (InferenceTier) -> Unit,
@@ -148,7 +166,7 @@ private fun AiProviderSettingsContent(
                 isDefault = state.selectedDefault == row.id,
                 onSaveKey = { key -> onSaveKey(row.id, key) },
                 onClearKey = { onClearKey(row.id) },
-                onTestConnection = { onTestConnection(row.id) },
+                onTestConnection = { tier -> onTestConnection(row.id, tier) },
                 onSelectDefault = { onSelectDefault(row.id) },
                 onDownloadModel = onDownloadModel,
                 onDeleteModel = onDeleteModel,
@@ -172,7 +190,7 @@ private fun ProviderCard(
     isDefault: Boolean,
     onSaveKey: (String) -> Unit,
     onClearKey: () -> Unit,
-    onTestConnection: () -> Unit,
+    onTestConnection: (InferenceTier?) -> Unit,
     onSelectDefault: () -> Unit,
     onDownloadModel: (InferenceTier) -> Unit,
     onDeleteModel: (InferenceTier) -> Unit,
@@ -211,11 +229,13 @@ private fun ProviderCard(
                 configured = row.configured,
                 onSaveKey = onSaveKey,
                 onClearKey = onClearKey,
-                onTestConnection = onTestConnection,
+                onTestConnection = { onTestConnection(null) },
             )
         }
 
-        TestResult(row.test)
+        // On-device Test results render inside each ModelCard (per-tier); the shared row is
+        // cloud-only — a single shared result once let the Qwen card show a Gemma-served Success.
+        if (onDevice == null) TestResult(row.test)
 
         if (usable) {
             Row(
@@ -274,7 +294,7 @@ private fun CloudKeySection(
 @Composable
 private fun OnDeviceSection(
     info: OnDeviceInfo,
-    onTestConnection: () -> Unit,
+    onTestConnection: (InferenceTier?) -> Unit,
     onDownloadModel: (InferenceTier) -> Unit,
     onDeleteModel: (InferenceTier) -> Unit,
     onDownloadNano: () -> Unit,
@@ -295,19 +315,31 @@ private fun OnDeviceSection(
     // Gemma (≥4 GB) and the light Qwen tier (≥3 GB) are two independent downloads (P-Atlas PA.3b).
     ModelCard(
         labelRes = R.string.ai_tier_gemma,
+        descriptionRes = R.string.ai_ondevice_desc_gemma,
         downloadLabelRes = R.string.ai_ondevice_download,
+        // Point an ineligible-for-Gemma device at the lighter Qwen only when it actually qualifies.
+        ineligibleLabelRes =
+            if (info.lightEligible) {
+                R.string.ai_ondevice_ineligible_gemma_light_ok
+            } else {
+                R.string.ai_ondevice_ineligible_gemma
+            },
         state = info.gemmaState,
         eligible = info.gemmaEligible,
-        onTestConnection = onTestConnection,
+        testState = info.tierTests[InferenceTier.GEMMA] ?: ConnectionTest.Idle,
+        onTestConnection = { onTestConnection(InferenceTier.GEMMA) },
         onDownload = { onDownloadModel(InferenceTier.GEMMA) },
         onDelete = { onDeleteModel(InferenceTier.GEMMA) },
     )
     ModelCard(
         labelRes = R.string.ai_tier_light,
+        descriptionRes = R.string.ai_ondevice_desc_light,
         downloadLabelRes = R.string.ai_ondevice_download_light,
+        ineligibleLabelRes = R.string.ai_ondevice_ineligible_light,
         state = info.lightState,
         eligible = info.lightEligible,
-        onTestConnection = onTestConnection,
+        testState = info.tierTests[InferenceTier.LIGHT] ?: ConnectionTest.Idle,
+        onTestConnection = { onTestConnection(InferenceTier.LIGHT) },
         onDownload = { onDownloadModel(InferenceTier.LIGHT) },
         onDelete = { onDeleteModel(InferenceTier.LIGHT) },
     )
@@ -321,20 +353,22 @@ private fun OnDeviceSection(
     // Choose which on-device engine to use when more than one is ready.
     if (listOf(gemmaReady, lightReady, nanoReady).count { it } >= 2) {
         Text(stringResource(R.string.ai_ondevice_prefer), style = MaterialTheme.typography.labelLarge)
+        // Short engine names — the ai_tier_* labels embed "(downloaded)"/"(system)" and wrap chips
+        // over multiple lines (seen on-device, PA.6 follow-up).
         Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
             PreferChip(R.string.ai_prefer_auto, info.preferredTier == null) { onSetPreferredTier(null) }
             if (gemmaReady) {
-                PreferChip(R.string.ai_tier_gemma, info.preferredTier == InferenceTier.GEMMA) {
+                PreferChip(R.string.ai_engine_gemma, info.preferredTier == InferenceTier.GEMMA) {
                     onSetPreferredTier(InferenceTier.GEMMA)
                 }
             }
             if (lightReady) {
-                PreferChip(R.string.ai_tier_light, info.preferredTier == InferenceTier.LIGHT) {
+                PreferChip(R.string.ai_engine_light, info.preferredTier == InferenceTier.LIGHT) {
                     onSetPreferredTier(InferenceTier.LIGHT)
                 }
             }
             if (nanoReady) {
-                PreferChip(R.string.ai_tier_nano, info.preferredTier == InferenceTier.NANO) {
+                PreferChip(R.string.ai_engine_nano, info.preferredTier == InferenceTier.NANO) {
                     onSetPreferredTier(InferenceTier.NANO)
                 }
             }
@@ -367,14 +401,22 @@ private fun OnDeviceSection(
 @Composable
 private fun ModelCard(
     labelRes: Int,
+    descriptionRes: Int,
     downloadLabelRes: Int,
+    ineligibleLabelRes: Int,
     state: ModelState,
     eligible: Boolean,
+    testState: ConnectionTest,
     onTestConnection: () -> Unit,
     onDownload: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Text(stringResource(labelRes), style = MaterialTheme.typography.labelLarge)
+    Text(
+        stringResource(descriptionRes),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
     when (state) {
         ModelState.NotDownloaded ->
             if (eligible) {
@@ -383,7 +425,7 @@ private fun ModelCard(
                 }
             } else {
                 Text(
-                    stringResource(R.string.ai_ondevice_ineligible),
+                    stringResource(ineligibleLabelRes),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                 )
@@ -420,6 +462,8 @@ private fun ModelCard(
                 }
             }
     }
+    // This model's own Test result (pinned to its engine — never another tier's).
+    TestResult(testState)
 }
 
 @Composable
@@ -564,7 +608,7 @@ private fun AiProviderSettingsContentPreview() {
                 ),
             onSaveKey = { _, _ -> },
             onClearKey = {},
-            onTestConnection = {},
+            onTestConnection = { _, _ -> },
             onSelectDefault = {},
             onDownloadModel = {},
             onDeleteModel = {},

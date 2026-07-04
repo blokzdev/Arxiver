@@ -56,9 +56,12 @@ class QwenEngine(
                     ?.let { ConversationConfig(systemInstruction = Contents.of(it)) }
                     ?: ConversationConfig()
             var emittedAny = false
+            // Qwen3 prefixes replies with a <think> block that rendered verbatim to users
+            // (K20 find #2); /no_think still emits an empty pair, so filter both shapes.
+            val thinkFilter = ThinkBlockFilter()
             activeEngine.createConversation(config).use { conversation ->
                 conversation.sendMessageAsync(promptOf(request)).collect { message ->
-                    val text = message.text()
+                    val text = thinkFilter.filter(message.text())
                     if (text.isNotEmpty()) {
                         emittedAny = true
                         emit(ChatChunk.Delta(text))
@@ -97,7 +100,7 @@ class QwenEngine(
     private fun promptOf(request: ChatRequest): String =
         request.messages
             .filter { it.role != ChatRole.SYSTEM }
-            .joinToString("\n\n") { it.content }
+            .joinToString("\n\n") { it.content } + NO_THINK
 
     private fun Message.text(): String =
         contents.contents
@@ -105,6 +108,13 @@ class QwenEngine(
             .joinToString("") { it.text }
 
     companion object {
+        /**
+         * Qwen3's documented per-turn soft switch: disables the <think> reasoning block. A 0.6B
+         * model's monologue burns decode tokens (slow on-device) and leaked to the UI before this
+         * (K20 find #2); [ThinkBlockFilter] removes the residual empty pair the switch still emits.
+         */
+        private const val NO_THINK = "\n/no_think"
+
         /**
          * Pinned model: the **standard CPU** Qwen3-0.6B `.litertlm` (INT8, 614 MB) from the LiteRT
          * community (Apache-2.0), community-benchmarked decoding on CPU. Pinned by exact filename +

@@ -47,6 +47,26 @@ class OnDeviceProvider(
      */
     suspend fun isReady(): Boolean = engines.any { it.isReady() }
 
+    /** The tier [chat] would serve right now (null when none ready) — labels indicators/results. */
+    suspend fun resolveTier(): InferenceTier? = pickReadyEngine()?.tier
+
+    /**
+     * Tier-PINNED stream for the per-model "Test" button (PA.6 follow-up): **no fallback** — before
+     * this, the Qwen card's Test could silently stream Gemma (default order), so a broken light
+     * build would still show "Connection OK". Failing when the pinned engine can't serve is the
+     * button's whole point (it exists to catch exactly the zero-token F2-trap class).
+     */
+    fun chat(
+        request: ChatRequest,
+        pinTier: InferenceTier,
+    ): Flow<ChatChunk> =
+        flow {
+            val engine =
+                engines.firstOrNull { it.tier == pinTier && it.isReady() }
+                    ?: throw AiException(AppError.Unexpected())
+            emitAll(engine.generate(request))
+        }
+
     /**
      * The output richness of the engine that would serve a turn right now (P-Atlas PA.2). Read at
      * prepare time so the assembler's system prompt matches the streaming engine; a microscopic

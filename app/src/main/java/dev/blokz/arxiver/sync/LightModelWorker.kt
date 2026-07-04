@@ -35,12 +35,13 @@ class LightModelWorker
         override suspend fun doWork(): Result =
             coroutineScope {
                 val title = R.string.bg_task_light_download
-                setForeground(notifications.foregroundInfo(title, progressPercent = 0))
+                val id = DownloadNotifications.LIGHT_NOTIFICATION_ID
+                setForeground(notifications.foregroundInfo(title, progressPercent = 0, notificationId = id))
                 val progress =
                     launch {
                         modelDownloader.state.collect { state ->
                             if (state is ModelState.Downloading) {
-                                notifications.updateProgress(title, state.progressPercent)
+                                notifications.updateProgress(title, state.progressPercent, notificationId = id)
                             }
                         }
                     }
@@ -48,7 +49,13 @@ class LightModelWorker
                 progress.cancel()
                 when (result) {
                     is AppResult.Failure -> Result.retry()
-                    is AppResult.Success -> Result.success()
+                    is AppResult.Success -> {
+                        notifications.notifyCompleted(
+                            modelNameRes = R.string.ai_engine_light,
+                            notificationId = DownloadNotifications.LIGHT_DONE_NOTIFICATION_ID,
+                        )
+                        Result.success()
+                    }
                 }
             }
 

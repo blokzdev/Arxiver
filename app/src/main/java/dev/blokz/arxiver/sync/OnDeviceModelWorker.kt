@@ -34,12 +34,13 @@ class OnDeviceModelWorker
         override suspend fun doWork(): Result =
             coroutineScope {
                 val title = R.string.bg_task_gemma_download
-                setForeground(notifications.foregroundInfo(title, progressPercent = 0))
+                val id = DownloadNotifications.GEMMA_NOTIFICATION_ID
+                setForeground(notifications.foregroundInfo(title, progressPercent = 0, notificationId = id))
                 val progress =
                     launch {
                         modelDownloader.state.collect { state ->
                             if (state is ModelState.Downloading) {
-                                notifications.updateProgress(title, state.progressPercent)
+                                notifications.updateProgress(title, state.progressPercent, notificationId = id)
                             }
                         }
                     }
@@ -47,7 +48,13 @@ class OnDeviceModelWorker
                 progress.cancel()
                 when (result) {
                     is AppResult.Failure -> Result.retry()
-                    is AppResult.Success -> Result.success()
+                    is AppResult.Success -> {
+                        notifications.notifyCompleted(
+                            modelNameRes = R.string.ai_engine_gemma,
+                            notificationId = DownloadNotifications.GEMMA_DONE_NOTIFICATION_ID,
+                        )
+                        Result.success()
+                    }
                 }
             }
 
