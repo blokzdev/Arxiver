@@ -188,6 +188,48 @@ class OnDeviceProviderTest {
             assertTrue(!OnDeviceProvider(listOf(gemma, nano), dispatchers).isReady())
         }
 
+    // --- PA.6 follow-up: tier-PINNED test streams (no fallback) + resolveTier ---
+
+    @Test
+    fun `pinned chat streams the pinned engine regardless of preferred tier and DI order`() =
+        runBlocking {
+            val gemma = FakeEngine(InferenceTier.GEMMA, ready = true, reply = "gemma")
+            val light = FakeEngine(InferenceTier.LIGHT, ready = true, reply = "light")
+            // DI order Gemma-first AND the user prefers Gemma — the pin must still win.
+            val provider = OnDeviceProvider(listOf(gemma, light), dispatchers, preferredTier = { InferenceTier.GEMMA })
+
+            val text =
+                provider.chat(request(), pinTier = InferenceTier.LIGHT)
+                    .toList().filterIsInstance<ChatChunk.Delta>().joinToString("") { it.text }
+
+            assertEquals("light", text)
+            assertTrue(light.generated && !gemma.generated)
+        }
+
+    @Test
+    fun `pinned chat errors — never falls back — when the pinned engine is not ready`() =
+        runBlocking {
+            // The zero-token F2-trap scenario the per-model Test button exists to catch: a broken
+            // light build must NOT show Success by silently streaming Gemma.
+            val gemma = FakeEngine(InferenceTier.GEMMA, ready = true, reply = "gemma")
+            val light = FakeEngine(InferenceTier.LIGHT, ready = false, reply = "light")
+            val provider = OnDeviceProvider(listOf(gemma, light), dispatchers)
+
+            assertFailsWith<AiException> {
+                provider.chat(request(), pinTier = InferenceTier.LIGHT).toList()
+            }
+            assertTrue(!gemma.generated && !light.generated)
+        }
+
+    @Test
+    fun `resolveTier reports the tier chat would serve, null when none ready`() =
+        runBlocking {
+            val gemma = FakeEngine(InferenceTier.GEMMA, ready = false, reply = "x")
+            val light = FakeEngine(InferenceTier.LIGHT, ready = true, reply = "x")
+            assertEquals(InferenceTier.LIGHT, OnDeviceProvider(listOf(gemma, light), dispatchers).resolveTier())
+            assertEquals(null, OnDeviceProvider(listOf(gemma), dispatchers).resolveTier())
+        }
+
     // --- P-Atlas PA.2: richness resolution matches the engine that would stream ---
 
     @Test

@@ -45,13 +45,14 @@ class DownloadNotifications
         fun foregroundInfo(
             @StringRes titleRes: Int,
             progressPercent: Int,
+            notificationId: Int,
         ): ForegroundInfo {
             ensureChannel()
             val notification = build(titleRes, progressPercent)
             return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+                ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
-                ForegroundInfo(NOTIFICATION_ID, notification)
+                ForegroundInfo(notificationId, notification)
             }
         }
 
@@ -59,6 +60,7 @@ class DownloadNotifications
         fun updateProgress(
             @StringRes titleRes: Int,
             progressPercent: Int,
+            notificationId: Int,
         ) {
             // Inline guard so lint sees the permission check (POST_NOTIFICATIONS is a 13+ runtime grant).
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -67,7 +69,38 @@ class DownloadNotifications
             ) {
                 return
             }
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, build(titleRes, progressPercent))
+            NotificationManagerCompat.from(context).notify(notificationId, build(titleRes, progressPercent))
+        }
+
+        /**
+         * Terminal "model ready" notification (PA.6 follow-up): the reporting user had ZERO completion
+         * signal after a 614 MB download. Non-ongoing + auto-cancel, its own id (distinct from the
+         * progress ids so a concurrent sibling download's progress isn't clobbered), same local-only
+         * channel. Posted by the worker after a verified download, before Result.success(), so it
+         * survives the foreground teardown.
+         */
+        fun notifyCompleted(
+            @StringRes modelNameRes: Int,
+            notificationId: Int,
+        ) {
+            // Inline guard so lint sees the permission check (POST_NOTIFICATIONS is a 13+ runtime grant).
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                return
+            }
+            ensureChannel()
+            val notification =
+                NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                    .setContentTitle(
+                        context.getString(R.string.ai_ondevice_ready_notification, context.getString(modelNameRes)),
+                    )
+                    .setAutoCancel(true)
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .build()
+            NotificationManagerCompat.from(context).notify(notificationId, notification)
         }
 
         private fun build(
@@ -87,6 +120,14 @@ class DownloadNotifications
 
         companion object {
             const val CHANNEL_ID = "arxiver_background"
-            const val NOTIFICATION_ID = 4201
+
+            // Per-model ids — concurrent Gemma + Qwen downloads are a real path (separate unique
+            // works; both buttons on one settings visit). A single shared id made the two progress
+            // notifications clobber each other. Explicit constants, NOT derived from the title —
+            // deriving would recreate the hand-enumerated-seam bug class this cluster fixes.
+            const val GEMMA_NOTIFICATION_ID = 4201
+            const val LIGHT_NOTIFICATION_ID = 4202
+            const val GEMMA_DONE_NOTIFICATION_ID = 4203
+            const val LIGHT_DONE_NOTIFICATION_ID = 4204
         }
     }

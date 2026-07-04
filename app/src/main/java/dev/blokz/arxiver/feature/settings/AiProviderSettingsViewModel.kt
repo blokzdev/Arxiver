@@ -3,6 +3,7 @@ package dev.blokz.arxiver.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.ai.AiException
 import dev.blokz.arxiver.core.ai.AiKeyStore
 import dev.blokz.arxiver.core.ai.ChatMessage
@@ -14,6 +15,7 @@ import dev.blokz.arxiver.core.ai.InferenceTier
 import dev.blokz.arxiver.core.ai.NanoAvailability
 import dev.blokz.arxiver.core.ai.NanoDownloadProgress
 import dev.blokz.arxiver.core.ai.NanoStatus
+import dev.blokz.arxiver.core.ai.OnDeviceProvider
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderRegistry
 import dev.blokz.arxiver.core.ai.TierSelector
@@ -23,12 +25,14 @@ import dev.blokz.arxiver.data.AiProviderStore
 import dev.blokz.arxiver.data.OnDeviceModelController
 import dev.blokz.arxiver.di.GemmaModel
 import dev.blokz.arxiver.di.QwenModel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -49,6 +53,8 @@ data class OnDeviceInfo(
     val preferredTier: InferenceTier? = null,
     val preferOnDeviceWhenReady: Boolean = false,
     val nanoDownload: NanoDownloadProgress? = null,
+    /** Per-model Test results (PA.6 follow-up) — rendered inside each ModelCard, not a shared row. */
+    val tierTests: Map<InferenceTier, ConnectionTest> = emptyMap(),
 )
 
 data class ProviderRow(
@@ -82,7 +88,13 @@ class AiProviderSettingsViewModel
         @QwenModel private val lightController: OnDeviceModelController,
         private val nanoAvailability: NanoAvailability,
     ) : ViewModel() {
-        private val testStates = MutableStateFlow<Map<ProviderId, ConnectionTest>>(emptyMap())
+        // Keyed by (provider, on-device tier) — tier=null for cloud providers' shared row. A single
+        // ProviderId key let the Qwen card's result render as the row's (possibly Gemma-served) one.
+        private val testStates = MutableStateFlow<Map<Pair<ProviderId, InferenceTier?>, ConnectionTest>>(emptyMap())
+
+        /** One-shot "model ready" snackbar events (the @StringRes engine name); PA.6 follow-up. */
+        private val _modelReadyEvents = Channel<Int>(Channel.BUFFERED)
+        val modelReadyEvents = _modelReadyEvents.receiveAsFlow()
 
         // Bumped whenever a key is stored/cleared so the configured flags recompute.
         private val configuredRevision = MutableStateFlow(0)
@@ -126,14 +138,24 @@ class AiProviderSettingsViewModel
                 store.selectedAiProvider,
                 onDeviceInfo,
             ) { tests, _, selected, onDevice ->
+                val tierTests =
+                    tests
+                        .filterKeys { (id, tier) -> id == ProviderId.ON_DEVICE && tier != null }
+                        .map { (key, value) -> key.second!! to value }
+                        .toMap()
                 AiProviderSettingsUiState(
                     rows =
                         registry.all().map { provider ->
                             ProviderRow(
                                 id = provider.id,
                                 configured = registry.isConfigured(provider.id),
-                                test = tests[provider.id] ?: ConnectionTest.Idle,
-                                onDevice = if (provider.id == ProviderId.ON_DEVICE) onDevice else null,
+                                test = tests[provider.id to null] ?: ConnectionTest.Idle,
+                                onDevice =
+                                    if (provider.id == ProviderId.ON_DEVICE) {
+                                        onDevice?.copy(tierTests = tierTests)
+                                    } else {
+                                        null
+                                    },
                             )
                         },
                     selectedDefault = selected,
@@ -143,8 +165,24 @@ class AiProviderSettingsViewModel
         init {
             // Re-probe device capability whenever a model state changes (download
             // progress / completion / deletion), which also seeds the initial value.
-            viewModelScope.launch { modelController.state.collect { refreshCapability() } }
-            viewModelScope.launch { lightController.state.collect { refreshCapability() } }
+            // A Downloading→Ready edge additionally fires the "model ready" snackbar (PA.6 follow-up
+            // — the reporting user had zero in-app completion signal after a 614 MB download).
+            viewModelScope.launch { watchModel(modelController, R.string.ai_engine_gemma) }
+            viewModelScope.launch { watchModel(lightController, R.string.ai_engine_light) }
+        }
+
+        private suspend fun watchModel(
+            controller: OnDeviceModelController,
+            nameRes: Int,
+        ) {
+            var previous: ModelState? = null
+            controller.state.collect { state ->
+                if (previous is ModelState.Downloading && state is ModelState.Ready) {
+                    _modelReadyEvents.send(nameRes)
+                }
+                previous = state
+                refreshCapability()
+            }
         }
 
         fun saveKey(
@@ -153,7 +191,7 @@ class AiProviderSettingsViewModel
         ) {
             if (key.isBlank()) return
             keyStore.put(id, key.trim())
-            testStates.update { it - id }
+            testStates.update { states -> states.filterKeys { it.first != id } }
             configuredRevision.update { it + 1 }
             viewModelScope.launch {
                 if (store.selectedAiProvider.first() == null) store.setSelectedAiProvider(id)
@@ -163,7 +201,7 @@ class AiProviderSettingsViewModel
 
         fun clearKey(id: ProviderId) {
             keyStore.clear(id)
-            testStates.update { it - id }
+            testStates.update { states -> states.filterKeys { it.first != id } }
             configuredRevision.update { it + 1 }
             viewModelScope.launch { refreshCapability() }
         }
@@ -203,23 +241,37 @@ class AiProviderSettingsViewModel
             }
         }
 
-        fun testConnection(id: ProviderId) {
+        /**
+         * Ping the provider; for the on-device row a non-null [tier] PINS the test to that model's
+         * engine (PA.6 follow-up) — before this, the Qwen card's Test streamed whatever engine the
+         * default order picked (usually Gemma), so a broken light build still showed Success.
+         */
+        fun testConnection(
+            id: ProviderId,
+            tier: InferenceTier? = null,
+        ) {
             val provider = registry.provider(id) ?: return
-            if (testStates.value[id] == ConnectionTest.Testing) return
+            val key = id to tier
+            if (testStates.value[key] == ConnectionTest.Testing) return
             viewModelScope.launch {
-                setTest(id, ConnectionTest.Testing)
+                setTest(key, ConnectionTest.Testing)
+                val request =
+                    ChatRequest(
+                        messages = listOf(ChatMessage(ChatRole.USER, PING_PROMPT)),
+                        maxTokens = PING_TOKENS,
+                    )
+                val stream =
+                    if (tier != null && provider is OnDeviceProvider) {
+                        provider.chat(request, pinTier = tier)
+                    } else {
+                        provider.chat(request)
+                    }
                 val result =
                     runCatching {
-                        provider
-                            .chat(
-                                ChatRequest(
-                                    messages = listOf(ChatMessage(ChatRole.USER, PING_PROMPT)),
-                                    maxTokens = PING_TOKENS,
-                                ),
-                            ).collect { /* drain the stream; success = no error */ }
+                        stream.collect { /* drain the stream; success = no error */ }
                     }
                 setTest(
-                    id,
+                    key,
                     result.fold(
                         onSuccess = { ConnectionTest.Success },
                         onFailure = { (it as? AiException)?.error.toConnectionTest() },
@@ -233,9 +285,9 @@ class AiProviderSettingsViewModel
         }
 
         private fun setTest(
-            id: ProviderId,
+            key: Pair<ProviderId, InferenceTier?>,
             state: ConnectionTest,
-        ) = testStates.update { it + (id to state) }
+        ) = testStates.update { it + (key to state) }
 
         private fun AppError?.toConnectionTest(): ConnectionTest =
             when (this) {

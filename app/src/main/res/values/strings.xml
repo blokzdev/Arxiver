@@ -179,8 +179,8 @@
 
     <string name="bg_tasks_title">Background activity</string>
     <string name="bg_tasks_empty">Nothing running right now.</string>
-    <string name="bg_task_gemma_download">Downloading on-device model</string>
-    <string name="bg_task_light_download">Downloading light model</string>
+    <string name="bg_task_gemma_download">Downloading Gemma (on-device AI)</string>
+    <string name="bg_task_light_download">Downloading Qwen light (on-device AI)</string>
     <string name="bg_task_model_download">Downloading search model</string>
     <string name="bg_task_follow_sync">Syncing your follows</string>
     <string name="bg_task_embedding">Indexing your library</string>
@@ -366,12 +366,23 @@
     <string name="ai_ondevice_delete">Delete model</string>
     <string name="ai_ondevice_retry">Retry download</string>
     <string name="ai_ondevice_failed">Download failed.</string>
-    <string name="ai_ondevice_ineligible">This device doesn\'t have enough memory to run the on-device model.</string>
+    <!-- Per-tier ineligible copy (PA.6 follow-up): the Gemma card points at the lighter Qwen only
+         when the device actually qualifies for it (DeviceCapability LIGHT_RAM_FLOOR_MB). -->
+    <string name="ai_ondevice_ineligible_gemma_light_ok">Gemma needs about 4 GB of memory — this device has less. The smaller Qwen model below may still run.</string>
+    <string name="ai_ondevice_ineligible_gemma">This device doesn\'t have enough memory to run Gemma.</string>
+    <string name="ai_ondevice_ineligible_light">This device doesn\'t have enough memory (about 3 GB needed) for on-device models.</string>
+    <string name="ai_ondevice_desc_gemma">Most capable on-device model.</string>
+    <string name="ai_ondevice_desc_light">Smallest model — fast and private, but answers are simpler than Gemma\'s.</string>
+    <string name="ai_engine_gemma">Gemma</string>
+    <string name="ai_engine_light">Qwen light</string>
+    <string name="ai_engine_nano">Nano</string>
+    <string name="ai_ondevice_ready_notification">%1$s ready — ask any paper in your library</string>
+    <string name="ai_ondevice_ready_snackbar">%1$s is ready — you can now ask papers questions.</string>
     <string name="ai_tier_nano">Gemini Nano (system)</string>
     <string name="ai_tier_gemma">Gemma (downloaded)</string>
     <string name="ai_tier_light">Qwen 0.6B light (downloaded)</string>
     <string name="ai_tier_cloud">Cloud (your key)</string>
-    <string name="ai_tier_none">none yet — connect a provider</string>
+    <string name="ai_tier_none">none yet — download a model below or add a provider key</string>
     <!-- Nano + on-device preference (P1.2c) -->
     <string name="ai_nano_ready">Nano ready</string>
     <string name="ai_nano_enable">Enable Nano</string>
