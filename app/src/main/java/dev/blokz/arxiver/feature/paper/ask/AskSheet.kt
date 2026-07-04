@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -134,8 +135,45 @@ fun AskSheet(
     initialQuote: AskQuoteRequest? = null,
     viewModel: AskViewModel = hiltViewModel(),
 ) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        ConversationHost(
+            sessionStart =
+                sessionId?.let { SessionStart.Resume(scope, it) }
+                    ?: SessionStart.MostRecentFor(scope),
+            onConfigureProvider = onConfigureProvider,
+            headerTitle = stringResource(R.string.ask_title),
+            onOpenCrossRef = onOpenCrossRef,
+            onPinAnswer = onPinAnswer,
+            onShareAnswer = onShareAnswer,
+            conversationTitle = conversationTitle,
+            initialQuote = initialQuote,
+            viewModel = viewModel,
+        )
+    }
+}
+
+/**
+ * The host-agnostic conversation surface (P-Chat PC.1): state collection, session binding,
+ * read-aloud, copy/quote, per-answer PNG export, the whole-conversation export, presets —
+ * zero sheet coupling. [AskSheet] wraps it in a ModalBottomSheet for the quick-ask hosts;
+ * ChatSessionScreen hosts it full-screen. A null [headerTitle] drops the in-content title
+ * line (the full screen's TopAppBar owns the title) while the export menu stays INSIDE the
+ * content, so its closures never hoist into a host chrome.
+ */
+@Composable
+internal fun ConversationHost(
+    sessionStart: SessionStart,
+    onConfigureProvider: () -> Unit,
+    headerTitle: String? = null,
+    onOpenCrossRef: ((String) -> Unit)? = null,
+    onPinAnswer: ((String) -> Unit)? = null,
+    onShareAnswer: ((AskMessage) -> Unit)? = null,
+    conversationTitle: String? = null,
+    initialQuote: AskQuoteRequest? = null,
+    viewModel: AskViewModel = hiltViewModel(),
+) {
     val state by viewModel.uiState.collectAsState()
-    LaunchedEffect(scope, sessionId) { viewModel.start(scope, sessionId) }
+    LaunchedEffect(sessionStart) { viewModel.start(sessionStart) }
     LaunchedEffect(initialQuote) { initialQuote?.let(viewModel::offerQuote) }
 
     // Read-aloud (P-Share PS.2): keyed by answer content so the play/stop toggle survives recomposition;
@@ -220,37 +258,39 @@ fun AskSheet(
     // vice versa) — P-Rich R3c. The vision preset (R3d.4) is additionally gated on
     // state.visionAvailable, which the VM resolves after open — so re-key on it.
     val presets =
-        remember(scope, state.visionAvailable) {
-            AskPresets.forScope(scope is RetrievalScope.Paper, visionAvailable = state.visionAvailable)
+        remember(sessionStart.scope, state.visionAvailable) {
+            AskPresets.forScope(
+                sessionStart.scope is RetrievalScope.Paper,
+                visionAvailable = state.visionAvailable,
+            )
         }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        AskSheetContent(
-            state = state,
-            presets = presets,
-            onInput = viewModel::setInput,
-            onSend = viewModel::send,
-            onRunPreset = viewModel::runPreset,
-            onRunVisionPreset = viewModel::runVisionPreset,
-            onRunGraphArtifact = viewModel::runGraphArtifact,
-            onFollowUp = viewModel::runPreset,
-            onSetMode = viewModel::setMode,
-            onSetIncludeNotes = viewModel::setIncludeNotes,
-            onConfirmSend = viewModel::confirmSend,
-            onCancelConfirm = viewModel::cancelConfirm,
-            onStop = viewModel::cancel,
-            onConfigureProvider = onConfigureProvider,
-            onOpenCrossRef = onOpenCrossRef,
-            onPinAnswer = onPinAnswer,
-            onShareAnswer = onShareAnswer,
-            onExportConversation = onExportConversation,
-            onReadAloud = onReadAloud,
-            speakingKey = speakingKey,
-            onCopy = onCopy,
-            onQuote = onQuote,
-            onExportImage = onExportImage,
-        )
-    }
+    AskSheetContent(
+        state = state,
+        headerTitle = headerTitle,
+        presets = presets,
+        onInput = viewModel::setInput,
+        onSend = viewModel::send,
+        onRunPreset = viewModel::runPreset,
+        onRunVisionPreset = viewModel::runVisionPreset,
+        onRunGraphArtifact = viewModel::runGraphArtifact,
+        onFollowUp = viewModel::runPreset,
+        onSetMode = viewModel::setMode,
+        onSetIncludeNotes = viewModel::setIncludeNotes,
+        onConfirmSend = viewModel::confirmSend,
+        onCancelConfirm = viewModel::cancelConfirm,
+        onStop = viewModel::cancel,
+        onConfigureProvider = onConfigureProvider,
+        onOpenCrossRef = onOpenCrossRef,
+        onPinAnswer = onPinAnswer,
+        onShareAnswer = onShareAnswer,
+        onExportConversation = onExportConversation,
+        onReadAloud = onReadAloud,
+        speakingKey = speakingKey,
+        onCopy = onCopy,
+        onQuote = onQuote,
+        onExportImage = onExportImage,
+    )
 }
 
 /** What "export this conversation" produces (P-Share PS.6): a text share, a Markdown file, or a PDF. */
@@ -271,7 +311,7 @@ private suspend fun writeConversationMarkdown(
     }
 
 @Composable
-private fun rememberConversationMarkdownLabels(): ConversationMarkdownLabels =
+internal fun rememberConversationMarkdownLabels(): ConversationMarkdownLabels =
     ConversationMarkdownLabels(
         you = stringResource(R.string.ask_export_you),
         assistant = stringResource(R.string.ask_export_assistant),
@@ -289,8 +329,10 @@ private fun rememberSpeakableLabels(): SpeakableLabels =
     )
 
 @Composable
-private fun AskSheetContent(
+internal fun AskSheetContent(
     state: AskUiState,
+    /** In-content title line; null on the full-screen host whose TopAppBar owns the title (PC.1). */
+    headerTitle: String?,
     presets: List<AskPreset>,
     onInput: (String) -> Unit,
     onSend: () -> Unit,
@@ -325,53 +367,61 @@ private fun AskSheetContent(
                 .padding(bottom = Spacing.xl),
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                stringResource(R.string.ask_title),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.weight(1f),
-            )
-            // Export the whole conversation (P-Share PS.6) — shown once a real answer exists. The share
-            // icon opens a menu: share as Markdown text, export a Markdown file, or print/save as PDF.
-            val canExportConversation =
-                onExportConversation != null &&
-                    state.messages.any {
-                        it.role == AskRole.ASSISTANT && !it.streaming && !it.error && it.text.isNotBlank()
-                    }
-            if (canExportConversation) {
-                var exportMenuOpen by remember { mutableStateOf(false) }
-                Box {
-                    IconButton(onClick = { exportMenuOpen = true }) {
-                        Icon(Icons.Filled.Share, stringResource(R.string.cd_ask_share_conversation))
-                    }
-                    DropdownMenu(
-                        expanded = exportMenuOpen,
-                        onDismissRequest = { exportMenuOpen = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.ask_export_conversation_text)) },
-                            leadingIcon = { Icon(Icons.Filled.Share, null) },
-                            onClick = {
-                                exportMenuOpen = false
-                                onExportConversation!!(ConversationExportKind.SHARE_TEXT)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.ask_export_conversation_markdown)) },
-                            leadingIcon = { Icon(Icons.Filled.Description, null) },
-                            onClick = {
-                                exportMenuOpen = false
-                                onExportConversation!!(ConversationExportKind.MARKDOWN_FILE)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.ask_export_conversation_pdf)) },
-                            leadingIcon = { Icon(Icons.Filled.PictureAsPdf, null) },
-                            onClick = {
-                                exportMenuOpen = false
-                                onExportConversation!!(ConversationExportKind.PDF)
-                            },
-                        )
+        // Export the whole conversation (P-Share PS.6) — shown once a real answer exists. The share
+        // icon opens a menu: share as Markdown text, export a Markdown file, or print/save as PDF.
+        val canExportConversation =
+            onExportConversation != null &&
+                state.messages.any {
+                    it.role == AskRole.ASSISTANT && !it.streaming && !it.error && it.text.isNotBlank()
+                }
+        // The full-screen host passes headerTitle = null — its TopAppBar owns the title; the
+        // export menu stays in-content either way (PC.1: no closure hoisting into hosts).
+        if (headerTitle != null || canExportConversation) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (headerTitle != null) {
+                    Text(
+                        headerTitle,
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
+                if (canExportConversation) {
+                    var exportMenuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { exportMenuOpen = true }) {
+                            Icon(Icons.Filled.Share, stringResource(R.string.cd_ask_share_conversation))
+                        }
+                        DropdownMenu(
+                            expanded = exportMenuOpen,
+                            onDismissRequest = { exportMenuOpen = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.ask_export_conversation_text)) },
+                                leadingIcon = { Icon(Icons.Filled.Share, null) },
+                                onClick = {
+                                    exportMenuOpen = false
+                                    onExportConversation!!(ConversationExportKind.SHARE_TEXT)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.ask_export_conversation_markdown)) },
+                                leadingIcon = { Icon(Icons.Filled.Description, null) },
+                                onClick = {
+                                    exportMenuOpen = false
+                                    onExportConversation!!(ConversationExportKind.MARKDOWN_FILE)
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.ask_export_conversation_pdf)) },
+                                leadingIcon = { Icon(Icons.Filled.PictureAsPdf, null) },
+                                onClick = {
+                                    exportMenuOpen = false
+                                    onExportConversation!!(ConversationExportKind.PDF)
+                                },
+                            )
+                        }
                     }
                 }
             }
@@ -387,7 +437,15 @@ private fun AskSheetContent(
             )
         }
 
-        if (state.messages.isEmpty() && !state.preparing) {
+        // Hydration-in-flight is neither "empty" nor "preparing" (PC.1): resuming a long
+        // session must not flash the empty hint first (a spinner stands in). The preset row
+        // is standing chrome above the composer and deliberately stays visible throughout.
+        if (state.hydrating && state.messages.isEmpty()) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(24.dp))
+            }
+        }
+        if (state.messages.isEmpty() && !state.preparing && !state.hydrating) {
             Text(
                 stringResource(R.string.ask_empty_hint),
                 style = MaterialTheme.typography.bodyMedium,
@@ -965,6 +1023,7 @@ private fun AskSheetEmptyPreview() {
     ArxiverTheme {
         AskSheetContent(
             state = AskUiState(provider = ProviderId.ON_DEVICE, isCloud = false),
+            headerTitle = stringResource(R.string.ask_title),
             presets = AskPresets.forScope(isPaper = true),
             onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
             onRunGraphArtifact = {}, onFollowUp = {},
@@ -1007,6 +1066,7 @@ private fun AskSheetConversationPreview() {
                             ),
                         ),
                 ),
+            headerTitle = stringResource(R.string.ask_title),
             presets = AskPresets.forScope(isPaper = true, visionAvailable = true),
             onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
             onRunGraphArtifact = {}, onFollowUp = {},

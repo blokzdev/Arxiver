@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.feature.paper.ask
 
+import androidx.lifecycle.SavedStateHandle
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.chat.ChatContextAssembler
 import dev.blokz.arxiver.chat.ChatPreviewBuilder
@@ -229,6 +230,9 @@ class AskViewModelTest {
         scope: RetrievalScope = RetrievalScope.Paper("2401.00001"),
         pageImageSource: PageImageSource = FakePageImageSource(),
         relationGraphSource: RelationGraphSource = RelationGraphSource { GraphResult.NoRelations },
+        sessionStart: SessionStart? = null,
+        resumeSessionId: Long? = null,
+        savedState: SavedStateHandle = SavedStateHandle(),
     ): AskViewModel {
         val registry = ProviderRegistry(listOf(provider), FakeKeyStore(keys))
         val resolver = ProviderResolver(registry, { selected }, { false }, { onDeviceReady })
@@ -248,7 +252,12 @@ class AskViewModelTest {
             pageImageSource,
             relationGraphSource,
             NoopReadAloud(),
-        ).also { it.start(scope) }
+            savedState,
+        ).also {
+            // sessionStart exercises the sealed API directly; resumeSessionId exercises the
+            // delegating sheet overload's Resume mapping; default = the sheet's MostRecentFor.
+            if (sessionStart != null) it.start(sessionStart) else it.start(scope, resumeSessionId)
+        }
     }
 
     private class NoopReadAloud : dev.blokz.arxiver.tts.ReadAloud {
@@ -851,5 +860,216 @@ class AskViewModelTest {
 
             assertEquals(1, chatDao.observeAllSessions().first().size, "a racing send never forks a session")
             assertTrue(chatDao.messagesFor(sessionA).any { it.content == "early question" })
+        }
+
+    // --- P-Chat PC.1: sealed SessionStart + SavedStateHandle binding ---
+
+    private suspend fun seedMessage(
+        sessionId: Long,
+        content: String,
+        at: Long,
+    ) = chatDao.insertMessage(
+        ChatMessageEntity(
+            sessionId = sessionId,
+            role = ChatMessageEntity.ROLE_USER,
+            content = content,
+            status = ChatMessageEntity.STATUS_COMPLETE,
+            createdAt = at,
+        ),
+    )
+
+    @Test
+    fun `start New ignores existing sessions and forks on first send`() =
+        runTest(dispatcher) {
+            val existing = seedSession(lastMessageAt = 1_000)
+            seedMessage(existing, "old turn", at = 1)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Delta("a"), ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    sessionStart = SessionStart.New(RetrievalScope.Paper("2401.00001")),
+                )
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.messages.isEmpty(), "New never hydrates the scope's history")
+
+            vm.setInput("fresh question")
+            vm.send()
+            advanceUntilIdle()
+
+            assertEquals(2, chatDao.observeAllSessions().first().size, "the first send forked a session")
+            assertTrue(chatDao.messagesFor(existing).none { it.content == "fresh question" })
+        }
+
+    @Test
+    fun `start Resume hydrates exactly the given session - not the scope's newest`() =
+        runTest(dispatcher) {
+            val older = seedSession(lastMessageAt = 1_000)
+            val newer = seedSession(lastMessageAt = 2_000)
+            seedMessage(older, "older turn", at = 1)
+            seedMessage(newer, "newer turn", at = 2)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    sessionStart = SessionStart.Resume(RetrievalScope.Paper("2401.00001"), older),
+                )
+            advanceUntilIdle()
+            assertEquals(listOf("older turn"), vm.uiState.value.messages.map { it.text })
+        }
+
+    @Test
+    fun `start MostRecentFor resumes the scope's latest session`() =
+        runTest(dispatcher) {
+            val older = seedSession(lastMessageAt = 1_000)
+            val newer = seedSession(lastMessageAt = 2_000)
+            seedMessage(older, "older turn", at = 1)
+            seedMessage(newer, "newer turn", at = 2)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    sessionStart = SessionStart.MostRecentFor(RetrievalScope.Paper("2401.00001")),
+                )
+            advanceUntilIdle()
+            assertEquals(listOf("newer turn"), vm.uiState.value.messages.map { it.text })
+        }
+
+    @Test
+    fun `the delegating sheet overload maps a session id to Resume`() =
+        runTest(dispatcher) {
+            val older = seedSession(lastMessageAt = 1_000)
+            val newer = seedSession(lastMessageAt = 2_000)
+            seedMessage(older, "older turn", at = 1)
+            seedMessage(newer, "newer turn", at = 2)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    resumeSessionId = older,
+                )
+            advanceUntilIdle()
+            assertEquals(listOf("older turn"), vm.uiState.value.messages.map { it.text })
+        }
+
+    @Test
+    fun `a New route restored after process death re-binds its created session`() =
+        runTest(dispatcher) {
+            val bound = seedSession(lastMessageAt = 1_000)
+            seedMessage(bound, "the forked conversation", at = 1)
+            seedSession(lastMessageAt = 9_999) // a newer session that must NOT win the binding
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    sessionStart = SessionStart.New(RetrievalScope.Paper("2401.00001")),
+                    savedState = SavedStateHandle(mapOf(AskViewModel.KEY_BOUND_SESSION_ID to bound)),
+                )
+            advanceUntilIdle()
+            assertEquals(listOf("the forked conversation"), vm.uiState.value.messages.map { it.text })
+        }
+
+    @Test
+    fun `the first send from New persists the created session id for restore`() =
+        runTest(dispatcher) {
+            val savedState = SavedStateHandle()
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Delta("a"), ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    sessionStart = SessionStart.New(RetrievalScope.Paper("2401.00001")),
+                    savedState = savedState,
+                )
+            vm.setInput("q")
+            vm.send()
+            advanceUntilIdle()
+
+            val created = chatDao.observeAllSessions().first().single().id
+            assertEquals(created, savedState.get<Long>(AskViewModel.KEY_BOUND_SESSION_ID))
+        }
+
+    @Test
+    fun `a graph artifact from New also persists the created session id`() =
+        runTest(dispatcher) {
+            val graph =
+                RelationGraph(
+                    nodes =
+                        listOf(
+                            RelationNode("2401.00001", "Center", isCenter = true),
+                            RelationNode("2402.00002", "Neighbor", inLibrary = true),
+                        ),
+                    edges = listOf(RelationEdge("2401.00001", "2402.00002", RelationEdgeKind.SIMILAR, 0.8)),
+                )
+            val savedState = SavedStateHandle()
+            val vm =
+                vm(
+                    cloudProvider { error("provider must not be called for an app-drawn artifact") },
+                    selected = ProviderId.CLAUDE,
+                    relationGraphSource = RelationGraphSource { GraphResult.Ready(graph) },
+                    sessionStart = SessionStart.New(RetrievalScope.Paper("2401.00001")),
+                    savedState = savedState,
+                )
+            vm.runGraphArtifact("Map relationships")
+            advanceUntilIdle()
+
+            val created = chatDao.observeAllSessions().first().single().id
+            assertEquals(created, savedState.get<Long>(AskViewModel.KEY_BOUND_SESSION_ID))
+        }
+
+    @Test
+    fun `a second start is a no-op - the first binding wins`() =
+        runTest(dispatcher) {
+            val a = seedSession(lastMessageAt = 1_000)
+            val b = seedSession(lastMessageAt = 2_000)
+            seedMessage(a, "a turn", at = 1)
+            seedMessage(b, "b turn", at = 2)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    sessionStart = SessionStart.Resume(RetrievalScope.Paper("2401.00001"), a),
+                )
+            advanceUntilIdle()
+            // The bind-once guard is why the route must never be launchSingleTop: a reused
+            // entry's second start() (here: for session b) must not rebind the surface.
+            vm.start(SessionStart.Resume(RetrievalScope.Paper("2401.00001"), b))
+            advanceUntilIdle()
+            assertEquals(listOf("a turn"), vm.uiState.value.messages.map { it.text })
+        }
+
+    @Test
+    fun `hydrating is set synchronously at start and always cleared`() =
+        runTest(dispatcher) {
+            val session = seedSession(lastMessageAt = 1_000)
+            seedMessage(session, "turn", at = 1)
+            val vm =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                )
+            assertTrue(vm.uiState.value.hydrating, "set before hydration's coroutine is dispatched")
+            advanceUntilIdle()
+            assertEquals(false, vm.uiState.value.hydrating)
+            assertEquals(listOf("turn"), vm.uiState.value.messages.map { it.text })
+
+            // The New-with-no-saved-id path bails out of hydration early (nothing to hydrate):
+            // the finally must still clear the flag.
+            val fresh =
+                vm(
+                    onDeviceProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.ON_DEVICE,
+                    onDeviceReady = true,
+                    sessionStart = SessionStart.New(RetrievalScope.Paper("2401.00001")),
+                )
+            assertTrue(fresh.uiState.value.hydrating)
+            advanceUntilIdle()
+            assertEquals(false, fresh.uiState.value.hydrating)
         }
 }

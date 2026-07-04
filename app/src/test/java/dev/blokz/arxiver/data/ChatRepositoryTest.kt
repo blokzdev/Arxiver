@@ -22,6 +22,7 @@ import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DefaultDispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.search.ChunkKeywordSource
 import dev.blokz.arxiver.core.search.ChunkVectorSource
 import dev.blokz.arxiver.core.search.RagRetriever
@@ -41,6 +42,7 @@ import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
@@ -346,5 +348,32 @@ class ChatRepositoryTest {
             repo.stream(prep.copy(sessionId = sid)).toList()
             assertEquals(listOf(sid), repo.observeSessions(RetrievalScope.Paper("p1")).first().map { it.id })
             assertEquals(2, db.chatDao().messagesFor(sid).size)
+        }
+
+    @Test
+    fun `sessionScope reconstructs paper and collection scopes and nulls the rest`() =
+        runTest {
+            val repo = repo(FakeProvider { flowOf(ChatChunk.Done()) })
+
+            suspend fun seed(
+                kind: String,
+                scopeId: String,
+            ) = db.chatDao().insertSession(
+                ChatSessionEntity(
+                    scope = kind,
+                    scopeId = scopeId,
+                    providerId = "CLAUDE",
+                    createdAt = 1,
+                    lastMessageAt = 1,
+                ),
+            )
+            val paper = seed(ChatSessionEntity.SCOPE_PAPER, "math/0211159")
+            val collection = seed(ChatSessionEntity.SCOPE_COLLECTION, "7")
+            val broken = seed(ChatSessionEntity.SCOPE_COLLECTION, "not-a-number")
+
+            assertEquals(RetrievalScope.Paper("math/0211159"), repo.sessionScope(paper))
+            assertEquals(RetrievalScope.Collection(7), repo.sessionScope(collection))
+            assertNull(repo.sessionScope(broken), "an unparsable collection id must pop, not crash")
+            assertNull(repo.sessionScope(999L), "a deleted session resolves null (stale back stack)")
         }
 }

@@ -321,6 +321,21 @@ class ChatRepository(
             sid
         }
 
+    /**
+     * Reconstruct the [RetrievalScope] a session was created for (PC.1 route→scope seam).
+     * Null when the session is gone (deleted elsewhere → stale back stack) or its stored
+     * scope id no longer parses — callers pop back rather than render a broken conversation.
+     */
+    suspend fun sessionScope(sessionId: Long): RetrievalScope? =
+        withContext(dispatchers.io) {
+            val session = chatDao.sessionById(sessionId) ?: return@withContext null
+            when (session.scope) {
+                ChatSessionEntity.SCOPE_COLLECTION ->
+                    session.scopeId.toLongOrNull()?.let { RetrievalScope.Collection(it) }
+                else -> RetrievalScope.Paper(session.scopeId)
+            }
+        }
+
     fun observeSessions(scope: RetrievalScope): Flow<List<ChatSessionEntity>> {
         val (scopeKind, scopeId) = scope.toRow()
         return chatDao.observeSessions(scopeKind, scopeId)

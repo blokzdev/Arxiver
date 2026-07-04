@@ -528,6 +528,8 @@
     <string name="chat_history_unknown_paper">(removed paper)</string>
     <string name="chat_history_unknown_collection">(removed collection)</string>
     <string name="chat_history_delete">Delete chat</string>
+    <string name="chat_session_title">Conversation</string>
+    <string name="chat_session_new">New conversation</string>
 
     <string name="settings_about_section">About</string>
     <string name="settings_version">Arxiver %1$s</string>

@@ -34,9 +34,13 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.feature.browse.BrowseScreen
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
+import dev.blokz.arxiver.feature.chat.CHAT_SCOPE_KIND_COLLECTION
+import dev.blokz.arxiver.feature.chat.CHAT_SCOPE_KIND_PAPER
 import dev.blokz.arxiver.feature.chat.ChatHistoryScreen
+import dev.blokz.arxiver.feature.chat.ChatSessionScreen
 import dev.blokz.arxiver.feature.claude.DispatchHistoryScreen
 import dev.blokz.arxiver.feature.claude.RoutineSetupScreen
 import dev.blokz.arxiver.feature.claude.RoutinesScreen
@@ -81,6 +85,8 @@ object Routes {
     const val ONBOARDING = "onboarding"
     const val DISPATCH_HISTORY = "claude/history"
     const val CHAT_HISTORY = "chat/history"
+    const val CHAT_SESSION = "chat/session/{sessionId}?title={title}"
+    const val CHAT_NEW = "chat/new/{scopeKind}/{scopeId}?title={title}"
     const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
     const val KNOWLEDGE_MAP = "map/{scope}/{id}"
 
@@ -109,6 +115,28 @@ object Routes {
         id: Long,
         title: String,
     ) = "library/$mode/$id?title=${Uri.encode(title)}"
+
+    /** Full-screen conversation resuming exactly [sessionId] (P-Chat PC.1). */
+    fun chatSession(
+        sessionId: Long,
+        title: String?,
+    ) = "chat/session/$sessionId?title=${Uri.encode(title ?: "")}"
+
+    /** Fork a NEW conversation on [scope]; paper ids are URI-encoded (legacy slash ids). */
+    fun chatNew(
+        scope: RetrievalScope,
+        title: String?,
+    ): String {
+        val base =
+            when (scope) {
+                is RetrievalScope.Paper -> "chat/new/$CHAT_SCOPE_KIND_PAPER/${Uri.encode(scope.paperId)}"
+                is RetrievalScope.Collection -> "chat/new/$CHAT_SCOPE_KIND_COLLECTION/${scope.collectionId}"
+            }
+        // The query param is ALWAYS present (app precedent: filteredPapers/categoryFeed) —
+        // an omitted pattern-declared query arg only matches when a navArgument default is
+        // declared, and this nav graph declares none. Blank decodes back to null in the VM.
+        return "$base?title=${Uri.encode(title ?: "")}"
+    }
 
     fun templateDetail(templateId: String) = "claude/templates/$templateId"
 
@@ -189,7 +217,31 @@ fun ArxiverApp(
                 composable(Routes.CHAT_HISTORY) {
                     ChatHistoryScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
+                        onOpenSession = { id, title -> navController.navigate(Routes.chatSession(id, title)) },
+                    )
+                }
+                // Full-screen conversation (P-Chat PC.1) — resume and fork variants share one
+                // screen. Deliberately NOT launchSingleTop: AskViewModel binds once per backstack
+                // entry (start()'s bind-once guard), so a reused entry would keep showing
+                // conversation A for a navigation to conversation B.
+                composable(Routes.CHAT_SESSION) {
+                    ChatSessionScreen(
+                        onBack = { navController.popBackStack() },
+                        onConfigureProvider = { navController.navigate(Routes.AI_SETTINGS) },
+                        onOpenPaper = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onNewConversation = { scope, title ->
+                            navController.navigate(Routes.chatNew(scope, title))
+                        },
+                    )
+                }
+                composable(Routes.CHAT_NEW) {
+                    ChatSessionScreen(
+                        onBack = { navController.popBackStack() },
+                        onConfigureProvider = { navController.navigate(Routes.AI_SETTINGS) },
+                        onOpenPaper = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onNewConversation = { scope, title ->
+                            navController.navigate(Routes.chatNew(scope, title))
+                        },
                     )
                 }
                 composable(
