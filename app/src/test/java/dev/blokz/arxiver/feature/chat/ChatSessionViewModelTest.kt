@@ -77,6 +77,16 @@ class ChatSessionViewModelTest {
             at: Long,
         ) = Unit
 
+        override suspend fun setPinned(
+            id: Long,
+            pinned: Boolean,
+        ) = Unit
+
+        override suspend fun renameSession(
+            id: Long,
+            title: String?,
+        ) = Unit
+
         override suspend fun messagesFor(sessionId: Long): List<ChatMessageEntity> = emptyList()
 
         override fun observeMessages(sessionId: Long): Flow<List<ChatMessageEntity>> = MutableStateFlow(emptyList())

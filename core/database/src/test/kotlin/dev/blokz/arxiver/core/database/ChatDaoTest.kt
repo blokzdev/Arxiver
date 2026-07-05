@@ -225,4 +225,53 @@ class ChatDaoTest {
             assertTrue(dao.messagesFor(sid).isEmpty())
             assertEquals(null, dao.sessionById(sid))
         }
+
+    // --- P-Chat PC.4: pinned + title (schema v4) ---
+
+    @Test
+    fun `observeSessionRows floats a pinned session above a fresher unpinned one`() =
+        runTest {
+            val dao = db.chatDao()
+            val pinned = dao.insertSession(session(scopeId = "p1").copy(lastMessageAt = 10))
+            dao.insertSession(session(scopeId = "p2").copy(lastMessageAt = 99)) // fresher, unpinned
+            dao.setPinned(pinned, true)
+
+            val first = dao.observeSessionRows().first().first()
+            assertEquals(pinned, first.session.id)
+            assertTrue(first.session.pinned)
+        }
+
+    @Test
+    fun `observeSessions ignores pinned so a paper sheet resumes the genuinely most-recent`() =
+        runTest {
+            val dao = db.chatDao()
+            val older = dao.insertSession(session(scopeId = "p1").copy(lastMessageAt = 10))
+            val newer = dao.insertSession(session(scopeId = "p1").copy(lastMessageAt = 99))
+            dao.setPinned(older, true) // pinning the OLDER one must NOT change resume order
+
+            // The invariant AskViewModel MostRecentFor depends on — never pinned-first here.
+            assertEquals(newer, dao.observeSessions(ChatSessionEntity.SCOPE_PAPER, "p1").first().first().id)
+        }
+
+    @Test
+    fun `setPinned round-trips`() =
+        runTest {
+            val dao = db.chatDao()
+            val sid = dao.insertSession(session())
+            dao.setPinned(sid, true)
+            assertTrue(dao.observeSessionRows().first().single { it.session.id == sid }.session.pinned)
+            dao.setPinned(sid, false)
+            assertTrue(!dao.observeSessionRows().first().single { it.session.id == sid }.session.pinned)
+        }
+
+    @Test
+    fun `renameSession sets and clears a custom title`() =
+        runTest {
+            val dao = db.chatDao()
+            val sid = dao.insertSession(session())
+            dao.renameSession(sid, "My title")
+            assertEquals("My title", dao.observeSessionRows().first().single().session.title)
+            dao.renameSession(sid, null)
+            assertEquals(null, dao.observeSessionRows().first().single().session.title)
+        }
 }
