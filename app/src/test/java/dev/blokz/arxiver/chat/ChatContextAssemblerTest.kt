@@ -436,4 +436,25 @@ class ChatContextAssemblerTest {
         assertEquals(listOf("a", "b", "c"), extractFollowUps("X\nFOLLOWUPS:: a | a | b |  | c | d").second)
         assertEquals(listOf("q1", "q2"), extractFollowUps("X\n- FOLLOWUPS:: q1 | q2").second)
     }
+
+    @Test
+    fun `toolsAvailable appends the tool addendum and the default omits it (byte-identity, P-Tools PT1)`() {
+        val withTool =
+            assembler.assemble(
+                "q",
+                emptyList(),
+                emptyList(),
+                includeNotes = true,
+                capability = cap(),
+                toolsAvailable = true,
+            ).request
+        val without =
+            assembler.assemble("q", emptyList(), emptyList(), includeNotes = true, capability = cap()).request
+
+        assertTrue(withTool.system!!.contains("search_my_library"))
+        assertTrue(withTool.system!!.endsWith(ChatContextAssembler.TOOLS_PRESENT_ADDENDUM))
+        // Default (toolsAvailable=false) is byte-identical to the pre-P-Tools cloud system prompt.
+        assertFalse(without.system!!.contains("search_my_library"))
+        assertTrue(without.system!!.endsWith(ChatContextAssembler.CLOUD_RICH_ADDENDUM))
+    }
 }

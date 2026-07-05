@@ -12,6 +12,7 @@ import dev.blokz.arxiver.core.ai.ToolResult
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import dev.blokz.arxiver.data.tool.NoToolExecutor
+import dev.blokz.arxiver.data.tool.ToolContext
 import dev.blokz.arxiver.data.tool.ToolExecutor
 
 /** An executed tool step accumulated by the loop before the assistant message id + clock are bound. */
@@ -77,13 +78,18 @@ class ChatToolLoop(
     suspend fun run(
         provider: AiProvider,
         state: ToolLoopState,
+        // Whether the user opted into tools for this conversation (P-Tools PT.1). Default true keeps
+        // existing loop tests gated only on supportsTools; prod passes the per-conversation flag.
+        attachTools: Boolean = true,
+        toolContext: ToolContext,
         emit: suspend (ChatChunk) -> Unit,
         onActivity: suspend (ToolInvocationDraft) -> Unit,
         persistTerminal: suspend (String) -> Unit,
     ) {
-        // Gate STRICTLY on supportsTools: never hand tools to a provider that would ignore them
-        // (on-device) and leave the loop waiting on a tool_use that never comes.
-        val toolDefs = if (provider.capability.supportsTools) executor.toolDefs() else emptyList()
+        // Attach tools ONLY when the provider supports them (never hand tools to an on-device engine
+        // that would ignore them and hang the loop) AND the user opted in for this conversation.
+        val toolDefs =
+            if (provider.capability.supportsTools && attachTools) executor.toolDefs() else emptyList()
         var iteration = 0
         while (true) {
             val lastRound = iteration >= maxIterations
@@ -99,6 +105,8 @@ class ChatToolLoop(
                         emit(chunk) // stream live; the full answer accumulates across rounds
                     }
                     is ChatChunk.ToolUse -> buffered += ToolCall(chunk.id, chunk.name, chunk.inputJson)
+                    // Loop-authored; a provider never emits it here (unreachable) — for exhaustiveness.
+                    is ChatChunk.ToolActivity -> Unit
                     // Suppress the provider's Done — the loop synthesizes the ONE terminal Done below.
                     is ChatChunk.Done -> sawToolUseStop = chunk.stopReason == "tool_use"
                 }
@@ -116,7 +124,7 @@ class ChatToolLoop(
             // The model asked for tools: execute ALL (serial), append ONE assistant + ONE TOOL turn.
             val results = mutableListOf<ToolResult>()
             buffered.forEach { call ->
-                val exec = executor.execute(call)
+                val exec = executor.execute(call, toolContext)
                 val draft =
                     ToolInvocationDraft(
                         toolName = call.name,

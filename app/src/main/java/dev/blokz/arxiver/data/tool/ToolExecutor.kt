@@ -17,9 +17,19 @@ interface ToolExecutor {
     /** The tools offered to the model this turn (already consent/egress-filtered by the caller). */
     fun toolDefs(): List<ToolDef>
 
-    /** Run one call. Never throws; transport/tool errors become an error [ToolResult]. */
-    suspend fun execute(call: ToolCall): ToolExecution
+    /** Run one call with the per-turn [context]. Never throws; errors become an error [ToolResult]. */
+    suspend fun execute(
+        call: ToolCall,
+        context: ToolContext,
+    ): ToolExecution
 }
+
+/**
+ * Per-turn context threaded to every tool call (P-Tools PT.1). [includeNotes] mirrors the user's
+ * privacy gate for the turn — a local library search must skip note-derived ranking when it's off,
+ * so private note text never influences what returns to the cloud model.
+ */
+data class ToolContext(val includeNotes: Boolean)
 
 /**
  * One executed tool step: the [result] fed back to the model, plus the audit facts the tool loop
@@ -41,7 +51,10 @@ data class ToolExecution(
 object NoToolExecutor : ToolExecutor {
     override fun toolDefs(): List<ToolDef> = emptyList()
 
-    override suspend fun execute(call: ToolCall): ToolExecution =
+    override suspend fun execute(
+        call: ToolCall,
+        context: ToolContext,
+    ): ToolExecution =
         ToolExecution(
             result = ToolResult(call.id, call.name, "{}", isError = true),
             query = "",

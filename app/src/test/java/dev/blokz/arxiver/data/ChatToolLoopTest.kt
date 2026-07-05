@@ -11,6 +11,7 @@ import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ToolCall
 import dev.blokz.arxiver.core.ai.ToolDef
 import dev.blokz.arxiver.core.ai.ToolResult
+import dev.blokz.arxiver.data.tool.ToolContext
 import dev.blokz.arxiver.data.tool.ToolExecution
 import dev.blokz.arxiver.data.tool.ToolExecutor
 import kotlinx.coroutines.flow.Flow
@@ -70,7 +71,10 @@ class ChatToolLoopTest {
         override fun toolDefs(): List<ToolDef> =
             listOf(ToolDef("echo", "echo text", buildJsonObject { put("type", "object") }))
 
-        override suspend fun execute(call: ToolCall): ToolExecution {
+        override suspend fun execute(
+            call: ToolCall,
+            context: ToolContext,
+        ): ToolExecution {
             calls += call
             return when (mode) {
                 Mode.FAIL ->
@@ -98,6 +102,7 @@ class ChatToolLoopTest {
     private fun runLoop(
         loop: ChatToolLoop,
         provider: ScriptedProvider,
+        attachTools: Boolean = true,
         base: ChatRequest = ChatRequest(listOf(ChatMessage(ChatRole.USER, "hi"))),
     ): LoopResult =
         runBlocking {
@@ -108,6 +113,8 @@ class ChatToolLoopTest {
             loop.run(
                 provider = provider,
                 state = state,
+                attachTools = attachTools,
+                toolContext = ToolContext(includeNotes = true),
                 emit = { emitted += it },
                 onActivity = { activity += it },
                 persistTerminal = { persisted = it },
@@ -213,6 +220,25 @@ class ChatToolLoopTest {
 
         assertEquals("recovered", r.persisted)
         assertTrue(provider.requests[1].messages.last { it.role == ChatRole.TOOL }.toolResults.single().isError)
+    }
+
+    @Test
+    fun `attachTools=false offers no tools even to a tool-capable provider (opt-in gate)`() {
+        val provider = ScriptedProvider(listOf(listOf(ChatChunk.Delta("plain"), ChatChunk.Done())))
+        val exec = FakeExecutor()
+        val r = runLoop(ChatToolLoop(exec), provider, attachTools = false)
+
+        assertTrue(provider.requests[0].tools.isEmpty(), "the user opted out — no tool leaves the device")
+        assertTrue(exec.calls.isEmpty())
+        assertEquals("plain", r.persisted)
+    }
+
+    @Test
+    fun `attachTools=true offers the tools to a tool-capable provider`() {
+        val provider = ScriptedProvider(listOf(listOf(ChatChunk.Delta("plain"), ChatChunk.Done())))
+        runLoop(ChatToolLoop(FakeExecutor()), provider, attachTools = true)
+
+        assertTrue(provider.requests[0].tools.isNotEmpty(), "opted in + tool-capable ⇒ tools attached")
     }
 
     @Test

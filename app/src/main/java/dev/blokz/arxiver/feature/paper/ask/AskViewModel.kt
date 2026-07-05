@@ -34,7 +34,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class AskRole { USER, ASSISTANT }
+enum class AskRole { USER, ASSISTANT, TOOL }
+
+/** A rendered tool step (P-Tools PT.1) — the inline "Searched …: query" activity chip. */
+data class ToolActivity(val toolName: String, val query: String, val egress: Boolean)
 
 /** One rendered turn. [streaming] marks the live assistant bubble; [error] a failed one. */
 data class AskMessage(
@@ -46,12 +49,18 @@ data class AskMessage(
     val citations: List<Citation> = emptyList(),
     /** Suggested follow-up questions (P-Rich R3b.2); live-turn only, not persisted. */
     val followUps: List<String> = emptyList(),
+    /** Non-null on a [AskRole.TOOL] bubble (P-Tools PT.1). */
+    val activity: ToolActivity? = null,
 )
 
 data class AskUiState(
     val messages: List<AskMessage> = emptyList(),
     val input: String = "",
     val includeNotes: Boolean = true,
+    /** Per-conversation opt-in to let the model search the user's library (P-Tools PT.1). Persisted;
+     *  gates whether search_my_library attaches (its matching abstracts egress to the cloud model).
+     *  Default off (privacy-first). */
+    val toolsEnabled: Boolean = false,
     /** True while the scope's papers are being chunk-embedded on open (collections). */
     val indexing: Boolean = false,
     /** True while start()-time session resolution/hydration is reading the DB (PC.1). */
@@ -186,7 +195,9 @@ class AskViewModel
                                 is SessionStart.New -> savedStateHandle[KEY_BOUND_SESSION_ID]
                             }
                         this@AskViewModel.sessionId = resume ?: return@launch
-                        val history =
+                        // Seed the per-conversation tool consent (P-Tools PT.1) so it survives process death.
+                        _uiState.update { it.copy(toolsEnabled = chatRepository.toolsEnabledFor(resume)) }
+                        val rows =
                             chatRepository.observeMessages(resume).first()
                                 // A mid-stream process death leaves a 0-char `incomplete` assistant row —
                                 // the ghost bubble (seen live on device, 2026-07-04). Drop exactly that
@@ -199,7 +210,27 @@ class AskViewModel
                                         it.status == ChatMessageEntity.STATUS_INCOMPLETE &&
                                         it.content.isEmpty()
                                 }
-                                .map { it.toAskMessage() }
+                        // Splice each assistant turn's persisted tool steps (P-Tools PT.1) as TOOL bubbles
+                        // immediately before it, by ordinal — so a resumed conversation shows the same
+                        // inline activity it did live. A filtered ghost assistant has zero tool rows
+                        // (written only at terminal), so no orphan bubble appears.
+                        val history =
+                            buildList {
+                                rows.forEach { row ->
+                                    if (row.role == ChatMessageEntity.ROLE_ASSISTANT) {
+                                        chatRepository.toolInvocationsFor(row.id).forEach { inv ->
+                                            add(
+                                                AskMessage(
+                                                    role = AskRole.TOOL,
+                                                    text = "",
+                                                    activity = ToolActivity(inv.toolName, inv.query, inv.egress),
+                                                ),
+                                            )
+                                        }
+                                    }
+                                    add(row.toAskMessage())
+                                }
+                            }
                         _uiState.update { it.copy(messages = history) }
                     } finally {
                         _uiState.update { it.copy(hydrating = false) }
@@ -216,6 +247,11 @@ class AskViewModel
                     _uiState.update { it.copy(pageCount = pages, visionAvailable = visionProvider && pages > 0) }
                 }
             }
+            // P-Tools PT.1: seed isCloud at bind time so the "Search my library" toggle renders BEFORE
+            // the first send (handlePrepared re-confirms it at send time). All scopes; network-free.
+            viewModelScope.launch {
+                _uiState.update { it.copy(isCloud = chatRepository.resolveIsCloud()) }
+            }
         }
 
         /** Sheet-host convenience: [sessionId] resumes exactly that session, else the scope's latest. */
@@ -231,6 +267,11 @@ class AskViewModel
         private fun bindSession(id: Long) {
             sessionId = id
             savedStateHandle[KEY_BOUND_SESSION_ID] = id
+            // Flush a consent flag the user set BEFORE the session existed (P-Tools PT.1) — a New
+            // conversation's toggle can't persist until its first send lazily creates the session.
+            if (_uiState.value.toolsEnabled) {
+                viewModelScope.launch { chatRepository.setToolsEnabled(id, true) }
+            }
         }
 
         fun setInput(text: String) = _uiState.update { it.copy(input = text) }
@@ -247,6 +288,16 @@ class AskViewModel
         }
 
         fun setIncludeNotes(value: Boolean) = _uiState.update { it.copy(includeNotes = value) }
+
+        /**
+         * Toggle the per-conversation opt-in to let the model search the user's library (P-Tools
+         * PT.1). Optimistic in-memory; persisted when a session exists (else flushed at [bindSession]
+         * on the first send). Gates whether search_my_library attaches on the next send.
+         */
+        fun setToolsEnabled(value: Boolean) {
+            _uiState.update { it.copy(toolsEnabled = value) }
+            sessionId?.let { id -> viewModelScope.launch { chatRepository.setToolsEnabled(id, value) } }
+        }
 
         fun setMode(mode: ChatMode) = _uiState.update { it.copy(mode = mode) }
 
@@ -330,7 +381,14 @@ class AskViewModel
                 hydrateJob?.join()
                 val mode = _uiState.value.mode
                 val result =
-                    chatRepository.prepare(scope, sessionId, question, _uiState.value.includeNotes, mode)
+                    chatRepository.prepare(
+                        scope,
+                        sessionId,
+                        question,
+                        _uiState.value.includeNotes,
+                        mode,
+                        toolsEnabled = _uiState.value.toolsEnabled,
+                    )
                 handlePrepared(result, mode)
             }
         }
@@ -376,6 +434,7 @@ class AskViewModel
                         _uiState.value.includeNotes,
                         mode,
                         attachment = image,
+                        toolsEnabled = _uiState.value.toolsEnabled,
                     )
                 handlePrepared(result, mode)
             }
@@ -443,6 +502,21 @@ class AskViewModel
                                 // The repo-side ChatToolLoop buffers tool_use internally and never
                                 // forwards it here (P-Tools PT.0) — required only for exhaustiveness.
                                 is ChatChunk.ToolUse -> Unit
+                                // A loop-authored tool step (P-Tools PT.1): splice a TOOL bubble in
+                                // BEFORE the live assistant bubble so it renders in chronological order.
+                                is ChatChunk.ToolActivity ->
+                                    _uiState.update { s ->
+                                        val i = s.messages.indexOfLast { it.role == AskRole.ASSISTANT }
+                                        val bubble =
+                                            AskMessage(
+                                                role = AskRole.TOOL,
+                                                text = "",
+                                                activity = ToolActivity(chunk.toolName, chunk.query, chunk.egress),
+                                            )
+                                        val list = s.messages.toMutableList()
+                                        if (i < 0) list.add(bubble) else list.add(i, bubble)
+                                        s.copy(messages = list)
+                                    }
                                 is ChatChunk.Done ->
                                     if (answer.isBlank()) {
                                         // A provider that completed without producing any text is a

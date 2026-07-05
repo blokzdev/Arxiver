@@ -25,8 +25,10 @@ import dev.blokz.arxiver.core.database.dao.ChatDao
 import dev.blokz.arxiver.core.database.dao.ChatSessionRow
 import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
 import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
+import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
+import dev.blokz.arxiver.data.tool.ToolContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -57,6 +59,10 @@ data class PreparedChat(
     val citations: List<Citation>,
     /** The resolved output richness of the turn — gates the PA.4 STRUCTURED table transform on settle. */
     val richness: OutputRichness,
+    /** The turn's note-privacy gate — threaded to a tool call so a library search honors it (P-Tools PT.1). */
+    val includeNotes: Boolean,
+    /** Whether a tool (search_my_library) attaches this turn = provider supports tools AND user opted in. */
+    val toolsEnabled: Boolean,
     internal val provider: AiProvider,
 )
 
@@ -121,6 +127,9 @@ class ChatRepository(
         includeNotes: Boolean,
         mode: ChatMode = ChatMode.STANDARD,
         attachment: ChatImage? = null,
+        // P-Tools PT.1: per-conversation opt-in to let the model search the user's library. Default
+        // false ⇒ no tool attaches ⇒ the turn is byte-identical to a pre-P-Tools chat.
+        toolsEnabled: Boolean = false,
     ): ChatPrepareResult =
         withContext(dispatchers.io) {
             val provider =
@@ -156,8 +165,22 @@ class ChatRepository(
 
             // The assembler drops the image unless capability.vision is true (R3d M2/M3),
             // so an attachment never reaches a non-vision/on-device provider.
+            // The library tool attaches only when the provider supports tools AND the user opted in.
+            val toolsAttached = capability.supportsTools && toolsEnabled
             val assembled =
-                assembler.assemble(question, chunks, history, includeNotes, capability, mode, attachment)
+                assembler.assemble(
+                    question,
+                    chunks,
+                    history,
+                    includeNotes,
+                    capability,
+                    mode,
+                    attachment,
+                    // Steer the (cloud-only) tool-present system addendum only when a tool will attach;
+                    // pre-turn RAG + [n] citations are UNCHANGED (P-Tools PT.1, Option B — the tool
+                    // augments, it doesn't replace RAG).
+                    toolsAvailable = toolsAttached,
+                )
             val citations = assembled.citedChunks.mapIndexed { i, c -> Citation(i + 1, c.paperId, c.text) }
 
             ChatPrepareResult.Ready(
@@ -171,6 +194,8 @@ class ChatRepository(
                     preview = previewBuilder.build(assembled.request),
                     citations = citations,
                     richness = capability.richness,
+                    includeNotes = includeNotes,
+                    toolsEnabled = toolsAttached,
                     provider = provider,
                 ),
             )
@@ -186,6 +211,19 @@ class ChatRepository(
         withContext(dispatchers.io) {
             when (val resolution = providerResolver.resolve()) {
                 is ProviderResolution.Resolved -> resolution.provider.capability.vision
+                ProviderResolution.NotConfigured -> false
+            }
+        }
+
+    /**
+     * Read-only: would the provider that handles a turn right now be a cloud (key-requiring) one?
+     * Seeds the `isCloud` UI gate at bind time so cloud-only affordances (the P-Tools "Search my
+     * library" toggle) render BEFORE the first send. Local store reads only — never trips the limiter.
+     */
+    suspend fun resolveIsCloud(): Boolean =
+        withContext(dispatchers.io) {
+            when (val resolution = providerResolver.resolve()) {
+                is ProviderResolution.Resolved -> resolution.provider.capability.requiresKey
                 ProviderResolution.NotConfigured -> false
             }
         }
@@ -262,9 +300,15 @@ class ChatRepository(
                 toolLoop.run(
                     provider = prepared.provider,
                     state = state,
+                    // The library tool attaches only when the user opted in for this conversation (PT.1).
+                    attachTools = prepared.toolsEnabled,
+                    toolContext = ToolContext(includeNotes = prepared.includeNotes),
                     emit = { emit(it) },
-                    // PT.0: no-op seam — PT.1 renders the inline tool-activity bubble from this signal.
-                    onActivity = { },
+                    // P-Tools PT.1: surface each executed tool step as a loop-authored ToolActivity chunk
+                    // on the same stream as Delta, so the VM renders it in chronological position.
+                    onActivity = { draft ->
+                        emit(ChatChunk.ToolActivity(draft.toolName, draft.query, draft.egress))
+                    },
                     persistTerminal = { body ->
                         // Persist the settled body: strip any model FOLLOWUPS:: sentinel (P-Rich R3b.2),
                         // then on a STRUCTURED turn render the TABLE:: intermediate (PA.4). A Done with
@@ -399,6 +443,10 @@ class ChatRepository(
     /** One-shot read of a session's external-tool consent (P-Tools PT.0). */
     suspend fun toolsEnabledFor(id: Long): Boolean =
         withContext(dispatchers.io) { chatDao.sessionById(id)?.toolsEnabled ?: false }
+
+    /** The persisted tool steps of an assistant turn, in call order (P-Tools PT.1 activity hydration). */
+    suspend fun toolInvocationsFor(messageId: Long): List<ToolInvocationEntity> =
+        withContext(dispatchers.io) { chatDao.toolInvocationsForMessage(messageId) }
 
     // Pending hard-deletes keyed by session id (PC.3). Mutated only under this object's monitor
     // (@Synchronized / synchronized(this)) — never a coroutine Mutex, which can't be acquired
