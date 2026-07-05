@@ -9,13 +9,17 @@ package dev.blokz.arxiver.core.model
  * [PaperRef.fromStorageId] prefix, and byte-matches the SQL default `'arxiv'`. **Never derive it from
  * `name.lowercase()` at a call site — read [wire].** (kotlinx serializes an enum by `name` = UPPERCASE;
  * only [wire] ever touches the DB / a storage id prefix — do not confuse the two.)
+ *
+ * [displayName] is the brand-cased human label ("chemRxiv", not "chemrxiv") for citations, badges, and
+ * metadata rows. It is a proper noun (not localized), so pure-JVM surfaces ([Citation]) read it directly;
+ * Android chrome around it ("Source: %s") still comes from `strings.xml`.
  */
-enum class Source(val wire: String) {
-    ARXIV("arxiv"),
-    CHEMRXIV("chemrxiv"),
-    BIORXIV("biorxiv"),
-    MEDRXIV("medrxiv"),
-    S2("s2"),
+enum class Source(val wire: String, val displayName: String) {
+    ARXIV("arxiv", "arXiv"),
+    CHEMRXIV("chemrxiv", "chemRxiv"),
+    BIORXIV("biorxiv", "bioRxiv"),
+    MEDRXIV("medrxiv", "medRxiv"),
+    S2("s2", "Semantic Scholar"),
     ;
 
     companion object {

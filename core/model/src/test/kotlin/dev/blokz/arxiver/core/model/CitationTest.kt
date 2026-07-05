@@ -100,4 +100,43 @@ class CitationTest {
         assertContains(ref, "Ends With A Dot. arXiv:")
         assertFalse(ref.contains("Dot.. arXiv"), ref)
     }
+
+    // --- non-arXiv (chemRxiv, PS.1): no fake arXiv fields; DOI + brand label instead ---
+
+    private fun chemPaper(
+        doi: String = "10.26434/chemrxiv-2024-xyz",
+        title: String = "A Chemistry Preprint",
+        authors: List<String> = listOf("Marie Curie"),
+    ) = Paper(
+        ref = ExternalRef(Source.CHEMRXIV, doi),
+        latestVersion = 1,
+        title = title,
+        abstract = "a",
+        publishedAt = published,
+        updatedAt = published,
+        primaryCategory = "",
+        categories = emptyList(),
+        authors = authors,
+        doi = doi,
+        pdfUrl = "https://chemrxiv.org/x.pdf",
+    )
+
+    @Test
+    fun `bibtex for a chemRxiv paper carries no arXiv eprint or archivePrefix`() {
+        val bib = Citation.bibtex(chemPaper())
+        assertFalse(bib.contains("archivePrefix = {arXiv}"), bib)
+        assertFalse(bib.contains("eprint = {"), bib)
+        assertFalse(bib.contains("primaryClass"), bib)
+        assertContains(bib, "howpublished = {chemRxiv},")
+        assertContains(bib, "doi = {10.26434/chemrxiv-2024-xyz},")
+        assertContains(bib, "url = {https://doi.org/10.26434/chemrxiv-2024-xyz}")
+    }
+
+    @Test
+    fun `reference for a chemRxiv paper shows the brand label and doi link, no arXiv segment`() {
+        assertEquals(
+            "Marie Curie (2017). A Chemistry Preprint. chemRxiv. https://doi.org/10.26434/chemrxiv-2024-xyz",
+            Citation.reference(chemPaper()),
+        )
+    }
 }

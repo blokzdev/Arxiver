@@ -30,28 +30,39 @@ object Citation {
             appendLine("  title = {${paper.title.escapeBibtex()}},")
             appendLine("  author = {${paper.authors.joinToString(" and ").escapeBibtex()}},")
             appendLine("  year = {$year},")
-            appendLine("  eprint = {${paper.id.value}},")
-            appendLine("  archivePrefix = {arXiv},")
-            appendLine("  primaryClass = {${paper.primaryCategory}},")
+            // arXiv's recommended eprint form; a non-arXiv source (chemRxiv, PS.1) carries no eprint/class,
+            // so it degrades to a `howpublished` label + its DOI — never a fake `archivePrefix = {arXiv}`.
+            if (paper.ref.origin == Source.ARXIV) {
+                appendLine("  eprint = {${paper.ref.storageId}},")
+                appendLine("  archivePrefix = {arXiv},")
+                appendLine("  primaryClass = {${paper.primaryCategory}},")
+            } else {
+                appendLine("  howpublished = {${paper.ref.origin.displayName}},")
+            }
             paper.journalRef?.let { appendLine("  journal = {${it.escapeBibtex()}},") }
             paper.doi?.let { appendLine("  doi = {$it},") }
-            appendLine("  url = {${paper.id.absUrl()}}")
+            appendLine("  url = {${paper.canonicalUrl()}}")
             append("}")
         }
     }
 
     /**
      * A human-readable one-line reference: `Authors (Year). Title. arXiv:id [primaryClass]. <link>`
-     * — `et al.` past three authors, the DOI link when published, else the arXiv abstract URL.
+     * — `et al.` past three authors, the DOI link when published, else the paper's canonical URL. A
+     * non-arXiv source shows its brand label (`chemRxiv.`) in place of the `arXiv:id [class]` segment.
      */
     fun reference(paper: Paper): String {
         val year = paper.publishedAt.atZone(ZoneOffset.UTC).year
-        val link = paper.doi?.let { "https://doi.org/$it" } ?: paper.id.absUrl()
+        val link = paper.doi?.let { "https://doi.org/$it" } ?: paper.canonicalUrl()
         return buildString {
             formatAuthors(paper.authors).takeIf { it.isNotEmpty() }?.let { append("$it ") }
             append("($year). ")
             append("${paper.title.trimEnd('.', ' ')}. ")
-            append("arXiv:${paper.id.value} [${paper.primaryCategory}]. ")
+            if (paper.ref.origin == Source.ARXIV) {
+                append("arXiv:${paper.ref.storageId} [${paper.primaryCategory}]. ")
+            } else {
+                append("${paper.ref.origin.displayName}. ")
+            }
             append(link)
         }
     }
@@ -67,7 +78,7 @@ object Citation {
                 ?.lowercase()
                 ?.filter { it.isLetter() }
                 .orEmpty()
-        val idDigits = paper.id.value.takeLast(4).filter { it.isDigit() }
+        val idDigits = paper.ref.storageId.takeLast(4).filter { it.isDigit() }
         return "$surnameKey$year$idDigits"
     }
 

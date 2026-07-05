@@ -36,4 +36,47 @@ class PaperTest {
         val p = paper().copy(pdfUrl = "https://example.org/x.pdf")
         assertEquals("https://example.org/x.pdf", p.pdfUrl)
     }
+
+    @Test
+    fun `canonicalUrl for an arxiv paper is the abstract page, unversioned`() {
+        assertEquals("https://arxiv.org/abs/2403.01234", paper(version = 3).canonicalUrl())
+    }
+
+    @Test
+    fun `canonicalUrl for a non-arxiv paper prefers the doi resolver`() {
+        val p =
+            Paper(
+                ref = ExternalRef(Source.CHEMRXIV, "10.26434/chemrxiv-2024-xyz"),
+                latestVersion = 1,
+                title = "t",
+                abstract = "a",
+                publishedAt = Instant.EPOCH,
+                updatedAt = Instant.EPOCH,
+                primaryCategory = "",
+                categories = emptyList(),
+                authors = listOf("A"),
+                doi = "10.26434/chemrxiv-2024-xyz",
+                pdfUrl = "https://chemrxiv.org/engage/api-gateway/chemrxiv/assets/x.pdf",
+            )
+        assertEquals("https://doi.org/10.26434/chemrxiv-2024-xyz", p.canonicalUrl())
+    }
+
+    @Test
+    fun `canonicalUrl for a non-arxiv paper with no doi falls back to the stored pdf url`() {
+        val p =
+            Paper(
+                ref = ExternalRef(Source.CHEMRXIV, "native-1"),
+                latestVersion = 1,
+                title = "t",
+                abstract = "a",
+                publishedAt = Instant.EPOCH,
+                updatedAt = Instant.EPOCH,
+                primaryCategory = "",
+                categories = emptyList(),
+                authors = listOf("A"),
+                doi = null,
+                pdfUrl = "https://chemrxiv.org/x.pdf",
+            )
+        assertEquals("https://chemrxiv.org/x.pdf", p.canonicalUrl())
+    }
 }
