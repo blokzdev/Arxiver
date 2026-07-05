@@ -1,6 +1,15 @@
 package dev.blokz.arxiver.feature.search
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,8 +18,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +33,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.SearchOff
@@ -38,38 +50,53 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.core.model.ArxivCategory
 import dev.blokz.arxiver.core.model.ArxivTaxonomy
 import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import dev.blokz.arxiver.core.search.Provenance
+import dev.blokz.arxiver.data.CategoryWithFollowState
+import dev.blokz.arxiver.feature.browse.BrowseViewModel
+import dev.blokz.arxiver.feature.browse.CategoryGroup
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.PaperBadge
 import dev.blokz.arxiver.ui.components.SelectionTopBar
 import dev.blokz.arxiver.ui.components.SkeletonList
 import dev.blokz.arxiver.ui.components.SkeletonPaperItem
+import dev.blokz.arxiver.ui.components.StatusChip
 import dev.blokz.arxiver.ui.components.StatusTone
 import dev.blokz.arxiver.ui.components.SwipeablePaperRow
 import dev.blokz.arxiver.ui.components.rememberSelectionState
@@ -77,17 +104,31 @@ import dev.blokz.arxiver.ui.feedback.FeedbackAction
 import dev.blokz.arxiver.ui.feedback.FeedbackMessage
 import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
+import dev.blokz.arxiver.ui.theme.ArxiverMotion
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 
+/**
+ * Explore (P-Chat PC.2) — the merged discovery surface: one search field over two scopes
+ * (Library live-hybrid | arXiv online-submit) with the category taxonomy as the Library
+ * resting state (blank query), reached after Search+Browse were folded into one tab. Reuses
+ * the two existing ViewModels unchanged; the taxonomy is [BrowseViewModel]'s grouped feed.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SearchScreen(
+fun ExploreScreen(
     onPaperClick: (String) -> Unit,
+    onCategoryClick: (code: String, name: String) -> Unit,
     onOpenRoutines: () -> Unit = {},
+    resetToLibrary: Boolean = false,
     viewModel: SearchViewModel = hiltViewModel(),
+    browseViewModel: BrowseViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val browseState by browseViewModel.uiState.collectAsState()
+    // Group expansion is view state (plain remember, CS open by default) — mirrors the old
+    // BrowseScreen; process-death restoration is a recorded backlog item, unchanged here.
+    val expandedGroups = remember { mutableStateMapOf("Computer Science" to true) }
     val selection = rememberSelectionState()
     val feedback = LocalFeedbackController.current
     var organizeIds by remember { mutableStateOf<List<String>?>(null) }
@@ -134,7 +175,7 @@ fun SearchScreen(
                     }
                 }
             } else {
-                TopAppBar(title = { Text(stringResource(R.string.nav_search)) })
+                TopAppBar(title = { Text(stringResource(R.string.nav_explore)) })
             }
         },
     ) { padding ->
@@ -144,6 +185,19 @@ fun SearchScreen(
                     .fillMaxSize()
                     .padding(padding),
         ) {
+            // Scope toggle state is hoisted ABOVE the field so the IME Search action can gate
+            // on it (PC.2): submit() builds an arXiv network query, so firing it on the Library
+            // scope would leak a network call the user never asked for.
+            var tab by rememberSaveable { mutableIntStateOf(0) }
+            // The Today "no follows" CTA routes here to reach the taxonomy — force the Library
+            // resting state (scope 0 + blank query) once so a stale query/scope can't hide it.
+            LaunchedEffect(resetToLibrary) {
+                if (resetToLibrary) {
+                    tab = 0
+                    viewModel.onQueryChange("")
+                }
+            }
+
             // Pill search field (deliberately not M3 SearchBar — its
             // full-screen expansion fights the tabbed result layout).
             TextField(
@@ -173,10 +227,10 @@ fun SearchScreen(
                         disabledIndicatorColor = Color.Transparent,
                     ),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { viewModel.submit() }),
+                // Library scope is live-debounced with no submit concept — only arXiv submits.
+                keyboardActions = KeyboardActions(onSearch = { if (tab == 1) viewModel.submit() }),
             )
 
-            var tab by rememberSaveable { mutableIntStateOf(0) }
             SingleChoiceSegmentedButtonRow(
                 modifier =
                     Modifier
@@ -196,7 +250,16 @@ fun SearchScreen(
             }
 
             if (tab == 0) {
-                LocalResultList(state, selection, onPaperClick, saveOne)
+                LibraryPane(
+                    state = state,
+                    selection = selection,
+                    onPaperClick = onPaperClick,
+                    onSave = saveOne,
+                    taxonomy = browseState.groups,
+                    expandedGroups = expandedGroups,
+                    onCategoryClick = onCategoryClick,
+                    onFollowToggle = browseViewModel::setFollowed,
+                )
             } else {
                 var showFilters by rememberSaveable { mutableStateOf(false) }
                 ArxivFilterBar(
@@ -409,18 +472,25 @@ private fun DatePreset.labelRes(): Int =
     }
 
 @Composable
-private fun LocalResultList(
+private fun LibraryPane(
     state: SearchUiState,
     selection: dev.blokz.arxiver.ui.components.SelectionState,
     onPaperClick: (String) -> Unit,
     onSave: (String) -> Unit,
+    taxonomy: List<CategoryGroup>,
+    expandedGroups: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
+    onCategoryClick: (code: String, name: String) -> Unit,
+    onFollowToggle: (ArxivCategory, Boolean) -> Unit,
 ) {
     when {
+        // Blank query = the resting state: the category taxonomy (the old Browse tab), now the
+        // app's category directory, reached by clearing the query on the Library scope (PC.2).
         state.query.isBlank() ->
-            EmptyState(
-                title = stringResource(R.string.search_tab_library),
-                body = stringResource(R.string.search_local_intro),
-                icon = Icons.Filled.Search,
+            TaxonomyList(
+                groups = taxonomy,
+                expandedGroups = expandedGroups,
+                onCategoryClick = onCategoryClick,
+                onFollowToggle = onFollowToggle,
             )
         state.localResults.isEmpty() ->
             EmptyState(
@@ -527,12 +597,137 @@ private fun SearchingState() {
     }
 }
 
+/** The category taxonomy (moved verbatim from the old BrowseScreen) — the Explore resting state. */
+@Composable
+private fun TaxonomyList(
+    groups: List<CategoryGroup>,
+    expandedGroups: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
+    onCategoryClick: (code: String, name: String) -> Unit,
+    onFollowToggle: (ArxivCategory, Boolean) -> Unit,
+) {
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        items(groups, key = { "group-${it.name}" }) { group ->
+            val expanded = expandedGroups[group.name] == true
+            // Header + categories live in one item so the group expands as a unit.
+            Column {
+                GroupHeader(
+                    group = group,
+                    expanded = expanded,
+                    onToggle = { expandedGroups[group.name] = !expanded },
+                )
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter =
+                        expandVertically(tween(ArxiverMotion.DURATION_MEDIUM)) +
+                            fadeIn(tween(ArxiverMotion.DURATION_MEDIUM)),
+                    exit =
+                        shrinkVertically(tween(ArxiverMotion.DURATION_MEDIUM)) +
+                            fadeOut(tween(ArxiverMotion.DURATION_SHORT)),
+                ) {
+                    Column {
+                        group.categories.forEach { item ->
+                            CategoryRow(
+                                item = item,
+                                onClick = { onCategoryClick(item.category.code, item.category.name) },
+                                onFollowToggle = { onFollowToggle(item.category, it) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupHeader(
+    group: CategoryGroup,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(ArxiverMotion.DURATION_MEDIUM),
+        label = "chevron",
+    )
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.sm, vertical = 2.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(
+                    if (expanded) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surface,
+                )
+                .clickable(onClick = onToggle)
+                .padding(horizontal = Spacing.sm, vertical = Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = group.name,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.weight(1f),
+        )
+        val followedCount = group.categories.count { it.followed }
+        if (followedCount > 0) {
+            StatusChip(
+                text = pluralStringResource(R.plurals.browse_following_count, followedCount, followedCount),
+                modifier = Modifier.padding(end = Spacing.sm),
+            )
+        }
+        Icon(
+            imageVector = Icons.Filled.ExpandMore,
+            contentDescription =
+                stringResource(
+                    if (expanded) R.string.cd_collapse_group else R.string.cd_expand_group,
+                ),
+            modifier = Modifier.rotate(chevronRotation),
+        )
+    }
+}
+
+@Composable
+private fun CategoryRow(
+    item: CategoryWithFollowState,
+    onClick: () -> Unit,
+    onFollowToggle: (Boolean) -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .heightIn(min = 48.dp)
+                .padding(start = Spacing.xl, end = Spacing.lg, top = Spacing.sm, bottom = Spacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(item.category.name, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                item.category.code,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        val followDescription = stringResource(R.string.cd_follow_category, item.category.name)
+        Switch(
+            checked = item.followed,
+            onCheckedChange = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onFollowToggle(it)
+            },
+            modifier = Modifier.semantics { contentDescription = followDescription },
+        )
+    }
+}
+
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun LocalResultsPreview() {
     ArxiverTheme {
-        LocalResultList(
+        LibraryPane(
             state =
                 SearchUiState(
                     query = "diffusion models",
@@ -549,6 +744,10 @@ private fun LocalResultsPreview() {
             selection = dev.blokz.arxiver.ui.components.SelectionState(),
             onPaperClick = {},
             onSave = {},
+            taxonomy = emptyList(),
+            expandedGroups = remember { androidx.compose.runtime.mutableStateMapOf() },
+            onCategoryClick = { _, _ -> },
+            onFollowToggle = { _, _ -> },
         )
     }
 }
@@ -556,13 +755,34 @@ private fun LocalResultsPreview() {
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
-private fun LocalResultsEmptyPreview() {
+private fun ExploreTaxonomyRestingPreview() {
+    val fixture =
+        listOf(
+            CategoryGroup(
+                name = "Computer Science",
+                categories =
+                    listOf(
+                        CategoryWithFollowState(
+                            ArxivCategory("cs.LG", "Machine Learning", "Computer Science"),
+                            followed = true,
+                        ),
+                        CategoryWithFollowState(
+                            ArxivCategory("cs.CL", "Computation and Language", "Computer Science"),
+                            followed = false,
+                        ),
+                    ),
+            ),
+        )
     ArxiverTheme {
-        LocalResultList(
+        LibraryPane(
             state = SearchUiState(query = ""),
             selection = dev.blokz.arxiver.ui.components.SelectionState(),
             onPaperClick = {},
             onSave = {},
+            taxonomy = fixture,
+            expandedGroups = remember { androidx.compose.runtime.mutableStateMapOf("Computer Science" to true) },
+            onCategoryClick = { _, _ -> },
+            onFollowToggle = { _, _ -> },
         )
     }
 }

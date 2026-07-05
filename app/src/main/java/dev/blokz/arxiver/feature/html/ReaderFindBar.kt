@@ -65,7 +65,7 @@ internal fun reduceFindCounts(
 /**
  * The find-in-page bar (P-HTML PH.7): swaps into the reader's topBar slot at the SAME height so the
  * WebView never resizes (zero PH.6 reflow). SelectionTopBar's surfaceContainerHigh frame + the
- * SearchScreen pill-field idiom; no match-case toggle (Chromium hardcodes case-insensitive).
+ * Explore pill-field idiom; no match-case toggle (Chromium hardcodes case-insensitive).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

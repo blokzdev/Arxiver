@@ -24,24 +24,28 @@
 
 ## 2. Navigation
 
-Single activity, Navigation-Compose, bottom navigation bar with 4 destinations + nested routes:
+Single activity, Navigation-Compose, bottom navigation bar with **3 destinations** (4 once Chat lands in PC.3) + nested routes:
 
 ```
 BottomNav
 ├── Today      (inbox/triage feed)
-├── Browse     (categories → listings)
-├── Search     (local | arXiv tabs)
+├── Explore    (search field, Library|arXiv scope, category taxonomy as the resting state)
 └── Library    (papers | collections | tags)
 
 Stacked routes (from anywhere):
   paper/{id}            Paper detail
   paper/{id}/pdf        PDF reader
   paper/{id}/graph      Connections (citations/related)
+  browse/category/{code} Category listing (from the Explore taxonomy)
+  chat/session/{id}     Full-screen conversation (PC.1)
+  chat/new/{kind}/{id}  Fork a new conversation (PC.1)
   claude/dispatch       Dispatch confirm sheet (modal)
   claude/history        Dispatch history
   settings/*            Settings, routine management, follows management
   onboarding            First-run flow
 ```
+> The tree lists bottom-tab destinations + the principal stacked routes; a few nested routes
+> (html, map, library/{mode}) are omitted and a full reconciliation is a pending docs pass.
 
 Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + link interception) → `paper/{id}`.
 
@@ -51,17 +55,14 @@ Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + li
 - Sections: **Likely relevant** (Phase 3 similarity score) and **More from your follows**; recency sort pre-Phase 3.
 - Item: title, authors (truncated), primary category chip, score bar (subtle), arrival time. Swipe right = save to library, swipe left = dismiss, tap = detail.
 - Top bar: sync status/last synced, manual refresh (respects rate limiter — shows "queued" if throttled).
-- Empty states: no follows yet → CTA to Browse/follow; all triaged → "Inbox zero" moment.
+- Empty states: no follows yet → CTA to Explore's category taxonomy (forces the Library resting state); all triaged → "Inbox zero" moment.
 
-### Browse
-- Category groups (Physics, Math, CS, …) → category list with follow toggles → category listing (latest, paged).
-- Category listing doubles as preview of "what following this feels like".
-
-### Search
-- One field, two result tabs: **Library** (local hybrid) and **arXiv** (online). Filter chips: category, date, library-only, tag, status.
+### Explore
+- **Search + Browse merged into one discovery surface (PC.2).** One search field over two scopes (segmented toggle): **Library** (local hybrid, live-debounced) and **arXiv** (online, explicit submit).
+- **Resting state (Library scope, blank query): the category taxonomy** — groups (Physics, Math, CS, …) with follow toggles; tapping a category opens its listing (latest, paged) via the stacked `browse/category/{code}` route. This taxonomy is the app's category directory, reached by clearing the query on the Library scope; the Today "no follows" CTA routes here (forcing the Library resting state via a one-shot `?reset=true`).
 - Local results show provenance badges (keyword/semantic/both) and similarity where applicable.
-- arXiv tab shows the rate-limit queue state gracefully ("searching arXiv…" with spacing-aware progress, never raw errors for throttling).
-- Recent queries persisted (local, clearable).
+- arXiv scope shows the rate-limit queue state gracefully ("searching arXiv…"), structured filters (category/date/sort), never raw throttle errors.
+- The keyboard **Search** action submits only on the arXiv scope; the Library scope is live-debounced with no explicit submit.
 
 ### Library
 - Tabs: Papers (filter/sort: added, updated, rating, status), Collections (grid), Tags (chips cloud → filtered list).

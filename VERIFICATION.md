@@ -165,6 +165,15 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [~] **M-PH7-6 Reader-hosted Ask parity (PH.7)** — pin-to-notes lands in the paper's notes with the snackbar; share/export work; cross-ref opens the paper; the session resumes the SAME conversation the detail screen shows; the top-bar Ask works with no selection. _(P-HTML PH.7)_
 - [ ] **M-PH5-6 First-paint latency + no starvation (PH.5)** — text + math paint promptly on first download (two-phase), figures pop in after; the **30s deadline** stops a pathological survey paper from holding the shared ≥3s slot indefinitely, and a **concurrent FollowSync still progresses** during a figure-heavy open. _(P-HTML PH.5)_
 
+## N-PC2. Explore merge - Search + Browse (P-Chat PC.2) _(ROADMAP P-Chat)_
+
+- [ ] **N-PC2-1 Resting taxonomy** - cold-open Explore (Library scope, blank query) shows the category taxonomy under the pinned field; the keyboard does NOT auto-open; groups expand/collapse; follow toggles work; tapping a category opens its listing and Back returns to Explore.
+- [ ] **N-PC2-2 Today CTA -> taxonomy** - with zero follows and last-used scope = arXiv, tapping the Today "Explore categories" CTA lands on Explore **Library scope showing the taxonomy** (the `?reset=true` forces scope 0 + blank query), not the arXiv intro.
+- [ ] **N-PC2-3 3-tab bar + label fit** - the bottom bar renders exactly 3 tabs (Today . Explore . Library); the bar is VISIBLE on Explore (the base-route matcher) and Explore is highlighted selected; "Explore" label not truncated at 1.3x font scale.
+- [ ] **N-PC2-4 Tab-switch state survival** - query, results, filters, and the Library|arXiv scope survive tab switches and a rotation.
+- [ ] **N-PC2-5 IME gate** - on the Library scope, pressing the keyboard "Search" does NOT fire an arXiv network submit (inert); on the arXiv scope it does.
+- [ ] **N-PC2-6 arXiv search unchanged** - an arXiv query still queues through the >=3s limiter ("searching arXiv..."), paginates, and shows structured filters; no throttle errors surface raw.
+
 ## M-PC1. Full-screen conversation route (P-Chat PC.1) _(ROADMAP P-Chat)_
 
 - [ ] **M-PC1-1 Composer/IME with adjustResize** — on ChatSessionScreen the keyboard must never bury the composer; check for a navbar-height gap above the keyboard (double inset consumption: Scaffold padding + consumeWindowInsets + imePadding). **Also sanity-check existing inputs** (search field, routine setup, Ask sheet) — `adjustResize` is activity-wide and new in PC.1.
