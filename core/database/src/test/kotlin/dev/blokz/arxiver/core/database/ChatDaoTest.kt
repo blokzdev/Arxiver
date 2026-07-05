@@ -5,6 +5,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
 import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
+import dev.blokz.arxiver.core.database.entity.CollectionEntity
+import dev.blokz.arxiver.core.database.entity.PaperEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -82,6 +84,132 @@ class ChatDaoTest {
             val all = dao.observeAllSessions().first()
             assertEquals(listOf(newer), all.take(1).map { it.id })
             assertEquals(2, all.size)
+        }
+
+    private fun paper(
+        id: String,
+        title: String,
+    ) = PaperEntity(
+        id = id,
+        latestVersion = 1,
+        title = title,
+        abstract = "",
+        publishedAt = 0,
+        updatedAt = 0,
+        primaryCategory = "cs.LG",
+        authorsLine = "",
+        comment = null,
+        journalRef = null,
+        doi = null,
+        pdfUrl = "",
+        citationCount = null,
+        s2PaperId = null,
+        source = "arxiv",
+        fetchedAt = 0,
+        embeddedAt = null,
+        citationsSyncedAt = null,
+    )
+
+    private fun msg(
+        sessionId: Long,
+        role: String,
+        content: String,
+        status: String,
+        createdAt: Long,
+    ) = ChatMessageEntity(
+        sessionId = sessionId,
+        role = role,
+        content = content,
+        status = status,
+        createdAt = createdAt,
+    )
+
+    // --- P-Chat PC.3: observeSessionRows JOIN (scope label + snippet in SQL, no N+1) ---
+
+    @Test
+    fun `observeSessionRows joins a paper title and its latest non-empty snippet`() =
+        runTest {
+            val dao = db.chatDao()
+            db.paperDao().upsertPaper(paper("2401.00001", "Attention Is All You Need"))
+            val sid = dao.insertSession(session(scopeId = "2401.00001"))
+            dao.insertMessage(msg(sid, "user", "what is attention?", "complete", 1))
+            dao.insertMessage(msg(sid, "assistant", "a weighted sum", "complete", 2))
+
+            val row = dao.observeSessionRows().first().single()
+            assertEquals("Attention Is All You Need", row.paperTitle)
+            assertEquals(null, row.collectionName)
+            assertEquals("a weighted sum", row.snippet)
+        }
+
+    @Test
+    fun `observeSessionRows joins a collection name through the CAST`() =
+        runTest {
+            val dao = db.chatDao()
+            val cid = db.libraryDao().createCollection(CollectionEntity(name = "Transformers", createdAt = 0))
+            val sid = dao.insertSession(session(scope = ChatSessionEntity.SCOPE_COLLECTION, scopeId = cid.toString()))
+            dao.insertMessage(msg(sid, "assistant", "collection answer", "complete", 1))
+
+            val row = dao.observeSessionRows().first().single()
+            assertEquals("Transformers", row.collectionName)
+            assertEquals(null, row.paperTitle)
+            assertEquals("collection answer", row.snippet)
+        }
+
+    @Test
+    fun `observeSessionRows leaves labels null when the target was deleted`() =
+        runTest {
+            val dao = db.chatDao()
+            dao.insertSession(session(scopeId = "gone.99999")) // no papers row
+            dao.insertSession(session(scope = ChatSessionEntity.SCOPE_COLLECTION, scopeId = "404")) // no collection
+
+            val rows = dao.observeSessionRows().first()
+            assertTrue(rows.all { it.paperTitle == null && it.collectionName == null })
+        }
+
+    @Test
+    fun `the snippet is the latest non-empty message - ghosts are skipped and id breaks a timestamp tie`() =
+        runTest {
+            val dao = db.chatDao()
+            val sid = dao.insertSession(session())
+            dao.insertMessage(msg(sid, "user", "question", "complete", 5))
+            // Same created_at for the two assistant rows: the higher autoincrement id (the real
+            // answer, inserted last) must win over an earlier empty-ghost row at the same ms.
+            dao.insertMessage(msg(sid, "assistant", "", "incomplete", 6)) // ghost
+            dao.insertMessage(msg(sid, "assistant", "the real answer", "complete", 6))
+
+            assertEquals("the real answer", dao.observeSessionRows().first().single().snippet)
+        }
+
+    @Test
+    fun `the snippet is null when the session has only an empty ghost message`() =
+        runTest {
+            val dao = db.chatDao()
+            val sid = dao.insertSession(session())
+            dao.insertMessage(msg(sid, "assistant", "", "incomplete", 1)) // the ghost, only row
+
+            assertEquals(null, dao.observeSessionRows().first().single().snippet)
+        }
+
+    @Test
+    fun `an errored first turn falls back to the user question as the snippet`() =
+        runTest {
+            val dao = db.chatDao()
+            val sid = dao.insertSession(session())
+            dao.insertMessage(msg(sid, "user", "my question", "complete", 1))
+            dao.insertMessage(msg(sid, "assistant", "", "error", 2)) // failed answer, empty
+
+            assertEquals("my question", dao.observeSessionRows().first().single().snippet)
+        }
+
+    @Test
+    fun `observeSessionRows orders by last activity across scopes`() =
+        runTest {
+            val dao = db.chatDao()
+            dao.insertSession(session(scopeId = "p1").copy(lastMessageAt = 10))
+            val newer = dao.insertSession(session(scope = ChatSessionEntity.SCOPE_COLLECTION, scopeId = "7"))
+            dao.touchSession(newer, 99)
+
+            assertEquals(newer, dao.observeSessionRows().first().first().session.id)
         }
 
     @Test

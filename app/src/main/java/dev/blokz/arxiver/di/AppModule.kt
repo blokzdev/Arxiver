@@ -469,6 +469,7 @@ object AppModule {
         providerResolver: dev.blokz.arxiver.core.ai.ProviderResolver,
         embeddingService: dev.blokz.arxiver.core.ml.EmbeddingService,
         dispatchers: DispatcherProvider,
+        appScope: kotlinx.coroutines.CoroutineScope,
     ): dev.blokz.arxiver.data.ChatRepository =
         dev.blokz.arxiver.data.ChatRepository(
             chatDao = chatDao,
@@ -478,6 +479,8 @@ object AppModule {
             previewBuilder = dev.blokz.arxiver.chat.ChatPreviewBuilder(),
             embedQuery = embeddingService::embedQuery,
             dispatchers = dispatchers,
+            // The app-lifetime delete commit outlives the ChatHistoryViewModel (PC.3).
+            appScope = appScope,
         )
 
     @Provides

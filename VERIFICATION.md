@@ -165,6 +165,14 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [~] **M-PH7-6 Reader-hosted Ask parity (PH.7)** — pin-to-notes lands in the paper's notes with the snackbar; share/export work; cross-ref opens the paper; the session resumes the SAME conversation the detail screen shows; the top-bar Ask works with no selection. _(P-HTML PH.7)_
 - [ ] **M-PH5-6 First-paint latency + no starvation (PH.5)** — text + math paint promptly on first download (two-phase), figures pop in after; the **30s deadline** stops a pathological survey paper from holding the shared ≥3s slot indefinitely, and a **concurrent FollowSync still progresses** during a figure-heavy open. _(P-HTML PH.5)_
 
+## O-PC3. Chat tab + promoted recents (P-Chat PC.3) _(ROADMAP P-Chat)_
+
+- [ ] **O-PC3-1 Chat tab present + selectable** - a 4th bottom-nav tab "Chat" shows, is selectable, lights on selection, survives a rotation; cross-tab Back returns to Chat (per-tab saved back stack); the 4 labels fit at 1.3x font scale on a small phone.
+- [ ] **O-PC3-2 Promoted recents render** - sessions list with scope chip, snippet (latest non-empty message; a session whose only reply was an empty/errored turn shows the user question or no snippet; orphaned-target rows show the fallback label + no snippet), relative time; tapping a row resumes its conversation.
+- [ ] **O-PC3-3 Delete + undo (delayed commit)** - delete a chat -> row hides instantly + "Chat deleted" snackbar with Undo; tap Undo within the window -> the row returns; let the window elapse -> the chat is gone after relaunch. **Navigate off the Chat tab immediately after deleting -> the deletion still commits** (application-scope survival).
+- [ ] **O-PC3-4 Empty-state CTA** - with zero sessions the empty state shows "Browse your library" -> routes to the Library tab.
+- [ ] **O-PC3-5 TalkBack** - a row announces label + snippet + scope + time as one item; the delete button is announced separately with its cd; the Undo snackbar action is reachable.
+
 ## N-PC2. Explore merge - Search + Browse (P-Chat PC.2) _(ROADMAP P-Chat)_
 
 - [ ] **N-PC2-1 Resting taxonomy** - cold-open Explore (Library scope, blank query) shows the category taxonomy under the pinned field; the keyboard does NOT auto-open; groups expand/collapse; follow toggles work; tapping a category opens its listing and Back returns to Explore.

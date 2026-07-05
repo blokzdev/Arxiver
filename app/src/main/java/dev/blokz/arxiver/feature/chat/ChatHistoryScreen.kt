@@ -25,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -38,20 +39,24 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.R
-import dev.blokz.arxiver.core.database.dao.PaperDao
+import dev.blokz.arxiver.core.database.dao.ChatSessionRow
 import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.ChatRepository
-import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.SkeletonList
+import dev.blokz.arxiver.ui.feedback.FeedbackAction
+import dev.blokz.arxiver.ui.feedback.FeedbackMessage
+import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
 /** A resumable chat session for the history list. */
@@ -61,6 +66,8 @@ data class ChatHistoryRow(
     val isCollection: Boolean,
     /** Resolved paper title / collection name; null if the target was deleted. */
     val label: String?,
+    /** Latest non-empty message (assistant answer, or the user turn on an errored first turn). */
+    val snippet: String?,
     val lastMessageAt: Long,
 )
 
@@ -69,60 +76,93 @@ class ChatHistoryViewModel
     @Inject
     constructor(
         private val chatRepository: ChatRepository,
-        private val paperDao: PaperDao,
-        libraryRepository: LibraryRepository,
     ) : ViewModel() {
-        // null = still loading.
+        // Sessions the user just deleted, hidden immediately while the undo window runs (PC.3).
+        private val pendingDelete = MutableStateFlow<Set<Long>>(emptySet())
+
+        // null = still loading. Labels + snippet resolve in SQL (no per-row paperById N+1).
         val rows: StateFlow<List<ChatHistoryRow>?> =
-            combine(
-                chatRepository.observeAllSessions(),
-                libraryRepository.observeCollections(),
-            ) { sessions, collections ->
-                val names = collections.associate { it.id to it.name }
-                sessions.map { it.toRow(names) }
+            combine(chatRepository.observeSessionRows(), pendingDelete) { rows, pending ->
+                rows.filterNot { it.session.id in pending }.map { it.toRow() }
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+        private val _chatDeleted = MutableStateFlow<Long?>(null)
+
+        /** The last session id deleted, so the screen can offer an Undo snackbar once. */
+        val chatDeleted: StateFlow<Long?> = _chatDeleted.asStateFlow()
+
         fun delete(sessionId: Long) {
-            viewModelScope.launch { chatRepository.deleteSession(sessionId) }
+            pendingDelete.update { it + sessionId } // hide the row now
+            chatRepository.scheduleDelete(sessionId) // commit after the undo window (app scope)
+            _chatDeleted.value = sessionId
         }
 
-        private suspend fun ChatSessionEntity.toRow(collectionNames: Map<Long, String>): ChatHistoryRow =
-            if (scope == ChatSessionEntity.SCOPE_COLLECTION) {
-                val id = scopeId.toLongOrNull() ?: -1L
-                ChatHistoryRow(
-                    sessionId = this.id,
-                    scope = RetrievalScope.Collection(id),
-                    isCollection = true,
-                    label = collectionNames[id],
-                    lastMessageAt = lastMessageAt,
-                )
-            } else {
-                ChatHistoryRow(
-                    sessionId = this.id,
-                    scope = RetrievalScope.Paper(scopeId),
-                    isCollection = false,
-                    label = paperDao.paperById(scopeId)?.title,
-                    lastMessageAt = lastMessageAt,
-                )
-            }
+        fun undoDelete(sessionId: Long) {
+            chatRepository.undoDelete(sessionId)
+            pendingDelete.update { it - sessionId }
+        }
+
+        fun consumeChatDeleted() {
+            _chatDeleted.value = null
+        }
+
+        private fun ChatSessionRow.toRow(): ChatHistoryRow {
+            val isCollection = session.scope == ChatSessionEntity.SCOPE_COLLECTION
+            return ChatHistoryRow(
+                sessionId = session.id,
+                scope =
+                    if (isCollection) {
+                        RetrievalScope.Collection(session.scopeId.toLongOrNull() ?: -1L)
+                    } else {
+                        RetrievalScope.Paper(session.scopeId)
+                    },
+                isCollection = isCollection,
+                label = if (isCollection) collectionName else paperTitle,
+                snippet = snippet,
+                lastMessageAt = session.lastMessageAt,
+            )
+        }
     }
 
+/**
+ * The promoted Chat tab (P-Chat PC.3): resumable sessions, most-recently-active first. Hosted
+ * as a bottom-tab ([onBack] null hides the back arrow) or — historically — as a stacked screen.
+ * Rows resume the full-screen conversation ([onOpenSession]); deleting shows an Undo snackbar
+ * and commits after the window. The empty state routes to the Library tab ([onBrowseLibrary]).
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatHistoryScreen(
-    onBack: () -> Unit,
     onOpenSession: (Long, String?) -> Unit,
+    onBrowseLibrary: () -> Unit,
+    onBack: (() -> Unit)? = null,
     viewModel: ChatHistoryViewModel = hiltViewModel(),
 ) {
     val rows by viewModel.rows.collectAsState()
+    val feedback = LocalFeedbackController.current
+    val deletedId by viewModel.chatDeleted.collectAsState()
+    val deletedText = stringResource(R.string.chat_deleted)
+    val undoLabel = stringResource(R.string.action_undo)
+    LaunchedEffect(deletedId) {
+        val id = deletedId ?: return@LaunchedEffect
+        feedback.show(
+            FeedbackMessage(
+                text = deletedText,
+                primary = FeedbackAction(undoLabel) { viewModel.undoDelete(id) },
+            ),
+        )
+        viewModel.consumeChatDeleted()
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.chat_history_title)) },
+                title = { Text(stringResource(R.string.nav_chat)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
+                    if (onBack != null) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
+                        }
                     }
                 },
             )
@@ -135,6 +175,8 @@ fun ChatHistoryScreen(
                 EmptyState(
                     title = stringResource(R.string.chat_history_empty),
                     body = stringResource(R.string.chat_history_empty_body),
+                    actionLabel = stringResource(R.string.chat_empty_cta),
+                    onAction = onBrowseLibrary,
                     modifier = Modifier.padding(padding),
                 )
             else ->
@@ -187,6 +229,15 @@ private fun ChatHistoryRowItem(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (!row.snippet.isNullOrEmpty()) {
+                Text(
+                    row.snippet,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
@@ -225,12 +276,32 @@ private fun ChatHistoryRowPreview() {
     ArxiverTheme {
         Column {
             ChatHistoryRowItem(
-                ChatHistoryRow(1, RetrievalScope.Paper("2401.00001"), false, "Attention Is All You Need", 0L),
+                ChatHistoryRow(
+                    1,
+                    RetrievalScope.Paper("2401.00001"),
+                    false,
+                    "Attention Is All You Need",
+                    "Multi-head attention runs several attention layers in parallel.",
+                    0L,
+                ),
                 onClick = {},
                 onDelete = {},
             )
             ChatHistoryRowItem(
-                ChatHistoryRow(2, RetrievalScope.Collection(7), true, "Transformers reading list", 0L),
+                ChatHistoryRow(
+                    2,
+                    RetrievalScope.Collection(7),
+                    true,
+                    "Transformers reading list",
+                    "The three papers share a positional-encoding scheme.",
+                    0L,
+                ),
+                onClick = {},
+                onDelete = {},
+            )
+            // Orphaned target (paper deleted) + no snippet yet — fallback label, no snippet line.
+            ChatHistoryRowItem(
+                ChatHistoryRow(3, RetrievalScope.Paper("gone"), false, null, null, 0L),
                 onClick = {},
                 onDelete = {},
             )

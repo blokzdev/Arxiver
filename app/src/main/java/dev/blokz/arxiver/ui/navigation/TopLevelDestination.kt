@@ -2,7 +2,9 @@ package dev.blokz.arxiver.ui.navigation
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.LibraryBooks
+import androidx.compose.material.icons.automirrored.outlined.Chat
 import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Today
@@ -34,5 +36,11 @@ enum class TopLevelDestination(
         labelRes = R.string.nav_library,
         icon = Icons.AutoMirrored.Outlined.LibraryBooks,
         selectedIcon = Icons.AutoMirrored.Filled.LibraryBooks,
+    ),
+    Chat(
+        route = "chat",
+        labelRes = R.string.nav_chat,
+        icon = Icons.AutoMirrored.Outlined.Chat,
+        selectedIcon = Icons.AutoMirrored.Filled.Chat,
     ),
 }

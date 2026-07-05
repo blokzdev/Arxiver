@@ -24,13 +24,14 @@
 
 ## 2. Navigation
 
-Single activity, Navigation-Compose, bottom navigation bar with **3 destinations** (4 once Chat lands in PC.3) + nested routes:
+Single activity, Navigation-Compose, bottom navigation bar with **4 destinations** + nested routes:
 
 ```
 BottomNav
 ├── Today      (inbox/triage feed)
 ├── Explore    (search field, Library|arXiv scope, category taxonomy as the resting state)
-└── Library    (papers | collections | tags)
+├── Library    (papers | collections | tags)
+└── Chat       (resumable conversations: recents + resume + delete/undo)
 
 Stacked routes (from anywhere):
   paper/{id}            Paper detail
@@ -63,6 +64,12 @@ Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + li
 - Local results show provenance badges (keyword/semantic/both) and similarity where applicable.
 - arXiv scope shows the rate-limit queue state gracefully ("searching arXiv…"), structured filters (category/date/sort), never raw throttle errors.
 - The keyboard **Search** action submits only on the arXiv scope; the Library scope is live-debounced with no explicit submit.
+
+### Chat
+
+- **Promoted top-level tab (PC.3)** listing resumable chat sessions, most-recently-active first — no longer buried under Settings.
+- Each row: a **scope chip** (Paper / Collection); the **label** — the paper title or collection name, resolved in one SQL JOIN (`ChatDao.observeSessionRows()`, replacing the per-row `paperById` N+1), falling back to a generic "removed paper/collection" label when the target was deleted; a **snippet** — the latest non-empty message (assistant answer in the normal case; a Done-with-no-text turn persists `content = ''` and is skipped, so a ghost bubble is never a preview), omitted when the session has no non-empty message yet; and a **relative time**.
+- Tapping a row resumes the conversation (`chat/session`). **Delete** hides the row immediately and shows an **Undo** snackbar; the hard delete is committed on the application scope after the undo window, so it survives navigating away from the tab (Undo cancels the pending commit). The empty state offers a **Browse your library** CTA that switches to the Library tab. There is no Settings entry point — the Chat tab is the single entry.
 
 ### Library
 - Tabs: Papers (filter/sort: added, updated, rating, status), Collections (grid), Tags (chips cloud → filtered list).

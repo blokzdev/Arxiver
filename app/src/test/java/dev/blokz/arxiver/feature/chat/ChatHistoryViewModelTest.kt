@@ -23,7 +23,6 @@ import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.core.search.ScopedChunk
 import dev.blokz.arxiver.data.ChatRepository
-import dev.blokz.arxiver.data.LibraryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -106,12 +105,7 @@ class ChatHistoryViewModelTest {
         )
     }
 
-    private fun viewModel() =
-        ChatHistoryViewModel(
-            chatRepository(),
-            db.paperDao(),
-            LibraryRepository(db.libraryDao(), db.inboxDao()),
-        )
+    private fun viewModel() = ChatHistoryViewModel(chatRepository())
 
     private suspend fun seedPaper(
         id: String,

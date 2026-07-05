@@ -83,7 +83,6 @@ object Routes {
     const val AI_SETTINGS = "settings/ai"
     const val ONBOARDING = "onboarding"
     const val DISPATCH_HISTORY = "claude/history"
-    const val CHAT_HISTORY = "chat/history"
     const val CHAT_SESSION = "chat/session/{sessionId}?title={title}"
     const val CHAT_NEW = "chat/new/{scopeKind}/{scopeId}?title={title}"
     const val FILTERED_PAPERS = "library/{mode}/{id}?title={title}"
@@ -209,17 +208,10 @@ fun ArxiverApp(
                         onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
                         onOpenTemplates = { navController.navigate(Routes.TEMPLATE_CATALOG) },
                         onOpenAiProviders = { navController.navigate(Routes.AI_SETTINGS) },
-                        onOpenChatHistory = { navController.navigate(Routes.CHAT_HISTORY) },
                     )
                 }
                 composable(Routes.AI_SETTINGS) {
                     AiProviderSettingsScreen(onBack = { navController.popBackStack() })
-                }
-                composable(Routes.CHAT_HISTORY) {
-                    ChatHistoryScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenSession = { id, title -> navController.navigate(Routes.chatSession(id, title)) },
-                    )
                 }
                 // Full-screen conversation (P-Chat PC.1) — resume and fork variants share one
                 // screen. Deliberately NOT launchSingleTop: AskViewModel binds once per backstack
@@ -311,6 +303,28 @@ fun ArxiverApp(
                         },
                         onTagClick = { id, name ->
                             navController.navigate(Routes.filteredPapers("tag", id, "#$name"))
+                        },
+                    )
+                }
+
+                // Chat tab (P-Chat PC.3): the promoted recents surface. onBack = null hides the
+                // back arrow (it is a top-level destination); rows resume the PC.1 full-screen
+                // route; the empty state routes to the Library tab (multi-back-stack switch).
+                composable(
+                    route = TopLevelDestination.Chat.route,
+                    enterTransition = fadeThroughEnter,
+                    exitTransition = fadeThroughExit,
+                    popEnterTransition = fadeThroughEnter,
+                    popExitTransition = fadeThroughExit,
+                ) {
+                    ChatHistoryScreen(
+                        onOpenSession = { id, title -> navController.navigate(Routes.chatSession(id, title)) },
+                        onBrowseLibrary = {
+                            navController.navigate(TopLevelDestination.Library.route) {
+                                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         },
                     )
                 }

@@ -22,16 +22,22 @@ import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.dao.ChatDao
+import dev.blokz.arxiver.core.database.dao.ChatSessionRow
 import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
 import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** A cited source backing an answer's `[index]` reference (P-Rich R0 — render-only). */
@@ -96,6 +102,11 @@ class ChatRepository(
     private val embedQuery: suspend (String) -> AppResult<FloatArray>,
     private val dispatchers: DispatcherProvider,
     private val clock: () -> Long = { System.currentTimeMillis() },
+    // App-lifetime scope for the delayed-commit delete (PC.3): the commit must outlive the
+    // ChatHistoryViewModel that started it — viewModelScope is cancelled the instant the user
+    // navigates off the Chat tab, which would abort the delete. Injected in prod (the shared
+    // @Singleton applicationScope); defaulted for tests.
+    private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io),
 ) {
     suspend fun prepare(
         scope: RetrievalScope,
@@ -343,10 +354,45 @@ class ChatRepository(
 
     fun observeMessages(sessionId: Long): Flow<List<ChatMessageEntity>> = chatDao.observeMessages(sessionId)
 
-    /** All sessions across scopes, most-recently-active first (chat-history list). */
-    fun observeAllSessions(): Flow<List<ChatSessionEntity>> = chatDao.observeAllSessions()
+    /** The promoted chat-history list (PC.3): scope label + snippet resolved in SQL, no N+1. */
+    fun observeSessionRows(): Flow<List<ChatSessionRow>> = chatDao.observeSessionRows()
 
-    suspend fun deleteSession(id: Long) = withContext(dispatchers.io) { chatDao.deleteSession(id) }
+    // Pending hard-deletes keyed by session id (PC.3). Mutated only under this object's monitor
+    // (@Synchronized / synchronized(this)) — never a coroutine Mutex, which can't be acquired
+    // from the non-suspend schedule/undo entry points and would force a lost-cancel race.
+    private val pendingDeletes = HashMap<Long, Job>()
+
+    /**
+     * Schedule a hard delete after the undo window (PC.3); [undoDelete] cancels it. Runs on
+     * [appScope] so it survives the ChatHistoryViewModel being cleared (tab switch). The
+     * [delay] is cancellable (undo wins); the DAO delete is [NonCancellable] so an app-scope
+     * teardown mid-write can't corrupt. Message rows cascade on the session delete.
+     */
+    @Synchronized
+    fun scheduleDelete(id: Long) {
+        pendingDeletes.remove(id)?.cancel() // a re-delete of the same id replaces the old job
+        pendingDeletes[id] =
+            appScope.launch {
+                delay(UNDO_WINDOW_MS)
+                withContext(NonCancellable) { chatDao.deleteSession(id) }
+                // Clear the slot only if it still holds THIS job — after the commit, an undo +
+                // re-schedule could have installed a new job B for the same id; an unconditional
+                // remove would evict B untracked (benign, since the row is already gone, but B
+                // would then be un-undoable). remove(key, value) drops nothing that isn't ours.
+                synchronized(this@ChatRepository) { pendingDeletes.remove(id, coroutineContext[Job]) }
+            }
+    }
+
+    /** Cancel a pending delete (the user tapped Undo) — no-op if it already committed. */
+    @Synchronized
+    fun undoDelete(id: Long) {
+        pendingDeletes.remove(id)?.cancel()
+    }
+
+    companion object {
+        /** The delete undo window — matched to the feedback snackbar's LONG duration (8 s). */
+        const val UNDO_WINDOW_MS = 8_000L
+    }
 
     /** Persist a partial/failed turn even if the surrounding coroutine is cancelled. */
     private suspend fun finalize(
