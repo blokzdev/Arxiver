@@ -28,6 +28,7 @@ import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
+import dev.blokz.arxiver.data.tool.ToolConsent
 import dev.blokz.arxiver.data.tool.ToolContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -61,8 +62,13 @@ data class PreparedChat(
     val richness: OutputRichness,
     /** The turn's note-privacy gate — threaded to a tool call so a library search honors it (P-Tools PT.1). */
     val includeNotes: Boolean,
-    /** Whether a tool (search_my_library) attaches this turn = provider supports tools AND user opted in. */
-    val toolsEnabled: Boolean,
+    /**
+     * The tool consent in force for this turn (P-Tools): [ToolConsent.library] gates the LOCAL
+     * `search_my_library`; [ToolConsent.external] gates the EXTERNAL arXiv tools (PT.2). Each is the AND
+     * of provider tool-support and the user's per-conversation opt-in — the registry offers exactly the
+     * enabled subset, and `ToolConsent.external` is also the execute-time gate for the first egress.
+     */
+    val consent: ToolConsent,
     internal val provider: AiProvider,
 )
 
@@ -130,6 +136,9 @@ class ChatRepository(
         // P-Tools PT.1: per-conversation opt-in to let the model search the user's library. Default
         // false ⇒ no tool attaches ⇒ the turn is byte-identical to a pre-P-Tools chat.
         toolsEnabled: Boolean = false,
+        // P-Tools PT.2: per-conversation opt-in to let the model reach the live arXiv API (the first
+        // EXTERNAL egress). Default false ⇒ no external tool attaches ⇒ byte-identical to pre-PT.2.
+        webSearchEnabled: Boolean = false,
     ): ChatPrepareResult =
         withContext(dispatchers.io) {
             val provider =
@@ -165,8 +174,12 @@ class ChatRepository(
 
             // The assembler drops the image unless capability.vision is true (R3d M2/M3),
             // so an attachment never reaches a non-vision/on-device provider.
-            // The library tool attaches only when the provider supports tools AND the user opted in.
-            val toolsAttached = capability.supportsTools && toolsEnabled
+            // A tool attaches only when the provider supports tools AND the user opted into that class:
+            // library (LOCAL, PT.1) and external (arXiv, PT.2) are independent gates.
+            val libraryAttached = capability.supportsTools && toolsEnabled
+            val externalAttached = capability.supportsTools && webSearchEnabled
+            val consent = ToolConsent(library = libraryAttached, external = externalAttached)
+            val toolsAttached = libraryAttached || externalAttached
             val assembled =
                 assembler.assemble(
                     question,
@@ -183,19 +196,26 @@ class ChatRepository(
                 )
             val citations = assembled.citedChunks.mapIndexed { i, c -> Citation(i + 1, c.paperId, c.text) }
 
+            // Attach the EXACT tool defs the loop will send (SPEC-P-TOOLS §9 hard confirm gate): the
+            // assembler only appends the neutral system addendum, so a preview built from its request
+            // would silently omit the external tools — the "what leaves the device" sheet must list them.
+            // Same source as the loop (ChatToolLoop.toolDefsFor) → confirm + stream can never drift.
+            val toolDefs = toolLoop.toolDefsFor(provider, consent)
+            val request = assembled.request.copy(tools = toolDefs)
+
             ChatPrepareResult.Ready(
                 PreparedChat(
                     scope = scope,
                     sessionId = sessionId,
                     question = question,
-                    request = assembled.request,
+                    request = request,
                     providerId = provider.id,
                     isCloud = provider.capability.requiresKey,
-                    preview = previewBuilder.build(assembled.request),
+                    preview = previewBuilder.build(request),
                     citations = citations,
                     richness = capability.richness,
                     includeNotes = includeNotes,
-                    toolsEnabled = toolsAttached,
+                    consent = consent,
                     provider = provider,
                 ),
             )
@@ -300,9 +320,15 @@ class ChatRepository(
                 toolLoop.run(
                     provider = prepared.provider,
                     state = state,
-                    // The library tool attaches only when the user opted in for this conversation (PT.1).
-                    attachTools = prepared.toolsEnabled,
-                    toolContext = ToolContext(includeNotes = prepared.includeNotes),
+                    // The registry offers exactly the consented subset (library and/or external, PT.1/PT.2).
+                    consent = prepared.consent,
+                    // externalEnabled is the execute-time gate for the first egress: a hallucinated
+                    // external call in a web-off turn is refused before the seam runs.
+                    toolContext =
+                        ToolContext(
+                            includeNotes = prepared.includeNotes,
+                            externalEnabled = prepared.consent.external,
+                        ),
                     emit = { emit(it) },
                     // P-Tools PT.1: surface each executed tool step as a loop-authored ToolActivity chunk
                     // on the same stream as Delta, so the VM renders it in chronological position.
@@ -434,15 +460,25 @@ class ChatRepository(
     /** Observe one session for the full-screen route's live title (P-Chat PC.5). */
     fun observeSession(id: Long): Flow<ChatSessionEntity?> = chatDao.observeSession(id)
 
-    /** Set per-conversation consent to attach EXTERNAL tools (P-Tools PT.0; gates attachment PT.2+). */
+    /** Set per-conversation consent to attach the LOCAL library-search tool (P-Tools PT.1). */
     suspend fun setToolsEnabled(
         id: Long,
         enabled: Boolean,
     ) = withContext(dispatchers.io) { chatDao.setToolsEnabled(id, enabled) }
 
-    /** One-shot read of a session's external-tool consent (P-Tools PT.0). */
+    /** One-shot read of a session's LOCAL library-search consent (P-Tools PT.1). */
     suspend fun toolsEnabledFor(id: Long): Boolean =
         withContext(dispatchers.io) { chatDao.sessionById(id)?.toolsEnabled ?: false }
+
+    /** Set per-conversation consent to attach the EXTERNAL arXiv tools (P-Tools PT.2). */
+    suspend fun setWebSearchEnabled(
+        id: Long,
+        enabled: Boolean,
+    ) = withContext(dispatchers.io) { chatDao.setWebSearchEnabled(id, enabled) }
+
+    /** One-shot read of a session's EXTERNAL web-tool consent (P-Tools PT.2). */
+    suspend fun webSearchEnabledFor(id: Long): Boolean =
+        withContext(dispatchers.io) { chatDao.sessionById(id)?.webSearchEnabled ?: false }
 
     /** The persisted tool steps of an assistant turn, in call order (P-Tools PT.1 activity hydration). */
     suspend fun toolInvocationsFor(messageId: Long): List<ToolInvocationEntity> =

@@ -14,8 +14,8 @@ import dev.blokz.arxiver.core.ai.ToolResult
  * can recover on the next turn rather than aborting the whole conversation.
  */
 interface ToolExecutor {
-    /** The tools offered to the model this turn (already consent/egress-filtered by the caller). */
-    fun toolDefs(): List<ToolDef>
+    /** The tools offered to the model this turn, filtered to the classes the user consented to ([consent]). */
+    fun toolDefs(consent: ToolConsent): List<ToolDef>
 
     /** Run one call with the per-turn [context]. Never throws; errors become an error [ToolResult]. */
     suspend fun execute(
@@ -25,11 +25,29 @@ interface ToolExecutor {
 }
 
 /**
- * Per-turn context threaded to every tool call (P-Tools PT.1). [includeNotes] mirrors the user's
- * privacy gate for the turn — a local library search must skip note-derived ranking when it's off,
- * so private note text never influences what returns to the cloud model.
+ * The per-conversation tool consent for a turn (P-Tools). [library] gates the LOCAL library-search
+ * tool (PT.1); [external] gates the EXTERNAL web tools (arXiv, PT.2) — separate because a user may
+ * want library-yes / web-no. The registry offers exactly the enabled subset.
  */
-data class ToolContext(val includeNotes: Boolean)
+data class ToolConsent(
+    val library: Boolean,
+    val external: Boolean,
+) {
+    companion object {
+        val NONE = ToolConsent(library = false, external = false)
+    }
+}
+
+/**
+ * Per-turn context threaded to every tool call (P-Tools). [includeNotes] mirrors the user's note
+ * privacy gate (a local library search skips note-derived ranking when off). [externalEnabled] is the
+ * execute-time guard for the first external egress (PT.2): a hallucinated external call in a
+ * web-search-off turn is refused before the seam runs, so nothing egresses without consent.
+ */
+data class ToolContext(
+    val includeNotes: Boolean,
+    val externalEnabled: Boolean,
+)
 
 /**
  * One executed tool step: the [result] fed back to the model, plus the audit facts the tool loop
@@ -49,7 +67,7 @@ data class ToolExecution(
  * to pre-P-Tools behavior).
  */
 object NoToolExecutor : ToolExecutor {
-    override fun toolDefs(): List<ToolDef> = emptyList()
+    override fun toolDefs(consent: ToolConsent): List<ToolDef> = emptyList()
 
     override suspend fun execute(
         call: ToolCall,

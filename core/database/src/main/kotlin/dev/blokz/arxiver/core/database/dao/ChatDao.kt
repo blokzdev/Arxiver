@@ -58,9 +58,16 @@ interface ChatDao {
         title: String?,
     )
 
-    /** Set/clear per-conversation consent to attach external tools (P-Tools PT.0). */
+    /** Set/clear per-conversation consent to attach the LOCAL library-search tool (P-Tools PT.1). */
     @Query("UPDATE chat_sessions SET tools_enabled = :enabled WHERE id = :id")
     suspend fun setToolsEnabled(
+        id: Long,
+        enabled: Boolean,
+    )
+
+    /** Set/clear per-conversation consent to attach the EXTERNAL web tools (P-Tools PT.2). */
+    @Query("UPDATE chat_sessions SET web_search_enabled = :enabled WHERE id = :id")
+    suspend fun setWebSearchEnabled(
         id: Long,
         enabled: Boolean,
     )

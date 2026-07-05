@@ -61,6 +61,10 @@ data class AskUiState(
      *  gates whether search_my_library attaches (its matching abstracts egress to the cloud model).
      *  Default off (privacy-first). */
     val toolsEnabled: Boolean = false,
+    /** Per-conversation opt-in to let the model reach the live arXiv API (P-Tools PT.2 — the first
+     *  EXTERNAL egress: search/get/import send the query to arxiv.org, a third party). Persisted;
+     *  independent of [toolsEnabled]. Default off (privacy-first). */
+    val webSearchEnabled: Boolean = false,
     /** True while the scope's papers are being chunk-embedded on open (collections). */
     val indexing: Boolean = false,
     /** True while start()-time session resolution/hydration is reading the DB (PC.1). */
@@ -195,8 +199,15 @@ class AskViewModel
                                 is SessionStart.New -> savedStateHandle[KEY_BOUND_SESSION_ID]
                             }
                         this@AskViewModel.sessionId = resume ?: return@launch
-                        // Seed the per-conversation tool consent (P-Tools PT.1) so it survives process death.
-                        _uiState.update { it.copy(toolsEnabled = chatRepository.toolsEnabledFor(resume)) }
+                        // Seed both per-conversation tool consents (P-Tools PT.1/PT.2) so they survive
+                        // process death. webSearchEnabledFor reads the SEPARATE web_search_enabled column —
+                        // NOT toolsEnabled — so the external gate never mirrors the library gate.
+                        _uiState.update {
+                            it.copy(
+                                toolsEnabled = chatRepository.toolsEnabledFor(resume),
+                                webSearchEnabled = chatRepository.webSearchEnabledFor(resume),
+                            )
+                        }
                         val rows =
                             chatRepository.observeMessages(resume).first()
                                 // A mid-stream process death leaves a 0-char `incomplete` assistant row —
@@ -267,10 +278,13 @@ class AskViewModel
         private fun bindSession(id: Long) {
             sessionId = id
             savedStateHandle[KEY_BOUND_SESSION_ID] = id
-            // Flush a consent flag the user set BEFORE the session existed (P-Tools PT.1) — a New
-            // conversation's toggle can't persist until its first send lazily creates the session.
+            // Flush consent flags the user set BEFORE the session existed (P-Tools PT.1/PT.2) — a New
+            // conversation's toggles can't persist until its first send lazily creates the session.
             if (_uiState.value.toolsEnabled) {
                 viewModelScope.launch { chatRepository.setToolsEnabled(id, true) }
+            }
+            if (_uiState.value.webSearchEnabled) {
+                viewModelScope.launch { chatRepository.setWebSearchEnabled(id, true) }
             }
         }
 
@@ -297,6 +311,17 @@ class AskViewModel
         fun setToolsEnabled(value: Boolean) {
             _uiState.update { it.copy(toolsEnabled = value) }
             sessionId?.let { id -> viewModelScope.launch { chatRepository.setToolsEnabled(id, value) } }
+        }
+
+        /**
+         * Toggle the per-conversation opt-in to let the model reach the live arXiv API (P-Tools PT.2 —
+         * the first EXTERNAL egress). Same machinery as [setToolsEnabled]: optimistic in-memory,
+         * persisted to the SEPARATE web_search_enabled column when a session exists (else flushed at
+         * [bindSession] on the first send). Gates whether the external arXiv tools attach on the next send.
+         */
+        fun setWebSearchEnabled(value: Boolean) {
+            _uiState.update { it.copy(webSearchEnabled = value) }
+            sessionId?.let { id -> viewModelScope.launch { chatRepository.setWebSearchEnabled(id, value) } }
         }
 
         fun setMode(mode: ChatMode) = _uiState.update { it.copy(mode = mode) }
@@ -388,6 +413,7 @@ class AskViewModel
                         _uiState.value.includeNotes,
                         mode,
                         toolsEnabled = _uiState.value.toolsEnabled,
+                        webSearchEnabled = _uiState.value.webSearchEnabled,
                     )
                 handlePrepared(result, mode)
             }
@@ -435,6 +461,7 @@ class AskViewModel
                         mode,
                         attachment = image,
                         toolsEnabled = _uiState.value.toolsEnabled,
+                        webSearchEnabled = _uiState.value.webSearchEnabled,
                     )
                 handlePrepared(result, mode)
             }

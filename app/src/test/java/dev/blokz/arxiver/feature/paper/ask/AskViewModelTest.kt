@@ -56,6 +56,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -188,7 +189,16 @@ class AskViewModelTest {
         override suspend fun setToolsEnabled(
             id: Long,
             enabled: Boolean,
-        ) = Unit
+        ) {
+            sessions.value = sessions.value.map { if (it.id == id) it.copy(toolsEnabled = enabled) else it }
+        }
+
+        override suspend fun setWebSearchEnabled(
+            id: Long,
+            enabled: Boolean,
+        ) {
+            sessions.value = sessions.value.map { if (it.id == id) it.copy(webSearchEnabled = enabled) else it }
+        }
 
         override suspend fun insertToolInvocations(rows: List<ToolInvocationEntity>) = Unit
 
@@ -782,6 +792,45 @@ class AskViewModelTest {
                 "every turn stays in the session THIS surface displays, never the scope's newest",
             )
             assertTrue(chatDao.messagesFor(sessionB).isEmpty(), "the other surface's session is untouched")
+        }
+
+    // --- P-Tools PT.2: the web-search consent VM wiring (seed from its own column, persist, independence) ---
+
+    @Test
+    fun `web-search consent seeds from its own column and persists to it (PT2, anti copy-paste)`() =
+        runTest(dispatcher) {
+            // A resumed session that opted into WEB search but NOT library — the two columns are distinct.
+            // A copy-paste reading tools_enabled into webSearchEnabled (or the reverse) would flip these.
+            val sid =
+                chatDao.insertSession(
+                    ChatSessionEntity(
+                        scope = ChatSessionEntity.SCOPE_PAPER,
+                        scopeId = "2401.00001",
+                        providerId = "CLAUDE",
+                        createdAt = 1,
+                        lastMessageAt = 1,
+                        toolsEnabled = false,
+                        webSearchEnabled = true,
+                    ),
+                )
+            val vm =
+                vm(
+                    cloudProvider { flowOf(ChatChunk.Done()) },
+                    selected = ProviderId.CLAUDE,
+                    keys = setOf(ProviderId.CLAUDE),
+                    resumeSessionId = sid,
+                )
+            advanceUntilIdle()
+            assertTrue(vm.uiState.value.webSearchEnabled, "web consent seeds from web_search_enabled")
+            assertFalse(vm.uiState.value.toolsEnabled, "the library gate is NOT mirrored from the web column")
+
+            // Toggle off → optimistic UI + persisted to the web column only (library column untouched).
+            vm.setWebSearchEnabled(false)
+            advanceUntilIdle()
+            assertFalse(vm.uiState.value.webSearchEnabled)
+            val row = chatDao.sessionById(sid)!!
+            assertFalse(row.webSearchEnabled, "persisted to web_search_enabled")
+            assertFalse(row.toolsEnabled, "the library column stays untouched")
         }
 
     @Test

@@ -165,6 +165,17 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [~] **M-PH7-6 Reader-hosted Ask parity (PH.7)** — pin-to-notes lands in the paper's notes with the snackbar; share/export work; cross-ref opens the paper; the session resumes the SAME conversation the detail screen shows; the top-bar Ask works with no selection. _(P-HTML PH.7)_
 - [ ] **M-PH5-6 First-paint latency + no starvation (PH.5)** — text + math paint promptly on first download (two-phase), figures pop in after; the **30s deadline** stops a pathological survey paper from holding the shared ≥3s slot indefinitely, and a **concurrent FollowSync still progresses** during a figure-heavy open. _(P-HTML PH.5)_
 
+## Q-PT. Agentic in-chat tool-use (Phase P-Tools) _(SPEC-P-TOOLS)_
+> CI covers the pure/loop/registry/migration/disclosure pieces: `ChatToolLoopTest`, `ToolRegistryTest`,
+> `ToolPackageNoOkHttpStructuralTest`, `Migration4To5Test`/`Migration5To6Test`, `ChatRepositoryTest`,
+> `ChatPreviewBuilderTest`, provider SSE tool-block tests. What needs a live cloud key + hardware:
+- [ ] **Q-PT1 Library search, live (PT.1)** — a cloud turn with the **Library** chip on: the model calls `search_my_library`, the inline activity bubble shows "Searched your library: …" (neutral, `egress=false`), and the answer cites saved papers as prose `arXiv:<id>`. With the chip off, no tool attaches (byte-identical to a pre-tools turn).
+- [ ] **Q-PT2 arXiv search/get/import round-trip, live (PT.2)** — a cloud turn with the **Web search** chip on: `search_arxiv` (fragmented `input_json_delta`/`functionCall` SSE reassembles), `get_paper`, and `import_to_library` each run; each activity bubble shows the accent-tinted "… (left your device)" wording (`egress=true`), and the confirm sheet discloses "sends your query to arXiv, a third party."
+- [ ] **Q-PT3 Import → reader loop-closer (PT.2)** — after `import_to_library` of a fresh id, the paper appears in the Library AND opening it lands in the P-HTML reader / PDF by the same (un-versioned) id — no re-fetch, no new nav.
+- [ ] **Q-PT4 Two-gate consent + per-message stickiness (PT.2)** — Library-on / Web-off honors library-yes-web-no (no arXiv egress); flipping a chip between two consecutive sends attaches/omits the class accordingly; both chips survive process death (persisted columns). A hallucinated `search_arxiv` in a web-off turn is refused with no egress.
+- [ ] **Q-PT5 Rate-limit spacing on a multi-call turn (PT.2)** — a 3–4-call external turn spaces ≥3s between arXiv fetches (serial through the shared limiter); no burst; a concurrent FollowSync still progresses.
+- [ ] **Q-PT6 TalkBack on the composer deck** — the Library/Web-search chips announce their selected state + label; the egress activity bubbles read their "left your device" text.
+
 ## P-PC5. Pinned sections + rename (P-Chat PC.5) _(ROADMAP P-Chat)_
 
 - [ ] **P-PC5-1 Pin/unpin** — pinning a chat floats it into a **Pinned** section header above **Recent**; the row **animates** across the boundary (not a teleport); unpin returns it to Recent; an all-recent list shows no section header.

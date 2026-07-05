@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
@@ -43,6 +44,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -91,6 +93,7 @@ import dev.blokz.arxiver.chat.ChatPreview
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.data.Citation
+import dev.blokz.arxiver.data.tool.ToolRegistry
 import dev.blokz.arxiver.ui.EXPORT_DIR
 import dev.blokz.arxiver.ui.markdown.ConversationPdfPrinter
 import dev.blokz.arxiver.ui.markdown.MarkdownText
@@ -279,6 +282,7 @@ internal fun ConversationHost(
         onSetMode = viewModel::setMode,
         onSetIncludeNotes = viewModel::setIncludeNotes,
         onSetToolsEnabled = viewModel::setToolsEnabled,
+        onSetWebSearchEnabled = viewModel::setWebSearchEnabled,
         onConfirmSend = viewModel::confirmSend,
         onCancelConfirm = viewModel::cancelConfirm,
         onStop = viewModel::cancel,
@@ -347,6 +351,7 @@ internal fun AskSheetContent(
     onSetMode: (ChatMode) -> Unit,
     onSetIncludeNotes: (Boolean) -> Unit,
     onSetToolsEnabled: (Boolean) -> Unit,
+    onSetWebSearchEnabled: (Boolean) -> Unit,
     onConfirmSend: () -> Unit,
     onCancelConfirm: () -> Unit,
     onStop: () -> Unit,
@@ -536,10 +541,19 @@ internal fun AskSheetContent(
             }
             ModeRow(mode = state.mode, enabled = !state.streaming && !state.preparing, onSetMode = onSetMode)
             IncludeNotesRow(state.includeNotes, onSetIncludeNotes)
-            // P-Tools PT.1: opt-in to let the model search the user's library (matching abstracts
-            // egress to the cloud model — the toggle IS the disclosure). Cloud turns only (on-device
-            // has no tools); persisted per conversation, default off.
-            if (state.isCloud) SearchLibraryRow(state.toolsEnabled, onSetToolsEnabled)
+            // P-Tools PT.1/PT.2: the per-message composer tool deck — chips that opt this conversation
+            // into the LOCAL library search (matching abstracts egress to the cloud model) and/or the
+            // EXTERNAL arXiv tools (queries egress to arxiv.org). Cloud turns only (on-device has no
+            // tools); each is persisted per conversation, default off; the caption is the disclosure.
+            if (state.isCloud) {
+                ComposerToolDeck(
+                    toolsEnabled = state.toolsEnabled,
+                    webSearchEnabled = state.webSearchEnabled,
+                    enabled = !state.streaming && !state.preparing,
+                    onSetToolsEnabled = onSetToolsEnabled,
+                    onSetWebSearchEnabled = onSetWebSearchEnabled,
+                )
+            }
             InputRow(
                 input = state.input,
                 streaming = state.streaming,
@@ -986,32 +1000,73 @@ private fun IncludeNotesRow(
     }
 }
 
-/** Per-conversation opt-in to let the model search the user's library (P-Tools PT.1). Mirrors
- *  [IncludeNotesRow]; the hint discloses that matching abstracts egress to the cloud model. */
+/**
+ * The per-message composer tool deck (P-Tools PT.2) — ChatGPT/Claude-style chips above the input that
+ * opt this conversation into each tool CLASS. Library (LOCAL) surfaces the user's saved abstracts to
+ * the cloud model; Web search (EXTERNAL) sends the query to arXiv, a third party. The one-line caption
+ * IS the disclosure (the two egress classes stay distinct). Both are sticky per-conversation toggles
+ * read live at send time, so the set in effect at send is honored per-message.
+ */
 @Composable
-private fun SearchLibraryRow(
+private fun ComposerToolDeck(
+    toolsEnabled: Boolean,
+    webSearchEnabled: Boolean,
     enabled: Boolean,
-    onSetEnabled: (Boolean) -> Unit,
+    onSetToolsEnabled: (Boolean) -> Unit,
+    onSetWebSearchEnabled: (Boolean) -> Unit,
 ) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.ask_search_library), style = MaterialTheme.typography.bodyMedium)
-            Text(
-                stringResource(R.string.ask_search_library_hint),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Row(
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            FilterChip(
+                selected = toolsEnabled,
+                onClick = { onSetToolsEnabled(!toolsEnabled) },
+                enabled = enabled,
+                leadingIcon = { Icon(Icons.Outlined.Search, null, modifier = Modifier.size(18.dp)) },
+                label = { Text(stringResource(R.string.ask_search_library)) },
+            )
+            FilterChip(
+                selected = webSearchEnabled,
+                onClick = { onSetWebSearchEnabled(!webSearchEnabled) },
+                enabled = enabled,
+                leadingIcon = { Icon(Icons.Outlined.Public, null, modifier = Modifier.size(18.dp)) },
+                label = { Text(stringResource(R.string.ask_web_search)) },
             )
         }
-        Switch(checked = enabled, onCheckedChange = onSetEnabled)
+        Text(
+            stringResource(R.string.ask_tool_deck_caption),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
-/** The compact inline "Searched your library: …" chip for a [AskRole.TOOL] step (P-Tools PT.1). */
+/**
+ * The compact inline activity chip for a [AskRole.TOOL] step (P-Tools PT.1/PT.2). Branches on
+ * [ToolActivity.egress]: a LOCAL step reads "Searched your library" (neutral); an EXTERNAL step reads
+ * "… (left your device)" per tool, tinted with an accent + globe icon so the egress is visible — the
+ * bubble must never mislabel a third-party arXiv egress as an on-device search (red-line disclosure).
+ */
 @Composable
 private fun ToolActivityBubble(activity: ToolActivity?) {
     if (activity == null) return
+    val external = activity.egress
+    val labelRes =
+        when {
+            !external -> R.string.ask_tool_activity_local
+            activity.toolName == ToolRegistry.GET_PAPER_NAME -> R.string.ask_tool_activity_fetch
+            activity.toolName == ToolRegistry.IMPORT_NAME -> R.string.ask_tool_activity_import
+            // search_arxiv and any other external tool: the generic "searched arXiv, left your device".
+            else -> R.string.ask_tool_activity_arxiv
+        }
+    val container =
+        if (external) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow
+    val content =
+        if (external) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        color = container,
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -1021,15 +1076,15 @@ private fun ToolActivityBubble(activity: ToolActivity?) {
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
             Icon(
-                Icons.Outlined.Search,
+                if (external) Icons.Outlined.Public else Icons.Outlined.Search,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                tint = content,
                 modifier = Modifier.size(18.dp),
             )
             Text(
-                stringResource(R.string.ask_tool_activity_local, activity.query),
+                stringResource(labelRes, activity.query),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = content,
             )
         }
     }
@@ -1087,7 +1142,7 @@ private fun AskSheetEmptyPreview() {
             presets = AskPresets.forScope(isPaper = true),
             onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
             onRunGraphArtifact = {}, onFollowUp = {},
-            onSetMode = {}, onSetIncludeNotes = {}, onSetToolsEnabled = {},
+            onSetMode = {}, onSetIncludeNotes = {}, onSetToolsEnabled = {}, onSetWebSearchEnabled = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
@@ -1130,7 +1185,7 @@ private fun AskSheetConversationPreview() {
             presets = AskPresets.forScope(isPaper = true, visionAvailable = true),
             onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
             onRunGraphArtifact = {}, onFollowUp = {},
-            onSetMode = {}, onSetIncludeNotes = {}, onSetToolsEnabled = {},
+            onSetMode = {}, onSetIncludeNotes = {}, onSetToolsEnabled = {}, onSetWebSearchEnabled = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
