@@ -159,7 +159,10 @@ internal fun truncateToolResult(
 ): String {
     if (content.length <= budget) return content
     val marker = "…[truncated]"
-    var end = (budget - marker.length).coerceAtLeast(0)
+    // A budget too small to hold even the marker degrades to a hard clip (defensive; unreachable
+    // in practice — DEFAULT_RESULT_CHAR_BUDGET is 4000).
+    if (budget <= marker.length) return content.take(budget)
+    var end = budget - marker.length
     if (end > 0 && content[end - 1].isHighSurrogate()) end -= 1
     return content.substring(0, end) + marker
 }
