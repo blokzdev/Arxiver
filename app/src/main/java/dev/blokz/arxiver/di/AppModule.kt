@@ -353,13 +353,23 @@ object AppModule {
         // failed job never kills the scope.
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + dispatchers.io)
 
+    // P-Tools PT.3: S2 now runs on the @ArxivClient host-gated client (egress allowlisted to
+    // api.semanticscholar.org — the previously-aspirational gate now fires). The 1.2s mutex is internal
+    // to the client, so gating adds no ≥3s throttle. apiKey is a per-request supplier reading the
+    // optional BYOK key from the vault (absent → free tier); a key entered after this singleton builds
+    // is still honored (mirrors anthropicProvider).
     @Provides
     @Singleton
     fun semanticScholarClient(
-        httpClient: OkHttpClient,
+        @ArxivClient httpClient: OkHttpClient,
         dispatchers: DispatcherProvider,
+        aiKeyVault: dev.blokz.arxiver.core.ai.AiKeyVault,
     ): dev.blokz.arxiver.core.network.s2.SemanticScholarClient =
-        dev.blokz.arxiver.core.network.s2.SemanticScholarClient(httpClient, dispatchers)
+        dev.blokz.arxiver.core.network.s2.SemanticScholarClient(
+            httpClient,
+            dispatchers,
+            apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.SEMANTIC_SCHOLAR) },
+        )
 
     @Provides
     fun embeddingDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.EmbeddingDao = db.embeddingDao()
@@ -510,6 +520,7 @@ object AppModule {
         libraryDao: dev.blokz.arxiver.core.database.dao.LibraryDao,
         paperRepository: dev.blokz.arxiver.data.PaperRepository,
         libraryRepository: dev.blokz.arxiver.data.LibraryRepository,
+        semanticScholarClient: dev.blokz.arxiver.core.network.s2.SemanticScholarClient,
     ): dev.blokz.arxiver.data.tool.ToolExecutor =
         dev.blokz.arxiver.data.tool.ToolRegistry(
             keywordSearch = { query, includeNotes, limit ->
@@ -531,6 +542,11 @@ object AppModule {
             getPaper = { id -> paperRepository.paper(id) },
             savePaper = { paperId -> libraryRepository.save(paperId) },
             isInLibrary = { paperId -> paperId in libraryDao.allPaperIds() },
+            // EXTERNAL seam (PT.3): the host-gated, 1.2s-mutex-spaced S2 client. No HTTP client reaches
+            // the registry — only this lambda; the structural no-okhttp-in-data/tool test stays green.
+            searchSemanticScholar = { query, limit, venue, from, to ->
+                semanticScholarClient.searchPapers(query, limit, venue, from, to)
+            },
         )
 
     @Provides

@@ -9,12 +9,20 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
 
 @Serializable
-data class S2ExternalIds(val ArXiv: String? = null)
+data class S2ExternalIds(
+    val ArXiv: String? = null,
+    // Added for search (PT.3): identify the third-party ids a hit carries. Defaulted-nullable, so the
+    // existing citation-sync decode (which reads only .ArXiv) is byte-untouched. `CorpusId` is
+    // deliberately omitted — it decodes as a numeric, not a String, and would crash the parse.
+    val DOI: String? = null,
+    val PubMed: String? = null,
+)
 
 @Serializable
 data class S2LinkedPaper(
@@ -31,17 +39,65 @@ data class S2Paper(
     val citations: List<S2LinkedPaper> = emptyList(),
 )
 
+// --- Search DTOs (PT.3 `search_semantic_scholar`). All nullable/defaulted so a partial/renamed
+// field never crashes the parse; `Json { ignoreUnknownKeys = true }` drops extras (incl. CorpusId). ---
+
+@Serializable
+data class S2Author(
+    val authorId: String? = null,
+    val name: String? = null,
+)
+
+/** S2's LLM-generated one-line summary — an OBJECT `{model,text}`, not a bare string. */
+@Serializable
+data class S2Tldr(
+    val model: String? = null,
+    val text: String? = null,
+)
+
+@Serializable
+data class S2OpenAccessPdf(
+    val url: String? = null,
+    val status: String? = null,
+)
+
+@Serializable
+data class S2SearchPaper(
+    val paperId: String? = null,
+    val title: String? = null,
+    val abstract: String? = null,
+    val tldr: S2Tldr? = null,
+    val openAccessPdf: S2OpenAccessPdf? = null,
+    val externalIds: S2ExternalIds? = null,
+    val venue: String? = null,
+    val year: Int? = null,
+    val authors: List<S2Author> = emptyList(),
+    val citationCount: Int? = null,
+)
+
+/** `/graph/v1/paper/search` envelope. `next` is ABSENT on the last page → nullable. */
+@Serializable
+data class S2SearchResponse(
+    val total: Int? = null,
+    val offset: Int? = null,
+    val next: Int? = null,
+    val data: List<S2SearchPaper> = emptyList(),
+)
+
 /**
- * Semantic Scholar Academic Graph client (ARCHITECTURE §3.5, SPEC-DATA §2).
- * Unauthenticated free tier: requests are spaced >= 1.2s and callers batch
- * nightly. An API key, when configured, lifts politeness pressure but the
- * spacing stays.
+ * Semantic Scholar Academic Graph client (ARCHITECTURE §3.5, SPEC-DATA §2, P-Tools PT.3).
+ * Free tier works keyless: requests are spaced >= 1.2s via the internal [mutex] and callers batch
+ * nightly. An optional user-supplied API key (BYOK), when configured, lifts politeness pressure but
+ * the spacing stays. **From PT.3 this runs on the `@ArxivClient` host-gated client** (egress is
+ * allowlisted to `api.semanticscholar.org`); the 1.2s mutex is internal and independent of which
+ * `OkHttpClient` is injected, so gating adds no ≥3s throttle. [apiKey] is a **supplier** evaluated
+ * per-request (mirrors `AnthropicProvider`) so a key entered after this singleton is built is honored.
  */
 class SemanticScholarClient(
     private val httpClient: OkHttpClient,
     private val dispatchers: DispatcherProvider,
     private val baseUrl: String = DEFAULT_BASE_URL,
-    private val apiKey: String? = null,
+    private val apiKey: () -> String? = { null },
     private val minSpacingMs: Long = MIN_SPACING_MS,
     private val nowMs: () -> Long = System::currentTimeMillis,
 ) {
@@ -51,32 +107,76 @@ class SemanticScholarClient(
 
     suspend fun paperByArxivId(arxivId: String): AppResult<S2Paper> =
         withContext(dispatchers.io) {
-            mutex.withLock {
-                val wait = lastRequestAtMs + minSpacingMs - nowMs()
-                if (wait > 0) delay(wait)
-                lastRequestAtMs = nowMs()
-            }
+            space()
             val url = "$baseUrl/graph/v1/paper/arXiv:$arxivId?fields=$FIELDS"
             val request =
                 Request.Builder()
                     .url(url)
-                    .apply { apiKey?.let { header("x-api-key", it) } }
+                    .apply { apiKey()?.let { header("x-api-key", it) } }
                     .build()
-            runCatching {
-                httpClient.newCall(request).execute().use { response ->
-                    when {
-                        response.isSuccessful -> {
-                            val body = response.body?.string() ?: throw IOException("empty body")
-                            AppResult.Success(json.decodeFromString<S2Paper>(body))
-                        }
-                        else -> AppResult.Failure(AppError.Upstream(response.code))
+            execute(request) { json.decodeFromString<S2Paper>(it) }
+        }
+
+    /**
+     * Full-text paper search (`/graph/v1/paper/search`, PT.3 `search_semantic_scholar`). [query] +
+     * [venue] are URL-encoded via `HttpUrl`; the year window renders to S2's `year=from-to` filter
+     * (open-ended when one bound is null). Shares the 1.2s mutex + the same error mapping as
+     * [paperByArxivId] (non-2xx → `Upstream(code)` incl. a 429; `IOException` → `Offline`).
+     */
+    suspend fun searchPapers(
+        query: String,
+        limit: Int,
+        venue: String? = null,
+        yearFrom: Int? = null,
+        yearTo: Int? = null,
+    ): AppResult<S2SearchResponse> =
+        withContext(dispatchers.io) {
+            space()
+            val url =
+                "$baseUrl/graph/v1/paper/search".toHttpUrl().newBuilder()
+                    .addQueryParameter("query", query)
+                    .addQueryParameter("limit", limit.toString())
+                    .addQueryParameter("fields", SEARCH_FIELDS)
+                    .apply {
+                        venue?.let { addQueryParameter("venue", it) }
+                        yearFilter(yearFrom, yearTo)?.let { addQueryParameter("year", it) }
                     }
+                    .build()
+            val request =
+                Request.Builder()
+                    .url(url)
+                    .apply { apiKey()?.let { header("x-api-key", it) } }
+                    .build()
+            execute(request) { json.decodeFromString<S2SearchResponse>(it) }
+        }
+
+    /** Claim a 1.2s-spaced slot (the sole politeness spacer; the caller/worker holds none). */
+    private suspend fun space() =
+        mutex.withLock {
+            val wait = lastRequestAtMs + minSpacingMs - nowMs()
+            if (wait > 0) delay(wait)
+            lastRequestAtMs = nowMs()
+        }
+
+    /** Run [request], decode a 2xx body via [decode]; non-2xx → `Upstream(code)`, IO → `Offline`. */
+    private inline fun <T> execute(
+        request: Request,
+        decode: (String) -> T,
+    ): AppResult<T> =
+        runCatching {
+            httpClient.newCall(request).execute().use { response ->
+                when {
+                    response.isSuccessful -> {
+                        val body = response.body?.string() ?: throw IOException("empty body")
+                        AppResult.Success(decode(body))
+                    }
+                    else -> AppResult.Failure(AppError.Upstream(response.code))
                 }
-            }.getOrElse { e ->
-                when (e) {
-                    is IOException -> AppResult.Failure(AppError.Offline)
-                    else -> AppResult.Failure(AppError.Unexpected(e))
-                }
+            }
+        }.getOrElse { e ->
+            when (e) {
+                is IOException -> AppResult.Failure(AppError.Offline)
+                else -> AppResult.Failure(AppError.Unexpected(e))
             }
         }
 
@@ -85,5 +185,19 @@ class SemanticScholarClient(
         private const val MIN_SPACING_MS = 1_200L
         private const val FIELDS =
             "paperId,citationCount,references.externalIds,references.title,citations.externalIds,citations.title"
+        private const val SEARCH_FIELDS =
+            "paperId,title,abstract,tldr,openAccessPdf,externalIds,venue,year,authors,citationCount"
+
+        /** S2's `year` filter: `2019-2023` / `2019-` / `-2023` / `2020`; null when both bounds absent. */
+        internal fun yearFilter(
+            from: Int?,
+            to: Int?,
+        ): String? =
+            when {
+                from != null && to != null -> "$from-$to"
+                from != null -> "$from-"
+                to != null -> "-$to"
+                else -> null
+            }
     }
 }

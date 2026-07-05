@@ -8,6 +8,12 @@ import dev.blokz.arxiver.core.database.fts.KeywordHit
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
+import dev.blokz.arxiver.core.network.s2.S2Author
+import dev.blokz.arxiver.core.network.s2.S2ExternalIds
+import dev.blokz.arxiver.core.network.s2.S2OpenAccessPdf
+import dev.blokz.arxiver.core.network.s2.S2SearchPaper
+import dev.blokz.arxiver.core.network.s2.S2SearchResponse
+import dev.blokz.arxiver.core.network.s2.S2Tldr
 import dev.blokz.arxiver.data.PaperPage
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -68,6 +74,9 @@ class ToolRegistryTest {
         },
         getPaper: suspend (ArxivId) -> Paper? = { null },
         savedIds: MutableSet<String> = mutableSetOf(),
+        // PT.3 seam — defaulted no-op so PT.1/PT.2 tests are unaffected.
+        searchSemanticScholar: suspend (String, Int, String?, Int?, Int?) -> AppResult<S2SearchResponse> =
+            { _, _, _, _, _ -> AppResult.Success(S2SearchResponse()) },
     ) = ToolRegistry(
         keywordSearch = { _, notes, _ ->
             keywordSpy?.invoke(notes)
@@ -80,6 +89,7 @@ class ToolRegistryTest {
         getPaper = getPaper,
         savePaper = { id -> savedIds.add(id) },
         isInLibrary = { id -> id in savedIds },
+        searchSemanticScholar = searchSemanticScholar,
     )
 
     private fun exec(
@@ -195,6 +205,7 @@ class ToolRegistryTest {
                 getPaper = { null },
                 savePaper = { },
                 isInLibrary = { false },
+                searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse()) },
             )
         val r = exec(reg, """{"query":"x"}""")
         assertTrue(r.result.isError)
@@ -218,10 +229,10 @@ class ToolRegistryTest {
             reg.toolDefs(ToolConsent(library = true, external = false)).map { it.name },
         )
         assertEquals(
-            setOf("search_arxiv", "get_paper", "import_to_library"),
+            setOf("search_arxiv", "get_paper", "import_to_library", "search_semantic_scholar"),
             reg.toolDefs(ToolConsent(library = false, external = true)).map { it.name }.toSet(),
         )
-        assertEquals(4, reg.toolDefs(ToolConsent(library = true, external = true)).size)
+        assertEquals(5, reg.toolDefs(ToolConsent(library = true, external = true)).size)
         assertTrue(reg.toolDefs(ToolConsent.NONE).isEmpty())
     }
 
@@ -338,5 +349,95 @@ class ToolRegistryTest {
         assertTrue(exec(registry(), "{}", extCtx, "no_such_tool").result.isError)
         assertTrue(exec(registry(), "not json", extCtx, ToolRegistry.SEARCH_ARXIV_NAME).result.isError)
         assertTrue(exec(registry(), """{"arxiv_id":"###"}""", extCtx, ToolRegistry.IMPORT_NAME).result.isError)
+    }
+
+    // --- PT.3: search_semantic_scholar (EXTERNAL) ---
+
+    private fun s2Paper(
+        title: String,
+        arxiv: String? = null,
+    ) = S2SearchPaper(
+        paperId = "s2:$title",
+        title = title,
+        abstract = "Abstract of $title",
+        tldr = S2Tldr(text = "tldr of $title"),
+        externalIds = S2ExternalIds(ArXiv = arxiv, DOI = "10.1/$title"),
+        venue = "NeurIPS",
+        year = 2024,
+        authors = listOf(S2Author(name = "A. Author")),
+        citationCount = 42,
+        openAccessPdf = S2OpenAccessPdf(url = "https://x/$title.pdf"),
+    )
+
+    @Test
+    fun `search_semantic_scholar maps hits and flags importable only for arXiv-keyed results`() {
+        val reg =
+            registry(
+                searchSemanticScholar = { _, _, _, _, _ ->
+                    AppResult.Success(S2SearchResponse(data = listOf(s2Paper("A", arxiv = "2401.00001"), s2Paper("B"))))
+                },
+            )
+        val r = exec(reg, """{"query":"diffusion"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        assertFalse(r.result.isError)
+        assertTrue(r.egress)
+        val hits = body(r.result.contentJson)["hits"]!!.jsonArray
+        assertEquals(2, hits.size)
+        // Hit A carries an arXiv id → importable; hit B does not → read-only (non-arXiv import is out of scope).
+        assertEquals(true, hits[0].jsonObject["importable"]!!.jsonPrimitive.boolean)
+        assertEquals(false, hits[1].jsonObject["importable"]!!.jsonPrimitive.boolean)
+        assertEquals("tldr of A", hits[0].jsonObject["tldr"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `search_semantic_scholar is refused in a web-off turn before the seam runs`() {
+        var searched = false
+        val reg =
+            registry(
+                searchSemanticScholar = { _, _, _, _, _ ->
+                    searched = true
+                    AppResult.Success(S2SearchResponse())
+                },
+            )
+        val r = exec(reg, """{"query":"x"}""", ctx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        assertTrue(r.result.isError)
+        assertTrue(r.egress, "an attempted external call is disclosed as egress-class")
+        assertFalse(searched, "the S2 seam must NOT run without web consent")
+    }
+
+    @Test
+    fun `every search_semantic_scholar path is egress incl error paths`() {
+        // success
+        assertTrue(exec(registry(), """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME).egress)
+        // blank query
+        assertTrue(exec(registry(), """{"query":"  "}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME).egress)
+        // upstream failure (e.g. a 429)
+        val failReg = registry(searchSemanticScholar = { _, _, _, _, _ -> AppResult.Failure(AppError.Upstream(429)) })
+        val r = exec(failReg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        assertTrue(r.result.isError)
+        assertTrue(r.egress)
+    }
+
+    @Test
+    fun `search_semantic_scholar clamps limit and threads the year window, never throwing`() {
+        var capturedLimit = 0
+        var capturedYear: Pair<Int?, Int?>? = null
+        val reg =
+            registry(
+                searchSemanticScholar = { _, limit, _, from, to ->
+                    capturedLimit = limit
+                    capturedYear = from to to
+                    AppResult.Success(S2SearchResponse())
+                },
+            )
+        val r =
+            exec(
+                reg,
+                """{"query":"x","limit":9999,"year":{"from":2019,"to":2023}}""",
+                extCtx,
+                ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME,
+            )
+        assertFalse(r.result.isError)
+        assertEquals(25, capturedLimit, "limit is clamped to 25")
+        assertEquals(2019 to 2023, capturedYear, "the year window is threaded to the seam")
     }
 }

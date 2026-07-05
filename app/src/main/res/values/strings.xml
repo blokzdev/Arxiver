@@ -370,6 +370,9 @@
     <string name="ai_provider_claude">Claude (Anthropic)</string>
     <string name="ai_provider_gemini">Gemini (Google)</string>
     <string name="ai_provider_on_device">On-device</string>
+    <string name="ai_provider_semantic_scholar">Semantic Scholar</string>
+    <string name="s2_key_label">API key (optional)</string>
+    <string name="s2_key_caption">Powers the "search Semantic Scholar" chat tool. The free tier works without a key — add one only to lift rate limits. Stored encrypted on this device; never shown again.</string>
     <string name="ai_provider_connected">connected</string>
     <string name="ai_provider_not_connected">not connected</string>
     <string name="ai_provider_key_label">API key</string>
@@ -512,6 +515,8 @@
     <string name="ask_tool_activity_arxiv">Searched arXiv (left your device): %1$s</string>
     <string name="ask_tool_activity_fetch">Fetched from arXiv (left your device): %1$s</string>
     <string name="ask_tool_activity_import">Imported to library (left your device): %1$s</string>
+    <string name="ask_tool_activity_s2">Searched Semantic Scholar (left your device): %1$s</string>
+    <string name="ask_tool_activity_external">Searched an external source (left your device): %1$s</string>
     <string name="ask_provider_cloud">Answered by %1$s — review what\'s sent before each cloud reply.</string>
     <string name="ask_provider_ondevice">On-device — nothing leaves your device.</string>
     <string name="ask_confirm_title">What leaves the device</string>

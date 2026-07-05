@@ -52,4 +52,18 @@ class AiKeyVaultTest {
         assertNull(vault.get(ProviderId.CLAUDE))
         assertFalse(vault.has(ProviderId.CLAUDE))
     }
+
+    @Test
+    fun `the optional Semantic Scholar key round-trips in its own slot (PT3)`() {
+        assertFalse(vault.has(ProviderId.SEMANTIC_SCHOLAR), "unset by default")
+        vault.put(ProviderId.SEMANTIC_SCHOLAR, "s2-key")
+        vault.put(ProviderId.CLAUDE, "sk-claude")
+        assertEquals("s2-key", vault.get(ProviderId.SEMANTIC_SCHOLAR))
+        assertTrue(vault.has(ProviderId.SEMANTIC_SCHOLAR))
+        // Isolated from the chat providers — S2's slot is independent.
+        assertEquals("sk-claude", vault.get(ProviderId.CLAUDE))
+        vault.clear(ProviderId.SEMANTIC_SCHOLAR)
+        assertNull(vault.get(ProviderId.SEMANTIC_SCHOLAR))
+        assertEquals("sk-claude", vault.get(ProviderId.CLAUDE), "clearing S2 leaves other keys intact")
+    }
 }

@@ -175,6 +175,9 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [ ] **Q-PT4 Two-gate consent + per-message stickiness (PT.2)** — Library-on / Web-off honors library-yes-web-no (no arXiv egress); flipping a chip between two consecutive sends attaches/omits the class accordingly; both chips survive process death (persisted columns). A hallucinated `search_arxiv` in a web-off turn is refused with no egress.
 - [ ] **Q-PT5 Rate-limit spacing on a multi-call turn (PT.2)** — a 3–4-call external turn spaces ≥3s between arXiv fetches (serial through the shared limiter); no burst; a concurrent FollowSync still progresses.
 - [ ] **Q-PT6 TalkBack on the composer deck** — the Library/Web-search chips announce their selected state + label; the egress activity bubbles read their "left your device" text.
+- [ ] **Q-PT7 Semantic Scholar search, live (PT.3)** — a cloud turn with the Web-search chip on: `search_semantic_scholar` returns S2 hits (incl. non-arXiv), the activity bubble reads **"Searched Semantic Scholar (left your device)"** (NOT arXiv), and the confirm sheet discloses **"sends your query to Semantic Scholar"**. An arXiv-keyed hit (`importable`) then imports via `import_to_library` + opens in the reader; a non-arXiv hit does not import.
+- [ ] **Q-PT8 S2 host-gate now fires + CitationSync unaffected (PT.3)** — S2 traffic reaches `api.semanticscholar.org` through the `@ArxivClient` interceptor (allowed); the nightly `CitationSyncWorker` still spaces ~1.2s/call and completes (no ≥3s over-throttle from the client move).
+- [ ] **Q-PT9 Optional S2 BYOK key (PT.3)** — Settings → the "Semantic Scholar" card: entering a key persists it (masked, never shown again, survives restart); with a key set the S2 request carries `x-api-key`; clearing it removes the header. The free tier (no key) still returns results. Key never appears in a backup export.
 
 ## P-PC5. Pinned sections + rename (P-Chat PC.5) _(ROADMAP P-Chat)_
 

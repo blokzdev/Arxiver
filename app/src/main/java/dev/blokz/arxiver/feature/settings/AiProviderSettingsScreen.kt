@@ -128,6 +128,8 @@ fun AiProviderSettingsScreen(
             onDownloadNano = viewModel::downloadNano,
             onSetPreferredTier = viewModel::setPreferredOnDeviceTier,
             onSetPreferOnDeviceWhenReady = viewModel::setPreferOnDeviceWhenReady,
+            onSaveS2Key = viewModel::saveS2Key,
+            onClearS2Key = viewModel::clearS2Key,
         )
     }
 }
@@ -145,6 +147,8 @@ private fun AiProviderSettingsContent(
     onDownloadNano: () -> Unit,
     onSetPreferredTier: (InferenceTier?) -> Unit,
     onSetPreferOnDeviceWhenReady: (Boolean) -> Unit,
+    onSaveS2Key: (String) -> Unit,
+    onClearS2Key: () -> Unit,
 ) {
     Column(
         modifier =
@@ -175,12 +179,74 @@ private fun AiProviderSettingsContent(
                 onSetPreferOnDeviceWhenReady = onSetPreferOnDeviceWhenReady,
             )
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        SemanticScholarKeySection(
+            configured = state.s2KeyConfigured,
+            onSaveKey = onSaveS2Key,
+            onClearKey = onClearS2Key,
+        )
         Text(
             stringResource(R.string.ai_providers_privacy_note),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = Spacing.lg),
         )
+    }
+}
+
+/**
+ * The OPTIONAL Semantic Scholar BYOK key card (P-Tools PT.3). NOT a provider card: S2 backs the
+ * `search_semantic_scholar` tool, not chat — so there is no "Test connection" (no chat ping) and no
+ * default radio. The free tier works keyless; a key only lifts rate pressure. Key entry is write-only
+ * (masked, never read back), mirroring [CloudKeySection].
+ */
+@Composable
+private fun SemanticScholarKeySection(
+    configured: Boolean,
+    onSaveKey: (String) -> Unit,
+    onClearKey: () -> Unit,
+) {
+    var keyInput by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.ai_provider_semantic_scholar),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (configured) {
+                StatusChip(stringResource(R.string.ai_provider_connected), tone = StatusTone.Positive)
+            }
+        }
+        Text(
+            stringResource(R.string.s2_key_caption),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = keyInput,
+            onValueChange = { keyInput = it },
+            label = { Text(stringResource(R.string.s2_key_label)) },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Button(
+                onClick = {
+                    onSaveKey(keyInput)
+                    keyInput = ""
+                },
+                enabled = keyInput.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.ai_provider_save_key))
+            }
+            if (configured) {
+                TextButton(onClick = onClearKey) {
+                    Text(stringResource(R.string.ai_provider_clear_key))
+                }
+            }
+        }
     }
 }
 
@@ -575,6 +641,8 @@ private fun providerName(id: ProviderId): String =
         ProviderId.CLAUDE -> stringResource(R.string.ai_provider_claude)
         ProviderId.GEMINI -> stringResource(R.string.ai_provider_gemini)
         ProviderId.ON_DEVICE -> stringResource(R.string.ai_provider_on_device)
+        // Not a chat provider (never rendered as a provider card); the arm exists for exhaustiveness.
+        ProviderId.SEMANTIC_SCHOLAR -> stringResource(R.string.ai_provider_semantic_scholar)
     }
 
 @Preview(showBackground = true)
@@ -615,6 +683,8 @@ private fun AiProviderSettingsContentPreview() {
             onDownloadNano = {},
             onSetPreferredTier = {},
             onSetPreferOnDeviceWhenReady = {},
+            onSaveS2Key = {},
+            onClearS2Key = {},
         )
     }
 }
