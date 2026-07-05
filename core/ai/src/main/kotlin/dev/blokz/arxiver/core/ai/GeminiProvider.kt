@@ -7,6 +7,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.put
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -47,6 +51,7 @@ class GeminiProvider(
             requiresKey = true,
             richness = OutputRichness.FULL,
             vision = true,
+            supportsTools = true,
         )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -68,6 +73,7 @@ class GeminiProvider(
                 val source = resp.body?.source() ?: throw AiException(AppError.Upstream(resp.code, "empty body"))
 
                 var finishReason: String? = null
+                var toolSeq = 0 // Gemini gives no tool-call id; synthesize a stable per-stream one.
                 while (true) {
                     val line =
                         try {
@@ -81,7 +87,20 @@ class GeminiProvider(
 
                     val event = runCatching { json.decodeFromString<GenResponse>(data) }.getOrNull() ?: continue
                     val candidate = event.candidates.firstOrNull()
-                    candidate?.content?.parts?.firstOrNull()?.text?.let { emit(ChatChunk.Delta(it)) }
+                    // Iterate ALL parts (was firstOrNull().text, which dropped functionCall parts).
+                    candidate?.content?.parts?.forEach { part ->
+                        when {
+                            part.text != null -> emit(ChatChunk.Delta(part.text))
+                            part.functionCall != null ->
+                                emit(
+                                    ChatChunk.ToolUse(
+                                        id = "gemini-tool-${toolSeq++}",
+                                        name = part.functionCall.name,
+                                        inputJson = part.functionCall.args.toString(),
+                                    ),
+                                )
+                        }
+                    }
                     candidate?.finishReason?.let { finishReason = it }
                 }
                 emit(ChatChunk.Done(finishReason))
@@ -97,27 +116,57 @@ class GeminiProvider(
                 request.system?.let { add(GenPart(it)) }
                 request.messages.filter { it.role == ChatRole.SYSTEM }.forEach { add(GenPart(it.content)) }
             }
+        // Null when no tools ⇒ tools/toolConfig omitted (encodeDefaults off) ⇒ byte-identical wire.
+        val genTools =
+            request.tools.takeIf { it.isNotEmpty() }
+                ?.map { GenFunctionDeclaration(it.name, it.description, it.inputSchema) }
+                ?.let { listOf(GenTool(functionDeclarations = it)) }
         val body =
             GenRequest(
                 contents =
                     request.messages
                         .filter { it.role != ChatRole.SYSTEM }
                         .map { msg ->
-                            // Keep the text part unconditionally (byte-identical to pre-R3d); append
-                            // an inlineData part per attached image (P-Rich R3d). null fields are omitted.
+                            // Text+image path unchanged (byte-identical to pre-R3d); tool turns emit
+                            // functionCall (assistant) / functionResponse (TOOL) parts instead.
                             val parts =
                                 buildList {
-                                    add(GenPart(text = msg.content))
-                                    msg.images.forEach {
-                                        add(
-                                            GenPart(inlineData = InlineData(it.mediaType, it.base64)),
-                                        )
+                                    when {
+                                        msg.toolCalls.isNotEmpty() ->
+                                            msg.toolCalls.forEach {
+                                                add(
+                                                    GenPart(
+                                                        functionCall =
+                                                            GenFunctionCall(
+                                                                it.name,
+                                                                parseArgs(it.inputJson),
+                                                            ),
+                                                    ),
+                                                )
+                                            }
+                                        msg.toolResults.isNotEmpty() ->
+                                            msg.toolResults.forEach {
+                                                add(
+                                                    GenPart(
+                                                        functionResponse =
+                                                            GenFunctionResponse(it.name, wrapResponse(it.contentJson)),
+                                                    ),
+                                                )
+                                            }
+                                        else -> {
+                                            add(GenPart(text = msg.content))
+                                            msg.images.forEach {
+                                                add(GenPart(inlineData = InlineData(it.mediaType, it.base64)))
+                                            }
+                                        }
                                     }
                                 }
                             GenContent(role = msg.role.wire(), parts = parts)
                         },
                 systemInstruction = systemParts.takeIf { it.isNotEmpty() }?.let { GenContent(parts = it) },
                 generationConfig = GenConfig(maxOutputTokens = request.maxTokens),
+                tools = genTools,
+                toolConfig = genTools?.let { GenToolConfig(GenFunctionCallingConfig("AUTO")) },
             )
         return Request.Builder()
             .url("$baseUrl/models/$model:streamGenerateContent?alt=sse")
@@ -133,6 +182,20 @@ class GeminiProvider(
             else -> "user"
         }
 
+    /** A functionCall args string → a JSON object; blank (zero-arg tool) → `{}`. */
+    private fun parseArgs(inputJson: String): JsonObject =
+        if (inputJson.isBlank()) {
+            JsonObject(emptyMap())
+        } else {
+            runCatching { json.parseToJsonElement(inputJson).jsonObject }
+                .getOrElse { throw AiException(AppError.Unexpected()) }
+        }
+
+    /** Gemini's functionResponse.response MUST be an object; wrap a bare/non-object result. */
+    private fun wrapResponse(contentJson: String): JsonObject =
+        runCatching { json.parseToJsonElement(contentJson).jsonObject }
+            .getOrElse { buildJsonObject { put("result", contentJson) } }
+
     private fun Int.toAppError(): AppError =
         when {
             this == 401 || this == 403 -> AppError.Upstream(this, "authentication failed")
@@ -146,7 +209,31 @@ class GeminiProvider(
         val contents: List<GenContent>,
         val systemInstruction: GenContent? = null,
         val generationConfig: GenConfig,
+        val tools: List<GenTool>? = null,
+        val toolConfig: GenToolConfig? = null,
     )
+
+    @Serializable
+    private data class GenTool(val functionDeclarations: List<GenFunctionDeclaration>)
+
+    @Serializable
+    private data class GenFunctionDeclaration(
+        val name: String,
+        val description: String,
+        val parameters: JsonObject,
+    )
+
+    @Serializable
+    private data class GenToolConfig(val functionCallingConfig: GenFunctionCallingConfig)
+
+    @Serializable
+    private data class GenFunctionCallingConfig(val mode: String)
+
+    @Serializable
+    private data class GenFunctionCall(val name: String, val args: JsonObject = JsonObject(emptyMap()))
+
+    @Serializable
+    private data class GenFunctionResponse(val name: String, val response: JsonObject)
 
     @Serializable
     private data class GenConfig(val maxOutputTokens: Int)
@@ -167,6 +254,8 @@ class GeminiProvider(
     private data class GenPart(
         val text: String? = null,
         val inlineData: InlineData? = null,
+        val functionCall: GenFunctionCall? = null,
+        val functionResponse: GenFunctionResponse? = null,
     )
 
     /** Gemini inline image bytes (P-Rich R3d): base64 [data] + its [mimeType]. */

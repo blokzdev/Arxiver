@@ -5,6 +5,8 @@ import dev.blokz.arxiver.core.common.DispatcherProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -180,6 +182,131 @@ class AnthropicProviderTest {
             assertTrue(body.contains("\"data\":\"QUJD\""), body)
             // The human privacy-preview label must never reach the wire.
             assertTrue(!body.contains("page 2 of arXiv"), body)
+        }
+
+    // --- P-Tools PT.0: tool-use SSE parsing + wire serialization ---
+    // Compact SSE builders (the `index` field is ignored by the parser and dropped for brevity).
+
+    private fun toolDef() = ToolDef("echo", "Echo text", buildJsonObject { put("type", "object") })
+
+    private fun startTool(id: String) =
+        """data: {"type":"content_block_start","content_block":{"type":"tool_use","id":"$id","name":"echo"}}"""
+
+    private fun argDelta(value: String) =
+        """data: {"type":"content_block_delta","delta":{"type":"input_json_delta","partial_json":"$value"}}"""
+
+    private fun stopReason(reason: String) = """data: {"type":"message_delta","delta":{"stop_reason":"$reason"}}"""
+
+    private val blockStop = """data: {"type":"content_block_stop"}"""
+    private val msgStop = """data: {"type":"message_stop"}"""
+
+    @Test
+    fun `tool_use block accumulates partial_json across deltas and emits ToolUse`() =
+        runBlocking {
+            server.enqueue(
+                sse(
+                    startTool("toolu_1"),
+                    argDelta("""{\"text\":"""),
+                    argDelta("""\"hi\"}"""),
+                    blockStop,
+                    stopReason("tool_use"),
+                    msgStop,
+                ),
+            )
+            val chunks = provider().chat(request()).toList()
+            val tool = chunks.filterIsInstance<ChatChunk.ToolUse>().single()
+            assertEquals("toolu_1", tool.id)
+            assertEquals("echo", tool.name)
+            assertEquals("""{"text":"hi"}""", tool.inputJson)
+            assertTrue(chunks.last() is ChatChunk.Done)
+        }
+
+    @Test
+    fun `parallel tool_use blocks emit in order`() =
+        runBlocking {
+            server.enqueue(sse(startTool("a"), blockStop, startTool("b"), blockStop, msgStop))
+            val ids = provider().chat(request()).toList().filterIsInstance<ChatChunk.ToolUse>().map { it.id }
+            assertEquals(listOf("a", "b"), ids)
+        }
+
+    @Test
+    fun `empty partial_json yields ToolUse with empty input string`() =
+        runBlocking {
+            server.enqueue(sse(startTool("z"), blockStop, msgStop))
+            val tool = provider().chat(request()).toList().filterIsInstance<ChatChunk.ToolUse>().single()
+            assertEquals("", tool.inputJson)
+        }
+
+    @Test
+    fun `an unterminated tool_use at message_stop throws instead of hanging`() =
+        runBlocking {
+            server.enqueue(sse(startTool("z"), msgStop))
+            val ex = assertFailsWith<AiException> { provider().chat(request()).toList() }
+            assertTrue(ex.error is AppError.Upstream)
+        }
+
+    @Test
+    fun `a truncated tool_use at stream end throws`() =
+        runBlocking {
+            server.enqueue(sse(startTool("z"), argDelta("""{""")))
+            val ex = assertFailsWith<AiException> { provider().chat(request()).toList() }
+            assertTrue(ex.error is AppError.Upstream)
+        }
+
+    @Test
+    fun `an interleaved tool_use start throws`() =
+        runBlocking {
+            server.enqueue(sse(startTool("a"), startTool("b"), msgStop))
+            val ex = assertFailsWith<AiException> { provider().chat(request()).toList() }
+            assertTrue(ex.error is AppError.Upstream)
+        }
+
+    @Test
+    fun `no tools attached omits the tools field (byte-identity)`() =
+        runBlocking {
+            server.enqueue(sse(msgStop))
+            provider().chat(request()).toList()
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(!body.contains("\"tools\""), body)
+        }
+
+    @Test
+    fun `tool defs serialize as input_schema when attached`() =
+        runBlocking {
+            server.enqueue(sse(msgStop))
+            provider().chat(request().copy(tools = listOf(toolDef()))).toList()
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("\"tools\""), body)
+            assertTrue(body.contains("\"input_schema\""), body)
+            assertTrue(body.contains("\"echo\""), body)
+        }
+
+    @Test
+    fun `assistant tool_use and tool_result turns serialize as content blocks`() =
+        runBlocking {
+            server.enqueue(sse(msgStop))
+            val req =
+                ChatRequest(
+                    messages =
+                        listOf(
+                            ChatMessage(ChatRole.USER, "call echo"),
+                            ChatMessage(
+                                ChatRole.ASSISTANT,
+                                "",
+                                toolCalls = listOf(ToolCall("t1", "echo", """{"text":"hi"}""")),
+                            ),
+                            ChatMessage(
+                                ChatRole.TOOL,
+                                "",
+                                toolResults = listOf(ToolResult("t1", "echo", """{"echo":"hi"}""")),
+                            ),
+                        ),
+                )
+            provider().chat(req).toList()
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("\"type\":\"tool_use\""), body)
+            assertTrue(body.contains("\"tool_use_id\":\"t1\""), body)
+            assertTrue(body.contains("\"type\":\"tool_result\""), body)
         }
 
     private fun request(): ChatRequest =

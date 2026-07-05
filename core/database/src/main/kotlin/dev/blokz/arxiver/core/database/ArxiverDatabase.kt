@@ -39,9 +39,11 @@ import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
 import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
+import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import dev.blokz.arxiver.core.database.migration.MIGRATION_1_2
 import dev.blokz.arxiver.core.database.migration.MIGRATION_2_3
 import dev.blokz.arxiver.core.database.migration.MIGRATION_3_4
+import dev.blokz.arxiver.core.database.migration.MIGRATION_4_5
 
 @Database(
     entities = [
@@ -60,6 +62,7 @@ import dev.blokz.arxiver.core.database.migration.MIGRATION_3_4
         InboxItemEntity::class,
         ChatSessionEntity::class,
         ChatMessageEntity::class,
+        ToolInvocationEntity::class,
         PaperFtsEntity::class,
         NoteFtsEntity::class,
         PaperEmbeddingEntity::class,
@@ -100,7 +103,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
         const val NAME = "arxiver.db"
 
         /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
-        const val VERSION = 4
+        const val VERSION = 5
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema
@@ -108,7 +111,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
          */
         fun build(context: Context): ArxiverDatabase =
             Room.databaseBuilder(context, ArxiverDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                 .build()
     }
 }

@@ -5,6 +5,8 @@ import dev.blokz.arxiver.core.common.DispatcherProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -164,6 +166,97 @@ class GeminiProviderTest {
             assertTrue(body.contains("\"mimeType\":\"image/jpeg\""), body)
             assertTrue(body.contains("\"data\":\"QUJD\""), body)
             assertTrue(!body.contains("page 2 of arXiv"), body)
+        }
+
+    // --- P-Tools PT.0: functionCall parsing + tool wire serialization ---
+
+    private fun toolDef() = ToolDef("echo", "Echo text", buildJsonObject { put("type", "object") })
+
+    private fun candidate(parts: String) =
+        """data: {"candidates":[{"content":{"parts":[$parts]},"finishReason":"STOP"}]}"""
+
+    private fun fnCall(args: String) = """{"functionCall":{"name":"echo","args":$args}}"""
+
+    @Test
+    fun `functionCall part emits ToolUse with a synthesized id`() =
+        runBlocking {
+            server.enqueue(sse(candidate(fnCall("""{"text":"hi"}"""))))
+            val tool = provider().chat(request()).toList().filterIsInstance<ChatChunk.ToolUse>().single()
+            assertEquals("gemini-tool-0", tool.id)
+            assertEquals("echo", tool.name)
+            assertTrue(tool.inputJson.contains("\"text\":\"hi\""), tool.inputJson)
+        }
+
+    @Test
+    fun `a multi-part response emits text then ToolUse`() =
+        runBlocking {
+            server.enqueue(sse(candidate("""{"text":"searching"},""" + fnCall("{}"))))
+            val chunks = provider().chat(request()).toList()
+            assertEquals("searching", chunks.filterIsInstance<ChatChunk.Delta>().single().text)
+            assertEquals("echo", chunks.filterIsInstance<ChatChunk.ToolUse>().single().name)
+        }
+
+    @Test
+    fun `a malformed functionCall is dropped without hanging`() =
+        runBlocking {
+            server.enqueue(
+                sse(
+                    """data: {"candidates":[{"content":{"parts":[{"functionCall":{"args":{}}}]}}]}""",
+                    """data: {"candidates":[{"finishReason":"STOP"}]}""",
+                ),
+            )
+            val chunks = provider().chat(request()).toList()
+            assertTrue(chunks.none { it is ChatChunk.ToolUse }, "malformed functionCall yields no ToolUse")
+            assertTrue(chunks.last() is ChatChunk.Done)
+        }
+
+    @Test
+    fun `no tools attached omits tools and toolConfig (byte-identity)`() =
+        runBlocking {
+            server.enqueue(sse("""data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"STOP"}]}"""))
+            provider().chat(request()).toList()
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(!body.contains("\"tools\""), body)
+            assertTrue(!body.contains("toolConfig"), body)
+        }
+
+    @Test
+    fun `tool defs serialize as functionDeclarations plus AUTO toolConfig`() =
+        runBlocking {
+            server.enqueue(sse("""data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"STOP"}]}"""))
+            provider().chat(request().copy(tools = listOf(toolDef()))).toList()
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("functionDeclarations"), body)
+            assertTrue(body.contains("\"mode\":\"AUTO\""), body)
+            assertTrue(body.contains("\"echo\""), body)
+        }
+
+    @Test
+    fun `a functionResponse turn serializes an object response`() =
+        runBlocking {
+            server.enqueue(sse("""data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"STOP"}]}"""))
+            val req =
+                ChatRequest(
+                    messages =
+                        listOf(
+                            ChatMessage(ChatRole.USER, "call echo"),
+                            ChatMessage(
+                                ChatRole.ASSISTANT,
+                                "",
+                                toolCalls = listOf(ToolCall("gemini-tool-0", "echo", """{"text":"hi"}""")),
+                            ),
+                            ChatMessage(
+                                ChatRole.TOOL,
+                                "",
+                                toolResults = listOf(ToolResult("gemini-tool-0", "echo", """{"echo":"hi"}""")),
+                            ),
+                        ),
+                )
+            provider().chat(req).toList()
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("functionCall"), body)
+            assertTrue(body.contains("functionResponse"), body)
+            assertTrue(body.contains("\"echo\":\"hi\""), body)
         }
 
     private fun request(): ChatRequest =

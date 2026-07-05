@@ -6,9 +6,13 @@ import dev.blokz.arxiver.core.ai.ChatRequest
 import dev.blokz.arxiver.core.ai.ChatRole
 import dev.blokz.arxiver.core.ai.OutputRichness
 import dev.blokz.arxiver.core.ai.ProviderCapability
+import dev.blokz.arxiver.core.ai.ToolDef
+import dev.blokz.arxiver.core.ai.ToolResult
 import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
 import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.core.search.RetrievedChunk
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -102,5 +106,56 @@ class ChatPreviewBuilderTest {
         val preview = builder.build(request)
 
         assertTrue(preview.text.contains(hostileQuestion), "the confirm shows the excerpt exactly as sent")
+    }
+
+    // --- P-Tools PT.0: tool disclosure goldens ---
+
+    @Test
+    fun `tool definitions are disclosed in both preview surfaces when tools attach`() {
+        val request =
+            ChatRequest(
+                messages = listOf(ChatMessage(ChatRole.USER, "find papers on diffusion")),
+                tools =
+                    listOf(
+                        ToolDef("search_arxiv", "Search arXiv for papers", buildJsonObject { put("type", "object") }),
+                    ),
+            )
+
+        val preview = builder.build(request)
+
+        assertTrue(preview.json.contains("search_arxiv"), preview.json)
+        assertTrue(preview.text.contains("TOOLS THE MODEL MAY CALL"), preview.text)
+        assertTrue(preview.text.contains("search_arxiv"), preview.text)
+    }
+
+    @Test
+    fun `a tool-free request discloses no tools (byte-identity)`() {
+        val request = ChatRequest(messages = listOf(ChatMessage(ChatRole.USER, "hello")))
+
+        val preview = builder.build(request)
+
+        assertFalse(preview.json.contains("\"tools\""), preview.json)
+        assertFalse(preview.text.contains("TOOLS THE MODEL MAY CALL"), preview.text)
+    }
+
+    @Test
+    fun `a re-fed tool_result turn is disclosed in the preview`() {
+        val request =
+            ChatRequest(
+                messages =
+                    listOf(
+                        ChatMessage(ChatRole.USER, "q"),
+                        ChatMessage(
+                            ChatRole.TOOL,
+                            "RESULT_SUMMARY_TEXT",
+                            toolResults = listOf(ToolResult("t1", "echo", """{"echo":"hi"}""")),
+                        ),
+                    ),
+            )
+
+        assertTrue(
+            builder.build(request).json.contains("RESULT_SUMMARY_TEXT"),
+            "a re-fed tool result must be disclosed",
+        )
     }
 }

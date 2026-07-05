@@ -22,6 +22,7 @@ import dev.blokz.arxiver.core.database.dao.ChatDao
 import dev.blokz.arxiver.core.database.dao.ChatSessionRow
 import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
 import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
+import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import dev.blokz.arxiver.core.search.ChunkKeywordSource
 import dev.blokz.arxiver.core.search.ChunkVectorSource
 import dev.blokz.arxiver.core.search.RagRetriever
@@ -183,6 +184,15 @@ class AskViewModelTest {
             id: Long,
             title: String?,
         ) = Unit
+
+        override suspend fun setToolsEnabled(
+            id: Long,
+            enabled: Boolean,
+        ) = Unit
+
+        override suspend fun insertToolInvocations(rows: List<ToolInvocationEntity>) = Unit
+
+        override suspend fun toolInvocationsForMessage(messageId: Long): List<ToolInvocationEntity> = emptyList()
 
         override suspend fun messagesFor(sessionId: Long): List<ChatMessageEntity> =
             messages.value.filter { it.sessionId == sessionId }.sortedWith(compareBy({ it.createdAt }, { it.id }))

@@ -9,6 +9,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -54,6 +55,7 @@ class AnthropicProvider(
             requiresKey = true,
             richness = OutputRichness.FULL,
             vision = true,
+            supportsTools = true,
         )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -75,6 +77,13 @@ class AnthropicProvider(
                 val source = resp.body?.source() ?: throw AiException(AppError.Upstream(resp.code, "empty body"))
 
                 var stopReason: String? = null
+                // Tool-block accumulator (P-Tools PT.0): a tool_use content block streams as
+                // content_block_start (type+id+name) → N× content_block_delta.input_json_delta.partial_json
+                // → content_block_stop. Text blocks leave inToolBlock false, so the text path is unchanged.
+                var toolId: String? = null
+                var toolName: String? = null
+                val toolArgs = StringBuilder()
+                var inToolBlock = false
                 while (true) {
                     val line =
                         try {
@@ -88,15 +97,45 @@ class AnthropicProvider(
 
                     val event = runCatching { json.decodeFromString<StreamEvent>(data) }.getOrNull() ?: continue
                     when (event.type) {
-                        "content_block_delta" -> event.delta?.text?.let { emit(ChatChunk.Delta(it)) }
+                        "content_block_start" ->
+                            if (event.contentBlock?.type == "tool_use") {
+                                if (inToolBlock) throw AiException(AppError.Upstream(resp.code, "interleaved tool_use"))
+                                inToolBlock = true
+                                toolId = event.contentBlock.id
+                                toolName = event.contentBlock.name
+                                toolArgs.setLength(0)
+                            } else {
+                                inToolBlock = false // a non-tool block start resets any stale tool state
+                            }
+                        "content_block_delta" -> {
+                            event.delta?.text?.let { emit(ChatChunk.Delta(it)) }
+                            if (inToolBlock) event.delta?.partialJson?.let { toolArgs.append(it) }
+                        }
+                        "content_block_stop" ->
+                            if (inToolBlock) {
+                                val id = toolId
+                                val name = toolName
+                                if (id == null || name == null) {
+                                    throw AiException(AppError.Upstream(resp.code, "malformed tool_use block"))
+                                }
+                                emit(ChatChunk.ToolUse(id, name, toolArgs.toString()))
+                                inToolBlock = false
+                                toolId = null
+                                toolName = null
+                                toolArgs.setLength(0)
+                            }
                         "message_delta" -> event.delta?.stopReason?.let { stopReason = it }
                         "error" -> throw AiException(AppError.Upstream(resp.code, event.error?.message))
                         "message_stop" -> {
+                            // A tool_use block still open at message_stop is a corrupted stream — fail
+                            // loudly rather than let the loop wait on a tool_result that never comes.
+                            if (inToolBlock) throw AiException(AppError.Upstream(resp.code, "unterminated tool_use"))
                             emit(ChatChunk.Done(stopReason))
                             return@flow
                         }
                     }
                 }
+                if (inToolBlock) throw AiException(AppError.Upstream(resp.code, "truncated tool_use"))
                 emit(ChatChunk.Done(stopReason))
             }
         }.flowOn(dispatchers.io)
@@ -120,6 +159,15 @@ class AnthropicProvider(
                     request.messages
                         .filter { it.role != ChatRole.SYSTEM }
                         .map { WireMessage(role = it.role.wire(), content = anthropicContent(it)) },
+                // takeIf BEFORE map ⇒ null (omitted) not [] when no tools — byte-identical wire.
+                tools =
+                    request.tools.takeIf { it.isNotEmpty() }?.map {
+                        WireTool(
+                            it.name,
+                            it.description,
+                            it.inputSchema,
+                        )
+                    },
             )
         return Request.Builder()
             .url("$baseUrl/messages")
@@ -142,32 +190,77 @@ class AnthropicProvider(
      * image blocks). [ChatImage.label] is never written (only media type + data).
      */
     private fun anthropicContent(message: ChatMessage): JsonElement =
-        if (message.images.isEmpty()) {
-            JsonPrimitive(message.content)
-        } else {
-            buildJsonArray {
-                add(
-                    buildJsonObject {
-                        put("type", "text")
-                        put("text", message.content)
-                    },
-                )
-                message.images.forEach { img ->
+        when {
+            // Assistant tool_use turn: text (if any) then one tool_use block per call. REQUIRED on
+            // resume — a tool_result without a matching tool_use in the prior assistant turn is a 400.
+            message.toolCalls.isNotEmpty() ->
+                buildJsonArray {
+                    if (message.content.isNotEmpty()) {
+                        add(
+                            buildJsonObject {
+                                put("type", "text")
+                                put("text", message.content)
+                            },
+                        )
+                    }
+                    message.toolCalls.forEach { call ->
+                        add(
+                            buildJsonObject {
+                                put("type", "tool_use")
+                                put("id", call.id)
+                                put("name", call.name)
+                                put("input", parseToolInput(call.inputJson))
+                            },
+                        )
+                    }
+                }
+            // TOOL turn: one tool_result block per executed result (carried on a `user`-role message).
+            message.toolResults.isNotEmpty() ->
+                buildJsonArray {
+                    message.toolResults.forEach { result ->
+                        add(
+                            buildJsonObject {
+                                put("type", "tool_result")
+                                put("tool_use_id", result.callId)
+                                put("content", result.contentJson)
+                                if (result.isError) put("is_error", true)
+                            },
+                        )
+                    }
+                }
+            message.images.isEmpty() -> JsonPrimitive(message.content)
+            else ->
+                buildJsonArray {
                     add(
                         buildJsonObject {
-                            put("type", "image")
-                            put(
-                                "source",
-                                buildJsonObject {
-                                    put("type", "base64")
-                                    put("media_type", img.mediaType)
-                                    put("data", img.base64)
-                                },
-                            )
+                            put("type", "text")
+                            put("text", message.content)
                         },
                     )
+                    message.images.forEach { img ->
+                        add(
+                            buildJsonObject {
+                                put("type", "image")
+                                put(
+                                    "source",
+                                    buildJsonObject {
+                                        put("type", "base64")
+                                        put("media_type", img.mediaType)
+                                        put("data", img.base64)
+                                    },
+                                )
+                            },
+                        )
+                    }
                 }
-            }
+        }
+
+    /** A tool_use arguments string → a JSON object for the wire; blank (zero-arg tool) → `{}`. */
+    private fun parseToolInput(inputJson: String): JsonElement =
+        if (inputJson.isBlank()) {
+            buildJsonObject { }
+        } else {
+            runCatching { json.parseToJsonElement(inputJson) }.getOrElse { throw AiException(AppError.Unexpected()) }
         }
 
     private fun Int.toAppError(): AppError =
@@ -185,6 +278,15 @@ class AnthropicProvider(
         val system: String? = null,
         val stream: Boolean,
         val messages: List<WireMessage>,
+        // Null when no tools attach ⇒ omitted (encodeDefaults is off) ⇒ byte-identical wire.
+        val tools: List<WireTool>? = null,
+    )
+
+    @Serializable
+    private data class WireTool(
+        val name: String,
+        val description: String,
+        @SerialName("input_schema") val inputSchema: JsonObject,
     )
 
     @Serializable
@@ -195,6 +297,14 @@ class AnthropicProvider(
         val type: String,
         val delta: EventDelta? = null,
         val error: EventError? = null,
+        @SerialName("content_block") val contentBlock: ContentBlock? = null,
+    )
+
+    @Serializable
+    private data class ContentBlock(
+        val type: String? = null,
+        val id: String? = null,
+        val name: String? = null,
     )
 
     @Serializable
@@ -202,6 +312,7 @@ class AnthropicProvider(
         val type: String? = null,
         val text: String? = null,
         @SerialName("stop_reason") val stopReason: String? = null,
+        @SerialName("partial_json") val partialJson: String? = null,
     )
 
     @Serializable

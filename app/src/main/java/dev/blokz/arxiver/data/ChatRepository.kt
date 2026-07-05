@@ -107,6 +107,12 @@ class ChatRepository(
     // navigates off the Chat tab, which would abort the delete. Injected in prod (the shared
     // @Singleton applicationScope); defaulted for tests.
     private val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + dispatchers.io),
+    // P-Tools PT.0: the agentic tool loop. Defaulted to a no-tool loop (NoToolExecutor) so every
+    // existing caller + test behaves exactly as before (one provider call, no tools attached).
+    private val toolLoop: ChatToolLoop = ChatToolLoop(),
+    // Runs the terminal write (assistant row + tool_invocations) atomically. Defaulted to a direct
+    // invoke for the pure-JVM tests; prod passes db.withTransaction (P-Tools PT.0).
+    private val transaction: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     suspend fun prepare(
         scope: RetrievalScope,
@@ -246,38 +252,50 @@ class ChatRepository(
                     ),
                 )
 
-            val answer = StringBuilder()
+            // P-Tools PT.0: the agentic tool loop replaces the single provider.chat().collect. It
+            // streams Delta live, buffers tool_use, executes tools LOCALLY, and emits exactly ONE
+            // terminal Done. The in-flight message list + partial text live in `state`, so the
+            // finalize arms below (and a process death) degrade to today's single-turn behavior with
+            // zero dangling tool rows. With the default no-tool loop this is byte-identical to before.
+            val state = ToolLoopState(prepared.request)
             try {
-                prepared.provider.chat(prepared.request).collect { chunk ->
-                    when (chunk) {
-                        is ChatChunk.Delta -> answer.append(chunk.text)
-                        is ChatChunk.Done -> {
-                            // Persist the settled body: strip any model FOLLOWUPS:: sentinel (P-Rich
-                            // R3b.2), then on a STRUCTURED turn render the TABLE:: intermediate to a
-                            // valid table/list (PA.4). The ViewModel display path runs the SAME two
-                            // transforms on the same input, so DB == UI == export (no resurrection).
-                            // A Done with NO usable text persists as `error`, matching the error
-                            // bubble the live UI already shows — an ''/complete row would dodge
-                            // every ghost filter AND feed an empty turn into later context (PC.0).
-                            val settled = settleStructured(prepared, extractFollowUps(answer.toString()).first)
-                            chatDao.updateMessage(
-                                assistantId,
-                                settled,
-                                if (settled.isBlank()) {
-                                    ChatMessageEntity.STATUS_ERROR
-                                } else {
-                                    ChatMessageEntity.STATUS_COMPLETE
-                                },
-                            )
+                toolLoop.run(
+                    provider = prepared.provider,
+                    state = state,
+                    emit = { emit(it) },
+                    // PT.0: no-op seam — PT.1 renders the inline tool-activity bubble from this signal.
+                    onActivity = { },
+                    persistTerminal = { body ->
+                        // Persist the settled body: strip any model FOLLOWUPS:: sentinel (P-Rich R3b.2),
+                        // then on a STRUCTURED turn render the TABLE:: intermediate (PA.4). A Done with
+                        // NO usable text persists as `error` (PC.0). The tool_invocations rows are
+                        // written in the SAME transaction so a dangling tool_use can never survive.
+                        val settled = settleStructured(prepared, extractFollowUps(body).first)
+                        val status =
+                            if (settled.isBlank()) {
+                                ChatMessageEntity.STATUS_ERROR
+                            } else {
+                                ChatMessageEntity.STATUS_COMPLETE
+                            }
+                        transaction {
+                            chatDao.updateMessage(assistantId, settled, status)
+                            if (state.invocations.isNotEmpty()) {
+                                val at = clock()
+                                chatDao.insertToolInvocations(state.invocations.map { it.toEntity(assistantId, at) })
+                            }
                         }
-                    }
-                    emit(chunk)
-                }
+                    },
+                )
             } catch (e: AiException) {
-                finalize(assistantId, answer.toString(), ChatMessageEntity.STATUS_ERROR, sessionId)
+                finalize(assistantId, state.assistantText.toString(), ChatMessageEntity.STATUS_ERROR, sessionId)
                 throw e
             } catch (e: CancellationException) {
-                finalize(assistantId, answer.toString(), ChatMessageEntity.STATUS_INCOMPLETE, sessionId)
+                finalize(assistantId, state.assistantText.toString(), ChatMessageEntity.STATUS_INCOMPLETE, sessionId)
+                throw e
+            } catch (e: Throwable) {
+                // A failure inside persistTerminal (DB/FK) must not leave a dangling INCOMPLETE row or
+                // crash uncaught — settle to error like any other stream failure (crash-safety).
+                finalize(assistantId, state.assistantText.toString(), ChatMessageEntity.STATUS_ERROR, sessionId)
                 throw e
             }
             chatDao.touchSession(sessionId, clock())
@@ -371,6 +389,16 @@ class ChatRepository(
 
     /** Observe one session for the full-screen route's live title (P-Chat PC.5). */
     fun observeSession(id: Long): Flow<ChatSessionEntity?> = chatDao.observeSession(id)
+
+    /** Set per-conversation consent to attach EXTERNAL tools (P-Tools PT.0; gates attachment PT.2+). */
+    suspend fun setToolsEnabled(
+        id: Long,
+        enabled: Boolean,
+    ) = withContext(dispatchers.io) { chatDao.setToolsEnabled(id, enabled) }
+
+    /** One-shot read of a session's external-tool consent (P-Tools PT.0). */
+    suspend fun toolsEnabledFor(id: Long): Boolean =
+        withContext(dispatchers.io) { chatDao.sessionById(id)?.toolsEnabled ?: false }
 
     // Pending hard-deletes keyed by session id (PC.3). Mutated only under this object's monitor
     // (@Synchronized / synchronized(this)) — never a coroutine Mutex, which can't be acquired

@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
 import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
+import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -56,6 +57,25 @@ interface ChatDao {
         id: Long,
         title: String?,
     )
+
+    /** Set/clear per-conversation consent to attach external tools (P-Tools PT.0). */
+    @Query("UPDATE chat_sessions SET tools_enabled = :enabled WHERE id = :id")
+    suspend fun setToolsEnabled(
+        id: Long,
+        enabled: Boolean,
+    )
+
+    /**
+     * Persist the executed tool steps of an agentic turn (P-Tools PT.0). Written ONLY at the
+     * terminal Done, inside the same transaction as the assistant-row update (repository) so a
+     * dangling tool_use never survives an interruption. Rows cascade on the assistant message.
+     */
+    @Insert
+    suspend fun insertToolInvocations(rows: List<ToolInvocationEntity>)
+
+    /** The tool steps of an assistant turn, in call order (activity-log render + audit; P-Tools). */
+    @Query("SELECT * FROM tool_invocations WHERE message_id = :messageId ORDER BY ordinal")
+    suspend fun toolInvocationsForMessage(messageId: Long): List<ToolInvocationEntity>
 
     @Query("SELECT * FROM chat_messages WHERE session_id = :sessionId ORDER BY created_at, id")
     suspend fun messagesFor(sessionId: Long): List<ChatMessageEntity>
