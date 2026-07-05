@@ -2,14 +2,16 @@ package dev.blokz.arxiver.core.database
 
 import dev.blokz.arxiver.core.database.dao.PaperWithRelations
 import dev.blokz.arxiver.core.database.entity.PaperEntity
-import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.core.model.PaperSource
 import java.time.Instant
 
 fun Paper.toEntity(): PaperEntity =
     PaperEntity(
-        id = id.value,
+        id = ref.storageId,
+        origin = ref.origin.wire,
+        nativeId = ref.nativeId,
         latestVersion = latestVersion,
         title = title,
         abstract = abstract,
@@ -35,7 +37,9 @@ fun Paper.toEntity(): PaperEntity =
  */
 fun PaperEntity.toListDomain(): Paper =
     Paper(
-        id = ArxivId(id),
+        // Reconstruct from the storage-id PK alone (the single source of truth); origin/native_id are
+        // redundant filter columns, never the reconstruction key — avoids discriminator-disagreement bugs.
+        ref = PaperRef.fromStorageId(id),
         latestVersion = latestVersion,
         title = title,
         abstract = abstract,
@@ -55,7 +59,7 @@ fun PaperEntity.toListDomain(): Paper =
 
 fun PaperWithRelations.toDomain(): Paper =
     Paper(
-        id = ArxivId(paper.id),
+        ref = PaperRef.fromStorageId(paper.id),
         latestVersion = paper.latestVersion,
         title = paper.title,
         abstract = paper.abstract,

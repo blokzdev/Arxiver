@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -22,7 +23,7 @@ class PaperDaoTest {
 
     private val paper =
         Paper(
-            id = ArxivId("2403.01234"),
+            ref = ArxivRef(ArxivId("2403.01234")),
             latestVersion = 2,
             title = "Attention Is Not All You Need After All",
             abstract = "We revisit the foundations of sequence modeling.",
@@ -64,11 +65,15 @@ class PaperDaoTest {
         runTest {
             val dao = db.paperDao()
             val older =
-                paper.copy(id = ArxivId("2401.00001"), publishedAt = Instant.parse("2024-01-01T00:00:00Z"))
+                paper.copy(ref = ArxivRef(ArxivId("2401.00001")), publishedAt = Instant.parse("2024-01-01T00:00:00Z"))
             val newer =
-                paper.copy(id = ArxivId("2402.00002"), publishedAt = Instant.parse("2024-02-01T00:00:00Z"))
+                paper.copy(ref = ArxivRef(ArxivId("2402.00002")), publishedAt = Instant.parse("2024-02-01T00:00:00Z"))
             val other =
-                paper.copy(id = ArxivId("2403.00003"), categories = listOf("hep-th"), primaryCategory = "hep-th")
+                paper.copy(
+                    ref = ArxivRef(ArxivId("2403.00003")),
+                    categories = listOf("hep-th"),
+                    primaryCategory = "hep-th",
+                )
             listOf(older, newer, other).forEach {
                 dao.upsertPaperWithRelations(it.toEntity(), it.authors, it.categories)
             }
@@ -98,7 +103,7 @@ class PaperDaoTest {
         runTest {
             val dao = db.paperDao()
             dao.upsertPaperWithRelations(paper.toEntity(), paper.authors, paper.categories)
-            val second = paper.copy(id = ArxivId("2404.05678"), title = "Another One")
+            val second = paper.copy(ref = ArxivRef(ArxivId("2404.05678")), title = "Another One")
             dao.upsertPaperWithRelations(second.toEntity(), second.authors, second.categories)
 
             // Same name resolves to the same author id in both papers.

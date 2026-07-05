@@ -7,6 +7,7 @@ import dev.blokz.arxiver.core.database.entity.CitationEdgeEntity
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -36,7 +37,7 @@ class RelationsDaoTest {
     private suspend fun insertPaper(id: String) {
         val paper =
             Paper(
-                id = ArxivId(id),
+                ref = ArxivRef(ArxivId(id)),
                 latestVersion = 1,
                 title = "Paper $id",
                 abstract = "Abstract $id",

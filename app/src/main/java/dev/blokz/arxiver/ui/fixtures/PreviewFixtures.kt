@@ -2,6 +2,7 @@ package dev.blokz.arxiver.ui.fixtures
 
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.data.LibraryPaper
@@ -11,7 +12,7 @@ import java.time.Instant
 object PreviewFixtures {
     val paper =
         Paper(
-            id = ArxivId("2403.01234"),
+            ref = ArxivRef(ArxivId("2403.01234")),
             latestVersion = 2,
             title = "Efficient State Space Models for Long-Context Sequence Modeling",
             abstract =
@@ -31,14 +32,14 @@ object PreviewFixtures {
         listOf(
             paper,
             paper.copy(
-                id = ArxivId("2404.05678"),
+                ref = ArxivRef(ArxivId("2404.05678")),
                 title = "A Survey of Retrieval-Augmented Generation for Scientific Literature",
                 authors = listOf("Dmitri Surveyor"),
                 primaryCategory = "cs.CL",
                 citationCount = null,
             ),
             paper.copy(
-                id = ArxivId("2405.00001"),
+                ref = ArxivRef(ArxivId("2405.00001")),
                 title = "Tokenizer-Free Language Modeling at Scale",
                 authors = listOf("Eve Modeler", "Frank Scaler"),
                 primaryCategory = "cs.CL",

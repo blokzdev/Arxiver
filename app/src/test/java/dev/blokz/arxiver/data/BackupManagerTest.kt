@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -62,7 +63,7 @@ class BackupManagerTest {
         id: String,
         title: String,
     ) = Paper(
-        id = ArxivId(id),
+        ref = ArxivRef(ArxivId(id)),
         latestVersion = 1,
         title = title,
         abstract = "An abstract about $title.",

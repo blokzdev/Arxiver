@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.data.LibraryRepository
 import kotlinx.coroutines.Dispatchers
@@ -48,7 +49,7 @@ class OrganizeViewModelTest {
     private suspend fun addPaper(id: String) {
         val p =
             Paper(
-                id = ArxivId(id),
+                ref = ArxivRef(ArxivId(id)),
                 latestVersion = 1,
                 title = "T $id",
                 abstract = "A",

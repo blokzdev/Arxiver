@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 class PaperTest {
     private fun paper(version: Int = 1) =
         Paper(
-            id = ArxivId("2403.01234"),
+            ref = ArxivRef(ArxivId("2403.01234")),
             latestVersion = version,
             title = "t",
             abstract = "a",

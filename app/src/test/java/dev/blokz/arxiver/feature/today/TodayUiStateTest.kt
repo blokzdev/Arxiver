@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.feature.today
 
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.data.InboxPaper
 import java.time.Instant
@@ -14,7 +15,7 @@ class TodayUiStateTest {
         InboxPaper(
             paper =
                 Paper(
-                    id = ArxivId("2401.00001"),
+                    ref = ArxivRef(ArxivId("2401.00001")),
                     latestVersion = 1,
                     title = "T",
                     abstract = "a",

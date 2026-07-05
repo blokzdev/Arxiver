@@ -55,6 +55,10 @@ structured-PK-rebuild alternative is rejected.
 - **arXiv rows** keep their bare id (`2403.09999`) — byte-untouched.
 - **New non-arXiv rows** get a **namespaced composite** id (`chemrxiv:10.26434/…`, `biorxiv:10.1101/…`) as the
   opaque PK. Reserved prefixes: `{chemrxiv:, biorxiv:, medrxiv:, s2:}`; **anything un-prefixed ⇒ arXiv**.
+  `PaperRef.fromStorageId` splits on the **first `:` only**, so a native id may itself contain `:`/`/` and
+  round-trips losslessly. **The storage id is NOT URL-encoded** (ratified PS.0 deviation: the original "through
+  `Uri.encode`" is un-implementable in the pure-JVM `:core:model` module — the id is a PK, and URL-safety is
+  applied downstream where it enters a route/filename: `Routes.paperDetail` `Uri.encode`, `HtmlStorage` `/`→`_`).
 - `ArxivId` is preserved (API-stable) and becomes the parse/URL body of one implementation of a narrow
   source-polymorphic **`PaperRef`** seam (`core/model`). PS.0 ships exactly two implementations: **`ArxivRef`**
   (the only one doing URL synthesis) and one generic **`ExternalRef(origin, nativeId, storedPdfUrl)`** that
@@ -229,7 +233,8 @@ HTML**. A bioRxiv/chemRxiv backup round-trip test ships with it.
 ## 8. Testing strategy
 
 - **Off-device golden spine:** `Migration6To7Test` (identity-hash + zero-re-key, Robolectric in `test` so CI runs
-  it); `PaperRef` round-trip (arXiv unchanged; namespaced composite through `Uri.encode`; `fromStorageId` prefix
+  it); `PaperRef` round-trip (arXiv unchanged; namespaced composite via the opaque-PK first-colon scheme, not
+  `Uri.encode`; `fromStorageId` prefix
   dispatch); the **de-dup invariant** (arXiv id always wins the storage id); source-dispatched hydration (no
   arXiv-Atom fetch for a non-arXiv ref); the **backup round-trip** with a chemRxiv/bioRxiv fixture; the
   **rate-limiter structural test** (arXiv-host ⇒ ≥3s singleton); disclosure/reader per-origin gating.

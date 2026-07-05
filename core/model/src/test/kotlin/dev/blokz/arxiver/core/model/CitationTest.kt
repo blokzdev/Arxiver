@@ -21,7 +21,7 @@ class CitationTest {
         journalRef: String? = null,
         publishedAt: Instant = published,
     ) = Paper(
-        id = ArxivId(id),
+        ref = ArxivRef(ArxivId(id)),
         latestVersion = 1,
         title = title,
         abstract = "a",

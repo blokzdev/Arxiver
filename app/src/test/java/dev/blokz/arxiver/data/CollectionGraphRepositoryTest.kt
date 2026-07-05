@@ -10,6 +10,7 @@ import dev.blokz.arxiver.core.database.entity.CollectionEntity
 import dev.blokz.arxiver.core.database.entity.CollectionPaperCrossRef
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.search.RelationEdge
 import dev.blokz.arxiver.core.search.RelationEdgeKind
@@ -54,7 +55,7 @@ class CollectionGraphRepositoryTest {
     private suspend fun seedPaper(id: String) {
         val paper =
             Paper(
-                id = ArxivId(id),
+                ref = ArxivRef(ArxivId(id)),
                 latestVersion = 1,
                 title = "Paper $id",
                 abstract = "abstract",
