@@ -551,7 +551,7 @@ object AppModule {
             // EXTERNAL seams (PT.2): route through PaperRepository → ArxivApiClient → the shared arXiv
             // limiter on the @ArxivClient (AllowedHosts-gated) client. No HTTP client reaches the registry.
             searchArxiv = { filter, maxResults -> paperRepository.searchArxiv(filter, maxResults = maxResults) },
-            getPaper = { id -> paperRepository.paper(id) },
+            getPaper = { id -> paperRepository.paper(dev.blokz.arxiver.core.model.ArxivRef(id)) },
             savePaper = { paperId -> libraryRepository.save(paperId) },
             isInLibrary = { paperId -> paperId in libraryDao.allPaperIds() },
             // EXTERNAL seam (PT.3): the host-gated, 1.2s-mutex-spaced S2 client. No HTTP client reaches
@@ -562,6 +562,9 @@ object AppModule {
             // EXTERNAL seam (PT.4): the host-gated, 1.2s-mutex-spaced chemRxiv client. No HTTP client
             // reaches the registry — only this lambda; the structural no-okhttp-in-data/tool test stays green.
             searchChemRxiv = { term, limit, skip -> chemRxivClient.searchItems(term, limit, skip) },
+            // PS.1: persist a cached chemRxiv draft as a real `papers` row — no network (the draft carries
+            // the full metadata). Origin-blind library save then rides the existing `savePaper` seam.
+            importExternal = { draft -> paperRepository.saveExternalPaper(draft) },
         )
 
     @Provides
@@ -571,7 +574,19 @@ object AppModule {
         rateLimiter: ArxivRateLimiter,
         dispatchers: DispatcherProvider,
     ): dev.blokz.arxiver.core.network.pdf.PdfDownloader =
-        dev.blokz.arxiver.core.network.pdf.PdfDownloader(httpClient, rateLimiter, dispatchers)
+        dev.blokz.arxiver.core.network.pdf.PdfDownloader(
+            httpClient,
+            // R6 red line: `arxivLimiter` MUST be the injected ≥3s SINGLETON (the exact instance the Atom
+            // API + HTML fetchers hold) so arXiv PDFs stay FIFO-serialized with them. The polite ~1.2s slot
+            // is created here — PdfDownloader is @Singleton, so this is one app-wide polite limiter shared by
+            // every non-arXiv (chemRxiv, PS.1) PDF fetch. Not a separate @Provides: a second unqualified
+            // ArxivRateLimiter would be Hilt-ambiguous, and no other consumer needs the polite slot.
+            dev.blokz.arxiver.core.network.pdf.PdfHostPolicy(
+                arxivLimiter = rateLimiter,
+                politeLimiter = ArxivRateLimiter(minSpacingMs = 1_200),
+            ),
+            dispatchers,
+        )
 
     @Provides
     @Singleton

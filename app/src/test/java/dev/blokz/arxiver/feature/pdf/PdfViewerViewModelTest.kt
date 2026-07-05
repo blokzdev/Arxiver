@@ -10,6 +10,7 @@ import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
 import dev.blokz.arxiver.core.network.pdf.PdfDownloader
+import dev.blokz.arxiver.core.network.pdf.PdfHostPolicy
 import dev.blokz.arxiver.data.PaperRepository
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -78,7 +79,12 @@ class PdfViewerViewModelTest {
                 PdfViewerViewModel(
                     savedStateHandle = SavedStateHandle(mapOf("id" to "9999.99999")),
                     context = context,
-                    pdfDownloader = PdfDownloader(OkHttpClient(), ArxivRateLimiter(minSpacingMs = 0), dispatchers),
+                    pdfDownloader =
+                        PdfDownloader(
+                            OkHttpClient(),
+                            PdfHostPolicy(ArxivRateLimiter(minSpacingMs = 0), ArxivRateLimiter(minSpacingMs = 0)),
+                            dispatchers,
+                        ),
                     paperRepository = paperRepo,
                     dispatchers = dispatchers,
                 )

@@ -7,8 +7,12 @@ import dev.blokz.arxiver.core.database.toDomain
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.database.toListDomain
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalPaperDraft
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.core.model.PaperSource
+import dev.blokz.arxiver.core.model.resolvePaperRef
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivFeed
 import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
@@ -57,13 +61,52 @@ class PaperRepository
             fetchAndCache(ArxivQuery.fromFilter(filter, start = start, maxResults = maxResults), PaperSource.SEARCH)
 
         /**
-         * Paper for the detail screen: local cache first, then network refresh.
-         * Returns null only when the paper is unknown locally AND unfetchable.
+         * Paper for the reader/detail screens: local cache first (keyed by the opaque [PaperRef.storageId],
+         * origin-blind), then — for arXiv only — a network refresh. A non-arXiv cache miss returns null with
+         * ZERO network: there is no `export.arxiv.org` query for a `chemrxiv:…` id, and a non-arXiv paper only
+         * reaches a reader after import (a cache hit), so the null-on-miss path is the enforced safety net.
+         * Returns null when the paper is unknown locally AND unfetchable.
          */
-        suspend fun paper(id: ArxivId): Paper? {
-            paperDao.paperWithRelations(id.value)?.let { return it.toDomain() }
-            val fetched = fetchAndCache(ArxivQuery.byIds(listOf(id.value)), PaperSource.SHARE_IN)
+        suspend fun paper(ref: PaperRef): Paper? {
+            paperDao.paperWithRelations(ref.storageId)?.let { return it.toDomain() }
+            val arxiv = ref.arxivIdOrNull ?: return null
+            val fetched = fetchAndCache(ArxivQuery.byIds(listOf(arxiv.value)), PaperSource.SHARE_IN)
             return (fetched as? AppResult.Success)?.value?.papers?.firstOrNull()
+        }
+
+        @Deprecated("Pass a PaperRef", ReplaceWith("paper(ArxivRef(id))"))
+        suspend fun paper(id: ArxivId): Paper? = paper(ArxivRef(id))
+
+        /**
+         * Persist a non-arXiv paper captured from a search hit ([ExternalPaperDraft]) as a real `papers` row,
+         * with NO network (the draft already carries the full metadata). Idempotent via `@Upsert`. The ref is
+         * chosen through [resolvePaperRef] — the single de-dup chokepoint — so a source that ever carries an
+         * arXiv cross-id would key under the bare arXiv id instead of forking (chemRxiv never does).
+         *
+         * `primaryCategory = ""` + `categories = emptyList()` is a deliberate sentinel: the chip row renders
+         * empty (no fake "chemrxiv" category), the FTS mirror indexes title/abstract/authors only, and
+         * `source = MANUAL` (the acquisition-path axis, distinct from identity origin) passes the embedding
+         * gate so the paper becomes semantically searchable like any other.
+         */
+        suspend fun saveExternalPaper(draft: ExternalPaperDraft): Paper {
+            val ref = resolvePaperRef(arxivId = null, origin = draft.origin, nativeId = draft.nativeId)
+            val paper =
+                Paper(
+                    ref = ref,
+                    latestVersion = 1,
+                    title = draft.title,
+                    abstract = draft.abstract,
+                    publishedAt = draft.publishedAt,
+                    updatedAt = draft.publishedAt,
+                    primaryCategory = "",
+                    categories = emptyList(),
+                    authors = draft.authors,
+                    doi = draft.nativeId,
+                    pdfUrl = draft.pdfUrl,
+                    source = PaperSource.MANUAL,
+                )
+            paperDao.upsertPaperWithRelations(paper.toEntity(), paper.authors, paper.categories)
+            return paper
         }
 
         private suspend fun fetchAndCache(

@@ -45,7 +45,14 @@ class PdfDownloaderTest {
 
     // A plain (un-gated) client: MockWebServer serves http://127.0.0.1, which the AllowedHosts gate
     // would reject — so PdfDownloader tests must use a bare client (the gate is tested separately).
-    private fun downloader(limiter: ArxivRateLimiter) = PdfDownloader(OkHttpClient(), limiter, dispatchers)
+    // 127.0.0.1 is not an arXiv-group host, so PdfHostPolicy routes it to the POLITE slot — that's where
+    // the counting limiter goes, so the existing acquire-count assertions still hold.
+    private fun downloader(limiter: ArxivRateLimiter) =
+        PdfDownloader(
+            OkHttpClient(),
+            PdfHostPolicy(arxivLimiter = ArxivRateLimiter(minSpacingMs = 0), politeLimiter = limiter),
+            dispatchers,
+        )
 
     @Before
     fun setUp() {

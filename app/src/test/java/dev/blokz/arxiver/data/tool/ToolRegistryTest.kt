@@ -7,7 +7,11 @@ import dev.blokz.arxiver.core.database.entity.PaperEntity
 import dev.blokz.arxiver.core.database.fts.KeywordHit
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalPaperDraft
+import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PaperSource
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAsset
 import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAssetOriginal
@@ -87,6 +91,8 @@ class ToolRegistryTest {
         // PT.4 seam — defaulted no-op.
         searchChemRxiv: suspend (String, Int, Int) -> AppResult<ChemRxivSearchResponse> =
             { _, _, _ -> AppResult.Success(ChemRxivSearchResponse()) },
+        // PS.1 seam — records the drafts it persisted so tests can assert the stored (full) abstract.
+        importedDrafts: MutableList<ExternalPaperDraft> = mutableListOf(),
     ) = ToolRegistry(
         keywordSearch = { _, notes, _ ->
             keywordSpy?.invoke(notes)
@@ -101,6 +107,23 @@ class ToolRegistryTest {
         isInLibrary = { id -> id in savedIds },
         searchSemanticScholar = searchSemanticScholar,
         searchChemRxiv = searchChemRxiv,
+        importExternal = { draft ->
+            importedDrafts.add(draft)
+            Paper(
+                ref = ExternalRef(draft.origin, draft.nativeId),
+                latestVersion = 1,
+                title = draft.title,
+                abstract = draft.abstract,
+                publishedAt = draft.publishedAt,
+                updatedAt = draft.publishedAt,
+                primaryCategory = "",
+                categories = emptyList(),
+                authors = draft.authors,
+                doi = draft.nativeId,
+                pdfUrl = draft.pdfUrl,
+                source = PaperSource.MANUAL,
+            )
+        },
     )
 
     private fun exec(
@@ -218,6 +241,7 @@ class ToolRegistryTest {
                 isInLibrary = { false },
                 searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse()) },
                 searchChemRxiv = { _, _, _ -> AppResult.Success(ChemRxivSearchResponse()) },
+                importExternal = { throw RuntimeException("unused") },
             )
         val r = exec(reg, """{"query":"x"}""")
         assertTrue(r.result.isError)
@@ -534,6 +558,111 @@ class ToolRegistryTest {
         assertFalse(r.result.isError)
         assertEquals(25, capturedLimit, "limit clamped to 25")
         assertEquals(20, capturedSkip, "skip threaded to the seam")
+    }
+
+    // --- PS.1: chemRxiv import (search caches the draft → import stores it, source-aware + de-dup) ---
+
+    @Test
+    fun `chemrxiv import caches the full abstract at search, stores an ExternalRef row, and de-dups`() {
+        val longAbstract = "chemistry ".repeat(60) // 600 chars > ABSTRACT_SNIPPET_CHARS (320)
+        val saved = mutableSetOf<String>()
+        val drafts = mutableListOf<ExternalPaperDraft>()
+        val reg =
+            registry(
+                savedIds = saved,
+                importedDrafts = drafts,
+                searchChemRxiv = { _, _, _ ->
+                    AppResult.Success(
+                        ChemRxivSearchResponse(
+                            itemHits =
+                                listOf(
+                                    ChemRxivItemHit(
+                                        ChemRxivItem(
+                                            id = "cr:cat",
+                                            title = "Catalysis",
+                                            abstract = longAbstract,
+                                            doi = "10.26434/chemrxiv-cat",
+                                            publishedDate = "2024-05-01T00:00:00Z",
+                                            pdfUrl = "https://chemrxiv.org/cat.pdf",
+                                            authors = listOf(ChemRxivAuthor(name = "Ada Lovelace")),
+                                        ),
+                                    ),
+                                ),
+                        ),
+                    )
+                },
+            )
+
+        // 1) search: the hit is importable, and the DTO body carries only the truncated snippet.
+        val search = exec(reg, """{"term":"catalysis"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
+        val hit = body(search.result.contentJson)["hits"]!!.jsonArray.single().jsonObject
+        assertTrue(hit["importable"]!!.jsonPrimitive.boolean, "a DOI+PDF hit is importable")
+        assertEquals(320, hit["abstractSnippet"]!!.jsonPrimitive.content.length, "the DTO snippet is truncated")
+
+        // 2) import by source+doi: stores one row under the composite id, no network, imported=true.
+        val import =
+            exec(reg, """{"source":"chemrxiv","doi":"10.26434/chemrxiv-cat"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertFalse(import.result.isError)
+        assertTrue(import.egress, "chemRxiv import is egress-classed")
+        val b = body(import.result.contentJson)
+        assertEquals(true, b["imported"]!!.jsonPrimitive.boolean)
+        assertEquals(false, b["alreadyInLibrary"]!!.jsonPrimitive.boolean)
+        assertTrue("chemrxiv:10.26434/chemrxiv-cat" in saved, "library keyed under the composite storage id")
+        // the STORED draft kept the whole abstract (not the snippet) — the offline read surface is complete.
+        assertEquals(longAbstract, drafts.single().abstract)
+        assertEquals(Source.CHEMRXIV, drafts.single().origin)
+
+        // 3) re-import short-circuits as already-in-library and does NOT store again.
+        val again =
+            exec(reg, """{"source":"chemrxiv","doi":"10.26434/chemrxiv-cat"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertEquals(true, body(again.result.contentJson)["alreadyInLibrary"]!!.jsonPrimitive.boolean)
+        assertEquals(1, drafts.size, "a re-import must not store the paper twice")
+    }
+
+    @Test
+    fun `chemrxiv import without a prior search is a clean error, no store, still egress`() {
+        val drafts = mutableListOf<ExternalPaperDraft>()
+        val reg = registry(importedDrafts = drafts)
+        val r = exec(reg, """{"source":"chemrxiv","doi":"10.26434/never-searched"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertTrue(r.result.isError, "an unknown DOI (never searched) is an error, never a fetch")
+        assertTrue(r.egress)
+        assertTrue(drafts.isEmpty(), "nothing is stored")
+    }
+
+    @Test
+    fun `a non-importable chemrxiv hit (no pdf) is not cached and cannot be imported`() {
+        val drafts = mutableListOf<ExternalPaperDraft>()
+        val reg =
+            registry(
+                importedDrafts = drafts,
+                searchChemRxiv = { _, _, _ ->
+                    AppResult.Success(
+                        ChemRxivSearchResponse(
+                            itemHits =
+                                listOf(
+                                    ChemRxivItemHit(
+                                        ChemRxivItem(
+                                            id = "cr:np",
+                                            title = "No PDF",
+                                            abstract = "x",
+                                            doi = "10.26434/no-pdf",
+                                            publishedDate = "2024-05-01T00:00:00Z",
+                                            pdfUrl = null,
+                                            authors = emptyList(),
+                                        ),
+                                    ),
+                                ),
+                        ),
+                    )
+                },
+            )
+        val search = exec(reg, """{"term":"x"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
+        val hit = body(search.result.contentJson)["hits"]!!.jsonArray.single().jsonObject
+        assertEquals(false, hit["importable"]!!.jsonPrimitive.boolean, "no PDF ⇒ not importable")
+        // Importing it fails: the non-importable hit was never cached as a draft.
+        val import = exec(reg, """{"source":"chemrxiv","doi":"10.26434/no-pdf"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertTrue(import.result.isError)
+        assertTrue(drafts.isEmpty())
     }
 
     @Test

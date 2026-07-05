@@ -9,7 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
-import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.core.network.pdf.PdfDownloader
 import dev.blokz.arxiver.data.PaperRepository
 import dev.blokz.arxiver.data.PdfStorage
@@ -39,7 +39,8 @@ class PdfViewerViewModel
         private val paperRepository: PaperRepository,
         dispatchers: DispatcherProvider,
     ) : ViewModel() {
-        private val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
+        // The route arg is the opaque storageId (nav `Uri.encode`s it), so it round-trips for any source.
+        private val paperRef = PaperRef.fromStorageId(checkNotNull(savedStateHandle["id"]))
 
         /** Exposed so the page renderer (Compose-side) honors the injected dispatcher. */
         val ioDispatcher: CoroutineDispatcher = dispatchers.io
@@ -58,12 +59,12 @@ class PdfViewerViewModel
         private fun load() {
             _uiState.update { it.copy(downloading = true, error = null) }
             viewModelScope.launch {
-                val paper = paperRepository.paper(paperId)
+                val paper = paperRepository.paper(paperRef)
                 if (paper == null) {
                     _uiState.update { it.copy(downloading = false, error = AppError.Storage("unknown paper")) }
                     return@launch
                 }
-                val safeName = paperId.value.replace('/', '_') + "v${paper.latestVersion}.pdf"
+                val safeName = PdfStorage.safeName(paperRef.storageId, paper.latestVersion)
                 val destination = File(PdfStorage.dir(context), safeName)
                 when (val result = pdfDownloader.download(paper.pdfUrl, destination)) {
                     is AppResult.Success ->
