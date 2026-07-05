@@ -26,6 +26,11 @@ data class ChatSessionEntity(
     @ColumnInfo(name = "provider_id") val providerId: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
     @ColumnInfo(name = "last_message_at") val lastMessageAt: Long,
+    // P-Chat PC.4. defaultValue="0" is REQUIRED — it must byte-match the migration's
+    // `ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0` or Room's identity hash rejects the open.
+    @ColumnInfo(name = "pinned", defaultValue = "0") val pinned: Boolean = false,
+    // Nullable, no default: null = derive the label (paper title / collection name) as today.
+    @ColumnInfo(name = "title") val title: String? = null,
 ) {
     companion object {
         const val SCOPE_PAPER = "PAPER"

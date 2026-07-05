@@ -43,13 +43,32 @@ interface ChatDao {
         at: Long,
     )
 
+    /** Pin/unpin a session (P-Chat PC.4; consumed by the PC.5 UI). */
+    @Query("UPDATE chat_sessions SET pinned = :pinned WHERE id = :id")
+    suspend fun setPinned(
+        id: Long,
+        pinned: Boolean,
+    )
+
+    /** Set/clear a custom title (null = derive the label; consumed by the PC.5 rename UI). */
+    @Query("UPDATE chat_sessions SET title = :title WHERE id = :id")
+    suspend fun renameSession(
+        id: Long,
+        title: String?,
+    )
+
     @Query("SELECT * FROM chat_messages WHERE session_id = :sessionId ORDER BY created_at, id")
     suspend fun messagesFor(sessionId: Long): List<ChatMessageEntity>
 
     @Query("SELECT * FROM chat_messages WHERE session_id = :sessionId ORDER BY created_at, id")
     fun observeMessages(sessionId: Long): Flow<List<ChatMessageEntity>>
 
-    /** Sessions for a paper or collection, most-recently-active first. */
+    /**
+     * Sessions for a paper or collection, most-recently-active first. **NOT pinned-first:**
+     * AskViewModel's MostRecentFor resume must return the genuinely latest session for the
+     * scope — ordering pinned DESC here would resume a stale pinned session in the paper
+     * sheet (pinned by a DAO test; PC.4).
+     */
     @Query(
         """
         SELECT * FROM chat_sessions
@@ -86,7 +105,7 @@ interface ChatDao {
         FROM chat_sessions s
         LEFT JOIN papers p ON s.scope = 'PAPER' AND s.scope_id = p.id
         LEFT JOIN collections c ON s.scope = 'COLLECTION' AND s.scope_id = CAST(c.id AS TEXT)
-        ORDER BY s.last_message_at DESC
+        ORDER BY s.pinned DESC, s.last_message_at DESC
         """,
     )
     fun observeSessionRows(): Flow<List<ChatSessionRow>>

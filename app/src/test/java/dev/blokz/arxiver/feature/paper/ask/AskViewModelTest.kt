@@ -174,6 +174,16 @@ class AskViewModelTest {
             sessions.value = sessions.value.map { if (it.id == id) it.copy(lastMessageAt = at) else it }
         }
 
+        override suspend fun setPinned(
+            id: Long,
+            pinned: Boolean,
+        ) = Unit
+
+        override suspend fun renameSession(
+            id: Long,
+            title: String?,
+        ) = Unit
+
         override suspend fun messagesFor(sessionId: Long): List<ChatMessageEntity> =
             messages.value.filter { it.sessionId == sessionId }.sortedWith(compareBy({ it.createdAt }, { it.id }))
 
