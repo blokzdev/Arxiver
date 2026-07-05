@@ -31,6 +31,7 @@ import dev.blokz.arxiver.core.search.ChunkVectorSource
 import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.core.search.ScopedChunk
+import dev.blokz.arxiver.data.tool.ToolContext
 import dev.blokz.arxiver.data.tool.ToolExecution
 import dev.blokz.arxiver.data.tool.ToolExecutor
 import kotlinx.coroutines.flow.Flow
@@ -157,7 +158,12 @@ class ChatRepositoryTest {
         scope: RetrievalScope,
         sessionId: Long?,
         question: String,
-    ): PreparedChat = (prepare(scope, sessionId, question, includeNotes = true) as ChatPrepareResult.Ready).prepared
+        toolsEnabled: Boolean = false,
+    ): PreparedChat =
+        (
+            prepare(scope, sessionId, question, includeNotes = true, toolsEnabled = toolsEnabled)
+                as ChatPrepareResult.Ready
+        ).prepared
 
     @Test
     fun `streaming persists the user turn and a completed assistant turn`() =
@@ -182,8 +188,10 @@ class ChatRepositoryTest {
         override fun toolDefs(): List<ToolDef> =
             listOf(ToolDef("echo", "echo", buildJsonObject { put("type", "object") }))
 
-        override suspend fun execute(call: ToolCall): ToolExecution =
-            ToolExecution(ToolResult(call.id, call.name, "{}"), call.inputJson, "echoed", egress = false)
+        override suspend fun execute(
+            call: ToolCall,
+            context: ToolContext,
+        ): ToolExecution = ToolExecution(ToolResult(call.id, call.name, "{}"), call.inputJson, "echoed", egress = false)
     }
 
     private fun toolProvider(vararg scripts: List<ChatChunk>): FakeProvider {
@@ -204,7 +212,7 @@ class ChatRepositoryTest {
                 )
             val repo = repo(provider, toolLoop = ChatToolLoop(RepoEchoExecutor()))
 
-            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "q")
+            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "q", toolsEnabled = true)
             repo.stream(prep).toList()
 
             val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
@@ -234,7 +242,7 @@ class ChatRepositoryTest {
                 }
             val repo = repo(provider, toolLoop = ChatToolLoop(RepoEchoExecutor()))
 
-            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "q")
+            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "q", toolsEnabled = true)
             assertFailsWith<AiException> { repo.stream(prep).toList() }
 
             val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
@@ -258,6 +266,25 @@ class ChatRepositoryTest {
 
             val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
             assertEquals("error", db.chatDao().messagesFor(sid).last().status)
+        }
+
+    @Test
+    fun `setToolsEnabled persists per conversation and toolsEnabledFor reads it back (PT1 consent)`() =
+        runTest {
+            val repo = repo(FakeProvider { flowOf(ChatChunk.Done()) })
+            val sid =
+                db.chatDao().insertSession(
+                    ChatSessionEntity(
+                        scope = "PAPER",
+                        scopeId = "p1",
+                        providerId = "CLAUDE",
+                        createdAt = 1,
+                        lastMessageAt = 1,
+                    ),
+                )
+            assertFalse(repo.toolsEnabledFor(sid), "default opt-out — privacy first")
+            repo.setToolsEnabled(sid, true)
+            assertTrue(repo.toolsEnabledFor(sid))
         }
 
     @Test

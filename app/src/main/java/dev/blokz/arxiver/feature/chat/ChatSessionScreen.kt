@@ -296,7 +296,7 @@ private fun ChatSessionScreenPreview() {
                     presets = AskPresets.forScope(isPaper = true),
                     onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
                     onRunGraphArtifact = {}, onFollowUp = {},
-                    onSetMode = {}, onSetIncludeNotes = {},
+                    onSetMode = {}, onSetIncludeNotes = {}, onSetToolsEnabled = {},
                     onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
                 )
             }

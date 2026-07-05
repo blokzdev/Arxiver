@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -277,6 +278,7 @@ internal fun ConversationHost(
         onFollowUp = viewModel::runPreset,
         onSetMode = viewModel::setMode,
         onSetIncludeNotes = viewModel::setIncludeNotes,
+        onSetToolsEnabled = viewModel::setToolsEnabled,
         onConfirmSend = viewModel::confirmSend,
         onCancelConfirm = viewModel::cancelConfirm,
         onStop = viewModel::cancel,
@@ -344,6 +346,7 @@ internal fun AskSheetContent(
     onFollowUp: (String) -> Unit,
     onSetMode: (ChatMode) -> Unit,
     onSetIncludeNotes: (Boolean) -> Unit,
+    onSetToolsEnabled: (Boolean) -> Unit,
     onConfirmSend: () -> Unit,
     onCancelConfirm: () -> Unit,
     onStop: () -> Unit,
@@ -533,6 +536,10 @@ internal fun AskSheetContent(
             }
             ModeRow(mode = state.mode, enabled = !state.streaming && !state.preparing, onSetMode = onSetMode)
             IncludeNotesRow(state.includeNotes, onSetIncludeNotes)
+            // P-Tools PT.1: opt-in to let the model search the user's library (matching abstracts
+            // egress to the cloud model — the toggle IS the disclosure). Cloud turns only (on-device
+            // has no tools); persisted per conversation, default off.
+            if (state.isCloud) SearchLibraryRow(state.toolsEnabled, onSetToolsEnabled)
             InputRow(
                 input = state.input,
                 streaming = state.streaming,
@@ -577,6 +584,10 @@ private fun AskBubble(
     onFollowUp: ((String) -> Unit)? = null,
     followUpsEnabled: Boolean = true,
 ) {
+    if (message.role == AskRole.TOOL) {
+        ToolActivityBubble(message.activity)
+        return
+    }
     val isUser = message.role == AskRole.USER
     val bubbleColor =
         if (isUser) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
@@ -975,6 +986,55 @@ private fun IncludeNotesRow(
     }
 }
 
+/** Per-conversation opt-in to let the model search the user's library (P-Tools PT.1). Mirrors
+ *  [IncludeNotesRow]; the hint discloses that matching abstracts egress to the cloud model. */
+@Composable
+private fun SearchLibraryRow(
+    enabled: Boolean,
+    onSetEnabled: (Boolean) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(stringResource(R.string.ask_search_library), style = MaterialTheme.typography.bodyMedium)
+            Text(
+                stringResource(R.string.ask_search_library_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = enabled, onCheckedChange = onSetEnabled)
+    }
+}
+
+/** The compact inline "Searched your library: …" chip for a [AskRole.TOOL] step (P-Tools PT.1). */
+@Composable
+private fun ToolActivityBubble(activity: ToolActivity?) {
+    if (activity == null) return
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = Spacing.md, vertical = Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+        ) {
+            Icon(
+                Icons.Outlined.Search,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                stringResource(R.string.ask_tool_activity_local, activity.query),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 @Composable
 private fun InputRow(
     input: String,
@@ -1027,7 +1087,7 @@ private fun AskSheetEmptyPreview() {
             presets = AskPresets.forScope(isPaper = true),
             onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
             onRunGraphArtifact = {}, onFollowUp = {},
-            onSetMode = {}, onSetIncludeNotes = {},
+            onSetMode = {}, onSetIncludeNotes = {}, onSetToolsEnabled = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }
@@ -1070,7 +1130,7 @@ private fun AskSheetConversationPreview() {
             presets = AskPresets.forScope(isPaper = true, visionAvailable = true),
             onInput = {}, onSend = {}, onRunPreset = {}, onRunVisionPreset = { _, _ -> },
             onRunGraphArtifact = {}, onFollowUp = {},
-            onSetMode = {}, onSetIncludeNotes = {},
+            onSetMode = {}, onSetIncludeNotes = {}, onSetToolsEnabled = {},
             onConfirmSend = {}, onCancelConfirm = {}, onStop = {}, onConfigureProvider = {},
         )
     }

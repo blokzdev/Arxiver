@@ -103,4 +103,21 @@ class ConversationMarkdownTest {
         assertEquals(161, out.length, "160 chars + ellipsis")
         assertTrue(out.endsWith("…"))
     }
+
+    @Test
+    fun `a TOOL activity bubble is never serialized into the export (P-Tools red line)`() {
+        val messages =
+            listOf(
+                user("what do my papers say about diffusion?"),
+                AskMessage(
+                    role = AskRole.TOOL,
+                    text = "",
+                    activity = ToolActivity("search_my_library", "SENSITIVE_LIBRARY_QUERY", egress = false),
+                ),
+                assistant("Your papers cover diffusion models."),
+            )
+        val md = ConversationMarkdown.conversation(messages, scopeLabel = "Paper", labels = labels)
+        assertTrue(md.contains("Your papers cover diffusion models."))
+        assertFalse(md.contains("SENSITIVE_LIBRARY_QUERY"), "a model-minted tool query must never enter an export")
+    }
 }

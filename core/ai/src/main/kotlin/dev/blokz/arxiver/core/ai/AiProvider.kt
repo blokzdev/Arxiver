@@ -144,6 +144,16 @@ sealed interface ChatChunk {
      */
     data class ToolUse(val id: String, val name: String, val inputJson: String) : ChatChunk
 
+    /**
+     * A tool step the repo-side ChatToolLoop just executed (P-Tools PT.1). **Loop-authored** — a
+     * provider NEVER emits it (providers emit only [Delta]/[ToolUse]/[Done]); the loop synthesizes it
+     * from its `onActivity` seam onto the same stream as [Delta] so the ViewModel can render the
+     * inline activity bubble in chronological position (user → tool activity → assistant answer).
+     * [egress] is false for a local tool (`search_my_library`). The result summary is NOT carried here
+     * (the UI doesn't render it) — it lives in `tool_invocations` for audit.
+     */
+    data class ToolActivity(val toolName: String, val query: String, val egress: Boolean) : ChatChunk
+
     /** Terminal marker; [stopReason] is the provider's stop reason when known. */
     data class Done(val stopReason: String? = null) : ChatChunk
 }

@@ -69,6 +69,7 @@ class ChatContextAssembler(
         capability: ProviderCapability,
         mode: ChatMode = ChatMode.STANDARD,
         attachment: ChatImage? = null,
+        toolsAvailable: Boolean = false,
     ): AssembledChat {
         val gated = if (includeNotes) chunks else chunks.filter { it.sourceKind != ChunkEmbeddingEntity.SOURCE_NOTE }
 
@@ -80,7 +81,9 @@ class ChatContextAssembler(
                 OutputRichness.PLAIN -> SYSTEM_PROMPT
                 OutputRichness.STRUCTURED -> SYSTEM_PROMPT + STRUCTURED_RICH_ADDENDUM
                 OutputRichness.FULL -> SYSTEM_PROMPT + CLOUD_RICH_ADDENDUM
-            }
+                // P-Tools PT.1: relax "ONLY the provided excerpts" when a tool can fetch more; default
+                // false keeps every non-tool turn's system prompt byte-identical.
+            } + if (toolsAvailable) TOOLS_PRESENT_ADDENDUM else ""
 
         // The depth directive rides the user turn (never the system prompt); STANDARD is empty,
         // so a default-mode request is byte-identical to before. Max's rich nudge is cloud-only (FULL).
@@ -225,5 +228,15 @@ class ChatContextAssembler(
                 "${'$'}${'$'}…${'$'}${'$'}. When a picture helps, draw it with a Mermaid block " +
                 "(```mermaid) — a flowchart, sequence, mindmap, or timeline, or a pie/xychart-beta " +
                 "chart. Use these only when they make the answer clearer."
+
+        /**
+         * Appended when a tool is available (P-Tools PT.1). The base prompt says "using ONLY the
+         * provided context excerpts" — too narrow once the model can fetch more via a tool. Tool
+         * results are valid grounding; steer their citations to prose `arXiv:<id>` so they don't
+         * collide with the `[number]` excerpt citations.
+         */
+        const val TOOLS_PRESENT_ADDENDUM =
+            " You may also call the search_my_library tool to find more of the user's saved papers; " +
+                "treat any papers it returns as valid grounding and cite them in prose as arXiv:<id>."
     }
 }

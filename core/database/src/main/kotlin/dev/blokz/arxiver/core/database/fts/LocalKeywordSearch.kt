@@ -17,6 +17,10 @@ class LocalKeywordSearch(private val searchDao: SearchDao) {
     suspend fun search(
         rawQuery: String,
         limit: Int = 30,
+        // P-Tools PT.1 red line: default true keeps every existing caller byte-identical, but a
+        // cloud-tool library search passes false so private note text never influences the ranking
+        // that returns to the model.
+        includeNotes: Boolean = true,
     ): List<KeywordHit> {
         val match = buildMatchQuery(rawQuery)
         if (match.isBlank()) return emptyList()
@@ -25,8 +29,10 @@ class LocalKeywordSearch(private val searchDao: SearchDao) {
         searchDao.matchPapers(match).forEach {
             scores.merge(it.paperId, Bm25.score(it.matchinfo, Bm25.PAPER_WEIGHTS), Double::plus)
         }
-        searchDao.matchNotes(match).forEach {
-            scores.merge(it.paperId, Bm25.score(it.matchinfo, Bm25.NOTE_WEIGHTS), Double::plus)
+        if (includeNotes) {
+            searchDao.matchNotes(match).forEach {
+                scores.merge(it.paperId, Bm25.score(it.matchinfo, Bm25.NOTE_WEIGHTS), Double::plus)
+            }
         }
         if (scores.isEmpty()) return emptyList()
 

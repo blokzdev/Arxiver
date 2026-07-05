@@ -9,6 +9,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import dev.blokz.arxiver.core.common.DefaultDispatcherProvider
 import dev.blokz.arxiver.core.common.DispatcherProvider
+import dev.blokz.arxiver.core.common.getOrNull
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.TaxonomySeeder
 import dev.blokz.arxiver.core.database.dao.CategoryDao
@@ -472,6 +473,7 @@ object AppModule {
         embeddingService: dev.blokz.arxiver.core.ml.EmbeddingService,
         dispatchers: DispatcherProvider,
         appScope: kotlinx.coroutines.CoroutineScope,
+        toolExecutor: dev.blokz.arxiver.data.tool.ToolExecutor,
     ): dev.blokz.arxiver.data.ChatRepository =
         dev.blokz.arxiver.data.ChatRepository(
             chatDao = chatDao,
@@ -483,9 +485,42 @@ object AppModule {
             dispatchers = dispatchers,
             // The app-lifetime delete commit outlives the ChatHistoryViewModel (PC.3).
             appScope = appScope,
+            // P-Tools PT.1: the loop runs the real tool registry (search_my_library) — replaces the
+            // PT.0 NoToolExecutor default. Cloud providers are offered the tool; on-device isn't
+            // (supportsTools=false gate), so it stays byte-identical there.
+            toolLoop = dev.blokz.arxiver.data.ChatToolLoop(executor = toolExecutor),
             // P-Tools PT.0: the terminal write (assistant row + tool_invocations) runs atomically so
-            // a real executor (PT.1+) can never split the assistant COMPLETE from its tool rows.
+            // a real executor can never split the assistant COMPLETE from its tool rows.
             transaction = { block -> db.withTransaction { block() } },
+        )
+
+    /**
+     * The P-Tools tool catalog (PT.1): wires `search_my_library`'s on-device search seams. The
+     * semantic leg is gated behind `ModelState.Ready` so a tool call NEVER triggers a model download;
+     * the registry itself holds no network dependency (zero egress).
+     */
+    @Provides
+    @Singleton
+    fun toolExecutor(
+        localKeywordSearch: dev.blokz.arxiver.core.database.fts.LocalKeywordSearch,
+        vectorIndex: dev.blokz.arxiver.core.search.VectorIndex,
+        embeddingService: dev.blokz.arxiver.core.ml.EmbeddingService,
+        modelDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
+        searchDao: dev.blokz.arxiver.core.database.dao.SearchDao,
+        libraryDao: dev.blokz.arxiver.core.database.dao.LibraryDao,
+    ): dev.blokz.arxiver.data.tool.ToolExecutor =
+        dev.blokz.arxiver.data.tool.ToolRegistry(
+            keywordSearch = { query, includeNotes -> localKeywordSearch.search(query, includeNotes = includeNotes) },
+            semanticSearch = { query, k ->
+                if (modelDownloader.state.value is dev.blokz.arxiver.core.ml.ModelState.Ready) {
+                    embeddingService.embedQuery(query).getOrNull()
+                        ?.let { qv -> vectorIndex.topK(qv, k).map { it.paperId to it.similarity } }
+                } else {
+                    null
+                }
+            },
+            libraryPaperIds = { libraryDao.allPaperIds().toHashSet() },
+            paperById = { ids -> searchDao.papersByIds(ids) },
         )
 
     @Provides

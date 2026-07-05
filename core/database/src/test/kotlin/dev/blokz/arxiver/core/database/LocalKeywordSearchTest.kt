@@ -109,6 +109,26 @@ class LocalKeywordSearchTest {
         }
 
     @Test
+    fun `includeNotes false skips the note leg so a note-only match never surfaces (P-Tools red line)`() =
+        runTest {
+            seed()
+            db.libraryDao().insertNote(
+                NoteEntity(
+                    paperId = "2401.00001",
+                    content = "compare with surface codes",
+                    createdAt = 1,
+                    updatedAt = 1,
+                ),
+            )
+            // "surface codes" appears ONLY in the note, not the title/abstract.
+            assertEquals(listOf("2401.00001"), search.search("surface codes", includeNotes = true).map { it.paper.id })
+            assertTrue(
+                search.search("surface codes", includeNotes = false).isEmpty(),
+                "note text must not influence a cloud library search",
+            )
+        }
+
+    @Test
     fun `note update and delete reindex`() =
         runTest {
             seed()
