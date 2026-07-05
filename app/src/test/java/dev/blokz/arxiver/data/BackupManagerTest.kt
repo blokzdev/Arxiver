@@ -226,7 +226,10 @@ class BackupManagerTest {
             d.elementDescriptors.forEach { collect(it, names, seen) }
         }
 
-        val forbidden = listOf("chat", "session", "message", "conversation")
+        // P-Tools PT.0: tool-activity surfaces write model-derived query strings (PII). Extend the
+        // wall to catch a mis-added tool/invocation/query/activity field at any nesting depth BEFORE
+        // the tool_invocations table lands. Verified no existing element name collides with these.
+        val forbidden = listOf("chat", "session", "message", "conversation", "tool", "invocation", "query", "activity")
         for (root in listOf(ArxiverBackup.serializer(), LibraryExport.serializer())) {
             val names = mutableSetOf<String>()
             collect(root.descriptor, names, mutableSetOf())

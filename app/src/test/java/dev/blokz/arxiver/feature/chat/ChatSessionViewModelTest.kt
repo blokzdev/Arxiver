@@ -13,6 +13,7 @@ import dev.blokz.arxiver.core.database.dao.ChatDao
 import dev.blokz.arxiver.core.database.dao.ChatSessionRow
 import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
 import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
+import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import dev.blokz.arxiver.core.search.ChunkKeywordSource
 import dev.blokz.arxiver.core.search.ChunkVectorSource
 import dev.blokz.arxiver.core.search.RagRetriever
@@ -91,6 +92,17 @@ class ChatSessionViewModelTest {
         ) {
             sessions.value = sessions.value.map { if (it.id == id) it.copy(title = title) else it }
         }
+
+        override suspend fun setToolsEnabled(
+            id: Long,
+            enabled: Boolean,
+        ) {
+            sessions.value = sessions.value.map { if (it.id == id) it.copy(toolsEnabled = enabled) else it }
+        }
+
+        override suspend fun insertToolInvocations(rows: List<ToolInvocationEntity>) = Unit
+
+        override suspend fun toolInvocationsForMessage(messageId: Long): List<ToolInvocationEntity> = emptyList()
 
         override fun observeSession(id: Long): Flow<ChatSessionEntity?> =
             sessions.map { list -> list.firstOrNull { it.id == id } }

@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.di
 
 import android.content.Context
+import androidx.room.withTransaction
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -464,6 +465,7 @@ object AppModule {
     @Provides
     @Singleton
     fun chatRepository(
+        db: dev.blokz.arxiver.core.database.ArxiverDatabase,
         chatDao: dev.blokz.arxiver.core.database.dao.ChatDao,
         ragRetriever: dev.blokz.arxiver.core.search.RagRetriever,
         providerResolver: dev.blokz.arxiver.core.ai.ProviderResolver,
@@ -481,6 +483,9 @@ object AppModule {
             dispatchers = dispatchers,
             // The app-lifetime delete commit outlives the ChatHistoryViewModel (PC.3).
             appScope = appScope,
+            // P-Tools PT.0: the terminal write (assistant row + tool_invocations) runs atomically so
+            // a real executor (PT.1+) can never split the assistant COMPLETE from its tool rows.
+            transaction = { block -> db.withTransaction { block() } },
         )
 
     @Provides

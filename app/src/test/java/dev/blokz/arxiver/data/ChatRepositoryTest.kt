@@ -18,6 +18,9 @@ import dev.blokz.arxiver.core.ai.ProviderCapability
 import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ProviderRegistry
 import dev.blokz.arxiver.core.ai.ProviderResolver
+import dev.blokz.arxiver.core.ai.ToolCall
+import dev.blokz.arxiver.core.ai.ToolDef
+import dev.blokz.arxiver.core.ai.ToolResult
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DefaultDispatcherProvider
@@ -28,12 +31,16 @@ import dev.blokz.arxiver.core.search.ChunkVectorSource
 import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.core.search.ScopedChunk
+import dev.blokz.arxiver.data.tool.ToolExecution
+import dev.blokz.arxiver.data.tool.ToolExecutor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -51,6 +58,7 @@ class ChatRepositoryTest {
 
     private class FakeProvider(
         override val id: ProviderId = ProviderId.CLAUDE,
+        supportsTools: Boolean = false,
         private val script: () -> Flow<ChatChunk>,
     ) : AiProvider {
         override val capability =
@@ -60,6 +68,7 @@ class ChatRepositoryTest {
                 onDevice = false,
                 requiresKey = true,
                 richness = OutputRichness.FULL,
+                supportsTools = supportsTools,
             )
 
         override fun chat(request: ChatRequest): Flow<ChatChunk> = script()
@@ -124,6 +133,8 @@ class ChatRepositoryTest {
         preferOnDevice: Boolean = false,
         onDeviceReady: Boolean = false,
         embed: suspend (String) -> AppResult<FloatArray> = { AppResult.Success(FloatArray(384)) },
+        toolLoop: ChatToolLoop = ChatToolLoop(),
+        transaction: suspend (suspend () -> Unit) -> Unit = { it() },
     ): ChatRepository {
         val registry = ProviderRegistry(listOf(provider), FakeKeyStore(keys))
         val resolver = ProviderResolver(registry, { selected }, { preferOnDevice }, { onDeviceReady })
@@ -137,6 +148,8 @@ class ChatRepositoryTest {
             embedQuery = embed,
             dispatchers = DefaultDispatcherProvider(),
             clock = { t++ },
+            toolLoop = toolLoop,
+            transaction = transaction,
         )
     }
 
@@ -161,6 +174,90 @@ class ChatRepositoryTest {
             val msgs = db.chatDao().messagesFor(sid)
             assertEquals(listOf("q", "Hello world"), msgs.map { it.content })
             assertEquals(listOf("complete", "complete"), msgs.map { it.status })
+        }
+
+    // --- P-Tools PT.0: the tool loop through the repository ---
+
+    private class RepoEchoExecutor : ToolExecutor {
+        override fun toolDefs(): List<ToolDef> =
+            listOf(ToolDef("echo", "echo", buildJsonObject { put("type", "object") }))
+
+        override suspend fun execute(call: ToolCall): ToolExecution =
+            ToolExecution(ToolResult(call.id, call.name, "{}"), call.inputJson, "echoed", egress = false)
+    }
+
+    private fun toolProvider(vararg scripts: List<ChatChunk>): FakeProvider {
+        var i = 0
+        return FakeProvider(supportsTools = true) {
+            val s = scripts.getOrElse(i++) { error("provider over-called") }
+            flow { s.forEach { emit(it) } }
+        }
+    }
+
+    @Test
+    fun `a tool turn persists a complete assistant row and its tool_invocations`() =
+        runTest {
+            val provider =
+                toolProvider(
+                    listOf(ChatChunk.ToolUse("t1", "echo", """{"text":"hi"}"""), ChatChunk.Done("tool_use")),
+                    listOf(ChatChunk.Delta("answer"), ChatChunk.Done()),
+                )
+            val repo = repo(provider, toolLoop = ChatToolLoop(RepoEchoExecutor()))
+
+            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "q")
+            repo.stream(prep).toList()
+
+            val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
+            val assistant = db.chatDao().messagesFor(sid).last()
+            assertEquals("answer", assistant.content)
+            assertEquals("complete", assistant.status)
+            val invocations = db.chatDao().toolInvocationsForMessage(assistant.id)
+            assertEquals(1, invocations.size)
+            assertEquals("echo", invocations.single().toolName)
+            assertFalse(invocations.single().egress)
+        }
+
+    @Test
+    fun `an error after a tool round persists error and writes zero tool rows (dangling guard)`() =
+        runTest {
+            var i = 0
+            val provider =
+                FakeProvider(supportsTools = true) {
+                    if (i++ == 0) {
+                        flow {
+                            emit(ChatChunk.ToolUse("t1", "echo", "{}"))
+                            emit(ChatChunk.Done("tool_use"))
+                        }
+                    } else {
+                        flow { throw AiException(AppError.Offline) }
+                    }
+                }
+            val repo = repo(provider, toolLoop = ChatToolLoop(RepoEchoExecutor()))
+
+            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "q")
+            assertFailsWith<AiException> { repo.stream(prep).toList() }
+
+            val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
+            val assistant = db.chatDao().messagesFor(sid).last()
+            assertEquals("error", assistant.status)
+            // The tool ran in-memory, but persistTerminal never fired → NO durable tool rows.
+            assertEquals(0, db.chatDao().toolInvocationsForMessage(assistant.id).size)
+        }
+
+    @Test
+    fun `a failure in the terminal write persists error, not incomplete`() =
+        runTest {
+            val repo =
+                repo(
+                    FakeProvider { flowOf(ChatChunk.Delta("hi"), ChatChunk.Done()) },
+                    transaction = { throw RuntimeException("db down") },
+                )
+
+            val prep = repo.prepared(RetrievalScope.Paper("p1"), null, "q")
+            assertFailsWith<RuntimeException> { repo.stream(prep).toList() }
+
+            val sid = repo.observeSessions(RetrievalScope.Paper("p1")).first().single().id
+            assertEquals("error", db.chatDao().messagesFor(sid).last().status)
         }
 
     @Test

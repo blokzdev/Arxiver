@@ -440,6 +440,9 @@ class AskViewModel
                                     answer.append(chunk.text)
                                     updateAssistant(answer.toString(), streaming = true)
                                 }
+                                // The repo-side ChatToolLoop buffers tool_use internally and never
+                                // forwards it here (P-Tools PT.0) — required only for exhaustiveness.
+                                is ChatChunk.ToolUse -> Unit
                                 is ChatChunk.Done ->
                                     if (answer.isBlank()) {
                                         // A provider that completed without producing any text is a

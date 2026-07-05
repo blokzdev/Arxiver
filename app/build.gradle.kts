@@ -114,6 +114,8 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
     implementation(libs.androidx.work.runtime)
+    // Room KTX for the suspend `withTransaction` used by the P-Tools terminal write (PT.0).
+    implementation(libs.androidx.room.ktx)
     ksp(libs.hilt.compiler)
     ksp(libs.hilt.androidx.compiler)
     implementation(libs.kotlinx.serialization.json)

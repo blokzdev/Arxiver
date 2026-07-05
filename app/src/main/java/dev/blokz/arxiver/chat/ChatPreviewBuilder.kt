@@ -28,11 +28,21 @@ private fun ChatImage.disclosure(): String {
     return "Attached image: ${label ?: "image"} — $mediaType, ~$approxKb KB"
 }
 
+/** A tool the model may call (P-Tools PT.0) — name + description leave the device; schema is elided. */
+@Serializable
+private data class PreviewToolDto(
+    val name: String,
+    val description: String,
+)
+
 @Serializable
 private data class PreviewDto(
     val system: String?,
     val messages: List<PreviewMessageDto>,
     val maxTokens: Int,
+    /** Tools offered to the model (P-Tools PT.0). Null (omitted) when none — the redaction golden
+     *  stays byte-identical for a tool-free turn. */
+    val tools: List<PreviewToolDto>? = null,
 )
 
 /**
@@ -64,6 +74,8 @@ class ChatPreviewBuilder(
                         )
                     },
                 maxTokens = request.maxTokens,
+                // takeIf BEFORE map ⇒ null (omitted) not [] when no tools — byte-identical golden.
+                tools = request.tools.takeIf { it.isNotEmpty() }?.map { PreviewToolDto(it.name, it.description) },
             )
         return ChatPreview(text = render(request), json = json.encodeToString(PreviewDto.serializer(), dto))
     }
@@ -76,6 +88,12 @@ class ChatPreviewBuilder(
             request.system?.let {
                 appendLine("SYSTEM:")
                 appendLine(it)
+                appendLine()
+            }
+            if (request.tools.isNotEmpty()) {
+                appendLine("TOOLS THE MODEL MAY CALL")
+                appendLine("Each call sends its query to an external service; results come back to the model.")
+                request.tools.forEach { appendLine("- ${it.name}: ${it.description}") }
                 appendLine()
             }
             request.messages.forEach { msg ->
