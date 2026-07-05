@@ -5,6 +5,7 @@
     <string name="nav_today">Today</string>
     <string name="nav_explore">Explore</string>
     <string name="nav_library">Library</string>
+    <string name="nav_chat">Chat</string>
 
     <plurals name="browse_following_count">
         <item quantity="one">%1$d followed</item>
@@ -518,8 +519,6 @@
 
     <!-- Collection chat + chat history (P2.4) -->
     <string name="cd_chat_collection">Chat with this collection</string>
-    <string name="settings_chat_history_link">Chat history</string>
-    <string name="chat_history_title">Chat history</string>
     <string name="chat_history_empty">No chats yet</string>
     <string name="chat_history_empty_body">Ask a paper or a collection a question and your conversations show up here.</string>
     <string name="chat_history_scope_paper">Paper</string>
@@ -527,6 +526,8 @@
     <string name="chat_history_unknown_paper">(removed paper)</string>
     <string name="chat_history_unknown_collection">(removed collection)</string>
     <string name="chat_history_delete">Delete chat</string>
+    <string name="chat_deleted">Chat deleted</string>
+    <string name="chat_empty_cta">Browse your library</string>
     <string name="chat_session_title">Conversation</string>
     <string name="chat_session_new">New conversation</string>
 

@@ -10,6 +10,7 @@ import dev.blokz.arxiver.core.ai.ProviderResolver
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.dao.ChatDao
+import dev.blokz.arxiver.core.database.dao.ChatSessionRow
 import dev.blokz.arxiver.core.database.entity.ChatMessageEntity
 import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.search.ChunkKeywordSource
@@ -85,6 +86,9 @@ class ChatSessionViewModelTest {
             scopeId: String,
         ): Flow<List<ChatSessionEntity>> =
             sessions.map { list -> list.filter { it.scope == scope && it.scopeId == scopeId } }
+
+        override fun observeSessionRows(): Flow<List<ChatSessionRow>> =
+            sessions.map { list -> list.map { ChatSessionRow(it, null, null, null) } }
 
         override fun observeAllSessions(): Flow<List<ChatSessionEntity>> = sessions
 
