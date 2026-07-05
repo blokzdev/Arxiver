@@ -45,6 +45,7 @@ import dev.blokz.arxiver.core.database.migration.MIGRATION_2_3
 import dev.blokz.arxiver.core.database.migration.MIGRATION_3_4
 import dev.blokz.arxiver.core.database.migration.MIGRATION_4_5
 import dev.blokz.arxiver.core.database.migration.MIGRATION_5_6
+import dev.blokz.arxiver.core.database.migration.MIGRATION_6_7
 
 @Database(
     entities = [
@@ -104,7 +105,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
         const val NAME = "arxiver.db"
 
         /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
-        const val VERSION = 6
+        const val VERSION = 7
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema
@@ -112,7 +113,14 @@ abstract class ArxiverDatabase : RoomDatabase() {
          */
         fun build(context: Context): ArxiverDatabase =
             Room.databaseBuilder(context, ArxiverDatabase::class.java, NAME)
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                )
                 .build()
     }
 }

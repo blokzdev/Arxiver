@@ -8,6 +8,7 @@ import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.data.LibraryExporter
 import dev.blokz.arxiver.data.LibraryRepository
@@ -56,7 +57,7 @@ class LibraryViewModelTest {
     ) {
         val p =
             Paper(
-                id = ArxivId(id),
+                ref = ArxivRef(ArxivId(id)),
                 latestVersion = 1,
                 title = "T $id",
                 abstract = "A",

@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.core.network.arxiv
 
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperSource
 import org.xmlpull.v1.XmlPullParser
@@ -95,7 +96,7 @@ class AtomFeedParser {
         val primary = primaryCategory ?: categories.firstOrNull() ?: return null
 
         return Paper(
-            id = arxivId,
+            ref = ArxivRef(arxivId),
             latestVersion = version ?: 1,
             title = title ?: return null,
             abstract = summary.orEmpty(),

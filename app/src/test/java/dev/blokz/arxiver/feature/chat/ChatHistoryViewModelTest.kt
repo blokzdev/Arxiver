@@ -16,6 +16,7 @@ import dev.blokz.arxiver.core.database.entity.ChatSessionEntity
 import dev.blokz.arxiver.core.database.entity.CollectionEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.search.ChunkKeywordSource
 import dev.blokz.arxiver.core.search.ChunkVectorSource
@@ -113,7 +114,7 @@ class ChatHistoryViewModelTest {
     ) {
         val paper =
             Paper(
-                id = ArxivId(id),
+                ref = ArxivRef(ArxivId(id)),
                 latestVersion = 1,
                 title = title,
                 abstract = "a",

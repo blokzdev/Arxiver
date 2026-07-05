@@ -3,6 +3,7 @@ package dev.blokz.arxiver.core.database
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -41,7 +42,7 @@ class MigrationHarnessTest {
             val context = ApplicationProvider.getApplicationContext<Context>()
             val paper =
                 Paper(
-                    id = ArxivId("2403.09999"),
+                    ref = ArxivRef(ArxivId("2403.09999")),
                     latestVersion = 1,
                     title = "Persisted",
                     abstract = "a",

@@ -8,6 +8,7 @@ import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
@@ -85,7 +86,7 @@ class PaperDetailViewModelTest {
     private suspend fun cachePaper(id: String) {
         val p =
             Paper(
-                id = ArxivId(id),
+                ref = ArxivRef(ArxivId(id)),
                 latestVersion = 1,
                 title = "Cached $id",
                 abstract = "A",

@@ -9,6 +9,7 @@ import dev.blokz.arxiver.core.database.entity.CitationEdgeEntity
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -47,7 +48,7 @@ class ConnectionsViewModelTest {
     private suspend fun paper(id: String) {
         val p =
             Paper(
-                id = ArxivId(id),
+                ref = ArxivRef(ArxivId(id)),
                 latestVersion = 1,
                 title = "T $id",
                 abstract = "A",

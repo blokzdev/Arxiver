@@ -6,6 +6,7 @@ import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.database.entity.PaperEntity
 import dev.blokz.arxiver.core.database.fts.KeywordHit
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAsset
@@ -57,7 +58,7 @@ class ToolRegistryTest {
     /** A domain [Paper] for the external-tool fakes (search_arxiv / get_paper / import). */
     private fun domainPaper(id: String) =
         Paper(
-            id = ArxivId(id),
+            ref = ArxivRef(ArxivId(id)),
             latestVersion = 1,
             title = "T $id",
             abstract = "Abstract of $id",

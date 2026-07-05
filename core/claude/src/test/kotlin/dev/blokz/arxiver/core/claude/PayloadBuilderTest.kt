@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.core.claude
 
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -21,7 +22,7 @@ class PayloadBuilderTest {
         PaperWithAnnotations(
             paper =
                 Paper(
-                    id = ArxivId("2403.01234"),
+                    ref = ArxivRef(ArxivId("2403.01234")),
                     latestVersion = 2,
                     title = "Efficient State Space Models",
                     abstract = "We study state space models.",

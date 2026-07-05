@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.core.claude
 
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import org.junit.Test
 import java.time.Instant
@@ -17,7 +18,7 @@ class DispatchEnvelopeTest {
     ) = PaperWithAnnotations(
         paper =
             Paper(
-                id = ArxivId(id),
+                ref = ArxivRef(ArxivId(id)),
                 latestVersion = 1,
                 title = title,
                 abstract = "Abstract of $title.",

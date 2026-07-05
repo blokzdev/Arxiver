@@ -33,4 +33,9 @@ data class PaperEntity(
     @ColumnInfo(name = "fetched_at") val fetchedAt: Long,
     @ColumnInfo(name = "embedded_at") val embeddedAt: Long?,
     @ColumnInfo(name = "citations_synced_at") val citationsSyncedAt: Long?,
+    // P-Sources PS.0: source-identity discriminators (appended last — Room's identity hash is
+    // column-order-sensitive and ADD COLUMN appends). `origin` is a NEW column, NOT an overload of the
+    // `source` acquisition enum. The SQL `DEFAULT 'arxiv'` MUST byte-match `defaultValue = "'arxiv'"`.
+    @ColumnInfo(name = "origin", defaultValue = "'arxiv'") val origin: String = "arxiv",
+    @ColumnInfo(name = "native_id") val nativeId: String? = null,
 )
