@@ -31,6 +31,7 @@ import dev.blokz.arxiver.core.search.ChunkVectorSource
 import dev.blokz.arxiver.core.search.RagRetriever
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.core.search.ScopedChunk
+import dev.blokz.arxiver.data.tool.ToolConsent
 import dev.blokz.arxiver.data.tool.ToolContext
 import dev.blokz.arxiver.data.tool.ToolExecution
 import dev.blokz.arxiver.data.tool.ToolExecutor
@@ -159,10 +160,17 @@ class ChatRepositoryTest {
         sessionId: Long?,
         question: String,
         toolsEnabled: Boolean = false,
+        webSearchEnabled: Boolean = false,
     ): PreparedChat =
         (
-            prepare(scope, sessionId, question, includeNotes = true, toolsEnabled = toolsEnabled)
-                as ChatPrepareResult.Ready
+            prepare(
+                scope,
+                sessionId,
+                question,
+                includeNotes = true,
+                toolsEnabled = toolsEnabled,
+                webSearchEnabled = webSearchEnabled,
+            ) as ChatPrepareResult.Ready
         ).prepared
 
     @Test
@@ -185,8 +193,12 @@ class ChatRepositoryTest {
     // --- P-Tools PT.0: the tool loop through the repository ---
 
     private class RepoEchoExecutor : ToolExecutor {
-        override fun toolDefs(): List<ToolDef> =
-            listOf(ToolDef("echo", "echo", buildJsonObject { put("type", "object") }))
+        override fun toolDefs(consent: ToolConsent): List<ToolDef> =
+            if (consent.library || consent.external) {
+                listOf(ToolDef("echo", "echo", buildJsonObject { put("type", "object") }))
+            } else {
+                emptyList()
+            }
 
         override suspend fun execute(
             call: ToolCall,
@@ -269,7 +281,45 @@ class ChatRepositoryTest {
         }
 
     @Test
-    fun `setToolsEnabled persists per conversation and toolsEnabledFor reads it back (PT1 consent)`() =
+    fun `prepare threads the consented external tool defs into the confirm preview (PT2 §9 disclosure gate)`() =
+        runTest {
+            // An executor offering an EXTERNAL search_arxiv def only when web consent is on.
+            val externalExec =
+                object : ToolExecutor {
+                    override fun toolDefs(consent: ToolConsent): List<ToolDef> =
+                        if (consent.external) {
+                            listOf(ToolDef("search_arxiv", "Search arXiv", buildJsonObject { put("type", "object") }))
+                        } else {
+                            emptyList()
+                        }
+
+                    override suspend fun execute(
+                        call: ToolCall,
+                        context: ToolContext,
+                    ): ToolExecution = ToolExecution(ToolResult(call.id, call.name, "{}"), "", "", egress = true)
+                }
+            val repo =
+                repo(
+                    FakeProvider(supportsTools = true) { flowOf(ChatChunk.Done()) },
+                    toolLoop = ChatToolLoop(externalExec),
+                )
+
+            // Web search ON: the external def must reach BOTH the request AND the "what leaves the device"
+            // confirm — the assembler only appends a system addendum, so without prepare() threading the
+            // defs the preview would silently omit the external tools (the SPEC §9 hard gate, dead in prod).
+            val on = repo.prepared(RetrievalScope.Paper("p1"), null, "q", webSearchEnabled = true)
+            assertTrue(on.request.tools.any { it.name == "search_arxiv" }, "consented external defs reach the request")
+            assertTrue(on.preview.text.contains("TOOLS THE MODEL MAY CALL"), on.preview.text)
+            assertTrue(on.preview.text.contains("sends your query to arXiv"), on.preview.text)
+
+            // Both off: tools-empty request → no tools section (byte-identity with a pre-PT.2 turn).
+            val off = repo.prepared(RetrievalScope.Paper("p2"), null, "q")
+            assertTrue(off.request.tools.isEmpty())
+            assertFalse(off.preview.text.contains("TOOLS THE MODEL MAY CALL"))
+        }
+
+    @Test
+    fun `both tool consents persist per conversation and read back independently (PT1 PT2)`() =
         runTest {
             val repo = repo(FakeProvider { flowOf(ChatChunk.Done()) })
             val sid =
@@ -282,9 +332,17 @@ class ChatRepositoryTest {
                         lastMessageAt = 1,
                     ),
                 )
-            assertFalse(repo.toolsEnabledFor(sid), "default opt-out — privacy first")
+            // Both default opt-out — privacy first.
+            assertFalse(repo.toolsEnabledFor(sid), "library default opt-out")
+            assertFalse(repo.webSearchEnabledFor(sid), "web-search default opt-out")
+            // The two gates are INDEPENDENT columns: setting library must not flip web-search, and
+            // webSearchEnabledFor must read web_search_enabled, not tools_enabled (anti copy-paste).
             repo.setToolsEnabled(sid, true)
             assertTrue(repo.toolsEnabledFor(sid))
+            assertFalse(repo.webSearchEnabledFor(sid), "library-on did NOT convert to web-on")
+            repo.setWebSearchEnabled(sid, true)
+            assertTrue(repo.webSearchEnabledFor(sid))
+            assertTrue(repo.toolsEnabledFor(sid), "web-on left library untouched")
         }
 
     @Test

@@ -52,7 +52,9 @@ class PaperRepository
         suspend fun searchArxiv(
             filter: SearchFilter,
             start: Int = 0,
-        ): AppResult<PaperPage> = fetchAndCache(ArxivQuery.fromFilter(filter, start = start), PaperSource.SEARCH)
+            maxResults: Int = ArxivQuery.DEFAULT_PAGE_SIZE,
+        ): AppResult<PaperPage> =
+            fetchAndCache(ArxivQuery.fromFilter(filter, start = start, maxResults = maxResults), PaperSource.SEARCH)
 
         /**
          * Paper for the detail screen: local cache first, then network refresh.

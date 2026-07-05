@@ -111,7 +111,7 @@ class ChatPreviewBuilderTest {
     // --- P-Tools PT.0: tool disclosure goldens ---
 
     @Test
-    fun `tool definitions are disclosed in both preview surfaces when tools attach`() {
+    fun `an external tool is disclosed as leaving the device (PT2 egress wording)`() {
         val request =
             ChatRequest(
                 messages = listOf(ChatMessage(ChatRole.USER, "find papers on diffusion")),
@@ -124,8 +124,36 @@ class ChatPreviewBuilderTest {
         val preview = builder.build(request)
 
         assertTrue(preview.json.contains("search_arxiv"), preview.json)
+        assertTrue(preview.json.contains("\"egress\": true"), preview.json)
         assertTrue(preview.text.contains("TOOLS THE MODEL MAY CALL"), preview.text)
         assertTrue(preview.text.contains("search_arxiv"), preview.text)
+        // The external tool must honestly disclose the third-party egress, not a vague "external service".
+        assertTrue(preview.text.contains("sends your query to arXiv"), preview.text)
+    }
+
+    @Test
+    fun `a mixed library-plus-external tool set discloses each egress class distinctly (PT2)`() {
+        val request =
+            ChatRequest(
+                messages = listOf(ChatMessage(ChatRole.USER, "find papers on diffusion")),
+                tools =
+                    listOf(
+                        ToolDef(
+                            "search_my_library",
+                            "Search the user's saved library",
+                            buildJsonObject { put("type", "object") },
+                        ),
+                        ToolDef("search_arxiv", "Search arXiv for papers", buildJsonObject { put("type", "object") }),
+                    ),
+            )
+
+        val preview = builder.build(request)
+
+        // The LOCAL tool egress=false ("searches your device"); the EXTERNAL one egress=true ("sends … arXiv").
+        assertTrue(preview.text.contains("searches your device"), preview.text)
+        assertTrue(preview.text.contains("sends your query to arXiv"), preview.text)
+        assertTrue(preview.json.contains("\"egress\": false"), preview.json)
+        assertTrue(preview.json.contains("\"egress\": true"), preview.json)
     }
 
     @Test

@@ -451,10 +451,13 @@ class ChatContextAssemblerTest {
         val without =
             assembler.assemble("q", emptyList(), emptyList(), includeNotes = true, capability = cap()).request
 
-        assertTrue(withTool.system!!.contains("search_my_library"))
+        // The addendum is now tool-NEUTRAL (PT.2): no hardcoded tool name, so it reads correctly whether
+        // the library tool, the external arXiv tools, or both attach (the per-tool schemas name specifics).
+        assertTrue(withTool.system!!.contains("available tools"))
+        assertFalse(withTool.system!!.contains("search_my_library"))
         assertTrue(withTool.system!!.endsWith(ChatContextAssembler.TOOLS_PRESENT_ADDENDUM))
         // Default (toolsAvailable=false) is byte-identical to the pre-P-Tools cloud system prompt.
-        assertFalse(without.system!!.contains("search_my_library"))
+        assertFalse(without.system!!.contains("available tools"))
         assertTrue(without.system!!.endsWith(ChatContextAssembler.CLOUD_RICH_ADDENDUM))
     }
 }

@@ -31,10 +31,14 @@ data class ChatSessionEntity(
     @ColumnInfo(name = "pinned", defaultValue = "0") val pinned: Boolean = false,
     // Nullable, no default: null = derive the label (paper title / collection name) as today.
     @ColumnInfo(name = "title") val title: String? = null,
-    // P-Tools PT.0: per-conversation consent to attach EXTERNAL tools (the agentic tool loop).
-    // Local tools (search_my_library) are consent-free. defaultValue="0" is REQUIRED to byte-match
-    // the migration's `ADD COLUMN tools_enabled INTEGER NOT NULL DEFAULT 0` (identity-hash gate).
+    // P-Tools: per-conversation consent to attach the LOCAL library-search tool (search_my_library).
+    // Gates whether that tool is offered (PT.1). defaultValue="0" is REQUIRED to byte-match the
+    // migration's `ADD COLUMN tools_enabled INTEGER NOT NULL DEFAULT 0` (identity-hash gate).
     @ColumnInfo(name = "tools_enabled", defaultValue = "0") val toolsEnabled: Boolean = false,
+    // P-Tools PT.2: per-conversation consent to attach the EXTERNAL web tools (search_arxiv /
+    // get_paper / import_to_library) — DISTINCT from library search (a user may want library-yes /
+    // web-no). A model-minted query egresses to arXiv. defaultValue="0" byte-matches the ALTER.
+    @ColumnInfo(name = "web_search_enabled", defaultValue = "0") val webSearchEnabled: Boolean = false,
 ) {
     companion object {
         const val SCOPE_PAPER = "PAPER"

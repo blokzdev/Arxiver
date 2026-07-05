@@ -2,8 +2,21 @@ package dev.blokz.arxiver.chat
 
 import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.ai.ChatRequest
+import dev.blokz.arxiver.data.tool.ToolRegistry
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+
+/**
+ * The tools that leave the device (P-Tools PT.2). The confirm sheet must disclose an external tool's
+ * egress honestly ("sends your query to arXiv") vs a local one's ("searches your device") — so the
+ * classification lives here, keyed off the registry's tool-name constants (single source of truth).
+ */
+private val EXTERNAL_TOOL_NAMES =
+    setOf(
+        ToolRegistry.SEARCH_ARXIV_NAME,
+        ToolRegistry.GET_PAPER_NAME,
+        ToolRegistry.IMPORT_NAME,
+    )
 
 /** The exact content that will leave the device for a cloud call (SPEC-AI-PROVIDERS §5). */
 data class ChatPreview(
@@ -28,11 +41,13 @@ private fun ChatImage.disclosure(): String {
     return "Attached image: ${label ?: "image"} — $mediaType, ~$approxKb KB"
 }
 
-/** A tool the model may call (P-Tools PT.0) — name + description leave the device; schema is elided. */
+/** A tool the model may call (P-Tools PT.0) — name + description leave the device; schema is elided.
+ *  [egress] distinguishes an external (leaves-the-device) tool from a purely on-device one (PT.2). */
 @Serializable
 private data class PreviewToolDto(
     val name: String,
     val description: String,
+    val egress: Boolean,
 )
 
 @Serializable
@@ -75,7 +90,10 @@ class ChatPreviewBuilder(
                     },
                 maxTokens = request.maxTokens,
                 // takeIf BEFORE map ⇒ null (omitted) not [] when no tools — byte-identical golden.
-                tools = request.tools.takeIf { it.isNotEmpty() }?.map { PreviewToolDto(it.name, it.description) },
+                tools =
+                    request.tools.takeIf { it.isNotEmpty() }?.map {
+                        PreviewToolDto(it.name, it.description, egress = it.name in EXTERNAL_TOOL_NAMES)
+                    },
             )
         return ChatPreview(text = render(request), json = json.encodeToString(PreviewDto.serializer(), dto))
     }
@@ -92,8 +110,17 @@ class ChatPreviewBuilder(
             }
             if (request.tools.isNotEmpty()) {
                 appendLine("TOOLS THE MODEL MAY CALL")
-                appendLine("Each call sends its query to an external service; results come back to the model.")
-                request.tools.forEach { appendLine("- ${it.name}: ${it.description}") }
+                request.tools.forEach { tool ->
+                    // Disclose each tool's egress honestly: an external tool sends your query off-device
+                    // to a third party; a local tool searches only your device (P-Tools PT.2).
+                    val effect =
+                        if (tool.name in EXTERNAL_TOOL_NAMES) {
+                            "sends your query to arXiv, a third party"
+                        } else {
+                            "searches your device, nothing leaves it"
+                        }
+                    appendLine("- ${tool.name} ($effect): ${tool.description}")
+                }
                 appendLine()
             }
             request.messages.forEach { msg ->

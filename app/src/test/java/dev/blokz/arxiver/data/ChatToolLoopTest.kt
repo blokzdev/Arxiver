@@ -11,6 +11,7 @@ import dev.blokz.arxiver.core.ai.ProviderId
 import dev.blokz.arxiver.core.ai.ToolCall
 import dev.blokz.arxiver.core.ai.ToolDef
 import dev.blokz.arxiver.core.ai.ToolResult
+import dev.blokz.arxiver.data.tool.ToolConsent
 import dev.blokz.arxiver.data.tool.ToolContext
 import dev.blokz.arxiver.data.tool.ToolExecution
 import dev.blokz.arxiver.data.tool.ToolExecutor
@@ -68,8 +69,13 @@ class ChatToolLoopTest {
 
         val calls = mutableListOf<ToolCall>()
 
-        override fun toolDefs(): List<ToolDef> =
-            listOf(ToolDef("echo", "echo text", buildJsonObject { put("type", "object") }))
+        // Honor the two-gate consent like the real registry: offer the tool only when a class is enabled.
+        override fun toolDefs(consent: ToolConsent): List<ToolDef> =
+            if (consent.library || consent.external) {
+                listOf(ToolDef("echo", "echo text", buildJsonObject { put("type", "object") }))
+            } else {
+                emptyList()
+            }
 
         override suspend fun execute(
             call: ToolCall,
@@ -102,7 +108,7 @@ class ChatToolLoopTest {
     private fun runLoop(
         loop: ChatToolLoop,
         provider: ScriptedProvider,
-        attachTools: Boolean = true,
+        consent: ToolConsent = ToolConsent(library = true, external = false),
         base: ChatRequest = ChatRequest(listOf(ChatMessage(ChatRole.USER, "hi"))),
     ): LoopResult =
         runBlocking {
@@ -113,8 +119,8 @@ class ChatToolLoopTest {
             loop.run(
                 provider = provider,
                 state = state,
-                attachTools = attachTools,
-                toolContext = ToolContext(includeNotes = true),
+                consent = consent,
+                toolContext = ToolContext(includeNotes = true, externalEnabled = consent.external),
                 emit = { emitted += it },
                 onActivity = { activity += it },
                 persistTerminal = { persisted = it },
@@ -223,10 +229,10 @@ class ChatToolLoopTest {
     }
 
     @Test
-    fun `attachTools=false offers no tools even to a tool-capable provider (opt-in gate)`() {
+    fun `ToolConsent NONE offers no tools even to a tool-capable provider (opt-in gate)`() {
         val provider = ScriptedProvider(listOf(listOf(ChatChunk.Delta("plain"), ChatChunk.Done())))
         val exec = FakeExecutor()
-        val r = runLoop(ChatToolLoop(exec), provider, attachTools = false)
+        val r = runLoop(ChatToolLoop(exec), provider, consent = ToolConsent.NONE)
 
         assertTrue(provider.requests[0].tools.isEmpty(), "the user opted out — no tool leaves the device")
         assertTrue(exec.calls.isEmpty())
@@ -234,9 +240,9 @@ class ChatToolLoopTest {
     }
 
     @Test
-    fun `attachTools=true offers the tools to a tool-capable provider`() {
+    fun `an enabled consent class offers the tools to a tool-capable provider`() {
         val provider = ScriptedProvider(listOf(listOf(ChatChunk.Delta("plain"), ChatChunk.Done())))
-        runLoop(ChatToolLoop(FakeExecutor()), provider, attachTools = true)
+        runLoop(ChatToolLoop(FakeExecutor()), provider, consent = ToolConsent(library = true, external = false))
 
         assertTrue(provider.requests[0].tools.isNotEmpty(), "opted in + tool-capable ⇒ tools attached")
     }

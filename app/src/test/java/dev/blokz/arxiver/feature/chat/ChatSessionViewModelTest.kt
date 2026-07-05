@@ -100,6 +100,13 @@ class ChatSessionViewModelTest {
             sessions.value = sessions.value.map { if (it.id == id) it.copy(toolsEnabled = enabled) else it }
         }
 
+        override suspend fun setWebSearchEnabled(
+            id: Long,
+            enabled: Boolean,
+        ) {
+            sessions.value = sessions.value.map { if (it.id == id) it.copy(webSearchEnabled = enabled) else it }
+        }
+
         override suspend fun insertToolInvocations(rows: List<ToolInvocationEntity>) = Unit
 
         override suspend fun toolInvocationsForMessage(messageId: Long): List<ToolInvocationEntity> = emptyList()

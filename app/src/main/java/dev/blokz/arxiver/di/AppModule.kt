@@ -508,6 +508,8 @@ object AppModule {
         modelDownloader: dev.blokz.arxiver.core.ml.ModelDownloader,
         searchDao: dev.blokz.arxiver.core.database.dao.SearchDao,
         libraryDao: dev.blokz.arxiver.core.database.dao.LibraryDao,
+        paperRepository: dev.blokz.arxiver.data.PaperRepository,
+        libraryRepository: dev.blokz.arxiver.data.LibraryRepository,
     ): dev.blokz.arxiver.data.tool.ToolExecutor =
         dev.blokz.arxiver.data.tool.ToolRegistry(
             keywordSearch = { query, includeNotes, limit ->
@@ -523,6 +525,12 @@ object AppModule {
             },
             libraryPaperIds = { libraryDao.allPaperIds().toHashSet() },
             paperById = { ids -> searchDao.papersByIds(ids) },
+            // EXTERNAL seams (PT.2): route through PaperRepository → ArxivApiClient → the shared arXiv
+            // limiter on the @ArxivClient (AllowedHosts-gated) client. No HTTP client reaches the registry.
+            searchArxiv = { filter, maxResults -> paperRepository.searchArxiv(filter, maxResults = maxResults) },
+            getPaper = { id -> paperRepository.paper(id) },
+            savePaper = { paperId -> libraryRepository.save(paperId) },
+            isInLibrary = { paperId -> paperId in libraryDao.allPaperIds() },
         )
 
     @Provides

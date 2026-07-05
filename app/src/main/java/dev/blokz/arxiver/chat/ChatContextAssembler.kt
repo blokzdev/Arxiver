@@ -230,13 +230,15 @@ class ChatContextAssembler(
                 "chart. Use these only when they make the answer clearer."
 
         /**
-         * Appended when a tool is available (P-Tools PT.1). The base prompt says "using ONLY the
-         * provided context excerpts" — too narrow once the model can fetch more via a tool. Tool
-         * results are valid grounding; steer their citations to prose `arXiv:<id>` so they don't
-         * collide with the `[number]` excerpt citations.
+         * Appended when any tool is available (P-Tools PT.1/PT.2). The base prompt says "using ONLY the
+         * provided context excerpts" — too narrow once the model can fetch more via a tool. Kept
+         * TOOL-NEUTRAL (no hardcoded tool name) so it reads correctly whether the library tool, the
+         * external arXiv tools, or both attach; the per-tool schemas name the specifics. Tool results
+         * are valid grounding; steer their citations to prose `arXiv:<id>` so they don't collide with
+         * the `[number]` excerpt citations.
          */
         const val TOOLS_PRESENT_ADDENDUM =
-            " You may also call the search_my_library tool to find more of the user's saved papers; " +
-                "treat any papers it returns as valid grounding and cite them in prose as arXiv:<id>."
+            " You may also call the available tools to find more papers; treat any papers they return " +
+                "as valid grounding and cite them in prose as arXiv:<id>."
     }
 }

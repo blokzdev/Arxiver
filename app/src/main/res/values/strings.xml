@@ -505,9 +505,13 @@
     <string name="ask_export_footer">Exported from Arxiver</string>
     <string name="ask_include_notes">Include my notes</string>
     <string name="ask_include_notes_hint">Let the answer draw on your notes for this paper.</string>
-    <string name="ask_search_library">Search my library</string>
-    <string name="ask_search_library_hint">Let the model search your saved papers to help answer. Matching papers\' abstracts are sent to the cloud model.</string>
+    <string name="ask_search_library">Library</string>
+    <string name="ask_web_search">Web search</string>
+    <string name="ask_tool_deck_caption">Library lets the model search your saved papers (their abstracts are sent to the AI model). Web search sends your query to arXiv, a third party.</string>
     <string name="ask_tool_activity_local">Searched your library: %1$s</string>
+    <string name="ask_tool_activity_arxiv">Searched arXiv (left your device): %1$s</string>
+    <string name="ask_tool_activity_fetch">Fetched from arXiv (left your device): %1$s</string>
+    <string name="ask_tool_activity_import">Imported to library (left your device): %1$s</string>
     <string name="ask_provider_cloud">Answered by %1$s — review what\'s sent before each cloud reply.</string>
     <string name="ask_provider_ondevice">On-device — nothing leaves your device.</string>
     <string name="ask_confirm_title">What leaves the device</string>

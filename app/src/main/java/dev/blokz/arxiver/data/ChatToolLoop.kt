@@ -12,6 +12,7 @@ import dev.blokz.arxiver.core.ai.ToolResult
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import dev.blokz.arxiver.data.tool.NoToolExecutor
+import dev.blokz.arxiver.data.tool.ToolConsent
 import dev.blokz.arxiver.data.tool.ToolContext
 import dev.blokz.arxiver.data.tool.ToolExecutor
 
@@ -75,21 +76,32 @@ class ChatToolLoop(
     private val maxIterations: Int = MAX_TOOL_ITERATIONS,
     private val perResultCharBudget: Int = DEFAULT_RESULT_CHAR_BUDGET,
 ) {
+    /**
+     * The exact tool set that will attach for [consent] on [provider] — offered ONLY to a tool-capable
+     * provider (never hand tools to an on-device engine that would ignore them and hang the loop), then
+     * filtered to the consented subset by the registry. Exposed so the repository's pre-send "what
+     * leaves the device" confirm discloses **precisely** what [run] will send (SPEC-P-TOOLS §9 hard
+     * gate) — the assembler only appends a neutral system addendum, never the tool defs, so without this
+     * the confirm would omit the external tools entirely. [run] uses the same method → preview + stream
+     * can never drift.
+     */
+    fun toolDefsFor(
+        provider: AiProvider,
+        consent: ToolConsent,
+    ): List<ToolDef> = if (provider.capability.supportsTools) executor.toolDefs(consent) else emptyList()
+
     suspend fun run(
         provider: AiProvider,
         state: ToolLoopState,
-        // Whether the user opted into tools for this conversation (P-Tools PT.1). Default true keeps
-        // existing loop tests gated only on supportsTools; prod passes the per-conversation flag.
-        attachTools: Boolean = true,
+        // The user's per-conversation tool consent (P-Tools). The registry offers exactly the enabled
+        // subset (library and/or external); NONE ⇒ no tools attach.
+        consent: ToolConsent,
         toolContext: ToolContext,
         emit: suspend (ChatChunk) -> Unit,
         onActivity: suspend (ToolInvocationDraft) -> Unit,
         persistTerminal: suspend (String) -> Unit,
     ) {
-        // Attach tools ONLY when the provider supports them (never hand tools to an on-device engine
-        // that would ignore them and hang the loop) AND the user opted in for this conversation.
-        val toolDefs =
-            if (provider.capability.supportsTools && attachTools) executor.toolDefs() else emptyList()
+        val toolDefs = toolDefsFor(provider, consent)
         var iteration = 0
         while (true) {
             val lastRound = iteration >= maxIterations
