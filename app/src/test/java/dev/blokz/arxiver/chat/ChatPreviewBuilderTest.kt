@@ -183,6 +183,25 @@ class ChatPreviewBuilderTest {
     }
 
     @Test
+    fun `search_chemrxiv names chemRxiv and is classified egress (PT4 disclosure honesty)`() {
+        val request =
+            ChatRequest(
+                messages = listOf(ChatMessage(ChatRole.USER, "find chemistry preprints")),
+                tools =
+                    listOf(
+                        ToolDef("search_chemrxiv", "Search chemRxiv", buildJsonObject { put("type", "object") }),
+                    ),
+            )
+
+        val preview = builder.build(request)
+
+        assertTrue(preview.text.contains("sends your query to chemRxiv"), preview.text)
+        assertFalse(preview.text.contains("arXiv"), preview.text)
+        assertTrue(preview.json.contains("\"egress\": true"), preview.json)
+        assertFalse(preview.json.contains("\"egress\": false"), preview.json)
+    }
+
+    @Test
     fun `a tool-free request discloses no tools (byte-identity)`() {
         val request = ChatRequest(messages = listOf(ChatMessage(ChatRole.USER, "hello")))
 

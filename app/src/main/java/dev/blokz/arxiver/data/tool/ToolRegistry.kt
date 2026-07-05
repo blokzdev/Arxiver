@@ -9,6 +9,8 @@ import dev.blokz.arxiver.core.database.fts.KeywordHit
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
+import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivItemHit
+import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivSearchResponse
 import dev.blokz.arxiver.core.network.s2.S2SearchPaper
 import dev.blokz.arxiver.core.network.s2.S2SearchResponse
 import dev.blokz.arxiver.core.search.HybridFusion
@@ -101,6 +103,21 @@ private data class S2HitDto(
 @Serializable
 private data class S2SearchResult(val hits: List<S2HitDto>)
 
+@Serializable
+private data class ChemHitDto(
+    val title: String,
+    val abstractSnippet: String?,
+    val doi: String?,
+    val authors: List<String>,
+    val publishedDate: String?,
+    val pdfUrl: String? = null,
+    // No `importable` flag: chemRxiv hits are DOI-keyed (not arXiv), so import_to_library never accepts
+    // them — they are surfaced read-only (generic import is the HUMAN.md carve-out).
+)
+
+@Serializable
+private data class ChemSearchResult(val hits: List<ChemHitDto>)
+
 /** LOCAL tools run purely on-device (zero egress); EXTERNAL tools leave the device (arXiv, PT.2+). */
 private enum class ToolClass { LOCAL, EXTERNAL }
 
@@ -154,6 +171,8 @@ class ToolRegistry(
             yearFrom: Int?,
             yearTo: Int?,
         ) -> AppResult<S2SearchResponse>,
+    /** EXTERNAL: chemRxiv (Open Engage) search through the host-gated, 1.2s-spaced client (`search_chemrxiv`). */
+    private val searchChemRxiv: suspend (term: String, limit: Int, skip: Int) -> AppResult<ChemRxivSearchResponse>,
 ) : ToolExecutor {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -164,6 +183,7 @@ class ToolRegistry(
             ToolSpec(GET_PAPER, ToolClass.EXTERNAL, ::handleGetPaper),
             ToolSpec(IMPORT_TO_LIBRARY, ToolClass.EXTERNAL, ::handleImport),
             ToolSpec(SEARCH_SEMANTIC_SCHOLAR, ToolClass.EXTERNAL, ::handleSearchS2),
+            ToolSpec(SEARCH_CHEMRXIV, ToolClass.EXTERNAL, ::handleSearchChem),
         )
     private val byName: Map<String, ToolSpec> = specs.associateBy { it.def.name }
 
@@ -317,6 +337,21 @@ class ToolRegistry(
         }
     }
 
+    private suspend fun handleSearchChem(
+        call: ToolCall,
+        context: ToolContext,
+    ): ToolExecution {
+        val args = parseArgs(call)
+        val term = args?.stringAt("term").orEmpty().trim()
+        if (term.isBlank()) return errorResult(call, "", "empty query", egress = true)
+        val limit = (args?.intAt("limit") ?: DEFAULT_CHEM_RESULTS).coerceIn(1, MAX_CHEM_RESULTS)
+        val skip = (args?.intAt("skip") ?: 0).coerceAtLeast(0)
+        return when (val r = searchChemRxiv(term, limit, skip)) {
+            is AppResult.Success -> okChemSearch(call, term, r.value.itemHits)
+            is AppResult.Failure -> errorResult(call, term, "search failed", egress = true)
+        }
+    }
+
     // --- result builders ---
 
     private fun okLibrary(
@@ -393,6 +428,40 @@ class ToolRegistry(
             result = ToolResult(call.id, call.name, body, isError = false),
             query = query,
             resultSummary = "${hits.size} results from Semantic Scholar",
+            egress = true,
+        )
+    }
+
+    private fun okChemSearch(
+        call: ToolCall,
+        query: String,
+        itemHits: List<ChemRxivItemHit>,
+    ): ToolExecution {
+        val hits =
+            itemHits.mapNotNull { it.item }.map { item ->
+                val authorNames =
+                    item.authors
+                        .map { a ->
+                            // An author carries a combined `name` OR separate first/last (mirrors the API).
+                            a.name?.takeIf { it.isNotBlank() }
+                                ?: listOfNotNull(a.firstName, a.lastName).joinToString(" ").trim()
+                        }
+                        .filter { it.isNotBlank() }
+                ChemHitDto(
+                    title = item.title.orEmpty(),
+                    abstractSnippet = item.abstract?.take(ABSTRACT_SNIPPET_CHARS),
+                    doi = item.doi,
+                    authors = authorNames,
+                    publishedDate = item.publishedDate,
+                    // Top-level pdfUrl when present, else the nested asset original (mirrors the API).
+                    pdfUrl = item.pdfUrl ?: item.asset?.original?.url,
+                )
+            }
+        val body = json.encodeToString(ChemSearchResult.serializer(), ChemSearchResult(hits))
+        return ToolExecution(
+            result = ToolResult(call.id, call.name, body, isError = false),
+            query = query,
+            resultSummary = "${hits.size} results from chemRxiv",
             egress = true,
         )
     }
@@ -474,6 +543,7 @@ class ToolRegistry(
         const val GET_PAPER_NAME = "get_paper"
         const val IMPORT_NAME = "import_to_library"
         const val SEARCH_SEMANTIC_SCHOLAR_NAME = "search_semantic_scholar"
+        const val SEARCH_CHEMRXIV_NAME = "search_chemrxiv"
 
         private const val DEFAULT_K = 6
         private const val MAX_K = 8
@@ -481,6 +551,8 @@ class ToolRegistry(
         private const val MAX_ARXIV_RESULTS = 25
         private const val DEFAULT_S2_RESULTS = 8
         private const val MAX_S2_RESULTS = 25
+        private const val DEFAULT_CHEM_RESULTS = 8
+        private const val MAX_CHEM_RESULTS = 25
 
         /**
          * Per-leg candidate pool searched BEFORE the library filter. Generous because the leg scans the
@@ -713,6 +785,47 @@ class ToolRegistry(
                             },
                         )
                         put("required", buildJsonArray { add("query") })
+                    },
+            )
+
+        val SEARCH_CHEMRXIV =
+            ToolDef(
+                name = SEARCH_CHEMRXIV_NAME,
+                description =
+                    "Search chemRxiv (Cambridge Open Engage), the chemistry preprint server. Your query is " +
+                        "sent to chemrxiv.org, a third party. Returns public metadata (title, abstract, DOI, " +
+                        "authors, date, PDF link). These are DOI-keyed preprints, NOT arXiv — read-only, and " +
+                        "cannot be saved via import_to_library. $CITE_HINT",
+                inputSchema =
+                    buildJsonObject {
+                        put("type", "object")
+                        put(
+                            "properties",
+                            buildJsonObject {
+                                put(
+                                    "term",
+                                    buildJsonObject {
+                                        put("type", "string")
+                                        put("description", "Free-text search over the chemRxiv corpus.")
+                                    },
+                                )
+                                put(
+                                    "limit",
+                                    buildJsonObject {
+                                        put("type", "integer")
+                                        put("description", "Max results (default 8, capped 25).")
+                                    },
+                                )
+                                put(
+                                    "skip",
+                                    buildJsonObject {
+                                        put("type", "integer")
+                                        put("description", "Results to skip, for pagination (default 0).")
+                                    },
+                                )
+                            },
+                        )
+                        put("required", buildJsonArray { add("term") })
                     },
             )
     }

@@ -6,12 +6,11 @@ package dev.blokz.arxiver.core.network
  * [AllowedHostsInterceptor] on the dedicated arXiv-group client; anything not listed is rejected
  * before a socket opens.
  *
- * Note: a host being listed here does **not** route its traffic through the rate limiter — only the
- * `@ArxivClient` consumers (Atom API, PDF, and the future HTML/image fetchers) are gated + spaced;
- * the AI providers / routine trigger / model downloaders stay on the bare shared client. `huggingface.co`
- * is listed for the pinned model download, and `api.semanticscholar.org` for the citation graph, but
- * both currently run on the bare client (the interceptor never fires for them) — they are here so that
- * if they ever move to the gated client the allowlist already permits them.
+ * Note: a host being listed here does **not** route its traffic through the rate limiter — the
+ * `@ArxivClient` consumers (Atom API, PDF, HTML/image fetchers, and — from P-Tools — the S2 + chemRxiv
+ * search clients) are host-gated, but only the arXiv group is ≥3s-spaced; S2 and chemRxiv self-space via
+ * their own 1.2s politeness mutexes. `huggingface.co` (the pinned model download) still runs on the bare
+ * client — it is here so that if it ever moves to the gated client the allowlist already permits it.
  */
 object AllowedHosts {
     val ALLOWED: Set<String> =
@@ -22,8 +21,11 @@ object AllowedHosts {
             "arxiv.org",
             // the HTML fallback (P-HTML red-line host, user-approved)
             "ar5iv.labs.arxiv.org",
-            // citation graph
+            // citation graph (moved onto the gated client in PT.3)
             "api.semanticscholar.org",
+            // chemRxiv (Cambridge Open Engage) search API (P-Tools PT.4 red-line host, user-approved).
+            // Exact-match only: an off-host asset CDN sub-domain is deliberately NOT allowlisted.
+            "chemrxiv.org",
             // the pinned model-download host
             "huggingface.co",
         )

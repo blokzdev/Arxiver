@@ -1060,8 +1060,9 @@ private fun ToolActivityBubble(activity: ToolActivity?) {
             activity.toolName == ToolRegistry.GET_PAPER_NAME -> R.string.ask_tool_activity_fetch
             activity.toolName == ToolRegistry.IMPORT_NAME -> R.string.ask_tool_activity_import
             activity.toolName == ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME -> R.string.ask_tool_activity_s2
-            // Any other external tool (e.g. PT.4 chemRxiv until it gets its own arm): host-neutral, so a
-            // new egress is never mislabeled as a specific wrong host. Each external arm names its host.
+            activity.toolName == ToolRegistry.SEARCH_CHEMRXIV_NAME -> R.string.ask_tool_activity_chemrxiv
+            // Any other external tool: host-neutral, so a new egress is never mislabeled as a specific
+            // wrong host. Each external arm names its host.
             else -> R.string.ask_tool_activity_external
         }
     val container =

@@ -8,8 +8,9 @@ import kotlin.test.assertTrue
  * Structural guard (SPEC-P-HTML §7/§14): every fetch site in `:core:network` that calls
  * `httpClient.newCall(...)` must also claim a `rateLimiter.acquire()` slot — so the ≥3s arXiv red line
  * can't be silently re-bypassed by a future fetcher (the bug this phase fixed in `PdfDownloader`).
- * The lone exception is `SemanticScholarClient`, which self-spaces with its own 1.2s mutex (documented
- * sole exception, on the bare client).
+ * The exceptions are the self-spacing search clients `SemanticScholarClient` (`/s2/`, PT.3) and
+ * `ChemRxivClient` (`/chemrxiv/`, PT.4), each with its own 1.2s politeness mutex — host-gated on the
+ * `@ArxivClient` allowlist but deliberately NOT ≥3s-throttled by the shared arXiv limiter.
  */
 class NoDirectNewCallStructuralTest {
     @Test
@@ -24,8 +25,11 @@ class NoDirectNewCallStructuralTest {
                 .filter { f ->
                     val text = f.readText()
                     val hasAcquire = text.contains("rateLimiter.acquire(")
-                    val isS2Exception = f.path.replace('\\', '/').contains("/s2/")
-                    !hasAcquire && !isS2Exception
+                    // S2 (PT.3) + chemRxiv (PT.4) self-space via their own 1.2s politeness mutex, not the
+                    // ≥3s ArxivRateLimiter — documented exceptions, gated on the @ArxivClient host allowlist.
+                    val path = f.path.replace('\\', '/')
+                    val isSelfSpacedException = path.contains("/s2/") || path.contains("/chemrxiv/")
+                    !hasAcquire && !isSelfSpacedException
                 }
                 .map { it.name }
                 .toList()

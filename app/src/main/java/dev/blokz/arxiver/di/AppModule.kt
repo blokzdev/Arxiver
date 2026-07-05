@@ -371,6 +371,17 @@ object AppModule {
             apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.SEMANTIC_SCHOLAR) },
         )
 
+    // P-Tools PT.4: chemRxiv (Cambridge Open Engage) search client on the @ArxivClient host-gated client
+    // (egress allowlisted to chemrxiv.org; off-host asset redirects blocked per-hop). Its own 1.2s polite
+    // mutex — NOT the ≥3s arXiv limiter. Keyless (no BYOK). Mirrors semanticScholarClient.
+    @Provides
+    @Singleton
+    fun chemRxivClient(
+        @ArxivClient httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.network.chemrxiv.ChemRxivClient =
+        dev.blokz.arxiver.core.network.chemrxiv.ChemRxivClient(httpClient, dispatchers)
+
     @Provides
     fun embeddingDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.EmbeddingDao = db.embeddingDao()
 
@@ -521,6 +532,7 @@ object AppModule {
         paperRepository: dev.blokz.arxiver.data.PaperRepository,
         libraryRepository: dev.blokz.arxiver.data.LibraryRepository,
         semanticScholarClient: dev.blokz.arxiver.core.network.s2.SemanticScholarClient,
+        chemRxivClient: dev.blokz.arxiver.core.network.chemrxiv.ChemRxivClient,
     ): dev.blokz.arxiver.data.tool.ToolExecutor =
         dev.blokz.arxiver.data.tool.ToolRegistry(
             keywordSearch = { query, includeNotes, limit ->
@@ -547,6 +559,9 @@ object AppModule {
             searchSemanticScholar = { query, limit, venue, from, to ->
                 semanticScholarClient.searchPapers(query, limit, venue, from, to)
             },
+            // EXTERNAL seam (PT.4): the host-gated, 1.2s-mutex-spaced chemRxiv client. No HTTP client
+            // reaches the registry — only this lambda; the structural no-okhttp-in-data/tool test stays green.
+            searchChemRxiv = { term, limit, skip -> chemRxivClient.searchItems(term, limit, skip) },
         )
 
     @Provides
