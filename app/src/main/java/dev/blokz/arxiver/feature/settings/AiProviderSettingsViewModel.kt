@@ -67,6 +67,10 @@ data class ProviderRow(
 data class AiProviderSettingsUiState(
     val rows: List<ProviderRow> = emptyList(),
     val selectedDefault: ProviderId? = null,
+    /** Whether an optional Semantic Scholar BYOK key is set (P-Tools PT.3). S2 is NOT a chat provider,
+     *  so it has no [ProviderRow]; this drives a standalone optional-key card. Write-only — the key
+     *  itself is never read back to the UI. */
+    val s2KeyConfigured: Boolean = false,
 )
 
 /**
@@ -159,6 +163,8 @@ class AiProviderSettingsViewModel
                             )
                         },
                     selectedDefault = selected,
+                    // Recomputed on each configuredRevision bump (saveS2Key/clearS2Key), like the rows.
+                    s2KeyConfigured = keyStore.has(ProviderId.SEMANTIC_SCHOLAR),
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AiProviderSettingsUiState())
 
@@ -204,6 +210,23 @@ class AiProviderSettingsViewModel
             testStates.update { states -> states.filterKeys { it.first != id } }
             configuredRevision.update { it + 1 }
             viewModelScope.launch { refreshCapability() }
+        }
+
+        /**
+         * Save/clear the OPTIONAL Semantic Scholar BYOK key (P-Tools PT.3). Unlike [saveKey], S2 is not a
+         * chat provider: it never becomes the selected default, has no "Test connection", and does not
+         * affect device capability — so this only writes the vault + bumps the configured revision. The
+         * key lives solely in EncryptedSharedPreferences and is never read back to the UI (write-only).
+         */
+        fun saveS2Key(key: String) {
+            if (key.isBlank()) return
+            keyStore.put(ProviderId.SEMANTIC_SCHOLAR, key.trim())
+            configuredRevision.update { it + 1 }
+        }
+
+        fun clearS2Key() {
+            keyStore.clear(ProviderId.SEMANTIC_SCHOLAR)
+            configuredRevision.update { it + 1 }
         }
 
         fun selectDefault(id: ProviderId) {

@@ -9,6 +9,8 @@ import dev.blokz.arxiver.core.database.fts.KeywordHit
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
+import dev.blokz.arxiver.core.network.s2.S2SearchPaper
+import dev.blokz.arxiver.core.network.s2.S2SearchResponse
 import dev.blokz.arxiver.core.search.HybridFusion
 import dev.blokz.arxiver.data.PaperPage
 import kotlinx.serialization.Serializable
@@ -72,6 +74,33 @@ private data class ImportResult(
     val title: String? = null,
 )
 
+@Serializable
+private data class S2ExternalIdsDto(
+    val arxiv: String? = null,
+    val doi: String? = null,
+    val pubmed: String? = null,
+)
+
+@Serializable
+private data class S2HitDto(
+    val paperId: String?,
+    val title: String,
+    val abstractSnippet: String?,
+    val tldr: String?,
+    val year: Int?,
+    val venue: String?,
+    val authors: List<String>,
+    val citationCount: Int?,
+    val externalIds: S2ExternalIdsDto,
+    val openAccessPdf: String?,
+    // True iff the hit carries a parseable arXiv id — tells the model up front which hits
+    // `import_to_library` accepts (S2's non-arXiv results are read-only; PT.3 §6).
+    val importable: Boolean,
+)
+
+@Serializable
+private data class S2SearchResult(val hits: List<S2HitDto>)
+
 /** LOCAL tools run purely on-device (zero egress); EXTERNAL tools leave the device (arXiv, PT.2+). */
 private enum class ToolClass { LOCAL, EXTERNAL }
 
@@ -116,6 +145,15 @@ class ToolRegistry(
     private val savePaper: suspend (paperId: String) -> Unit,
     /** Library membership check — the idempotency short-circuit for `import_to_library`. */
     private val isInLibrary: suspend (paperId: String) -> Boolean,
+    /** EXTERNAL: Semantic Scholar search through the host-gated, 1.2s-spaced S2 client (`search_semantic_scholar`). */
+    private val searchSemanticScholar:
+        suspend (
+            query: String,
+            limit: Int,
+            venue: String?,
+            yearFrom: Int?,
+            yearTo: Int?,
+        ) -> AppResult<S2SearchResponse>,
 ) : ToolExecutor {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -125,6 +163,7 @@ class ToolRegistry(
             ToolSpec(SEARCH_ARXIV, ToolClass.EXTERNAL, ::handleSearchArxiv),
             ToolSpec(GET_PAPER, ToolClass.EXTERNAL, ::handleGetPaper),
             ToolSpec(IMPORT_TO_LIBRARY, ToolClass.EXTERNAL, ::handleImport),
+            ToolSpec(SEARCH_SEMANTIC_SCHOLAR, ToolClass.EXTERNAL, ::handleSearchS2),
         )
     private val byName: Map<String, ToolSpec> = specs.associateBy { it.def.name }
 
@@ -261,6 +300,23 @@ class ToolRegistry(
         return okImport(call, id.value, imported = true, already = false, title = paper.title)
     }
 
+    private suspend fun handleSearchS2(
+        call: ToolCall,
+        context: ToolContext,
+    ): ToolExecution {
+        val args = parseArgs(call)
+        val query = args?.stringAt("query").orEmpty().trim()
+        if (query.isBlank()) return errorResult(call, "", "empty query", egress = true)
+        val limit = (args?.intAt("limit") ?: DEFAULT_S2_RESULTS).coerceIn(1, MAX_S2_RESULTS)
+        val venue = args?.stringAt("venue")?.takeIf { it.isNotBlank() }
+        val from = args?.intAt("year.from")
+        val to = args?.intAt("year.to")
+        return when (val r = searchSemanticScholar(query, limit, venue, from, to)) {
+            is AppResult.Success -> okS2Search(call, query, r.value.data)
+            is AppResult.Failure -> errorResult(call, query, "search failed", egress = true)
+        }
+    }
+
     // --- result builders ---
 
     private fun okLibrary(
@@ -300,6 +356,43 @@ class ToolRegistry(
             result = ToolResult(call.id, call.name, body, isError = false),
             query = query,
             resultSummary = "${hits.size} results from arXiv",
+            egress = true,
+        )
+    }
+
+    private fun okS2Search(
+        call: ToolCall,
+        query: String,
+        papers: List<S2SearchPaper>,
+    ): ToolExecution {
+        val hits =
+            papers.map { p ->
+                val arxiv = p.externalIds?.ArXiv
+                S2HitDto(
+                    paperId = p.paperId,
+                    title = p.title.orEmpty(),
+                    abstractSnippet = p.abstract?.take(ABSTRACT_SNIPPET_CHARS),
+                    tldr = p.tldr?.text?.take(ABSTRACT_SNIPPET_CHARS),
+                    year = p.year,
+                    venue = p.venue?.takeIf { it.isNotBlank() },
+                    authors = p.authors.mapNotNull { it.name },
+                    citationCount = p.citationCount,
+                    externalIds =
+                        S2ExternalIdsDto(
+                            arxiv = arxiv,
+                            doi = p.externalIds?.DOI,
+                            pubmed = p.externalIds?.PubMed,
+                        ),
+                    openAccessPdf = p.openAccessPdf?.url,
+                    // The exact gate handleImport uses — a hit is importable iff its arXiv id parses.
+                    importable = ArxivId.parse(arxiv.orEmpty())?.first != null,
+                )
+            }
+        val body = json.encodeToString(S2SearchResult.serializer(), S2SearchResult(hits))
+        return ToolExecution(
+            result = ToolResult(call.id, call.name, body, isError = false),
+            query = query,
+            resultSummary = "${hits.size} results from Semantic Scholar",
             egress = true,
         )
     }
@@ -380,11 +473,14 @@ class ToolRegistry(
         const val SEARCH_ARXIV_NAME = "search_arxiv"
         const val GET_PAPER_NAME = "get_paper"
         const val IMPORT_NAME = "import_to_library"
+        const val SEARCH_SEMANTIC_SCHOLAR_NAME = "search_semantic_scholar"
 
         private const val DEFAULT_K = 6
         private const val MAX_K = 8
         private const val DEFAULT_ARXIV_RESULTS = 8
         private const val MAX_ARXIV_RESULTS = 25
+        private const val DEFAULT_S2_RESULTS = 8
+        private const val MAX_S2_RESULTS = 25
 
         /**
          * Per-leg candidate pool searched BEFORE the library filter. Generous because the leg scans the
@@ -551,6 +647,72 @@ class ToolRegistry(
                             },
                         )
                         put("required", buildJsonArray { add("arxiv_id") })
+                    },
+            )
+
+        val SEARCH_SEMANTIC_SCHOLAR =
+            ToolDef(
+                name = SEARCH_SEMANTIC_SCHOLAR_NAME,
+                description =
+                    "Search Semantic Scholar (all fields of study, incl. non-arXiv papers). Your query is sent " +
+                        "to api.semanticscholar.org, a third party. Returns public metadata (title, abstract/tldr, " +
+                        "authors, venue, year, citationCount, externalIds). Only hits with `importable:true` (an " +
+                        "arXiv id) can be saved via import_to_library. $CITE_HINT",
+                inputSchema =
+                    buildJsonObject {
+                        put("type", "object")
+                        put(
+                            "properties",
+                            buildJsonObject {
+                                put(
+                                    "query",
+                                    buildJsonObject {
+                                        put("type", "string")
+                                        put("description", "Free-text search over the Semantic Scholar corpus.")
+                                    },
+                                )
+                                put(
+                                    "limit",
+                                    buildJsonObject {
+                                        put("type", "integer")
+                                        put("description", "Max results (default 8, capped 25).")
+                                    },
+                                )
+                                put(
+                                    "venue",
+                                    buildJsonObject {
+                                        put("type", "string")
+                                        put("description", "Optional venue/journal to filter by.")
+                                    },
+                                )
+                                put(
+                                    "year",
+                                    buildJsonObject {
+                                        put("type", "object")
+                                        put(
+                                            "properties",
+                                            buildJsonObject {
+                                                put(
+                                                    "from",
+                                                    buildJsonObject {
+                                                        put("type", "integer")
+                                                        put("description", "Inclusive lower publication year.")
+                                                    },
+                                                )
+                                                put(
+                                                    "to",
+                                                    buildJsonObject {
+                                                        put("type", "integer")
+                                                        put("description", "Inclusive upper publication year.")
+                                                    },
+                                                )
+                                            },
+                                        )
+                                    },
+                                )
+                            },
+                        )
+                        put("required", buildJsonArray { add("query") })
                     },
             )
     }

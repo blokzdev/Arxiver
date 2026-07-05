@@ -1056,10 +1056,13 @@ private fun ToolActivityBubble(activity: ToolActivity?) {
     val labelRes =
         when {
             !external -> R.string.ask_tool_activity_local
+            activity.toolName == ToolRegistry.SEARCH_ARXIV_NAME -> R.string.ask_tool_activity_arxiv
             activity.toolName == ToolRegistry.GET_PAPER_NAME -> R.string.ask_tool_activity_fetch
             activity.toolName == ToolRegistry.IMPORT_NAME -> R.string.ask_tool_activity_import
-            // search_arxiv and any other external tool: the generic "searched arXiv, left your device".
-            else -> R.string.ask_tool_activity_arxiv
+            activity.toolName == ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME -> R.string.ask_tool_activity_s2
+            // Any other external tool (e.g. PT.4 chemRxiv until it gets its own arm): host-neutral, so a
+            // new egress is never mislabeled as a specific wrong host. Each external arm names its host.
+            else -> R.string.ask_tool_activity_external
         }
     val container =
         if (external) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerLow
@@ -1128,6 +1131,8 @@ private fun providerLabel(provider: ProviderId): String =
             ProviderId.CLAUDE -> R.string.ai_provider_claude
             ProviderId.GEMINI -> R.string.ai_provider_gemini
             ProviderId.ON_DEVICE -> R.string.ai_provider_on_device
+            // Not a chat provider — never the resolved chat provider; arm exists for exhaustiveness.
+            ProviderId.SEMANTIC_SCHOLAR -> R.string.ai_provider_semantic_scholar
         },
     )
 

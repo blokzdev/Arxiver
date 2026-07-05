@@ -157,6 +157,32 @@ class ChatPreviewBuilderTest {
     }
 
     @Test
+    fun `an external tool names its OWN third-party host, not arXiv (PT3 disclosure honesty)`() {
+        val request =
+            ChatRequest(
+                messages = listOf(ChatMessage(ChatRole.USER, "find papers on diffusion")),
+                tools =
+                    listOf(
+                        ToolDef("search_arxiv", "Search arXiv", buildJsonObject { put("type", "object") }),
+                        ToolDef(
+                            "search_semantic_scholar",
+                            "Search Semantic Scholar",
+                            buildJsonObject { put("type", "object") },
+                        ),
+                    ),
+            )
+
+        val preview = builder.build(request)
+
+        // S2 is classified egress (NOT under-disclosed as local) AND named as Semantic Scholar, not arXiv —
+        // the red-line the PT.2 arXiv-hardcoded disclosure surfaces would have violated.
+        assertTrue(preview.text.contains("sends your query to Semantic Scholar"), preview.text)
+        assertTrue(preview.text.contains("sends your query to arXiv"), preview.text)
+        // Both external tools serialize egress:true; neither is silently treated as a local search.
+        assertFalse(preview.json.contains("\"egress\": false"), preview.json)
+    }
+
+    @Test
     fun `a tool-free request discloses no tools (byte-identity)`() {
         val request = ChatRequest(messages = listOf(ChatMessage(ChatRole.USER, "hello")))
 

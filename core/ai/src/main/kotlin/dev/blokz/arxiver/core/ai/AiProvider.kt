@@ -25,7 +25,10 @@ interface AiProvider {
     fun chat(request: ChatRequest): Flow<ChatChunk>
 }
 
-enum class ProviderId { CLAUDE, GEMINI, ON_DEVICE }
+// SEMANTIC_SCHOLAR is NOT a chat AiProvider — it is a tool-backing service (P-Tools PT.3). It exists
+// as a ProviderId ONLY to key its optional BYOK API key in the AiKeyVault; it is deliberately absent
+// from the ProviderRegistry, so it never renders a chat provider card or enters provider resolution.
+enum class ProviderId { CLAUDE, GEMINI, ON_DEVICE, SEMANTIC_SCHOLAR }
 
 /**
  * Facts about a provider used for tier selection, prompt shaping, and UI gating.
