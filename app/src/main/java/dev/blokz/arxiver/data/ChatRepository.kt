@@ -357,6 +357,21 @@ class ChatRepository(
     /** The promoted chat-history list (PC.3): scope label + snippet resolved in SQL, no N+1. */
     fun observeSessionRows(): Flow<List<ChatSessionRow>> = chatDao.observeSessionRows()
 
+    /** Pin/unpin a session (P-Chat PC.5 consumes the PC.4 column). */
+    suspend fun setPinned(
+        id: Long,
+        pinned: Boolean,
+    ) = withContext(dispatchers.io) { chatDao.setPinned(id, pinned) }
+
+    /** Set/clear a custom session title (null = derive the label; P-Chat PC.5). */
+    suspend fun renameSession(
+        id: Long,
+        title: String?,
+    ) = withContext(dispatchers.io) { chatDao.renameSession(id, title) }
+
+    /** Observe one session for the full-screen route's live title (P-Chat PC.5). */
+    fun observeSession(id: Long): Flow<ChatSessionEntity?> = chatDao.observeSession(id)
+
     // Pending hard-deletes keyed by session id (PC.3). Mutated only under this object's monitor
     // (@Synchronized / synchronized(this)) — never a coroutine Mutex, which can't be acquired
     // from the non-suspend schedule/undo entry points and would force a lost-cancel race.
