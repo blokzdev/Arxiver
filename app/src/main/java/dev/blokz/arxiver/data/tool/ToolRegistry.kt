@@ -47,8 +47,9 @@ private data class LibrarySearchResult(
  * `execute` never throws — a failure becomes an error result the model can recover from.
  */
 class ToolRegistry(
-    /** Keyword (BM25) leg, notes-gated by the 2nd arg — private notes never influence a cloud turn. */
-    private val keywordSearch: suspend (query: String, includeNotes: Boolean) -> List<KeywordHit>,
+    /** Keyword (BM25) leg over a wide candidate pool, notes-gated by the 2nd arg — private notes never
+     *  influence a cloud turn. The caller restricts the pool to the library BEFORE fusion (see [search]). */
+    private val keywordSearch: suspend (query: String, includeNotes: Boolean, limit: Int) -> List<KeywordHit>,
     /** Semantic (embedding) leg → (paperId, similarity); **null when the model isn't ready / embed failed**. */
     private val semanticSearch: suspend (query: String, k: Int) -> List<Pair<String, Double>>?,
     /** The ids of papers in the user's saved library — the `inLibrary` filter. */
@@ -83,18 +84,22 @@ class ToolRegistry(
         val librarySet = libraryPaperIds()
         if (librarySet.isEmpty()) return okResult(call, query, degraded = false, hits = emptyList())
 
-        val keywordHits = keywordSearch(query, context.includeNotes)
+        // Restrict BOTH legs to the user's LIBRARY *before* fusion. The `papers` corpus is a superset
+        // of the library (browse/search results are cached into `papers` too), so fusing over the whole
+        // corpus would let HybridFusion's quality gate + resultLimit drop/crowd-out library papers
+        // before any library filter ran — the tool could return ZERO library hits for a real match.
+        // A wide candidate pool per leg keeps a library paper from being truncated by each leg's top-N.
+        val keywordHits =
+            keywordSearch(query, context.includeNotes, CANDIDATE_LIMIT).filter { it.paper.id in librarySet }
         val papersById = keywordHits.associateTo(mutableMapOf()) { it.paper.id to it.paper }
         val keywordLeg = keywordHits.map { it.paper.id to it.score }
 
         // null ⇒ the semantic path couldn't run (model not ready / embed failed) ⇒ keyword-only degrade.
-        val semantic = semanticSearch(query, LEG_LIMIT)
+        val semantic = semanticSearch(query, CANDIDATE_LIMIT)
         val degraded = semantic == null
+        val semanticLeg = semantic?.filter { it.first in librarySet }.orEmpty()
 
-        val fused =
-            HybridFusion.fuse(keyword = keywordLeg, semantic = semantic.orEmpty())
-                .filter { it.paperId in librarySet }
-                .take(k)
+        val fused = HybridFusion.fuse(keyword = keywordLeg, semantic = semanticLeg).take(k)
 
         val missing = fused.map { it.paperId }.filter { it !in papersById }
         if (missing.isNotEmpty()) paperById(missing).forEach { papersById[it.id] = it }
@@ -147,7 +152,14 @@ class ToolRegistry(
         const val NAME = "search_my_library"
         private const val DEFAULT_K = 6
         private const val MAX_K = 8
-        private const val LEG_LIMIT = 30
+
+        /**
+         * Per-leg candidate pool searched BEFORE the library filter. Generous because the leg scans the
+         * whole cached `papers` corpus (a superset of the library); a wide pool makes it very unlikely a
+         * relevant LIBRARY paper is truncated out before the library restriction. (A fully library-scoped
+         * DAO search is a recorded follow-up for very large corpora.)
+         */
+        private const val CANDIDATE_LIMIT = 200
         private const val ABSTRACT_SNIPPET_CHARS = 320
 
         val SEARCH_MY_LIBRARY =

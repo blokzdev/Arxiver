@@ -38,7 +38,7 @@ class ToolRegistryTest {
         library: Set<String> = keyword.map { it.paper.id }.toSet(),
         keywordSpy: ((Boolean) -> Unit)? = null,
     ) = ToolRegistry(
-        keywordSearch = { _, notes ->
+        keywordSearch = { _, notes, _ ->
             keywordSpy?.invoke(notes)
             keyword
         },
@@ -107,6 +107,24 @@ class ToolRegistryTest {
     }
 
     @Test
+    fun `library hits survive when non-library papers out-rank and crowd them (F1 regression)`() {
+        // Non-library papers score much HIGHER on both legs — over the whole corpus they'd win the
+        // 0.70 quality gate + fill resultLimit, dropping the library match to ZERO. Both legs must be
+        // restricted to the library BEFORE fusion, so the single library paper still returns.
+        val libPaper = KeywordHit(paper("2401.lib"), 0.3)
+        val nonLibKeyword = (1..25).map { KeywordHit(paper("browse.$it"), 9.0) }
+        val nonLibSemantic = (1..25).map { "browse.$it" to 0.99 }
+        val reg =
+            registry(
+                keyword = nonLibKeyword + libPaper,
+                semantic = nonLibSemantic,
+                library = setOf("2401.lib"),
+            )
+        val r = exec(reg, """{"query":"x"}""")
+        assertEquals(listOf("2401.lib"), ids(r.result.contentJson), "the library match must not be crowded out")
+    }
+
+    @Test
     fun `an empty library returns no hits and is not degraded`() {
         val obj = body(exec(registry(library = emptySet()), """{"query":"x"}""").result.contentJson)
         assertEquals(false, obj["degraded"]!!.jsonPrimitive.boolean)
@@ -133,7 +151,7 @@ class ToolRegistryTest {
     fun `a throwing seam is caught and returned as an error (execute never throws)`() {
         val reg =
             ToolRegistry(
-                keywordSearch = { _, _ -> throw RuntimeException("db down") },
+                keywordSearch = { _, _, _ -> throw RuntimeException("db down") },
                 semanticSearch = { _, _ -> null },
                 libraryPaperIds = { setOf("2401.1") },
                 paperById = { emptyList() },

@@ -216,6 +216,19 @@ class ChatRepository(
         }
 
     /**
+     * Read-only: would the provider that handles a turn right now be a cloud (key-requiring) one?
+     * Seeds the `isCloud` UI gate at bind time so cloud-only affordances (the P-Tools "Search my
+     * library" toggle) render BEFORE the first send. Local store reads only — never trips the limiter.
+     */
+    suspend fun resolveIsCloud(): Boolean =
+        withContext(dispatchers.io) {
+            when (val resolution = providerResolver.resolve()) {
+                is ProviderResolution.Resolved -> resolution.provider.capability.requiresKey
+                ProviderResolution.NotConfigured -> false
+            }
+        }
+
+    /**
      * Resolve-or-create the session a turn will stream into, returning the EXACT id (PC.0).
      * Called by the ViewModel right before [stream] so a first turn binds its surface to the
      * session it actually creates — never re-resolved from the scope's most-recent session,

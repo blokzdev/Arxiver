@@ -247,6 +247,11 @@ class AskViewModel
                     _uiState.update { it.copy(pageCount = pages, visionAvailable = visionProvider && pages > 0) }
                 }
             }
+            // P-Tools PT.1: seed isCloud at bind time so the "Search my library" toggle renders BEFORE
+            // the first send (handlePrepared re-confirms it at send time). All scopes; network-free.
+            viewModelScope.launch {
+                _uiState.update { it.copy(isCloud = chatRepository.resolveIsCloud()) }
+            }
         }
 
         /** Sheet-host convenience: [sessionId] resumes exactly that session, else the scope's latest. */

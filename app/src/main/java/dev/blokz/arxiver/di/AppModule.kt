@@ -510,7 +510,9 @@ object AppModule {
         libraryDao: dev.blokz.arxiver.core.database.dao.LibraryDao,
     ): dev.blokz.arxiver.data.tool.ToolExecutor =
         dev.blokz.arxiver.data.tool.ToolRegistry(
-            keywordSearch = { query, includeNotes -> localKeywordSearch.search(query, includeNotes = includeNotes) },
+            keywordSearch = { query, includeNotes, limit ->
+                localKeywordSearch.search(query, limit = limit, includeNotes = includeNotes)
+            },
             semanticSearch = { query, k ->
                 if (modelDownloader.state.value is dev.blokz.arxiver.core.ml.ModelState.Ready) {
                     embeddingService.embedQuery(query).getOrNull()
