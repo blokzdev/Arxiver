@@ -8,6 +8,12 @@ import dev.blokz.arxiver.core.database.fts.KeywordHit
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
+import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAsset
+import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAssetOriginal
+import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAuthor
+import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivItem
+import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivItemHit
+import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivSearchResponse
 import dev.blokz.arxiver.core.network.s2.S2Author
 import dev.blokz.arxiver.core.network.s2.S2ExternalIds
 import dev.blokz.arxiver.core.network.s2.S2OpenAccessPdf
@@ -77,6 +83,9 @@ class ToolRegistryTest {
         // PT.3 seam — defaulted no-op so PT.1/PT.2 tests are unaffected.
         searchSemanticScholar: suspend (String, Int, String?, Int?, Int?) -> AppResult<S2SearchResponse> =
             { _, _, _, _, _ -> AppResult.Success(S2SearchResponse()) },
+        // PT.4 seam — defaulted no-op.
+        searchChemRxiv: suspend (String, Int, Int) -> AppResult<ChemRxivSearchResponse> =
+            { _, _, _ -> AppResult.Success(ChemRxivSearchResponse()) },
     ) = ToolRegistry(
         keywordSearch = { _, notes, _ ->
             keywordSpy?.invoke(notes)
@@ -90,6 +99,7 @@ class ToolRegistryTest {
         savePaper = { id -> savedIds.add(id) },
         isInLibrary = { id -> id in savedIds },
         searchSemanticScholar = searchSemanticScholar,
+        searchChemRxiv = searchChemRxiv,
     )
 
     private fun exec(
@@ -206,6 +216,7 @@ class ToolRegistryTest {
                 savePaper = { },
                 isInLibrary = { false },
                 searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse()) },
+                searchChemRxiv = { _, _, _ -> AppResult.Success(ChemRxivSearchResponse()) },
             )
         val r = exec(reg, """{"query":"x"}""")
         assertTrue(r.result.isError)
@@ -229,10 +240,10 @@ class ToolRegistryTest {
             reg.toolDefs(ToolConsent(library = true, external = false)).map { it.name },
         )
         assertEquals(
-            setOf("search_arxiv", "get_paper", "import_to_library", "search_semantic_scholar"),
+            setOf("search_arxiv", "get_paper", "import_to_library", "search_semantic_scholar", "search_chemrxiv"),
             reg.toolDefs(ToolConsent(library = false, external = true)).map { it.name }.toSet(),
         )
-        assertEquals(5, reg.toolDefs(ToolConsent(library = true, external = true)).size)
+        assertEquals(6, reg.toolDefs(ToolConsent(library = true, external = true)).size)
         assertTrue(reg.toolDefs(ToolConsent.NONE).isEmpty())
     }
 
@@ -415,6 +426,113 @@ class ToolRegistryTest {
         val r = exec(failReg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
         assertTrue(r.result.isError)
         assertTrue(r.egress)
+    }
+
+    // --- PT.4: search_chemrxiv (EXTERNAL) ---
+
+    private fun chemHit(
+        title: String,
+        name: String? = null,
+        firstLast: Pair<String, String>? = null,
+        pdfUrl: String? = null,
+        assetUrl: String? = null,
+    ) = ChemRxivItemHit(
+        item =
+            ChemRxivItem(
+                id = "cr:$title",
+                title = title,
+                abstract = "Abstract of $title",
+                doi = "10.26434/$title",
+                publishedDate = "2024-01-01T00:00:00Z",
+                pdfUrl = pdfUrl,
+                authors =
+                    listOfNotNull(
+                        name?.let { ChemRxivAuthor(name = it) },
+                        firstLast?.let { ChemRxivAuthor(firstName = it.first, lastName = it.second) },
+                    ),
+                asset = assetUrl?.let { ChemRxivAsset(original = ChemRxivAssetOriginal(url = it)) },
+            ),
+    )
+
+    @Test
+    fun `search_chemrxiv maps the itemHits-dot-item envelope incl both author shapes and pdf fallback`() {
+        val reg =
+            registry(
+                searchChemRxiv = { _, _, _ ->
+                    AppResult.Success(
+                        ChemRxivSearchResponse(
+                            totalCount = 2,
+                            itemHits =
+                                listOf(
+                                    chemHit("A", name = "Ada Lovelace", pdfUrl = "https://chemrxiv.org/a.pdf"),
+                                    chemHit(
+                                        "B",
+                                        firstLast = "Alan" to "Turing",
+                                        assetUrl = "https://chemrxiv.org/b.pdf",
+                                    ),
+                                ),
+                        ),
+                    )
+                },
+            )
+        val r = exec(reg, """{"term":"catalysis"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
+        assertFalse(r.result.isError)
+        assertTrue(r.egress)
+        val hits = body(r.result.contentJson)["hits"]!!.jsonArray
+        assertEquals(2, hits.size, "the itemHits[].item nesting is unwrapped (a flat DTO would give 0)")
+        assertEquals("A", hits[0].jsonObject["title"]!!.jsonPrimitive.content)
+        // author `name` shape:
+        assertEquals("Ada Lovelace", hits[0].jsonObject["authors"]!!.jsonArray.single().jsonPrimitive.content)
+        // top-level pdfUrl wins:
+        assertEquals("https://chemrxiv.org/a.pdf", hits[0].jsonObject["pdfUrl"]!!.jsonPrimitive.content)
+        // firstName+lastName shape joins:
+        assertEquals("Alan Turing", hits[1].jsonObject["authors"]!!.jsonArray.single().jsonPrimitive.content)
+        // asset.original.url fallback when no top-level pdfUrl:
+        assertEquals("https://chemrxiv.org/b.pdf", hits[1].jsonObject["pdfUrl"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `search_chemrxiv is refused in a web-off turn before the seam runs`() {
+        var searched = false
+        val reg =
+            registry(
+                searchChemRxiv = { _, _, _ ->
+                    searched = true
+                    AppResult.Success(ChemRxivSearchResponse())
+                },
+            )
+        val r = exec(reg, """{"term":"x"}""", ctx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
+        assertTrue(r.result.isError)
+        assertTrue(r.egress, "an attempted external call is disclosed as egress-class")
+        assertFalse(searched, "the chemRxiv seam must NOT run without web consent")
+    }
+
+    @Test
+    fun `every search_chemrxiv path is egress incl error paths`() {
+        assertTrue(exec(registry(), """{"term":"x"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME).egress)
+        assertTrue(exec(registry(), """{"term":"  "}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME).egress)
+        val failReg = registry(searchChemRxiv = { _, _, _ -> AppResult.Failure(AppError.Upstream(429)) })
+        val r = exec(failReg, """{"term":"x"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
+        assertTrue(r.result.isError)
+        assertTrue(r.egress)
+    }
+
+    @Test
+    fun `search_chemrxiv clamps limit and threads skip, never throwing`() {
+        var capturedLimit = 0
+        var capturedSkip = -1
+        val reg =
+            registry(
+                searchChemRxiv = { _, limit, skip ->
+                    capturedLimit = limit
+                    capturedSkip = skip
+                    AppResult.Success(ChemRxivSearchResponse())
+                },
+            )
+        val r = exec(reg, """{"term":"x","limit":9999,"skip":20}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
+        assertFalse(r.result.isError)
+        assertEquals(25, capturedLimit, "limit clamped to 25")
+        assertEquals(20, capturedSkip, "skip threaded to the seam")
     }
 
     @Test

@@ -17,6 +17,16 @@ class AllowedHostsTest {
     }
 
     @Test
+    fun `chemrxiv is allowlisted but its asset CDN sub-domains are not (PT4)`() {
+        assertTrue(AllowedHosts.isAllowed("chemrxiv.org"))
+        assertTrue(AllowedHosts.isAllowed("ChemRxiv.org"))
+        // Exact-match: an off-host asset CDN sub-domain must NOT pass (the redirect-block red line).
+        assertFalse(AllowedHosts.isAllowed("assets.chemrxiv.org"))
+        assertFalse(AllowedHosts.isAllowed("chemrxiv.org.evil.example"))
+        assertFalse(AllowedHosts.isAllowed("evilchemrxiv.org"))
+    }
+
+    @Test
     fun `null and unknown hosts are rejected`() {
         assertFalse(AllowedHosts.isAllowed(null))
         assertFalse(AllowedHosts.isAllowed(""))

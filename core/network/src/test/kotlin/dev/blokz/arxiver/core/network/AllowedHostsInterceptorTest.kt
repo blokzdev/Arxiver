@@ -87,6 +87,21 @@ class AllowedHostsInterceptorTest {
     }
 
     @Test
+    fun `chemrxiv proceeds but an off-host asset CDN hop is blocked (PT4 redirect red-line)`() {
+        // Hop 1 — the allowlisted chemRxiv API host proceeds.
+        val apiHop = FakeChain(req("https://chemrxiv.org/engage/chemrxiv/public-api/v1/items?term=x"))
+        interceptor.intercept(apiHop)
+        assertTrue(apiHop.proceeded)
+        // A redirect hop to an off-host asset CDN sub-domain is a NEW disallowed host. As a NETWORK
+        // interceptor this re-fires per hop and throws before the socket — FakeChain models one hop
+        // faithfully (the live end-to-end 302 rides VERIFICATION §Q-PT: MockWebServer's localhost origin
+        // is itself not allowlisted, so hop-1-through-the-real-allowlist can't be exercised in a unit test).
+        val assetHop = FakeChain(req("https://assets.chemrxiv.org/orp/resource/item/x/original/paper.pdf"))
+        assertFailsWith<IOException> { interceptor.intercept(assetHop) }
+        assertFalse(assetHop.proceeded, "an off-host asset origin must be blocked per hop")
+    }
+
+    @Test
     fun `as an application interceptor a disallowed host opens no socket`() {
         // The app-interceptor slot runs before ConnectInterceptor, so this throws with NO real network
         // (we never reach evil.example). Proves the pre-connection gate end-to-end.

@@ -20,6 +20,7 @@ private val EXTERNAL_TOOL_HOSTS =
         ToolRegistry.GET_PAPER_NAME to "arXiv",
         ToolRegistry.IMPORT_NAME to "arXiv",
         ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME to "Semantic Scholar",
+        ToolRegistry.SEARCH_CHEMRXIV_NAME to "chemRxiv",
     )
 
 /** The exact content that will leave the device for a cloud call (SPEC-AI-PROVIDERS §5). */
