@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -80,12 +81,19 @@ class ChatSessionViewModelTest {
         override suspend fun setPinned(
             id: Long,
             pinned: Boolean,
-        ) = Unit
+        ) {
+            sessions.value = sessions.value.map { if (it.id == id) it.copy(pinned = pinned) else it }
+        }
 
         override suspend fun renameSession(
             id: Long,
             title: String?,
-        ) = Unit
+        ) {
+            sessions.value = sessions.value.map { if (it.id == id) it.copy(title = title) else it }
+        }
+
+        override fun observeSession(id: Long): Flow<ChatSessionEntity?> =
+            sessions.map { list -> list.firstOrNull { it.id == id } }
 
         override suspend fun messagesFor(sessionId: Long): List<ChatMessageEntity> = emptyList()
 
@@ -102,7 +110,13 @@ class ChatSessionViewModelTest {
 
         override fun observeAllSessions(): Flow<List<ChatSessionEntity>> = sessions
 
-        override suspend fun sessionById(id: Long): ChatSessionEntity? = sessions.value.firstOrNull { it.id == id }
+        var sessionByIdCalls = 0
+            private set
+
+        override suspend fun sessionById(id: Long): ChatSessionEntity? {
+            sessionByIdCalls++
+            return sessions.value.firstOrNull { it.id == id }
+        }
 
         override suspend fun deleteSession(id: Long) {
             sessions.value = sessions.value.filterNot { it.id == id }
@@ -265,5 +279,61 @@ class ChatSessionViewModelTest {
             val id = seedSession(ChatSessionEntity.SCOPE_COLLECTION, "corrupt")
             val state = vm(mapOf("sessionId" to "$id")).uiState.first { it != ChatSessionUiState.Loading }
             assertEquals(ChatSessionUiState.Missing, state)
+        }
+
+    // --- P-Chat PC.5: live title + rename ---
+
+    @Test
+    fun `the title is live - a rename updates Ready while scope resolves exactly once`() =
+        runTest(dispatcher) {
+            val id = seedSession(ChatSessionEntity.SCOPE_PAPER, "2401.00001")
+            val vm = ChatSessionViewModel(repo(), SavedStateHandle(mapOf("sessionId" to "$id", "title" to "Route")))
+
+            // Initially no custom title -> route arg.
+            val first = vm.uiState.first { it is ChatSessionUiState.Ready } as ChatSessionUiState.Ready
+            assertEquals("Route", first.title)
+
+            chatDao.renameSession(id, "Renamed live")
+            val updated =
+                vm.uiState.first { it is ChatSessionUiState.Ready && it.title == "Renamed live" }
+            assertEquals("Renamed live", (updated as ChatSessionUiState.Ready).title)
+            // Scope (sessionScope -> sessionById) resolved once despite multiple title emissions.
+            assertEquals(1, chatDao.sessionByIdCalls)
+        }
+
+    @Test
+    fun `a session deleted while open keeps the screen on the route title, never Missing`() =
+        runTest(dispatcher) {
+            val id = seedSession(ChatSessionEntity.SCOPE_PAPER, "2401.00001")
+            chatDao.renameSession(id, "Custom") // start with a live custom title...
+            val vm = ChatSessionViewModel(repo(), SavedStateHandle(mapOf("sessionId" to "$id", "title" to "Route")))
+            vm.uiState.first { (it as? ChatSessionUiState.Ready)?.title == "Custom" }
+
+            chatDao.deleteSession(id) // ...then delete it out from under the open screen.
+
+            // The title must REVERT to the route arg (entity is now null) — a predicate the
+            // pre-delete Ready("Custom") value cannot satisfy, so this forces the post-delete
+            // emission and proves the null-entity branch keeps the screen (never Missing).
+            val after = vm.uiState.first { (it as? ChatSessionUiState.Ready)?.title == "Route" }
+            assertEquals("Route", (after as ChatSessionUiState.Ready).title)
+        }
+
+    @Test
+    fun `rename delegates for a Resume and is a no-op for a New route`() =
+        runTest(dispatcher) {
+            val id = seedSession(ChatSessionEntity.SCOPE_PAPER, "2401.00001")
+            val resume = ChatSessionViewModel(repo(), SavedStateHandle(mapOf("sessionId" to "$id")))
+            resume.uiState.first { it is ChatSessionUiState.Ready }
+            resume.rename("Named")
+            advanceUntilIdle()
+            assertEquals("Named", chatDao.sessionById(id)?.title)
+
+            val new =
+                ChatSessionViewModel(
+                    repo(),
+                    SavedStateHandle(mapOf("scopeKind" to CHAT_SCOPE_KIND_PAPER, "scopeId" to "math/0211159")),
+                )
+            new.uiState.first { it is ChatSessionUiState.Ready }
+            new.rename("ignored") // no session id -> no-op, no crash
         }
 }

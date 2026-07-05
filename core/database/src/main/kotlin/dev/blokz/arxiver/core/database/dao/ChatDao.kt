@@ -113,6 +113,10 @@ interface ChatDao {
     @Query("SELECT * FROM chat_sessions WHERE id = :id")
     suspend fun sessionById(id: Long): ChatSessionEntity?
 
+    /** Observe one session for a live title/pin (P-Chat PC.5); emits null if deleted elsewhere. */
+    @Query("SELECT * FROM chat_sessions WHERE id = :id")
+    fun observeSession(id: Long): Flow<ChatSessionEntity?>
+
     @Query("DELETE FROM chat_sessions WHERE id = :id")
     suspend fun deleteSession(id: Long)
 }

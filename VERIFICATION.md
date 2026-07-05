@@ -165,6 +165,14 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [~] **M-PH7-6 Reader-hosted Ask parity (PH.7)** — pin-to-notes lands in the paper's notes with the snackbar; share/export work; cross-ref opens the paper; the session resumes the SAME conversation the detail screen shows; the top-bar Ask works with no selection. _(P-HTML PH.7)_
 - [ ] **M-PH5-6 First-paint latency + no starvation (PH.5)** — text + math paint promptly on first download (two-phase), figures pop in after; the **30s deadline** stops a pathological survey paper from holding the shared ≥3s slot indefinitely, and a **concurrent FollowSync still progresses** during a figure-heavy open. _(P-HTML PH.5)_
 
+## P-PC5. Pinned sections + rename (P-Chat PC.5) _(ROADMAP P-Chat)_
+
+- [ ] **P-PC5-1 Pin/unpin** — pinning a chat floats it into a **Pinned** section header above **Recent**; the row **animates** across the boundary (not a teleport); unpin returns it to Recent; an all-recent list shows no section header.
+- [ ] **P-PC5-2 Rename (both surfaces)** — the row overflow **Rename** and the ChatSessionScreen TopAppBar **Edit** both open a prefilled dialog; a new name shows immediately in the list AND **live** on an already-open ChatSessionScreen TopAppBar; a **blank** submit clears back to the derived label.
+- [ ] **P-PC5-3 Overflow delete still undoable** — Delete moved into the overflow menu still fires the "Chat deleted" Undo snackbar (the PC.3 delayed-commit path).
+- [ ] **P-PC5-4 Upgrade + persist** — on a v3→v4 upgraded device, pin + rename **persist across an app restart**.
+- [ ] **P-PC5-5 TalkBack** — pin/unpin (verb labels), the overflow (`chat_more_actions`), the Rename item, and the dialog field are all announced.
+
 ## O-PC3. Chat tab + promoted recents (P-Chat PC.3) _(ROADMAP P-Chat)_
 
 - [ ] **O-PC3-1 Chat tab present + selectable** - a 4th bottom-nav tab "Chat" shows, is selectable, lights on selection, survives a rotation; cross-tab Back returns to Chat (per-tab saved back stack); the 4 labels fit at 1.3x font scale on a small phone.

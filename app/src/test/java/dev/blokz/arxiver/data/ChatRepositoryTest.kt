@@ -376,4 +376,46 @@ class ChatRepositoryTest {
             assertNull(repo.sessionScope(broken), "an unparsable collection id must pop, not crash")
             assertNull(repo.sessionScope(999L), "a deleted session resolves null (stale back stack)")
         }
+
+    @Test
+    fun `observeSession emits the current title and reflects a rename`() =
+        runTest {
+            val repo = repo(FakeProvider { flowOf(ChatChunk.Done()) })
+            val sid =
+                db.chatDao().insertSession(
+                    ChatSessionEntity(
+                        scope = "PAPER",
+                        scopeId = "p1",
+                        providerId = "CLAUDE",
+                        createdAt = 1,
+                        lastMessageAt = 1,
+                    ),
+                )
+            assertEquals(null, repo.observeSession(sid).first()?.title)
+            repo.renameSession(sid, "Named")
+            assertEquals("Named", repo.observeSession(sid).first { it?.title == "Named" }?.title)
+        }
+
+    @Test
+    fun `setPinned reorders observeSessionRows live - pinned first`() =
+        runTest {
+            val repo = repo(FakeProvider { flowOf(ChatChunk.Done()) })
+
+            fun seed(
+                scopeId: String,
+                at: Long,
+            ) = ChatSessionEntity(
+                scope = "PAPER",
+                scopeId = scopeId,
+                providerId = "CLAUDE",
+                createdAt = at,
+                lastMessageAt = at,
+            )
+            val older = db.chatDao().insertSession(seed("p1", 1))
+            db.chatDao().insertSession(seed("p2", 99)) // fresher, unpinned
+            assertEquals(older, repo.observeSessionRows().first().last().session.id) // older is last (unpinned)
+
+            repo.setPinned(older, true)
+            assertEquals(older, repo.observeSessionRows().first { it.first().session.pinned }.first().session.id)
+        }
 }

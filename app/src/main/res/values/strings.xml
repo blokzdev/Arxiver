@@ -528,6 +528,14 @@
     <string name="chat_history_delete">Delete chat</string>
     <string name="chat_deleted">Chat deleted</string>
     <string name="chat_empty_cta">Browse your library</string>
+    <string name="chat_pin">Pin</string>
+    <string name="chat_unpin">Unpin</string>
+    <string name="chat_rename">Rename</string>
+    <string name="chat_rename_title">Rename chat</string>
+    <string name="chat_rename_hint">Chat name</string>
+    <string name="chat_more_actions">More actions</string>
+    <string name="chat_section_pinned">Pinned</string>
+    <string name="chat_section_recent">Recent</string>
     <string name="chat_session_title">Conversation</string>
     <string name="chat_session_new">New conversation</string>
 

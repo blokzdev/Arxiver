@@ -186,4 +186,75 @@ class ChatHistoryViewModelTest {
             vm.delete(sid)
             assertTrue(awaitRows(vm) { it.isEmpty() }.isEmpty())
         }
+
+    private suspend fun seedSession(
+        scopeId: String,
+        at: Long,
+    ): Long =
+        db.chatDao().insertSession(
+            ChatSessionEntity(
+                scope = "PAPER",
+                scopeId = scopeId,
+                providerId = "CLAUDE",
+                createdAt = at,
+                lastMessageAt = at,
+            ),
+        )
+
+    @Test
+    fun `a custom title wins over the derived label in the row`() =
+        runBlocking {
+            seedPaper("2401.00001", "Derived Title")
+            val id = seedSession("2401.00001", at = 1)
+            db.chatDao().renameSession(id, "My custom name")
+
+            val row = awaitRows(viewModel()) { it.size == 1 }.single()
+            assertEquals("My custom name", row.customTitle)
+            assertEquals("Derived Title", row.label)
+            assertEquals("My custom name", row.effectiveTitle())
+        }
+
+    @Test
+    fun `a null custom title falls back to the derived label, and orphan to null`() =
+        runBlocking {
+            seedPaper("2401.00001", "Derived Title")
+            seedSession("2401.00001", at = 1) // has a paper -> derived label, no custom title
+            seedSession("gone.999", at = 2) // orphan: no paper row, no title
+
+            val rows = awaitRows(viewModel()) { it.size == 2 }
+            val derived = rows.first { it.scope == RetrievalScope.Paper("2401.00001") }
+            val orphan = rows.first { it.scope == RetrievalScope.Paper("gone.999") }
+            assertEquals(null, derived.customTitle)
+            assertEquals("Derived Title", derived.effectiveTitle())
+            assertEquals(null, orphan.effectiveTitle())
+        }
+
+    @Test
+    fun `pinning floats a session into the Pinned section above a fresher unpinned one`() =
+        runBlocking {
+            val older = seedSession("p1", at = 1)
+            seedSession("p2", at = 99) // fresher, unpinned
+            val vm = viewModel()
+            awaitRows(vm) { it.size == 2 }
+
+            vm.pin(older, true)
+
+            val rows = awaitRows(vm) { it.first().sessionId == older }
+            assertTrue(rows.first().pinned, "the pinned session floats to the top")
+            assertEquals(false, rows[1].pinned)
+        }
+
+    @Test
+    fun `rename through the VM clears back to the derived label on a blank (null) title`() =
+        runBlocking {
+            seedPaper("2401.00001", "Derived Title")
+            val id = seedSession("2401.00001", at = 1)
+            val vm = viewModel()
+            awaitRows(vm) { it.size == 1 }
+
+            vm.rename(id, "Custom")
+            assertEquals("Custom", awaitRows(vm) { it.single().customTitle == "Custom" }.single().customTitle)
+            vm.rename(id, null)
+            assertEquals(null, awaitRows(vm) { it.single().customTitle == null }.single().customTitle)
+        }
 }

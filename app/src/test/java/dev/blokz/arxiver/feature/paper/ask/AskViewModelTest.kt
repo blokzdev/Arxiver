@@ -208,6 +208,9 @@ class AskViewModelTest {
         override fun observeAllSessions(): Flow<List<ChatSessionEntity>> =
             sessions.map { list -> list.sortedByDescending { it.lastMessageAt } }
 
+        override fun observeSession(id: Long): Flow<ChatSessionEntity?> =
+            sessions.map { list -> list.firstOrNull { it.id == id } }
+
         override suspend fun sessionById(id: Long): ChatSessionEntity? = sessions.value.firstOrNull { it.id == id }
 
         override suspend fun deleteSession(id: Long) {
