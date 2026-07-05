@@ -8,8 +8,8 @@ import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.database.toListDomain
-import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,21 +39,22 @@ class PaperDetailViewModel
         private val libraryRepository: LibraryRepository,
         embeddingDao: dev.blokz.arxiver.core.database.dao.EmbeddingDao,
     ) : ViewModel() {
-        private val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
+        // The route arg is the opaque storageId (nav Uri.encode-d) — fromStorageId dispatches arXiv vs. non-arXiv.
+        private val paperRef = PaperRef.fromStorageId(checkNotNull(savedStateHandle["id"]))
 
         private val _uiState = MutableStateFlow(PaperDetailUiState())
         val uiState: StateFlow<PaperDetailUiState> = _uiState.asStateFlow()
 
         val entry: StateFlow<LibraryEntryEntity?> =
-            libraryRepository.observeEntry(paperId.value)
+            libraryRepository.observeEntry(paperRef.storageId)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
         val notes: StateFlow<List<NoteEntity>> =
-            libraryRepository.observeNotesFor(paperId.value)
+            libraryRepository.observeNotesFor(paperRef.storageId)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
         val tags: StateFlow<List<TagEntity>> =
-            libraryRepository.observeTagsFor(paperId.value)
+            libraryRepository.observeTagsFor(paperRef.storageId)
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
         val collections: StateFlow<List<dev.blokz.arxiver.core.database.entity.CollectionEntity>> =
@@ -61,12 +62,12 @@ class PaperDetailViewModel
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
         val memberCollectionIds: StateFlow<Set<Long>> =
-            libraryRepository.observeCollectionMembershipsFor(paperId.value)
+            libraryRepository.observeCollectionMembershipsFor(paperRef.storageId)
                 .map { it.toSet() }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
         val related: StateFlow<List<RelatedPaper>> =
-            embeddingDao.observeRelated(paperId.value)
+            embeddingDao.observeRelated(paperRef.storageId)
                 .map { rows ->
                     rows.map { RelatedPaper(paper = it.paper.toListDomain(), similarity = it.similarity) }
                 }
@@ -74,7 +75,7 @@ class PaperDetailViewModel
 
         init {
             viewModelScope.launch {
-                val paper = paperRepository.paper(paperId)
+                val paper = paperRepository.paper(paperRef)
                 _uiState.update { it.copy(paper = paper, loading = false, notFound = paper == null) }
             }
         }
@@ -83,24 +84,24 @@ class PaperDetailViewModel
             viewModelScope.launch {
                 if (entry.value == null) {
                     libraryRepository.save(
-                        paperId.value,
+                        paperRef.storageId,
                     )
                 } else {
-                    libraryRepository.unsave(paperId.value)
+                    libraryRepository.unsave(paperRef.storageId)
                 }
             }
         }
 
         fun setStatus(status: String) {
-            viewModelScope.launch { libraryRepository.setStatus(paperId.value, status) }
+            viewModelScope.launch { libraryRepository.setStatus(paperRef.storageId, status) }
         }
 
         fun setRating(rating: Int?) {
-            viewModelScope.launch { libraryRepository.setRating(paperId.value, rating) }
+            viewModelScope.launch { libraryRepository.setRating(paperRef.storageId, rating) }
         }
 
         fun addNote(content: String) {
-            viewModelScope.launch { libraryRepository.addNote(paperId.value, content) }
+            viewModelScope.launch { libraryRepository.addNote(paperRef.storageId, content) }
         }
 
         fun updateNote(
@@ -115,15 +116,15 @@ class PaperDetailViewModel
         }
 
         fun addTag(name: String) {
-            viewModelScope.launch { libraryRepository.addTag(paperId.value, name) }
+            viewModelScope.launch { libraryRepository.addTag(paperRef.storageId, name) }
         }
 
         fun addToCollection(collectionId: Long) {
-            viewModelScope.launch { libraryRepository.addToCollection(collectionId, paperId.value) }
+            viewModelScope.launch { libraryRepository.addToCollection(collectionId, paperRef.storageId) }
         }
 
         fun removeFromCollection(collectionId: Long) {
-            viewModelScope.launch { libraryRepository.removeFromCollection(collectionId, paperId.value) }
+            viewModelScope.launch { libraryRepository.removeFromCollection(collectionId, paperRef.storageId) }
         }
 
         /** Create a collection and immediately add this paper to it (picker "new collection" path). */
@@ -131,11 +132,11 @@ class PaperDetailViewModel
             if (name.isBlank()) return
             viewModelScope.launch {
                 val id = libraryRepository.createCollection(name)
-                libraryRepository.addToCollection(id, paperId.value)
+                libraryRepository.addToCollection(id, paperRef.storageId)
             }
         }
 
         fun removeTag(tagId: Long) {
-            viewModelScope.launch { libraryRepository.removeTag(paperId.value, tagId) }
+            viewModelScope.launch { libraryRepository.removeTag(paperRef.storageId, tagId) }
         }
     }

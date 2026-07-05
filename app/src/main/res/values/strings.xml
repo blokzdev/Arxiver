@@ -59,6 +59,7 @@
     <string name="paper_abstract_heading">Abstract</string>
     <string name="paper_dates">Submitted %1$s · updated %3$s (v%2$d)</string>
     <string name="paper_meta_arxiv_id">arXiv ID</string>
+    <string name="paper_meta_source">Source</string>
     <string name="paper_meta_comment">Comments</string>
     <string name="paper_meta_journal">Journal ref</string>
     <string name="paper_meta_doi">DOI</string>
@@ -190,6 +191,7 @@
     <string name="paper_view_connections">Connections</string>
 
     <string name="cd_send_to_claude">Send to Claude</string>
+    <string name="cd_source_badge">Source: %1$s</string>
     <string name="cd_clear_selection">Clear selection</string>
     <string name="cd_dismiss_feedback">Dismiss</string>
     <string name="cd_add_to_organize">Add to collection or tag</string>

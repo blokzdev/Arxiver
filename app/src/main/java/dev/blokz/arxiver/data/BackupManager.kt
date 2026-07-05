@@ -8,7 +8,8 @@ import dev.blokz.arxiver.core.database.entity.FollowEntity
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.PaperEntity
-import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.PaperRef
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -48,7 +49,10 @@ data class ArxiverBackup(
     val routines: List<BackupRoutine> = emptyList(),
 ) {
     companion object {
-        const val SCHEMA = "arxiver-backup/v1"
+        const val SCHEMA = "arxiver-backup/v2"
+
+        /** Schemas [import] accepts: v2 (P-Sources, carries origin + real pdfUrl) and the legacy v1. */
+        val SUPPORTED_SCHEMAS = setOf("arxiver-backup/v1", SCHEMA)
     }
 }
 
@@ -116,7 +120,10 @@ class BackupManager(
      */
     suspend fun import(content: String): ImportSummary {
         val backup = json.decodeFromString(ArxiverBackup.serializer(), content)
-        require(backup.schema == ArxiverBackup.SCHEMA) { "unsupported backup schema: ${backup.schema}" }
+        // Accept the current v2 AND the legacy v1 (whose papers lack origin/pdfUrl — the DTO defaults +
+        // toEntity's arXiv re-synthesis restore them losslessly). A bare == would make every v1 file on
+        // disk un-importable.
+        require(backup.schema in ArxiverBackup.SUPPORTED_SCHEMAS) { "unsupported backup schema: ${backup.schema}" }
 
         backup.papers.forEach { exported ->
             paperDao.upsertPaperWithRelations(
@@ -126,18 +133,18 @@ class BackupManager(
             )
             libraryDao.upsertEntry(
                 LibraryEntryEntity(
-                    paperId = exported.arxivId,
+                    paperId = exported.paperId,
                     addedAt = exported.addedAt.toEpochMilliOrNow(),
                     status = exported.status,
                     rating = exported.rating,
                 ),
             )
-            exported.tags.forEach { tag -> addTag(exported.arxivId, tag) }
-            val existingNotes = libraryDao.notesFor(exported.arxivId).map { it.content }.toSet()
+            exported.tags.forEach { tag -> addTag(exported.paperId, tag) }
+            val existingNotes = libraryDao.notesFor(exported.paperId).map { it.content }.toSet()
             exported.notes.filter { it !in existingNotes }.forEach { note ->
                 val now = Instant.now().toEpochMilli()
                 libraryDao.insertNote(
-                    NoteEntity(paperId = exported.arxivId, content = note, createdAt = now, updatedAt = now),
+                    NoteEntity(paperId = exported.paperId, content = note, createdAt = now, updatedAt = now),
                 )
             }
         }
@@ -201,9 +208,11 @@ class BackupManager(
         }
     }
 
-    private fun ExportedPaper.toEntity(): PaperEntity =
-        PaperEntity(
-            id = arxivId,
+    private fun ExportedPaper.toEntity(): PaperEntity {
+        // The PK is the single source of truth for identity origin (a v1 file's paperId is a bare arXiv id).
+        val ref = PaperRef.fromStorageId(paperId)
+        return PaperEntity(
+            id = paperId,
             latestVersion = version,
             title = title,
             abstract = abstract,
@@ -214,14 +223,21 @@ class BackupManager(
             comment = comment,
             journalRef = journalRef,
             doi = doi,
-            pdfUrl = ArxivId(arxivId).pdfUrl(version),
+            // v2 carries the real URL verbatim (chemRxiv's real pdf, or arXiv's stored pdf). A v1 arXiv row
+            // has pdfUrl == null and re-synthesizes exactly what it stored before — never a mangled
+            // arxiv.org URL for a non-arXiv paper (the pre-P-Sources bug).
+            pdfUrl = pdfUrl ?: (ref as? ArxivRef)?.pdfUrl(version) ?: "",
+            origin = ref.origin.wire,
+            nativeId = ref.nativeId,
             citationCount = null,
             s2PaperId = null,
+            // Acquisition path (distinct axis from identity origin): a restored paper is treated as MANUAL.
             source = "MANUAL",
             fetchedAt = Instant.now().toEpochMilli(),
             embeddedAt = null,
             citationsSyncedAt = null,
         )
+    }
 
     private fun String.toEpochMilliOrNow(): Long =
         runCatching { Instant.parse(this).toEpochMilli() }.getOrDefault(Instant.now().toEpochMilli())

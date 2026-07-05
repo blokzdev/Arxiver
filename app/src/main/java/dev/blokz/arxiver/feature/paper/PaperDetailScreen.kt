@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.StarOutline
@@ -72,6 +73,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -83,6 +86,7 @@ import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.model.Citation
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.data.PdfStorage
 import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
@@ -91,6 +95,8 @@ import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdownLabels
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.ScoreBar
 import dev.blokz.arxiver.ui.components.SkeletonLine
+import dev.blokz.arxiver.ui.components.StatusChip
+import dev.blokz.arxiver.ui.components.StatusTone
 import dev.blokz.arxiver.ui.feedback.FeedbackAction
 import dev.blokz.arxiver.ui.feedback.FeedbackMessage
 import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
@@ -181,8 +187,13 @@ fun PaperDetailScreen(
                         IconButton(onClick = { showAsk = true }) {
                             Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_ask))
                         }
-                        IconButton(onClick = { showDispatch = true }) {
-                            Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
+                        // Send-to-Claude routines are arXiv-shaped (SPEC-CLAUDE-BRIDGE). Hidden for a
+                        // non-arXiv paper — no dead affordance, and it can't reach the arXiv-only payload
+                        // path (source-aware dispatch is PS.2). Consistent with hiding Read HTML below.
+                        if (paper.ref.origin == Source.ARXIV) {
+                            IconButton(onClick = { showDispatch = true }) {
+                                Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
+                            }
                         }
                         IconButton(
                             onClick = {
@@ -213,7 +224,7 @@ fun PaperDetailScreen(
                                 val send =
                                     Intent(Intent.ACTION_SEND).apply {
                                         type = "text/plain"
-                                        putExtra(Intent.EXTRA_TEXT, "${paper.title}\n${paper.id.absUrl()}")
+                                        putExtra(Intent.EXTRA_TEXT, "${paper.title}\n${paper.canonicalUrl()}")
                                     }
                                 context.startActivity(
                                     Intent.createChooser(send, context.getString(R.string.action_share)),
@@ -235,7 +246,7 @@ fun PaperDetailScreen(
                                     leadingIcon = { Icon(Icons.Filled.PictureAsPdf, null) },
                                     onClick = {
                                         showActionsMenu = false
-                                        val pdf = PdfStorage.localPdf(context, paper.id.value)
+                                        val pdf = PdfStorage.localPdf(context, paper.ref.storageId)
                                         if (pdf != null) {
                                             context.sharePdf(pdf, subject = paper.title)
                                         } else {
@@ -312,7 +323,7 @@ fun PaperDetailScreen(
     if (showDispatch) {
         state.paper?.let { paper ->
             DispatchSheet(
-                paperIds = listOf(paper.id.value),
+                paperIds = listOf(paper.ref.storageId),
                 onDismiss = { showDispatch = false },
                 onGoToRoutines = {
                     showDispatch = false
@@ -325,7 +336,7 @@ fun PaperDetailScreen(
     if (showAsk) {
         state.paper?.let { paper ->
             AskSheet(
-                scope = dev.blokz.arxiver.core.search.RetrievalScope.Paper(paper.id.value),
+                scope = dev.blokz.arxiver.core.search.RetrievalScope.Paper(paper.ref.storageId),
                 onDismiss = { showAsk = false },
                 onConfigureProvider = {
                     showAsk = false
@@ -357,7 +368,7 @@ fun PaperDetailScreen(
     if (showOrganize) {
         state.paper?.let { paper ->
             dev.blokz.arxiver.feature.organize.OrganizeSheet(
-                paperIds = listOf(paper.id.value),
+                paperIds = listOf(paper.ref.storageId),
                 onDismiss = { showOrganize = false },
             )
         }
@@ -403,6 +414,17 @@ private fun PaperDetailContent(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+        // Provenance badge for a non-arXiv paper (chemRxiv, PS.1). arXiv is the default identity and shows
+        // no badge — the chip marks the exception, keeping the arXiv case visually byte-identical.
+        if (paper.ref.origin != Source.ARXIV) {
+            val badgeCd = stringResource(R.string.cd_source_badge, paper.ref.origin.displayName)
+            StatusChip(
+                text = paper.ref.origin.displayName,
+                tone = StatusTone.Neutral,
+                icon = Icons.Filled.Science,
+                modifier = Modifier.semantics { contentDescription = badgeCd },
+            )
+        }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         ) {
@@ -421,21 +443,26 @@ private fun PaperDetailContent(
         )
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.md)) {
-            FilledTonalButton(onClick = { onOpenHtml(paper.id.value) }) {
-                Icon(Icons.AutoMirrored.Filled.Article, contentDescription = null)
-                Text(
-                    text = stringResource(R.string.action_open_html),
-                    modifier = Modifier.padding(start = Spacing.sm),
-                )
+            // The HTML edition (ar5iv/native) is an arXiv-only transform — hidden for a non-arXiv paper.
+            // The FlowRow reflows to a clean two-button bar; the affordance is simply absent (no disabled
+            // ceremony). HtmlReaderViewModel defensively falls back to PDF if ever handed a non-arXiv ref.
+            if (paper.ref.origin == Source.ARXIV) {
+                FilledTonalButton(onClick = { onOpenHtml(paper.ref.storageId) }) {
+                    Icon(Icons.AutoMirrored.Filled.Article, contentDescription = null)
+                    Text(
+                        text = stringResource(R.string.action_open_html),
+                        modifier = Modifier.padding(start = Spacing.sm),
+                    )
+                }
             }
-            FilledTonalButton(onClick = { onOpenPdf(paper.id.value) }) {
+            FilledTonalButton(onClick = { onOpenPdf(paper.ref.storageId) }) {
                 Icon(Icons.Filled.PictureAsPdf, contentDescription = null)
                 Text(
                     text = stringResource(R.string.action_open_pdf),
                     modifier = Modifier.padding(start = Spacing.sm),
                 )
             }
-            FilledTonalButton(onClick = { onOpenConnections(paper.id.value) }) {
+            FilledTonalButton(onClick = { onOpenConnections(paper.ref.storageId) }) {
                 Icon(Icons.Filled.Hub, contentDescription = null)
                 Text(
                     text = stringResource(R.string.paper_view_connections),
@@ -726,7 +753,7 @@ private fun RelatedSection(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clickable { onPaperClick(item.paper.id.value) }
+                        .clickable { onPaperClick(item.paper.ref.storageId) }
                         .padding(vertical = Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -776,7 +803,16 @@ private fun MetadataSection(paper: Paper) {
             modifier = Modifier.padding(Spacing.md),
             verticalArrangement = Arrangement.spacedBy(Spacing.xs),
         ) {
-            MetadataRow(stringResource(R.string.paper_meta_arxiv_id), "${paper.id.value}v${paper.latestVersion}")
+            // arXiv shows its versioned id; a non-arXiv paper shows its source (its DOI carries identity,
+            // rendered by the DOI row below) — never a fake "arXiv ID" with a chemrxiv:… value or vN.
+            if (paper.ref.origin == Source.ARXIV) {
+                MetadataRow(
+                    stringResource(R.string.paper_meta_arxiv_id),
+                    "${paper.ref.storageId}v${paper.latestVersion}",
+                )
+            } else {
+                MetadataRow(stringResource(R.string.paper_meta_source), paper.ref.origin.displayName)
+            }
             paper.comment?.let { MetadataRow(stringResource(R.string.paper_meta_comment), it) }
             paper.journalRef?.let { MetadataRow(stringResource(R.string.paper_meta_journal), it) }
             paper.doi?.let { MetadataRow(stringResource(R.string.paper_meta_doi), it) }
@@ -835,10 +871,48 @@ private fun PaperDetailContentPreview() {
             paper = PreviewFixtures.paper,
             entry =
                 LibraryEntryEntity(
-                    paperId = PreviewFixtures.paper.id.value,
+                    paperId = PreviewFixtures.paper.ref.storageId,
                     addedAt = 0L,
                     status = LibraryEntryEntity.STATUS_READING,
                     rating = 4,
+                ),
+            notes = emptyList(),
+            tags = emptyList(),
+            collections = emptyList(),
+            memberCollectionIds = emptySet(),
+            related = emptyList(),
+            scrollState = rememberScrollState(),
+            onOpenPdf = {},
+            onOpenHtml = {},
+            onPaperClick = {},
+            onOpenConnections = {},
+            onSetStatus = {},
+            onSetRating = {},
+            onAddNote = {},
+            onDeleteNote = {},
+            onAddTag = {},
+            onRemoveTag = {},
+            onAddToCollection = {},
+            onRemoveFromCollection = {},
+            onCreateCollection = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "chemRxiv (non-arXiv)")
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, name = "chemRxiv (non-arXiv) dark")
+@Composable
+private fun PaperDetailContentChemRxivPreview() {
+    // Non-arXiv surface (PS.1): source badge shown, no "Read HTML" button, Source + DOI metadata rows.
+    ArxiverTheme {
+        PaperDetailContent(
+            paper = PreviewFixtures.chemrxivPaper,
+            entry =
+                LibraryEntryEntity(
+                    paperId = PreviewFixtures.chemrxivPaper.ref.storageId,
+                    addedAt = 0L,
+                    status = LibraryEntryEntity.STATUS_TO_READ,
+                    rating = null,
                 ),
             notes = emptyList(),
             tags = emptyList(),

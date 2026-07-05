@@ -519,8 +519,8 @@ private fun LibraryPane(
                         }
                     }
                 }
-                itemsIndexed(state.localResults, key = { _, hit -> hit.paper.id.value }) { index, hit ->
-                    val id = hit.paper.id.value
+                itemsIndexed(state.localResults, key = { _, hit -> hit.paper.ref.storageId }) { index, hit ->
+                    val id = hit.paper.ref.storageId
                     SwipeablePaperRow(
                         paper = hit.paper,
                         onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },
@@ -562,8 +562,8 @@ private fun ResultList(
                 )
             }
         }
-        itemsIndexed(state.results, key = { _, paper -> paper.id.value }) { index, paper ->
-            val id = paper.id.value
+        itemsIndexed(state.results, key = { _, paper -> paper.ref.storageId }) { index, paper ->
+            val id = paper.ref.storageId
             SwipeablePaperRow(
                 paper = paper,
                 onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },

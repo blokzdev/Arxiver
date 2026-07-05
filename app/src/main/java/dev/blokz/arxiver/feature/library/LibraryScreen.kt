@@ -253,8 +253,8 @@ private fun PapersTab(
             )
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(state.papers, key = { _, row -> row.paper.id.value }) { index, row ->
-                    val id = row.paper.id.value
+                itemsIndexed(state.papers, key = { _, row -> row.paper.ref.storageId }) { index, row ->
+                    val id = row.paper.ref.storageId
                     PaperListItem(
                         paper = row.paper,
                         onClick = {

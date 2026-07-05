@@ -184,11 +184,11 @@ private fun InboxList(
         if (scored.isNotEmpty()) {
             item(key = "header-relevant") { SectionHeader(stringResource(R.string.today_likely_relevant)) }
         }
-        itemsIndexed(scored, key = { _, it -> it.paper.id.value }) { index, item ->
-            key(item.paper.id.value) {
+        itemsIndexed(scored, key = { _, it -> it.paper.ref.storageId }) { index, item ->
+            key(item.paper.ref.storageId) {
                 SwipeablePaperRow(
                     paper = item.paper,
-                    onClick = { onPaperClick(item.paper.id.value) },
+                    onClick = { onPaperClick(item.paper.ref.storageId) },
                     onSwipeSave = { onSave(item) },
                     onSwipeDismiss = { onDismiss(item) },
                     score = item.score,
@@ -201,11 +201,11 @@ private fun InboxList(
         if (scored.isNotEmpty() && unscored.isNotEmpty()) {
             item(key = "header-rest") { SectionHeader(stringResource(R.string.today_more_from_follows)) }
         }
-        itemsIndexed(unscored, key = { _, it -> it.paper.id.value }) { index, item ->
-            key(item.paper.id.value) {
+        itemsIndexed(unscored, key = { _, it -> it.paper.ref.storageId }) { index, item ->
+            key(item.paper.ref.storageId) {
                 SwipeablePaperRow(
                     paper = item.paper,
-                    onClick = { onPaperClick(item.paper.id.value) },
+                    onClick = { onPaperClick(item.paper.ref.storageId) },
                     onSwipeSave = { onSave(item) },
                     onSwipeDismiss = { onDismiss(item) },
                     score = item.score,

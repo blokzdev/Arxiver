@@ -21,6 +21,8 @@ import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.toDomain
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.PaperRef
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.search.dotSimilarity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -235,23 +237,29 @@ class DispatchRepository
             includeNotes: Boolean,
         ): PayloadResult {
             val annotated =
-                paperIds.mapNotNull { id ->
-                    val full = paperDao.paperWithRelations(id) ?: return@mapNotNull null
-                    PaperWithAnnotations(
-                        paper = full.toDomain(),
-                        tags = libraryDao.observeTagsFor(id).first().map { it.name },
-                        status = libraryDao.observeEntry(id).first()?.status,
-                        rating = libraryDao.observeEntry(id).first()?.rating,
-                        notes = libraryDao.notesFor(id).map { it.content },
-                    )
-                }
+                paperIds
+                    // PS.1: routine payloads are arXiv-shaped (SPEC-CLAUDE-BRIDGE — eprint id + arxiv.org
+                    // URL). A non-arXiv (chemRxiv) paper is excluded here rather than dispatched with a
+                    // mangled arxiv.org URL; this single chokepoint covers every dispatch entry point
+                    // (detail, multi-select Library/Filtered/Explore). Source-aware payloads are PS.2.
+                    .filter { PaperRef.fromStorageId(it).origin == Source.ARXIV }
+                    .mapNotNull { id ->
+                        val full = paperDao.paperWithRelations(id) ?: return@mapNotNull null
+                        PaperWithAnnotations(
+                            paper = full.toDomain(),
+                            tags = libraryDao.observeTagsFor(id).first().map { it.name },
+                            status = libraryDao.observeEntry(id).first()?.status,
+                            rating = libraryDao.observeEntry(id).first()?.rating,
+                            notes = libraryDao.notesFor(id).map { it.content },
+                        )
+                    }
             return payloadBuilder.build(
                 action = action,
                 instruction = instruction,
                 papers = annotated,
                 includeNotes = includeNotes,
                 librarySize = libraryDao.count(),
-                relations = relationsFor(annotated.map { it.paper.id.value }),
+                relations = relationsFor(annotated.map { it.paper.ref.storageId }),
             )
         }
 
@@ -283,7 +291,9 @@ class DispatchRepository
             val neighbors =
                 paperIds.flatMap { id ->
                     embeddingDao.neighborsFor(id, NEIGHBORS_PER_PAPER)
-                        .filter { it.paper.id !in selection }
+                        // PS.1: a non-arXiv neighbor would synthesize a mangled arxiv.org URL below — exclude
+                        // it. Source-aware neighbor URLs ship with the rest of the payload work in PS.2.
+                        .filter { it.paper.id !in selection && it.paper.origin == Source.ARXIV.wire }
                         .map {
                             PayloadNeighbor(
                                 arxivId = it.paper.id,

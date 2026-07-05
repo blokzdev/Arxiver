@@ -72,7 +72,7 @@ class LibraryViewModel
         ) {
             viewModelScope.launch {
                 // Capture membership first so undo can restore it exactly.
-                val memberIds = libraryRepository.observeCollectionPapers(id).first().map { it.paper.id.value }
+                val memberIds = libraryRepository.observeCollectionPapers(id).first().map { it.paper.ref.storageId }
                 libraryRepository.deleteCollection(id)
                 _collectionDeleted.value = CollectionDeleteEvent(name = name, memberIds = memberIds)
             }
