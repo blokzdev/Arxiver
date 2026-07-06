@@ -50,6 +50,13 @@ class PdfDownloader(
                     val body = response.body ?: throw IOException("Empty body")
                     destination.parentFile?.mkdirs()
                     tmp.outputStream().use { out -> body.byteStream().copyTo(out) }
+                    if (!tmp.looksLikePdf()) {
+                        // Some hosts answer 200 with an HTML "enable cookies"/challenge page instead of the
+                        // PDF (e.g. an Atypon cookie-wall on a chemRxiv asset). Reject it as an upstream
+                        // failure so the reader degrades to external-open rather than rendering a broken doc.
+                        tmp.delete()
+                        return@withContext AppResult.Failure(AppError.Upstream(response.code))
+                    }
                     check(tmp.renameTo(destination)) { "rename failed" }
                 }
                 AppResult.Success(destination)
@@ -61,4 +68,14 @@ class PdfDownloader(
                 }
             }
         }
+
+    /** True iff the file begins with the `%PDF` magic — guards against a 200 HTML/challenge body. */
+    private fun File.looksLikePdf(): Boolean =
+        runCatching {
+            inputStream().use { stream ->
+                val head = ByteArray(4)
+                val n = stream.read(head)
+                n >= 4 && String(head, Charsets.US_ASCII) == "%PDF"
+            }
+        }.getOrDefault(false)
 }

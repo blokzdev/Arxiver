@@ -3,7 +3,6 @@ package dev.blokz.arxiver.feature.pdf
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
-import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -51,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.ui.components.ErrorState
@@ -121,7 +121,7 @@ fun PdfViewerScreen(
                         secondaryLabel = externalUrl?.let { stringResource(R.string.pdf_open_in_browser) },
                         onSecondary =
                             externalUrl?.let { url ->
-                                { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                                { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
                             },
                     )
                 }

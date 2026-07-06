@@ -17,6 +17,7 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -93,6 +94,19 @@ class PdfDownloaderTest {
             assertEquals(1, limiter.calls, "exactly one acquire on a cache miss")
             assertEquals(1, server.requestCount)
             assertTrue(dest.exists() && dest.readText().contains("%PDF"))
+        }
+
+    @Test
+    fun `a 200 body that is not a PDF (a cookie-wall or challenge page) is rejected, not saved`() =
+        runTest {
+            // Atypon-style cookie-wall: 200 OK with an HTML "enable cookies" page instead of the PDF.
+            server.enqueue(MockResponse().setBody("<!DOCTYPE html><html><body>Just a moment…</body></html>"))
+            val dest = File(dir, "walled.pdf")
+
+            val result = downloader(CountingRateLimiter()).download(server.url("/p.pdf").toString(), dest)
+
+            assertIs<AppResult.Failure>(result)
+            assertFalse(dest.exists(), "an HTML body must never be saved as a .pdf (would render broken)")
         }
 
     @Test

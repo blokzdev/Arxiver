@@ -23,8 +23,13 @@ object AllowedHosts {
             "ar5iv.labs.arxiv.org",
             // citation graph (moved onto the gated client in PT.3)
             "api.semanticscholar.org",
-            // chemRxiv (Cambridge Open Engage) search API (P-Tools PT.4 red-line host, user-approved).
-            // Exact-match only: an off-host asset CDN sub-domain is deliberately NOT allowlisted.
+            // chemRxiv (Cambridge Open Engage) — search API AND PDF assets, BOTH served from chemrxiv.org
+            // (verified 2026-07: real PDFs live at chemrxiv.org/engage/api-gateway/chemrxiv/assets/…, NOT an
+            // `assets.chemrxiv.org` sub-domain — an earlier assumption that doesn't resolve). So the PDF read
+            // needs no extra host. Exact-match only: any off-host redirect (a CDN sub-domain, S3, …) is still
+            // rejected per-hop. (chemRxiv gates downloads behind Cloudflare + an Atypon cookie-wall — a plain
+            // fetch may get a 200 HTML challenge, which PdfDownloader rejects → the reader degrades to
+            // external-open; device-verify per VERIFICATION §Q-PS4.)
             "chemrxiv.org",
             // the pinned model-download host
             "huggingface.co",
