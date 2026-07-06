@@ -429,10 +429,20 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   discovery/follows, not chat). Copy explains the per-device free budget + when a key helps. `saveOpenAlexKey`/
   `clearOpenAlexKey` on the VM (+`openAlexKeyConfigured` state). **Tests:** VM round-trip (trims, configures,
   never becomes the chat default, clears). Key never touches DB/logs/backups (same red line as S2). Green build.
-- [ ] **CHECKPOINT P-Feeds** — green build + ktlint; migration integrity (`Migration7To8Test` + `8.json` +
+- [x] **CHECKPOINT P-Feeds** — green build + ktlint; migration integrity (`Migration7To8Test` + `8.json` +
   zero-rows); red-line audit (backends host-gated + self-spacing, arXiv singleton untouched, `data/tool`
   okhttp-free, host-gated importability fail-closed, backup/BYOK redaction, `:core:* ∌ :app`, no telemetry);
   per-source e2e; `VERIFICATION.md` device items; docs current. Committed cut PF.0–PF.2; expansion PF.3–PF.4.
+  **Verified 2026-07-06:** `./gradlew build` green (CI runs #110–#112 all green first-try — the flake was killed
+  in PF.3 via `sqliteMode=NATIVE`). Red-line audit re-run at the phase boundary: `NoDirectNewCallStructuralTest`
+  + `/biorxiv/`,`/openalex/` self-spaced exceptions green (arXiv ≥3s singleton untouched); `ToolPackageNoOkHttp`
+  green; egress allowlist = exactly {arXiv group, s2, chemrxiv.org, www.bio/medrxiv.org, api.openalex.org,
+  api.biorxiv.org, huggingface.co} — no new-source PDF hosts (read-only, deferred); no telemetry deps; no
+  `:core:*`→`:app` import; `Migration7To8Test` identity-hash + zero-rows-re-keyed; `8.json` committed (51 KB);
+  no destructive migration; the OpenAlex BYOK key touches only `EncryptedSharedPreferences` (never DB/backup/logs).
+  Per-source discovery/follow e2e is CI-golden-tested (arXiv native, bio/med `api.biorxiv.org`, chemRxiv+new
+  OpenAlex). **Device-bound e2e deferred to a session** (`VERIFICATION.md` B1a/B1b + the chemRxiv/bio-med PDF
+  checks) — never blocks `[x]`. **P-Feeds is complete.** Deferred upside tracked in the backlog + `HUMAN.md`.
 
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
