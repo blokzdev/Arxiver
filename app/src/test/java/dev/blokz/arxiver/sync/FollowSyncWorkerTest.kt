@@ -7,9 +7,16 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
+import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.entity.FollowEntity
+import dev.blokz.arxiver.core.model.ExternalRef
+import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.core.network.PreprintBackend
+import dev.blokz.arxiver.core.network.PreprintBackendRegistry
+import dev.blokz.arxiver.core.network.PreprintHit
+import dev.blokz.arxiver.core.network.PreprintPage
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
 import kotlinx.coroutines.CoroutineDispatcher
@@ -23,6 +30,7 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -71,7 +79,24 @@ class FollowSyncWorkerTest {
         server.shutdown()
     }
 
-    private fun worker(attempt: Int): FollowSyncWorker {
+    /** A [PreprintBackendRegistry] whose every backend returns [page] — used for the non-arXiv branch. */
+    private fun registryReturning(page: AppResult<PreprintPage>): PreprintBackendRegistry {
+        val backend =
+            object : PreprintBackend {
+                override suspend fun browse(
+                    source: Source,
+                    category: String?,
+                    sinceIso: String,
+                    cursor: String?,
+                ): AppResult<PreprintPage> = page
+            }
+        return PreprintBackendRegistry(bioRxivBackend = backend, openAlexBackend = backend)
+    }
+
+    private fun worker(
+        attempt: Int,
+        backends: PreprintBackendRegistry = registryReturning(AppResult.Success(PreprintPage(emptyList(), null))),
+    ): FollowSyncWorker {
         val factory =
             object : WorkerFactory() {
                 override fun createWorker(
@@ -79,7 +104,15 @@ class FollowSyncWorkerTest {
                     workerClassName: String,
                     workerParameters: WorkerParameters,
                 ): ListenableWorker =
-                    FollowSyncWorker(appContext, workerParameters, db.followDao(), db.paperDao(), db.inboxDao(), client)
+                    FollowSyncWorker(
+                        appContext,
+                        workerParameters,
+                        db.followDao(),
+                        db.paperDao(),
+                        db.inboxDao(),
+                        client,
+                        backends,
+                    )
             }
         return TestListenableWorkerBuilder<FollowSyncWorker>(context)
             .setRunAttemptCount(attempt)
@@ -103,5 +136,38 @@ class FollowSyncWorkerTest {
     fun `no follows is an immediate success`() =
         runBlocking {
             assertTrue(worker(attempt = 0).doWork() is ListenableWorker.Result.Success)
+        }
+
+    @Test
+    fun `a non-arXiv follow rides its preprint backend into the inbox`() =
+        runBlocking {
+            // A biorxiv-origin follow must bypass the Atom client entirely and ride PreprintBackend.
+            db.followDao().insert(
+                FollowEntity(
+                    type = FollowEntity.TYPE_CATEGORY,
+                    value = "neuroscience",
+                    label = "Neuro",
+                    createdAt = 0,
+                    origin = Source.BIORXIV.wire,
+                ),
+            )
+            val hit =
+                PreprintHit(
+                    origin = Source.BIORXIV,
+                    doi = "10.1101/2026.01.02.680000",
+                    title = "A brain paper",
+                    abstract = "We studied brains.",
+                    authors = listOf("Ada Lovelace"),
+                    publishedIso = "2026-01-02",
+                    oaPdfUrl = "https://www.biorxiv.org/content/10.1101/2026.01.02.680000v1.full.pdf",
+                    version = "1",
+                )
+            val backends = registryReturning(AppResult.Success(PreprintPage(listOf(hit), nextCursor = null)))
+
+            assertTrue(worker(attempt = 0, backends = backends).doWork() is ListenableWorker.Result.Success)
+
+            // The external paper landed under its origin-blind ExternalRef storage id (no arXiv fork).
+            assertEquals(1, db.paperDao().count())
+            assertTrue(db.inboxDao().activePaperIds().contains(ExternalRef(Source.BIORXIV, hit.doi).storageId))
         }
 }
