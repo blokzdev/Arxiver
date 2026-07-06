@@ -1132,8 +1132,9 @@ private fun providerLabel(provider: ProviderId): String =
             ProviderId.CLAUDE -> R.string.ai_provider_claude
             ProviderId.GEMINI -> R.string.ai_provider_gemini
             ProviderId.ON_DEVICE -> R.string.ai_provider_on_device
-            // Not a chat provider — never the resolved chat provider; arm exists for exhaustiveness.
+            // Not chat providers — never the resolved chat provider; arms exist for exhaustiveness.
             ProviderId.SEMANTIC_SCHOLAR -> R.string.ai_provider_semantic_scholar
+            ProviderId.OPENALEX -> R.string.ai_provider_openalex
         },
     )
 

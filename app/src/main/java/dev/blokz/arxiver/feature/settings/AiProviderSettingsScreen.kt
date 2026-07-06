@@ -641,8 +641,9 @@ private fun providerName(id: ProviderId): String =
         ProviderId.CLAUDE -> stringResource(R.string.ai_provider_claude)
         ProviderId.GEMINI -> stringResource(R.string.ai_provider_gemini)
         ProviderId.ON_DEVICE -> stringResource(R.string.ai_provider_on_device)
-        // Not a chat provider (never rendered as a provider card); the arm exists for exhaustiveness.
+        // Not chat providers (never rendered as a provider card); the arms exist for exhaustiveness.
         ProviderId.SEMANTIC_SCHOLAR -> stringResource(R.string.ai_provider_semantic_scholar)
+        ProviderId.OPENALEX -> stringResource(R.string.ai_provider_openalex)
     }
 
 @Preview(showBackground = true)

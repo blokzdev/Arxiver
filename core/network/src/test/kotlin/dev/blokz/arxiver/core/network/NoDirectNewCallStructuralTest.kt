@@ -11,9 +11,9 @@ import kotlin.test.assertTrue
  * either directly (`rateLimiter.acquire()`) or, since P-Sources PS.1's per-host PDF policy, via
  * `hostPolicy.limiterFor(url).acquire()` (matched by the `.limiterFor(` marker — [PdfHostPolicy] always
  * `.acquire()`s the returned limiter at that call site). The exceptions are the self-spacing search
- * clients `SemanticScholarClient` (`/s2/`, PT.3) and `ChemRxivClient` (`/chemrxiv/`, PT.4), each with its
- * own 1.2s politeness mutex — host-gated on the `@ArxivClient` allowlist but deliberately NOT ≥3s-throttled
- * by the shared arXiv limiter.
+ * clients `SemanticScholarClient` (`/s2/`, PT.3), `ChemRxivClient` (`/chemrxiv/`, PT.4), and `OpenAlexClient`
+ * (`/openalex/`, P-Feeds), each with its own 1.2s politeness mutex — host-gated on the `@ArxivClient` allowlist
+ * but deliberately NOT ≥3s-throttled by the shared arXiv limiter.
  */
 class NoDirectNewCallStructuralTest {
     @Test
@@ -30,10 +30,11 @@ class NoDirectNewCallStructuralTest {
                     // A slot is claimed directly (`rateLimiter.acquire(`) or via the PS.1 per-host policy
                     // (`hostPolicy.limiterFor(url).acquire()`, matched by `.limiterFor(`).
                     val hasAcquire = text.contains("rateLimiter.acquire(") || text.contains(".limiterFor(")
-                    // S2 (PT.3) + chemRxiv (PT.4) self-space via their own 1.2s politeness mutex, not the
-                    // ≥3s ArxivRateLimiter — documented exceptions, gated on the @ArxivClient host allowlist.
+                    // S2 (PT.3) + chemRxiv (PT.4) + OpenAlex (P-Feeds) self-space via their own 1.2s politeness
+                    // mutex, not the ≥3s ArxivRateLimiter — documented exceptions, gated on the @ArxivClient host.
                     val path = f.path.replace('\\', '/')
-                    val isSelfSpacedException = path.contains("/s2/") || path.contains("/chemrxiv/")
+                    val isSelfSpacedException =
+                        path.contains("/s2/") || path.contains("/chemrxiv/") || path.contains("/openalex/")
                     !hasAcquire && !isSelfSpacedException
                 }
                 .map { it.name }
