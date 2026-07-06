@@ -138,13 +138,22 @@ is the coherent floor for every other source.
 
 | Order | Resolver | Gives | New host | Cut |
 |---|---|---|---|---|
-| R0 | Hit already carries it | chemRxiv `pdfUrl`; S2 `openAccessPdf.url` | none (chemRxiv same-host) | PS.1 |
-| R1 | Deterministic source URL | bioRxiv `www.biorxiv.org/content/<doi>v<n>.full.pdf` | `www.biorxiv.org`, `www.medrxiv.org` | PS.2 |
+| R0 | Hit already carries it | chemRxiv `pdfUrl`; S2 `openAccessPdf.url` **stored verbatim, host-gated** | `www.biorxiv.org`, `www.medrxiv.org` (PS.2) | **PS.1 (chemRxiv) + PS.2 (bio/med)** |
+| R1 | Deterministic `<doi>v<n>.full.pdf` synthesis | a version-resolved bioRxiv/medRxiv PDF URL | (reuses R0 hosts) | **Backlog** |
 | R2 | Unpaywall `?email=` → `best_oa_location.url_for_pdf` | OA PDF for any DOI (arbitrary host) | `api.unpaywall.org` | Backlog |
 | R3 | Crossref `?mailto=` → metadata (no hosted PDF) | metadata fallback | `api.crossref.org` | Backlog |
 
+**PS.2 ships R0, not R1** (ruling, 2026-07-05): S2 hands back the paper's `openAccessPdf.url` directly, so
+storing it verbatim is strictly smaller/safer than synthesizing a `<doi>vN.full.pdf` URL — synthesis needs a
+version (`vN`) the S2 search site doesn't carry, and live `/early/` vs `doi.org` OA URLs don't fit one template.
+R1 moves to Backlog. Source is classified by S2 **`venue`** (`bioRxiv`/`medRxiv`), never the DOI prefix — the
+`10.1101/` prefix is shared across both (`core/model/S2Origin.kt`).
+
 S2/Unpaywall PDF URLs are **arbitrary publisher hosts** — never blanket-allowlisted. Rule: **host already
-allowlisted ⇒ render in-app; else abstract + external-open.** No "allow-once" escape hatch (HUMAN.md carve-out).
+allowlisted ⇒ import + render in-app; else read-only (abstract + external-open).** No "allow-once" escape hatch
+(HUMAN.md carve-out). **Consequence — partial in-app coverage:** a bio/medRxiv hit is importable-for-in-app-read
+only when S2's OA URL host is `www.biorxiv.org`/`www.medrxiv.org`; a `doi.org` or publisher-host OA URL stays
+read-only. This is a scope-honesty fact, not a gap to paper over.
 
 ### Reader-coherence seams (hard PS.1 acceptance criteria — a non-arXiv paper must not dead-end)
 
@@ -207,8 +216,10 @@ back-compat test ship with it.
   in the §3 reader-coherence trio, the §4 rate-limiter parameterization, the §5 backup fix, and a **tested de-dup
   invariant** (an arXiv-resolvable paper — native id or via S2 `externalIds.ArXiv` — is stored under the **bare
   arXiv id**, never a `chemrxiv:`/`s2:` alias, else it forks library/notes/embeddings off the real row).
-- **PS.2 — DOI-PDF sources.** bioRxiv/medRxiv PDF import+read via the deterministic R1 URL (+2 hosts); S2 OA
-  results → external-open (or in-app when the host is already allowlisted). Rides PS.0's seam.
+- **PS.2 — DOI-PDF sources.** bioRxiv/medRxiv PDF import+read via S2's **verbatim OA URL (R0)**, host-gated on
+  `www.biorxiv.org`/`www.medrxiv.org` (+2 hosts); venue-classified (`S2Origin.kt`); de-dup wired at the S2 search
+  site; a `doi.org`/publisher-host OA URL stays read-only → external-open (partial in-app coverage). Rides PS.0's
+  seam. Also folds in the PS.1-deferred empty-dispatch guard. **Shipped 2026-07-05.**
 - **PS.3 — bioRxiv/medRxiv follows + feeds (DEMAND-GATED).** `FollowSyncWorker` per-source branch (arXiv→Atom;
   bio→date/category feed via `api.biorxiv.org`); `follows.origin` column + unique-index rebuild (additive, explicit
   SQL + `8.json`); a bioRxiv taxonomy (`paper_categories` has no FK to `categories`, so foreign codes fit).
