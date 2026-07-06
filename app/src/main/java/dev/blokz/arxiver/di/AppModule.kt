@@ -26,6 +26,10 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+    // OpenAlex "polite pool" contact (P-Feeds). A real contact is etiquette (like the arXiv UA contact — see
+    // HUMAN.md §2); OpenAlex does not verify it. Swap for the Co-Founder's preferred contact when provided.
+    private const val OPENALEX_MAILTO = "arxiver@blokz.dev"
+
     @Provides
     @Singleton
     fun dispatcherProvider(): DispatcherProvider = DefaultDispatcherProvider()
@@ -381,6 +385,24 @@ object AppModule {
         dispatchers: DispatcherProvider,
     ): dev.blokz.arxiver.core.network.chemrxiv.ChemRxivClient =
         dev.blokz.arxiver.core.network.chemrxiv.ChemRxivClient(httpClient, dispatchers)
+
+    // P-Feeds PF.0: OpenAlex discovery client on the @ArxivClient host-gated client (egress allowlisted to
+    // api.openalex.org). Its own 1.2s polite mutex — NOT the ≥3s arXiv limiter. Free "polite pool" via the
+    // OPENALEX_MAILTO param; an optional BYOK key (absent → free tier) upgrades to the prepaid tier and is
+    // honored even if entered after this singleton builds (per-request supplier, mirrors semanticScholarClient).
+    @Provides
+    @Singleton
+    fun openAlexClient(
+        @ArxivClient httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+        aiKeyVault: dev.blokz.arxiver.core.ai.AiKeyVault,
+    ): dev.blokz.arxiver.core.network.openalex.OpenAlexClient =
+        dev.blokz.arxiver.core.network.openalex.OpenAlexClient(
+            httpClient,
+            dispatchers,
+            mailto = OPENALEX_MAILTO,
+            apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.OPENALEX) },
+        )
 
     @Provides
     fun embeddingDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.EmbeddingDao = db.embeddingDao()

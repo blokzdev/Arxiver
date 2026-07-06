@@ -40,6 +40,12 @@ object AllowedHosts {
             // external-open), and an off-host CDN redirect is rejected per hop.
             "www.biorxiv.org",
             "www.medrxiv.org",
+            // OpenAlex — the un-gated aggregator that serves the sources we can't reach natively (chemRxiv is
+            // Cloudflare-dead direct; new preprint servers have no/poor APIs). Discovery only (metadata + OA-PDF
+            // urls); the PDF bytes still fetch from each source's own (allowlisted) host. P-Feeds, user-approved.
+            "api.openalex.org",
+            // bioRxiv/medRxiv native discovery API (P-Feeds follows) — distinct from the www.* PDF hosts above.
+            "api.biorxiv.org",
             // the pinned model-download host
             "huggingface.co",
         )
