@@ -35,6 +35,7 @@ import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -232,6 +233,25 @@ class AiProviderSettingsViewModelTest {
 
             assertFalse(keyStore.has(ProviderId.CLAUDE))
             assertFalse(row(vm.uiState.value, ProviderId.CLAUDE).configured)
+            job.cancel()
+        }
+
+    @Test
+    fun `the OpenAlex BYOK key round-trips (trimmed) and never becomes a chat default (PF4)`() =
+        runBlocking {
+            val vm = vm()
+            val job = launch(Dispatchers.Unconfined) { vm.uiState.collect {} }
+
+            vm.saveOpenAlexKey("  oa-secret  ")
+            assertTrue(keyStore.has(ProviderId.OPENALEX))
+            assertEquals("oa-secret", keyStore.get(ProviderId.OPENALEX), "key is trimmed")
+            assertTrue(vm.uiState.value.openAlexKeyConfigured)
+            // OpenAlex backs discovery/follows, not chat — it must not be picked as the chat default.
+            assertNull(vm.uiState.value.selectedDefault)
+
+            vm.clearOpenAlexKey()
+            assertFalse(keyStore.has(ProviderId.OPENALEX))
+            assertFalse(vm.uiState.value.openAlexKeyConfigured)
             job.cancel()
         }
 
