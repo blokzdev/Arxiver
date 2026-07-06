@@ -257,6 +257,53 @@ class BackupManagerTest {
             assertEquals("to_read", db.libraryDao().observeEntry("chemrxiv:10.26434/chemrxiv-2024-xyz").first()?.status)
         }
 
+    // PS.2: bioRxiv rides the same origin-blind backup seam (ExportedPaper carries origin+pdfUrl; the
+    // fromStorageId round-trip reconstructs ExternalRef(BIORXIV, …)) — no production change, just proven.
+    private fun bioPaper() =
+        Paper(
+            ref = ExternalRef(Source.BIORXIV, "10.1101/2024.01.07.574543"),
+            latestVersion = 1,
+            title = "A Biology Preprint",
+            abstract = "An abstract about genomics.",
+            publishedAt = Instant.parse("2024-01-07T00:00:00Z"),
+            updatedAt = Instant.parse("2024-01-07T00:00:00Z"),
+            primaryCategory = "",
+            categories = emptyList(),
+            authors = listOf("Rosalind Franklin"),
+            doi = "10.1101/2024.01.07.574543",
+            pdfUrl = "https://www.biorxiv.org/content/10.1101/2024.01.07.574543v1.full.pdf",
+            source = PaperSource.MANUAL,
+        )
+
+    @Test
+    fun `a biorxiv paper round-trips with its real biorxiv url and origin (PS2)`() =
+        runTest {
+            val p = bioPaper()
+            db.paperDao().upsertPaperWithRelations(p.toEntity(), p.authors, p.categories)
+            db.libraryDao().upsertEntry(
+                dev.blokz.arxiver.core.database.entity.LibraryEntryEntity(
+                    paperId = p.ref.storageId,
+                    addedAt = 1,
+                    status = "to_read",
+                    rating = null,
+                ),
+            )
+
+            val json = backupManager.export()
+            assertTrue(p.pdfUrl!! in json, "the real www.biorxiv.org URL is carried verbatim")
+            assertFalse("arxiv.org/pdf" in json, "a bioRxiv paper must never synthesize an arxiv.org URL")
+            assertFalse("%PDF" in json, "no raw PDF bytes ever enter the backup (red line)")
+
+            db.close()
+            setUp()
+            backupManager.import(json)
+
+            val restored = db.paperDao().paperWithRelations("biorxiv:10.1101/2024.01.07.574543")
+            assertEquals("biorxiv", restored?.paper?.origin, "fromStorageId reconstructs the bioRxiv origin")
+            assertEquals(p.pdfUrl, restored?.paper?.pdfUrl)
+            assertEquals("A Biology Preprint", restored?.paper?.title)
+        }
+
     @Test
     fun `a legacy v1 backup (arxivId, absUrl, no origin) still imports and re-synthesizes the arxiv pdf`() =
         runTest {
