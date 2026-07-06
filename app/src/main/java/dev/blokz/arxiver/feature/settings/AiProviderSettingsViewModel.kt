@@ -71,6 +71,9 @@ data class AiProviderSettingsUiState(
      *  so it has no [ProviderRow]; this drives a standalone optional-key card. Write-only — the key
      *  itself is never read back to the UI. */
     val s2KeyConfigured: Boolean = false,
+    /** Whether an optional OpenAlex BYOK key is set (P-Feeds PF.4). Like S2, OpenAlex backs discovery/follows,
+     *  not chat — a standalone optional-key card, write-only. */
+    val openAlexKeyConfigured: Boolean = false,
 )
 
 /**
@@ -165,6 +168,7 @@ class AiProviderSettingsViewModel
                     selectedDefault = selected,
                     // Recomputed on each configuredRevision bump (saveS2Key/clearS2Key), like the rows.
                     s2KeyConfigured = keyStore.has(ProviderId.SEMANTIC_SCHOLAR),
+                    openAlexKeyConfigured = keyStore.has(ProviderId.OPENALEX),
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AiProviderSettingsUiState())
 
@@ -226,6 +230,22 @@ class AiProviderSettingsViewModel
 
         fun clearS2Key() {
             keyStore.clear(ProviderId.SEMANTIC_SCHOLAR)
+            configuredRevision.update { it + 1 }
+        }
+
+        /**
+         * Save/clear the OPTIONAL OpenAlex BYOK key (P-Feeds PF.4). Like [saveS2Key], OpenAlex is not a chat
+         * provider — it backs discovery/follows — so this only writes the vault + bumps the configured revision;
+         * the key lives solely in EncryptedSharedPreferences and is never read back to the UI (write-only).
+         */
+        fun saveOpenAlexKey(key: String) {
+            if (key.isBlank()) return
+            keyStore.put(ProviderId.OPENALEX, key.trim())
+            configuredRevision.update { it + 1 }
+        }
+
+        fun clearOpenAlexKey() {
+            keyStore.clear(ProviderId.OPENALEX)
             configuredRevision.update { it + 1 }
         }
 

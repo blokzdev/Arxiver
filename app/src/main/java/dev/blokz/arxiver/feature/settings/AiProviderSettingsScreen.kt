@@ -130,6 +130,8 @@ fun AiProviderSettingsScreen(
             onSetPreferOnDeviceWhenReady = viewModel::setPreferOnDeviceWhenReady,
             onSaveS2Key = viewModel::saveS2Key,
             onClearS2Key = viewModel::clearS2Key,
+            onSaveOpenAlexKey = viewModel::saveOpenAlexKey,
+            onClearOpenAlexKey = viewModel::clearOpenAlexKey,
         )
     }
 }
@@ -149,6 +151,8 @@ private fun AiProviderSettingsContent(
     onSetPreferOnDeviceWhenReady: (Boolean) -> Unit,
     onSaveS2Key: (String) -> Unit,
     onClearS2Key: () -> Unit,
+    onSaveOpenAlexKey: (String) -> Unit,
+    onClearOpenAlexKey: () -> Unit,
 ) {
     Column(
         modifier =
@@ -184,6 +188,12 @@ private fun AiProviderSettingsContent(
             configured = state.s2KeyConfigured,
             onSaveKey = onSaveS2Key,
             onClearKey = onClearS2Key,
+        )
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+        OpenAlexKeySection(
+            configured = state.openAlexKeyConfigured,
+            onSaveKey = onSaveOpenAlexKey,
+            onClearKey = onClearOpenAlexKey,
         )
         Text(
             stringResource(R.string.ai_providers_privacy_note),
@@ -227,6 +237,61 @@ private fun SemanticScholarKeySection(
             value = keyInput,
             onValueChange = { keyInput = it },
             label = { Text(stringResource(R.string.s2_key_label)) },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+            Button(
+                onClick = {
+                    onSaveKey(keyInput)
+                    keyInput = ""
+                },
+                enabled = keyInput.isNotBlank(),
+            ) {
+                Text(stringResource(R.string.ai_provider_save_key))
+            }
+            if (configured) {
+                TextButton(onClick = onClearKey) {
+                    Text(stringResource(R.string.ai_provider_clear_key))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The OPTIONAL OpenAlex BYOK key card (P-Feeds PF.4). Like [SemanticScholarKeySection], OpenAlex backs
+ * discovery/follows (chemRxiv + new sources), not chat — so no "Test connection" and no default radio. The
+ * free `mailto` polite pool works keyless; a key only lifts the per-device budget. Write-only (masked).
+ */
+@Composable
+private fun OpenAlexKeySection(
+    configured: Boolean,
+    onSaveKey: (String) -> Unit,
+    onClearKey: () -> Unit,
+) {
+    var keyInput by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                stringResource(R.string.ai_provider_openalex),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (configured) {
+                StatusChip(stringResource(R.string.ai_provider_connected), tone = StatusTone.Positive)
+            }
+        }
+        Text(
+            stringResource(R.string.openalex_key_caption),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = keyInput,
+            onValueChange = { keyInput = it },
+            label = { Text(stringResource(R.string.openalex_key_label)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
@@ -686,6 +751,8 @@ private fun AiProviderSettingsContentPreview() {
             onSetPreferOnDeviceWhenReady = {},
             onSaveS2Key = {},
             onClearS2Key = {},
+            onSaveOpenAlexKey = {},
+            onClearOpenAlexKey = {},
         )
     }
 }
