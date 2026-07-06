@@ -381,7 +381,15 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   `apiKey` supplier → `?api_key=`. `AllowedHosts` +`api.openalex.org` +`api.biorxiv.org`. `ProviderId.OPENALEX` +
   DI provider (key from `AiKeyVault`). **Tests:** `OpenAlexClientTest` 7/7 — golden-decodes a **real** captured
   chemRxiv fixture (inverted-index abstract + prefix-strip), MockWebServer URL/cursor/BYOK params, error mapping.
-- [ ] **PF.1 — fix chemRxiv search via OpenAlex + honest disclosure (the correctness win).**
+- [x] **PF.1 — fix chemRxiv search via OpenAlex + honest disclosure (the correctness win).** `search_chemrxiv`
+  now discovers via `OpenAlexClient` filtered to the chemRxiv source id (its own API is Cloudflare-dead) —
+  `okOpenAlexChemSearch` maps each work → the existing `ChemHitDto`/`ExternalPaperDraft` (reconstructed abstract,
+  stripped DOI), **host-gated importability** (`AllowedHosts.isAllowedUrl` on the OA PDF — chemrxiv.org →
+  importable, an off-host/`doi.org` OA url → read-only). **Honest egress:** the tool + its activity-bubble string
+  now name `api.openalex.org`; the tool-desc notes the PDF may open-in-browser (cookie-wall). `ChemRxivClient`
+  kept in-tree but **unwired** (documented CF-dead). Reuses the PS.1/PS.2 import seam verbatim. Tests:
+  `ToolRegistryTest` chemRxiv-via-OpenAlex (mapping, limit-clamp+source-filter, import+de-dup, fail-closed
+  no-PDF/off-host-PDF); `ToolPackageNoOkHttpStructuralTest` green.
 - [ ] **PF.2 — native bio/med backend (`BioRxivApiClient`) + `PreprintBackend` engine + `follows.origin` v7→v8.**
 - [ ] **PF.3 — chemRxiv + new-source follows via OpenAlex + source/category follow-picker UI.**
 - [ ] **PF.4 — optional BYOK OpenAlex key (Settings card, mirrors S2).**

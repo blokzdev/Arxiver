@@ -520,7 +520,7 @@
     <string name="ask_tool_activity_fetch">Fetched from arXiv (left your device): %1$s</string>
     <string name="ask_tool_activity_import">Imported to library (left your device): %1$s</string>
     <string name="ask_tool_activity_s2">Searched Semantic Scholar (left your device): %1$s</string>
-    <string name="ask_tool_activity_chemrxiv">Searched chemRxiv (left your device): %1$s</string>
+    <string name="ask_tool_activity_chemrxiv">Searched chemRxiv via OpenAlex (left your device): %1$s</string>
     <string name="ask_tool_activity_external">Searched an external source (left your device): %1$s</string>
     <string name="ask_provider_cloud">Answered by %1$s — review what\'s sent before each cloud reply.</string>
     <string name="ask_provider_ondevice">On-device — nothing leaves your device.</string>
