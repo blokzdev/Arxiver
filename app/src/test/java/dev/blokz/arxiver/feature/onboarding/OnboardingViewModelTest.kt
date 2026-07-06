@@ -45,7 +45,14 @@ class OnboardingViewModelTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         // Idempotent across test classes in a shared JVM — re-init throws otherwise.
         runCatching { WorkManagerTestInitHelper.initializeTestWorkManager(context) }
-        db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
+        db =
+            Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
+                // Synchronous executors so the InvalidationTracker refresh can't race db.close() and
+                // leak an "Illegal connection pointer" into the next test (memory
+                // robolectric-room-sync-executors).
+                .setQueryExecutor { it.run() }
+                .setTransactionExecutor { it.run() }
+                .build()
         categories = CategoryRepository(db.categoryDao(), db.followDao())
         settings = SettingsRepository(context)
         vm = OnboardingViewModel(categories, settings, SyncScheduler(context))

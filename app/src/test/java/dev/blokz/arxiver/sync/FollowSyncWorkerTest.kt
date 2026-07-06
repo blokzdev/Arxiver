@@ -47,7 +47,14 @@ class FollowSyncWorkerTest {
     fun setUp() {
         server = MockWebServer().apply { start() }
         context = ApplicationProvider.getApplicationContext()
-        db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
+        db =
+            Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
+                // Synchronous executors so the InvalidationTracker refresh can't race db.close() and
+                // leak an "Illegal connection pointer" into the next test (memory
+                // robolectric-room-sync-executors).
+                .setQueryExecutor { it.run() }
+                .setTransactionExecutor { it.run() }
+                .build()
         client =
             ArxivApiClient(
                 httpClient = OkHttpClient(),
