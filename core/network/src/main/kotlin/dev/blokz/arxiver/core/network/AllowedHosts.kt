@@ -47,10 +47,15 @@ object AllowedHosts {
     fun isAllowed(host: String?): Boolean = host != null && host.lowercase() in ALLOWED
 
     /**
-     * Host-gate a full URL: true iff its parsed host is allowlisted. A null/malformed/non-HTTP(S) URL
-     * yields a null host → false (fail closed). Host extraction lives here in `:core:network` (which
-     * already depends on okhttp) so callers in `:app`'s `data/tool` package never import okhttp directly
-     * — the `ToolPackageNoOkHttpStructuralTest` red line.
+     * Host-gate a full URL: true iff it is **https** AND its parsed host is allowlisted. A
+     * null/malformed/non-HTTP(S)/http URL fails closed. Requiring https here keeps the search-time
+     * importability gate aligned with the fetch-time [AllowedHostsInterceptor] (which rejects non-https),
+     * so a hit is never flagged importable only to fail at download. Host extraction lives here in
+     * `:core:network` (which already depends on okhttp) so callers in `:app`'s `data/tool` package never
+     * import okhttp directly — the `ToolPackageNoOkHttpStructuralTest` red line.
      */
-    fun isAllowedUrl(url: String?): Boolean = isAllowed(url?.toHttpUrlOrNull()?.host)
+    fun isAllowedUrl(url: String?): Boolean {
+        val parsed = url?.toHttpUrlOrNull() ?: return false
+        return parsed.scheme == "https" && isAllowed(parsed.host)
+    }
 }

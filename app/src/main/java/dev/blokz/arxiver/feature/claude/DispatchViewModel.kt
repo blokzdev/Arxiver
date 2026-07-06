@@ -176,8 +176,10 @@ class DispatchViewModel
                         _uiState.update {
                             it.copy(
                                 sending = false,
+                                // Cause-neutral: the guard can't distinguish the arXiv-only filter from a
+                                // paper missing in the DB — state the outcome, give the common reason as context.
                                 error =
-                                    "No arXiv papers in the selection — routines currently " +
+                                    "Nothing to dispatch from the selection — routines currently " +
                                         "accept arXiv papers only.",
                             )
                         }

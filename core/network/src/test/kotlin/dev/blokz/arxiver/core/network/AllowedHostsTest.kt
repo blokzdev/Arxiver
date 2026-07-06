@@ -68,5 +68,8 @@ class AllowedHostsTest {
         assertFalse(AllowedHosts.isAllowedUrl(""))
         assertFalse(AllowedHosts.isAllowedUrl("not a url"))
         assertFalse(AllowedHosts.isAllowedUrl("ftp://www.biorxiv.org/x.pdf"))
+        // http:// fails closed — aligned with the https-only fetch interceptor (an http OA URL would be
+        // flagged importable but then rejected at download).
+        assertFalse(AllowedHosts.isAllowedUrl("http://www.biorxiv.org/x.pdf"))
     }
 }

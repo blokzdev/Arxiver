@@ -475,7 +475,10 @@ class ToolRegistry(
         val hits =
             papers.map { p ->
                 val arxiv = p.externalIds?.ArXiv
-                val doi = p.externalIds?.DOI
+                // Blank-filter the DOI: a `"DOI":""` from S2 deserializes to "" (the field is nullable), which
+                // would key `externalDrafts[""]` and persist a poisoned `biorxiv:`/`medrxiv:` PK all empty-DOI
+                // hits collide on. null-out a blank so the bio branch can't import it (and the DTO omits it).
+                val doi = p.externalIds?.DOI?.takeIf { it.isNotBlank() }
                 val oaUrl = p.openAccessPdf?.url
                 val bioOrigin = s2OriginFromVenue(p.venue)
                 // De-dup chokepoint at the SEARCH site (the resolvePaperRef invariant, PaperRef.kt:102-108):
@@ -500,9 +503,14 @@ class ToolRegistry(
                                 authors = p.authors.mapNotNull { it.name },
                                 // The S2 search DTO carries only `year` (no month/day) — coarse to Jan-1, else
                                 // EPOCH. Acceptable: the abstract, not the date, is the offline read surface.
+                                // runCatching: a pathological out-of-ISO-range `year` would throw and nuke the
+                                // WHOLE result set (this runs inside `papers.map`) — degrade that one hit to EPOCH.
                                 publishedAt =
-                                    p.year?.let { LocalDate.of(it, 1, 1).atStartOfDay(ZoneOffset.UTC).toInstant() }
-                                        ?: Instant.EPOCH,
+                                    p.year?.let {
+                                        runCatching {
+                                            LocalDate.of(it, 1, 1).atStartOfDay(ZoneOffset.UTC).toInstant()
+                                        }.getOrNull()
+                                    } ?: Instant.EPOCH,
                                 pdfUrl = oaUrl,
                             )
                         true
@@ -554,7 +562,8 @@ class ToolRegistry(
                         .filter { it.isNotBlank() }
                 // Top-level pdfUrl when present, else the nested asset original (mirrors the API).
                 val pdf = item.pdfUrl ?: item.asset?.original?.url
-                val doi = item.doi
+                // Blank-filter (same PK-poison guard as the S2 path): a "" DOI must not key a `chemrxiv:` row.
+                val doi = item.doi?.takeIf { it.isNotBlank() }
                 // Importable iff it has BOTH a DOI (identity) and a PDF (readable). Cache the draft NOW, from
                 // the RAW item — before the abstract is truncated to a snippet — so the stored paper keeps the
                 // whole abstract as its offline read surface.

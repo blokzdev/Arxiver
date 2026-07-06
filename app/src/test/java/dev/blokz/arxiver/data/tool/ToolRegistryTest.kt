@@ -398,6 +398,7 @@ class ToolRegistryTest {
         oaUrl: String? = "https://x/$title.pdf",
         doi: String? = "10.1/$title",
         abstract: String = "Abstract of $title",
+        year: Int? = 2024,
     ) = S2SearchPaper(
         paperId = "s2:$title",
         title = title,
@@ -405,7 +406,7 @@ class ToolRegistryTest {
         tldr = S2Tldr(text = "tldr of $title"),
         externalIds = S2ExternalIds(ArXiv = arxiv, DOI = doi),
         venue = venue,
-        year = 2024,
+        year = year,
         authors = listOf(S2Author(name = "A. Author")),
         citationCount = 42,
         openAccessPdf = oaUrl?.let { S2OpenAccessPdf(url = it) },
@@ -557,6 +558,42 @@ class ToolRegistryTest {
         assertTrue(imp.result.isError, "a non-cached DOI cannot be imported")
         assertTrue(imp.egress)
         assertTrue(drafts.isEmpty(), "nothing stored")
+    }
+
+    @Test
+    fun `a bioRxiv hit with a blank DOI fails closed — never keys a poisoned biorxiv row`() {
+        // A `"DOI":""` from S2 deserializes to "" (nullable field). Without the blank-filter it would key
+        // externalDrafts[""] and persist a `biorxiv:` PK every empty-DOI hit collides on.
+        val drafts = mutableListOf<ExternalPaperDraft>()
+        val papers =
+            listOf(s2Paper("Blank", venue = "bioRxiv", oaUrl = "https://www.biorxiv.org/x.full.pdf", doi = ""))
+        val reg =
+            registry(
+                importedDrafts = drafts,
+                searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse(data = papers)) },
+            )
+        val search = exec(reg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        val hit = body(search.result.contentJson)["hits"]!!.jsonArray.single().jsonObject
+        assertEquals(false, hit["importable"]!!.jsonPrimitive.boolean, "a blank DOI is not importable")
+        // and a source:biorxiv import with an empty doi errors (nothing cached), never stores a `biorxiv:` row.
+        val imp = exec(reg, """{"source":"biorxiv","doi":""}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertTrue(imp.result.isError)
+        assertTrue(drafts.isEmpty(), "no poisoned row stored")
+    }
+
+    @Test
+    fun `a pathological S2 year degrades one hit to EPOCH, never nuking the whole result set`() {
+        // LocalDate.of(year,1,1) throws for a year outside the ISO range; inside papers.map that would
+        // discard EVERY hit. runCatching must degrade only the offending hit's date.
+        val bioUrl = "https://www.biorxiv.org/x.full.pdf"
+        val papers =
+            listOf(s2Paper("Bad", venue = "bioRxiv", oaUrl = bioUrl, doi = "10.1101/bad", year = Int.MAX_VALUE))
+        val reg =
+            registry(searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse(data = papers)) })
+        val search = exec(reg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        assertFalse(search.result.isError, "a bad year must not fail the whole search")
+        val hits = body(search.result.contentJson)["hits"]!!.jsonArray
+        assertEquals(1, hits.size, "the hit still returns (its date just falls back to EPOCH)")
     }
 
     @Test
