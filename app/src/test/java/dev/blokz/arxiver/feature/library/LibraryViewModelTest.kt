@@ -40,7 +40,14 @@ class LibraryViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val context = ApplicationProvider.getApplicationContext<Context>()
-        db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
+        db =
+            Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
+                // Synchronous executors: the InvalidationTracker background refresh can otherwise race
+                // db.close() (Robolectric "Illegal connection pointer"), and DB-write continuations
+                // resume off-thread and race assertions. Direct executors make Room deterministic here.
+                .setQueryExecutor { it.run() }
+                .setTransactionExecutor { it.run() }
+                .build()
         repo = LibraryRepository(db.libraryDao(), db.inboxDao())
         vm = LibraryViewModel(repo, LibraryExporter(db.libraryDao(), db.paperDao()))
     }
@@ -78,8 +85,9 @@ class LibraryViewModelTest {
             savePaper("2401.00002", LibraryEntryEntity.STATUS_TO_READ)
 
             vm.uiState.test {
-                // Drain to the fully-populated emission.
-                awaitItem()
+                // Drain to the fully-populated emission. No assumption of a separate empty emission first
+                // (with synchronous Room executors the initial state may already be populated) —
+                // awaitItemMatching skips any intermediates until size == 2.
                 val populated = awaitItemMatching { it.papers.size == 2 }
                 assertEquals(2, populated.papers.size)
 

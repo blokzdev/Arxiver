@@ -48,7 +48,14 @@ class TodayViewModelTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         // Idempotent across test classes in a shared JVM — re-init throws otherwise.
         runCatching { WorkManagerTestInitHelper.initializeTestWorkManager(context) }
-        db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
+        db =
+            Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
+                // Synchronous executors: the InvalidationTracker background refresh can otherwise race
+                // db.close() (Robolectric "Illegal connection pointer"), and DB-write continuations
+                // resume off-thread and race assertions. Direct executors make Room deterministic here.
+                .setQueryExecutor { it.run() }
+                .setTransactionExecutor { it.run() }
+                .build()
         library = LibraryRepository(db.libraryDao(), db.inboxDao())
         inbox = InboxRepository(db.inboxDao(), library)
         categories = CategoryRepository(db.categoryDao(), db.followDao())

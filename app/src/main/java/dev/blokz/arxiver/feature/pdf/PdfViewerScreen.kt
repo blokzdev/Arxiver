@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.feature.pdf
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -45,9 +46,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.ui.components.ErrorState
@@ -109,7 +112,19 @@ fun PdfViewerScreen(
                             modifier = Modifier.padding(top = Spacing.md),
                         )
                     }
-                state.error != null -> ErrorState(error = state.error, onRetry = viewModel::retry)
+                state.error != null -> {
+                    val externalUrl = state.externalUrl
+                    val context = LocalContext.current
+                    ErrorState(
+                        error = state.error,
+                        onRetry = viewModel::retry,
+                        secondaryLabel = externalUrl?.let { stringResource(R.string.pdf_open_in_browser) },
+                        onSecondary =
+                            externalUrl?.let { url ->
+                                { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+                            },
+                    )
+                }
                 else ->
                     state.file?.let {
                         PdfPages(file = it, nightMode = state.nightMode, ioDispatcher = viewModel.ioDispatcher)

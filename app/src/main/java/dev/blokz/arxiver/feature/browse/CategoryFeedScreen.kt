@@ -182,8 +182,8 @@ private fun PaperList(
     }
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-            itemsIndexed(state.papers, key = { _, paper -> paper.id.value }) { index, paper ->
-                val id = paper.id.value
+            itemsIndexed(state.papers, key = { _, paper -> paper.ref.storageId }) { index, paper ->
+                val id = paper.ref.storageId
                 SwipeablePaperRow(
                     paper = paper,
                     onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },

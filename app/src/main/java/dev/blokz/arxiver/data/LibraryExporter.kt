@@ -2,18 +2,32 @@ package dev.blokz.arxiver.data
 
 import dev.blokz.arxiver.core.database.dao.LibraryDao
 import dev.blokz.arxiver.core.database.dao.PaperDao
+import dev.blokz.arxiver.core.model.Source
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNames
 import java.time.Instant
 import java.time.ZoneOffset
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * The export/backup DTO for one library paper — shared by [LibraryExport] and `ArxiverBackup`.
+ *
+ * [paperId] is the opaque `papers.id` PK (a bare arXiv id, or `"<origin>:<nativeId>"`). It accepts the
+ * legacy `"arxivId"` JSON key too ([JsonNames]), so a pre-P-Sources v1 file still deserializes losslessly.
+ * [origin] (default `"arxiv"`) + [pdfUrl] (nullable) are additive: a v1 file omits both, so its papers
+ * default to arXiv with a re-synthesized PDF URL on restore. The old `absUrl` field is dropped — the PDF
+ * URL is now carried verbatim and the abs/DOI link is derived, so a non-arXiv paper is never mangled into
+ * an arxiv.org URL.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class ExportedPaper(
-    val arxivId: String,
+    @JsonNames("arxivId") val paperId: String,
     val version: Int,
     val title: String,
     val abstract: String,
@@ -25,7 +39,8 @@ data class ExportedPaper(
     val doi: String?,
     val comment: String? = null,
     val journalRef: String? = null,
-    val absUrl: String,
+    val origin: String = "arxiv",
+    val pdfUrl: String? = null,
     val status: String,
     val rating: Int?,
     val addedAt: String,
@@ -56,7 +71,7 @@ class LibraryExporter
                 val tags = libraryDao.observeTagsFor(row.paper.id).first().map { it.name }
                 val notes = libraryDao.notesFor(row.paper.id).map { it.content }
                 ExportedPaper(
-                    arxivId = row.paper.id,
+                    paperId = row.paper.id,
                     version = row.paper.latestVersion,
                     title = row.paper.title,
                     abstract = row.paper.abstract,
@@ -66,7 +81,8 @@ class LibraryExporter
                     published = Instant.ofEpochMilli(row.paper.publishedAt).toString(),
                     updated = Instant.ofEpochMilli(row.paper.updatedAt).toString(),
                     doi = row.paper.doi,
-                    absUrl = "https://arxiv.org/abs/${row.paper.id}",
+                    origin = row.paper.origin,
+                    pdfUrl = row.paper.pdfUrl,
                     status = row.status,
                     rating = row.rating,
                     addedAt = Instant.ofEpochMilli(row.added_at).toString(),
@@ -87,17 +103,24 @@ class LibraryExporter
                         ?.lowercase()
                         ?.filter { it.isLetter() }
                         .orEmpty()
-                val key = "$firstAuthorKey$year${paper.arxivId.takeLast(4).filter { it.isDigit() }}"
+                val key = "$firstAuthorKey$year${paper.paperId.takeLast(4).filter { it.isDigit() }}"
                 buildString {
                     appendLine("@misc{$key,")
                     appendLine("  title = {${paper.title.escapeBibtex()}},")
                     appendLine("  author = {${paper.authors.joinToString(" and ").escapeBibtex()}},")
                     appendLine("  year = {$year},")
-                    appendLine("  eprint = {${paper.arxivId}},")
-                    appendLine("  archivePrefix = {arXiv},")
-                    appendLine("  primaryClass = {${paper.primaryCategory}},")
-                    paper.doi?.let { appendLine("  doi = {$it},") }
-                    appendLine("  url = {${paper.absUrl}}")
+                    if (paper.origin == Source.ARXIV.wire) {
+                        appendLine("  eprint = {${paper.paperId}},")
+                        appendLine("  archivePrefix = {arXiv},")
+                        appendLine("  primaryClass = {${paper.primaryCategory}},")
+                        paper.doi?.let { appendLine("  doi = {$it},") }
+                        appendLine("  url = {https://arxiv.org/abs/${paper.paperId}}")
+                    } else {
+                        val label = Source.entries.firstOrNull { it.wire == paper.origin }?.displayName ?: paper.origin
+                        appendLine("  howpublished = {$label},")
+                        paper.doi?.let { appendLine("  doi = {$it},") }
+                        appendLine("  url = {${paper.doi?.let { "https://doi.org/$it" } ?: paper.pdfUrl.orEmpty()}}")
+                    }
                     append("}")
                 }
             }

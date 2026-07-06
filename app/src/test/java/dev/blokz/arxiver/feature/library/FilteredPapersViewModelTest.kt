@@ -35,7 +35,14 @@ class FilteredPapersViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val context = ApplicationProvider.getApplicationContext<Context>()
-        db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
+        db =
+            Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
+                // Synchronous executors: the InvalidationTracker background refresh can otherwise race
+                // db.close() (Robolectric "Illegal connection pointer"), and DB-write continuations
+                // resume off-thread and race assertions. Direct executors make Room deterministic here.
+                .setQueryExecutor { it.run() }
+                .setTransactionExecutor { it.run() }
+                .build()
         repo = LibraryRepository(db.libraryDao(), db.inboxDao())
     }
 

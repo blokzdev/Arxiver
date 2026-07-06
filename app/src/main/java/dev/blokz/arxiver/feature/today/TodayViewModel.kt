@@ -64,8 +64,8 @@ class TodayViewModel
             val library =
                 libraryRepository.observeLibrary().first()
                     .filter { it.addedAt.isAfter(weekAgo) }
-                    .map { it.paper.id.value }
-            val inbox = uiState.value.items.take(10).map { it.paper.id.value }
+                    .map { it.paper.ref.storageId }
+            val inbox = uiState.value.items.take(10).map { it.paper.ref.storageId }
             return (library + inbox).distinct().take(20)
         }
 
@@ -76,15 +76,15 @@ class TodayViewModel
 
         fun save(item: InboxPaper) {
             viewModelScope.launch {
-                inboxRepository.saveToLibrary(item.paper.id.value)
-                _triageEvent.value = TriageEvent(item.paper.id.value, TriageKind.SAVED, item.state)
+                inboxRepository.saveToLibrary(item.paper.ref.storageId)
+                _triageEvent.value = TriageEvent(item.paper.ref.storageId, TriageKind.SAVED, item.state)
             }
         }
 
         fun dismiss(item: InboxPaper) {
             viewModelScope.launch {
-                inboxRepository.dismiss(item.paper.id.value)
-                _triageEvent.value = TriageEvent(item.paper.id.value, TriageKind.DISMISSED, item.state)
+                inboxRepository.dismiss(item.paper.ref.storageId)
+                _triageEvent.value = TriageEvent(item.paper.ref.storageId, TriageKind.DISMISSED, item.state)
             }
         }
 

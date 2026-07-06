@@ -86,3 +86,23 @@ data class ExternalRef(
 
     override val arxivIdOrNull: ArxivId? get() = null
 }
+
+/**
+ * The SINGLE de-dup decision point (SPEC-P-SOURCES §2, red line). A paper that resolves to a parseable
+ * arXiv id ALWAYS keys under the **bare** arXiv id (an [ArxivRef]) — never a source-prefixed alias — so
+ * the *same* paper can never fork into two rows (e.g. an S2 hit that carries an arXiv cross-id keys under
+ * that arXiv id, not `s2:<paperId>`). Only when there is no parseable arXiv id does it key under the
+ * source's own [nativeId] as an [ExternalRef].
+ *
+ * [arxivId] is the *candidate* arXiv identity a source hit may carry (S2's `externalIds.arxiv`); it is
+ * `null` for a source with no arXiv crosswalk (chemRxiv — a [ChemRxivItem] carries none, so chemRxiv is
+ * de-dup-safe by construction). [ArxivId.parse] is the EXACT gate `import_to_library`'s arXiv path uses,
+ * so "resolvable arXiv id" means one thing everywhere.
+ */
+fun resolvePaperRef(
+    arxivId: String?,
+    origin: Source,
+    nativeId: String,
+): PaperRef =
+    arxivId?.let { ArxivId.parse(it)?.first }?.let(::ArxivRef)
+        ?: ExternalRef(origin, nativeId)

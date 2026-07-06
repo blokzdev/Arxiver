@@ -237,8 +237,8 @@ private fun FilteredPapersContent(
             )
         else ->
             LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(rows, key = { _, row -> row.paper.id.value }) { index, row ->
-                    val id = row.paper.id.value
+                itemsIndexed(rows, key = { _, row -> row.paper.ref.storageId }) { index, row ->
+                    val id = row.paper.ref.storageId
                     SwipeablePaperRow(
                         paper = row.paper,
                         onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },

@@ -17,6 +17,7 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -45,7 +46,14 @@ class PdfDownloaderTest {
 
     // A plain (un-gated) client: MockWebServer serves http://127.0.0.1, which the AllowedHosts gate
     // would reject — so PdfDownloader tests must use a bare client (the gate is tested separately).
-    private fun downloader(limiter: ArxivRateLimiter) = PdfDownloader(OkHttpClient(), limiter, dispatchers)
+    // 127.0.0.1 is not an arXiv-group host, so PdfHostPolicy routes it to the POLITE slot — that's where
+    // the counting limiter goes, so the existing acquire-count assertions still hold.
+    private fun downloader(limiter: ArxivRateLimiter) =
+        PdfDownloader(
+            OkHttpClient(),
+            PdfHostPolicy(arxivLimiter = ArxivRateLimiter(minSpacingMs = 0), politeLimiter = limiter),
+            dispatchers,
+        )
 
     @Before
     fun setUp() {
@@ -86,6 +94,19 @@ class PdfDownloaderTest {
             assertEquals(1, limiter.calls, "exactly one acquire on a cache miss")
             assertEquals(1, server.requestCount)
             assertTrue(dest.exists() && dest.readText().contains("%PDF"))
+        }
+
+    @Test
+    fun `a 200 body that is not a PDF (a cookie-wall or challenge page) is rejected, not saved`() =
+        runTest {
+            // Atypon-style cookie-wall: 200 OK with an HTML "enable cookies" page instead of the PDF.
+            server.enqueue(MockResponse().setBody("<!DOCTYPE html><html><body>Just a moment…</body></html>"))
+            val dest = File(dir, "walled.pdf")
+
+            val result = downloader(CountingRateLimiter()).download(server.url("/p.pdf").toString(), dest)
+
+            assertIs<AppResult.Failure>(result)
+            assertFalse(dest.exists(), "an HTML body must never be saved as a .pdf (would render broken)")
         }
 
     @Test

@@ -3,7 +3,10 @@ package dev.blokz.arxiver.ui.fixtures
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PaperSource
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.data.LibraryPaper
 import java.time.Instant
@@ -26,6 +29,25 @@ object PreviewFixtures {
             authors = listOf("Ada Researcher", "Boris Scholar", "Carol Theorist"),
             comment = "24 pages, 7 figures. Accepted at ExampleConf 2024",
             citationCount = 87,
+        )
+
+    /** A non-arXiv (chemRxiv, PS.1) paper: ExternalRef identity, real DOI + chemRxiv PDF, no categories. */
+    val chemrxivPaper =
+        Paper(
+            ref = ExternalRef(Source.CHEMRXIV, "10.26434/chemrxiv-2024-abcde"),
+            latestVersion = 1,
+            title = "Catalytic Asymmetric Synthesis of Chiral Amines",
+            abstract =
+                "We report a general method for the enantioselective synthesis of chiral amines under " +
+                    "mild conditions, with broad substrate scope and consistently high yields.",
+            publishedAt = Instant.parse("2024-05-01T00:00:00Z"),
+            updatedAt = Instant.parse("2024-05-01T00:00:00Z"),
+            primaryCategory = "",
+            categories = emptyList(),
+            authors = listOf("Marie Curie", "Linus Pauling"),
+            doi = "10.26434/chemrxiv-2024-abcde",
+            pdfUrl = "https://chemrxiv.org/engage/api-gateway/chemrxiv/assets/example.pdf",
+            source = PaperSource.MANUAL,
         )
 
     val papers =

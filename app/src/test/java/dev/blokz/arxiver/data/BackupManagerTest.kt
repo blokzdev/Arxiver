@@ -7,7 +7,10 @@ import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PaperSource
+import dev.blokz.arxiver.core.model.Source
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -32,7 +35,14 @@ class BackupManagerTest {
     @Before
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
-        db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
+        db =
+            Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
+                // Synchronous executors: the InvalidationTracker background refresh can otherwise race
+                // db.close() (Robolectric "Illegal connection pointer"), and DB-write continuations
+                // resume off-thread and race assertions. Direct executors make Room deterministic here.
+                .setQueryExecutor { it.run() }
+                .setTransactionExecutor { it.run() }
+                .build()
         backupManager =
             BackupManager(
                 libraryExporter = LibraryExporter(db.libraryDao(), db.paperDao()),
@@ -194,6 +204,87 @@ class BackupManagerTest {
         runTest {
             val result = runCatching { backupManager.import("""{"schema":"other/v9","exportedAt":"x","papers":[]}""") }
             assertTrue(result.isFailure)
+        }
+
+    // --- P-Sources PS.1: the backup URL-mangle fix + v1 back-compat ---
+
+    private fun chemPaper() =
+        Paper(
+            ref = ExternalRef(Source.CHEMRXIV, "10.26434/chemrxiv-2024-xyz"),
+            latestVersion = 1,
+            title = "A Chemistry Preprint",
+            abstract = "An abstract about chemistry.",
+            publishedAt = Instant.parse("2024-05-01T00:00:00Z"),
+            updatedAt = Instant.parse("2024-05-01T00:00:00Z"),
+            primaryCategory = "",
+            categories = emptyList(),
+            authors = listOf("Marie Curie"),
+            doi = "10.26434/chemrxiv-2024-xyz",
+            pdfUrl = "https://chemrxiv.org/engage/chemrxiv/assets/xyz.pdf",
+            source = PaperSource.MANUAL,
+        )
+
+    @Test
+    fun `a chemrxiv paper round-trips with its real url and origin, never mangled to arxiv`() =
+        runTest {
+            val p = chemPaper()
+            db.paperDao().upsertPaperWithRelations(p.toEntity(), p.authors, p.categories)
+            db.libraryDao().upsertEntry(
+                dev.blokz.arxiver.core.database.entity.LibraryEntryEntity(
+                    paperId = p.ref.storageId,
+                    addedAt = 1,
+                    status = "to_read",
+                    rating = null,
+                ),
+            )
+
+            val json = backupManager.export()
+            // The real chemRxiv URL is carried verbatim; NO synthesized arxiv.org URL for a non-arXiv paper.
+            assertTrue("https://chemrxiv.org/engage/chemrxiv/assets/xyz.pdf" in json)
+            assertFalse("arxiv.org/pdf/chemrxiv" in json, "the pre-P-Sources URL-mangle bug must not recur")
+            assertFalse("arxiv.org/abs/chemrxiv" in json)
+            // No raw PDF bytes / HTML ever enter the backup (red line).
+            assertFalse("%PDF" in json)
+
+            db.close()
+            setUp()
+            backupManager.import(json)
+
+            val restored = db.paperDao().paperWithRelations("chemrxiv:10.26434/chemrxiv-2024-xyz")
+            assertEquals("chemrxiv", restored?.paper?.origin)
+            assertEquals("https://chemrxiv.org/engage/chemrxiv/assets/xyz.pdf", restored?.paper?.pdfUrl)
+            assertEquals("A Chemistry Preprint", restored?.paper?.title)
+            assertEquals("to_read", db.libraryDao().observeEntry("chemrxiv:10.26434/chemrxiv-2024-xyz").first()?.status)
+        }
+
+    @Test
+    fun `a legacy v1 backup (arxivId, absUrl, no origin) still imports and re-synthesizes the arxiv pdf`() =
+        runTest {
+            // A hand-written pre-P-Sources v1 file: paper key is "arxivId", carries "absUrl", omits
+            // origin/pdfUrl. @JsonNames maps arxivId->paperId, ignoreUnknownKeys drops absUrl, origin
+            // defaults to arxiv, and toEntity re-synthesizes the arXiv PDF url exactly as v1 stored it.
+            val v1 =
+                """
+                {
+                  "schema": "arxiver-backup/v1",
+                  "exportedAt": "2024-01-01T00:00:00Z",
+                  "papers": [
+                    {
+                      "arxivId": "2401.00001", "version": 2, "title": "Legacy Paper", "abstract": "old",
+                      "authors": ["Ada Researcher"], "primaryCategory": "cs.LG", "categories": ["cs.LG"],
+                      "published": "2024-03-02T10:00:00Z", "updated": "2024-03-02T10:00:00Z", "doi": null,
+                      "absUrl": "https://arxiv.org/abs/2401.00001", "status": "read", "rating": 4,
+                      "addedAt": "2024-03-02T10:00:00Z", "tags": [], "notes": []
+                    }
+                  ]
+                }
+                """.trimIndent()
+            backupManager.import(v1)
+            val restored = db.paperDao().paperWithRelations("2401.00001")
+            assertEquals("arxiv", restored?.paper?.origin)
+            assertEquals("https://arxiv.org/pdf/2401.00001v2", restored?.paper?.pdfUrl)
+            assertEquals("Legacy Paper", restored?.paper?.title)
+            assertEquals("read", db.libraryDao().observeEntry("2401.00001").first()?.status)
         }
 
     // --- P-Chat PC.0: the chat-never-in-backup red line, converted from code-absence to a test ---

@@ -178,13 +178,19 @@ closed via the per-hop interceptor). arXiv's ≥3s red line is untouched (struct
 
 ## 5. Backup wall
 
-`ArxiverBackup`'s `ExportedPaper` DTO currently hardcodes `id = arxivId`, `pdfUrl = ArxivId(arxivId).pdfUrl(version)`,
-`source = "MANUAL"` (`BackupManager.kt:206,217,220`). **The moment a non-arXiv paper is storable this silently
-corrupts data** — export→restore mints a wrong `arxiv.org` PDF URL. **Fixed in PS.1 (not deferred):** the DTO
-carries `origin` + the real `pdf_url` (rename `arxivId`→a neutral `paperId`), stops synthesizing the arXiv URL,
-drops the hardcoded `source`, and bumps `SCHEMA = "arxiver-backup/v1"`. The six-field allowlist DTO + forbidden-name
-walk stay green: the DTO gains only **non-sensitive metadata** (`origin`/`doi`/`pdf_url`) — **never PDF bytes or
-HTML**. A bioRxiv/chemRxiv backup round-trip test ships with it.
+The `ExportedPaper` DTO (defined in **`LibraryExporter.kt`**, shared by BOTH `LibraryExport` and `ArxiverBackup`)
+made `BackupManager.toEntity()` mint `id = arxivId`, `pdfUrl = ArxivId(arxivId).pdfUrl(version)` (a plausible-looking
+404-on-fetch `arxiv.org/pdf/chemrxiv:…` URL — an active **URL-mangle**, not a crash) and never set `origin`
+(`BackupManager.kt` toEntity + the join sites). **The moment a non-arXiv paper is storable this silently corrupts
+data.** **Fixed in PS.1 (not deferred):** the DTO renames `arxivId`→a neutral `paperId` (keeping the legacy
+`"arxivId"` JSON key via kotlinx `@JsonNames`, so a pre-P-Sources file still deserializes), adds `origin` (default
+`"arxiv"`) + a nullable `pdfUrl`, and **drops `absUrl` as authority**. `toEntity()` derives origin/nativeId from the
+PK via `PaperRef.fromStorageId` and carries the real `pdfUrl` verbatim — re-synthesizing the arXiv URL **only** for a
+legacy row whose `pdfUrl` is null and origin is arXiv. `SCHEMA` bumps `"arxiver-backup/v1"` → `"arxiver-backup/v2"`,
+and `import()`'s strict `require(schema == SCHEMA)` widens to `schema in {v1, v2}` (a bare bump would make every v1
+file un-importable). The six-field allowlist DTO + forbidden-name walk stay green: the DTO gains only **non-sensitive
+metadata** (`origin`/`pdfUrl`/`paperId`) — **never PDF bytes or HTML**. A chemRxiv round-trip test + a hand-written v1
+back-compat test ship with it.
 
 ---
 

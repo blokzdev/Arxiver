@@ -75,4 +75,35 @@ class PaperRefTest {
     fun `an ExternalRef cannot carry Source ARXIV`() {
         assertFailsWith<IllegalArgumentException> { ExternalRef(Source.ARXIV, "2403.09999") }
     }
+
+    // --- resolvePaperRef: the single de-dup chokepoint (SPEC-P-SOURCES §2 red line) ---
+
+    @Test
+    fun `resolvePaperRef keys a parseable arXiv id under the bare id, never a source alias`() {
+        // An S2-shaped hit that carries an arXiv cross-id must resolve to the BARE arXiv id — no `s2:` fork.
+        val ref = resolvePaperRef(arxivId = "2403.09999", origin = Source.S2, nativeId = "s2-paper-abc")
+        assertIs<ArxivRef>(ref)
+        assertEquals("2403.09999", ref.storageId)
+    }
+
+    @Test
+    fun `resolvePaperRef accepts a versioned or URL-shaped arXiv id via ArxivId parse`() {
+        // Same gate `import_to_library` uses: a versioned/URL form still resolves to the bare arXiv ref.
+        assertEquals("2403.09999", resolvePaperRef("2403.09999v2", Source.S2, "x").storageId)
+        assertEquals("2403.09999", resolvePaperRef("https://arxiv.org/abs/2403.09999", Source.S2, "x").storageId)
+    }
+
+    @Test
+    fun `resolvePaperRef with no arXiv id keys under the source nativeId`() {
+        val ref = resolvePaperRef(arxivId = null, origin = Source.CHEMRXIV, nativeId = "10.26434/chemrxiv-2024-xyz")
+        assertIs<ExternalRef>(ref)
+        assertEquals("chemrxiv:10.26434/chemrxiv-2024-xyz", ref.storageId)
+    }
+
+    @Test
+    fun `resolvePaperRef falls through to ExternalRef when the arXiv candidate is unparseable`() {
+        val ref = resolvePaperRef(arxivId = "not-an-arxiv-id", origin = Source.CHEMRXIV, nativeId = "10.26434/x")
+        assertIs<ExternalRef>(ref)
+        assertEquals("chemrxiv:10.26434/x", ref.storageId)
+    }
 }
