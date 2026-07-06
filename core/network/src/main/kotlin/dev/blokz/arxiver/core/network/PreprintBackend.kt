@@ -56,7 +56,10 @@ class PreprintBackendRegistry(
     fun backendFor(source: Source): PreprintBackend? =
         when (source) {
             Source.BIORXIV, Source.MEDRXIV -> bioRxivBackend
-            Source.CHEMRXIV -> openAlexBackend
+            // chemRxiv (CF-dead direct) + the OpenAlex-served preprint sources (PF.3).
+            Source.CHEMRXIV, Source.RESEARCH_SQUARE, Source.SSRN, Source.PREPRINTS_ORG, Source.PSYARXIV ->
+                openAlexBackend
+            // arXiv rides the native Atom path; S2 is a cross-source identity, not a followable feed.
             Source.ARXIV, Source.S2 -> null
         }
 }

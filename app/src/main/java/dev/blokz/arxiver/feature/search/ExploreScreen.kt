@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.SearchOff
@@ -133,6 +134,7 @@ fun ExploreScreen(
     val feedback = LocalFeedbackController.current
     var organizeIds by remember { mutableStateOf<List<String>?>(null) }
     var showDispatch by remember { mutableStateOf(false) }
+    var showSourceFollow by remember { mutableStateOf(false) }
 
     BackHandler(enabled = selection.isActive) { selection.clear() }
 
@@ -175,7 +177,14 @@ fun ExploreScreen(
                     }
                 }
             } else {
-                TopAppBar(title = { Text(stringResource(R.string.nav_explore)) })
+                TopAppBar(
+                    title = { Text(stringResource(R.string.nav_explore)) },
+                    actions = {
+                        IconButton(onClick = { showSourceFollow = true }) {
+                            Icon(Icons.Filled.RssFeed, stringResource(R.string.cd_follow_sources))
+                        }
+                    },
+                )
             }
         },
     ) { padding ->
@@ -305,6 +314,10 @@ fun ExploreScreen(
 
     organizeIds?.let { ids ->
         dev.blokz.arxiver.feature.organize.OrganizeSheet(paperIds = ids, onDismiss = { organizeIds = null })
+    }
+
+    if (showSourceFollow) {
+        SourceFollowSheet(onDismiss = { showSourceFollow = false })
     }
 
     if (showDispatch) {

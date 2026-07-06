@@ -14,6 +14,11 @@
     <string name="cd_expand_group">Expand group</string>
     <string name="cd_collapse_group">Collapse group</string>
     <string name="cd_follow_category">Follow %1$s</string>
+    <string name="cd_follow_sources">Follow other preprint sources</string>
+    <string name="follow_sources_title">Follow sources</string>
+    <string name="follow_sources_subtitle">Get new papers from more preprint servers in your Today feed.</string>
+    <string name="follow_sources_whole">All of %1$s</string>
+    <string name="follow_sources_external_note">Papers from these sources open in your browser.</string>
     <string name="cd_back">Back</string>
     <string name="cd_clear_query">Clear search query</string>
     <string name="cd_toggle_night_mode">Toggle night mode</string>

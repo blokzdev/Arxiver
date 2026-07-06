@@ -425,14 +425,12 @@ object AppModule {
     ): dev.blokz.arxiver.core.network.PreprintBackendRegistry =
         dev.blokz.arxiver.core.network.PreprintBackendRegistry(
             bioRxivBackend = dev.blokz.arxiver.core.network.biorxiv.BioRxivBackend(bioRxivApiClient),
+            // The Source→SID mapping lives with the SID_* constants (exhaustive, no silent else→null).
             openAlexBackend =
-                dev.blokz.arxiver.core.network.openalex.OpenAlexBackend(openAlexClient) { s ->
-                    when (s) {
-                        dev.blokz.arxiver.core.model.Source.CHEMRXIV ->
-                            dev.blokz.arxiver.core.network.openalex.OpenAlexClient.SID_CHEMRXIV
-                        else -> null // new sources (Research Square/SSRN/…) land in PF.3
-                    }
-                },
+                dev.blokz.arxiver.core.network.openalex.OpenAlexBackend(
+                    openAlexClient,
+                    dev.blokz.arxiver.core.network.openalex.OpenAlexClient.Companion::sidFor,
+                ),
         )
 
     @Provides

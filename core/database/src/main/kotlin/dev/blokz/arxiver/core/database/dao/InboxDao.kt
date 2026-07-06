@@ -53,4 +53,13 @@ interface InboxDao {
     /** Dismissed rows older than [cutoff] are pruned (SPEC-DATA §2). */
     @Query("DELETE FROM inbox_items WHERE state = 'dismissed' AND arrived_at < :cutoff")
     suspend fun pruneDismissed(cutoff: Long)
+
+    /**
+     * Delete the inbox rows a follow put here — called in the same operation as unfollow (P-Feeds PF.3), so an
+     * unfollowed source's rows don't dangle on a dead `follow_id`. Inbox PK is `paper_id` alone (a paper appears
+     * once regardless of how many follows surfaced it), so this removes rows whose *recorded* origin follow is
+     * being deleted; a paper still followed via another enabled follow is re-inboxed on the next sync.
+     */
+    @Query("DELETE FROM inbox_items WHERE follow_id = :followId")
+    suspend fun deleteByFollowId(followId: Long)
 }

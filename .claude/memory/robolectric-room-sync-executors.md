@@ -31,12 +31,27 @@ fire-and-forget IO, fixed via a `CoroutineExceptionHandler`).
 **Applied to ALL `:app` Room+Robolectric suites (PS.2, 2026-07-05; 19 suites as of PF.2)** — every in-memory `db`
 builder carries the two synchronous executors. Any NEW Room+Robolectric suite must add the same two lines.
 
-**These executors REDUCE but do NOT fully ELIMINATE the cross-test leak (corrected 2026-07-06, PF.2).** It
-recurred on a PF.2 full-suite run (`FilteredPapersViewModelTest` as the victim; green on a plain re-run — so it's
-nondeterministic, not a regression). Root cause the sync executors miss: the leftover invalidation refresh runs on
-**`ArchTaskExecutor`'s `arch_disk_io` thread**, which `setQueryExecutor`/`setTransactionExecutor` do **not**
-override. The root-cause kill is an `androidx.arch.core:core-testing` **`InstantTaskExecutorRule`** (or an
-equivalent `ArchTaskExecutor.getInstance().setDelegate` sync shim) on every Room+Robolectric suite — tracked as a
-focused test-infra PR in the ROADMAP backlog (repo-wide, watch the sync-emission-timing side effect above).
-**Operationally:** if the full `:app` suite flakes on `UncaughtExceptionsBeforeTest` in CI, re-kick once (loop step
-8) — it is this known race, not the diff under review.
+**These executors REDUCE but do NOT fully ELIMINATE the leak — and it is INTRA-class, not cross-class (corrected
+2026-07-06 across PF.2+PF.3).** It recurs nondeterministically (victims seen: `FilteredPapersViewModelTest`,
+`BackupManagerTest`; green on a plain re-run — so it's flakiness, not a regression). Two dead ends **empirically
+ruled out in PF.3** (don't retry them):
+- **`androidx.arch.core:core-testing` `InstantTaskExecutorRule` does NOT fix it.** Applied to ALL 36 Room+Robolectric
+  suites, the full `:app` suite still flaked (`FilteredPapersViewModelTest`, run 3 of 3). Room 2.7's
+  `TriggerBasedInvalidationTracker.notifyInvalidation` refresh is a **coroutine** (stack: `useConnection` →
+  `SupportSQLitePooledConnection.transaction`), NOT the legacy `ArchTaskExecutor` LiveData path the rule redirects.
+  The `arch_disk_io` thread name is incidental. Reverted the whole experiment.
+- **`forkEvery(1)` is ALREADY set** (`app/build.gradle.kts` `testOptions.unitTests`), so each test *class* already
+  gets its own JVM. The `UncaughtExceptionsBeforeTest` therefore leaks **method→method within ONE class** (a prior
+  test's `db.close()` leaves a pending refresh coroutine that fires at the next method's `runTest` startup), which
+  is why class-level isolation + per-class rules don't help.
+**THE ACTUAL FIX (PF.3, 2026-07-06): `sqliteMode=NATIVE`.** The `Illegal connection pointer` is a
+**`ShadowLegacySQLiteConnection`** artifact — Robolectric's default LEGACY Java SQLite shadow tracks per-thread
+connection pointers, and the post-close invalidation refresh coroutine hits a freed pointer → throws. Robolectric's
+**NATIVE** SQLite (real SQLite, no shadow pointer bookkeeping) makes the race un-manifestable. Fix = a
+`robolectric.properties` with `sqliteMode=NATIVE` in the test resources of every module with Room+Robolectric tests
+(committed: `app/src/test/resources/robolectric.properties`, `core/database/src/test/resources/robolectric.properties`).
+**Verified: the `:app` suite went 3/3 green after ~5 consecutive flakes without it.** NATIVE is closer to real
+SQLite (behavior is *more* correct, not less) — the full build stayed green, no test regressed. The sync executors
+stay (harmless, deterministic emission timing); they're no longer load-bearing for the flake. If a NEW module adds
+Room+Robolectric tests, add the same `robolectric.properties`. Dead-ends (do NOT retry): InstantTaskExecutorRule
+(refresh isn't on the ArchTaskExecutor path); `forkEvery(1)` is already set so isolation is per-class only.

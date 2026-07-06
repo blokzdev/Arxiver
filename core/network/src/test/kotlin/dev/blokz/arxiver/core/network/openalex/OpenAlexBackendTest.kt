@@ -88,4 +88,13 @@ class OpenAlexBackendTest {
                 backend().browse(Source.BIORXIV, category = null, sinceIso = "2026-01-01", cursor = null),
             )
         }
+
+    @Test
+    fun `a category is threaded through to the OpenAlex Field filter (PF3)`() =
+        runTest {
+            server.enqueue(MockResponse().setBody("""{"meta":{"count":0},"results":[]}"""))
+            backend().browse(Source.CHEMRXIV, category = "fields/16", sinceIso = "2026-01-01", cursor = null)
+            val filter = server.takeRequest().requestUrl!!.queryParameter("filter")!!
+            assert(filter.contains("primary_topic.field.id:fields/16")) { filter }
+        }
 }

@@ -22,5 +22,22 @@ sources we can't reach natively (chemRxiv, new preprint servers) — see [[chemr
   10 credits ($0.001). Arxiver is local-first → each **device** gets its own free budget (ample for a personal
   reader). **BYOK: `?api_key=<key>`** (a dummy → `401 "Invalid or missing API key"`) upgrades to the prepaid tier.
 
+- **Category = OpenAlex Field filter (PF.3, live-verified 2026-07-06):** the filter key is
+  **`primary_topic.field.id:fields/<N>`** — the response `meta` echoes it as OQL `field is (fields/<N>)`.
+  There are **26 top-level Fields** (`GET /fields`, stable ids). Ids are NON-obvious — verify, don't guess:
+  Chemistry=**16** (NOT 23), Environmental Science=23, Computer Science=17, Mathematics=26, Physics&Astronomy=31,
+  Biochemistry/Genetics/MolBio=13, Neuroscience=28, Psychology=32, Economics/Econometrics/Finance=20,
+  Medicine=27, Materials Science=25, Engineering=22, Social Sciences=33, Immunology&Microbiology=24,
+  Chemical Engineering=15, Earth&Planetary=19, Agricultural&Biological=11, Pharmacology/Tox=30, Energy=21,
+  Business/Mgmt/Accounting=14, Arts&Humanities=12, Decision Sciences=18, Health Professions=36, Nursing=29,
+  Dentistry=35, Veterinary=34. (Full table via `/fields?per-page=30`.)
+- **Fails safe:** an unknown/wrong field id (e.g. `fields/999`) returns **HTTP 200, meta.count=0, `results:[]`** —
+  never an error → a stale id degrades to an empty feed, not a crash. A missing category clause = the whole source.
+- **Field spread is real per source (group_by `primary_topic.field.id`):** chemRxiv/Chemistry(16) = ~15.8k of ~62k;
+  **SSRN spans all 26 Fields** (top Social Sciences ~19%, top-3 ~50%) — NOT a single-field source, so a per-source
+  Field picker + a "whole source (no filter)" escape hatch both matter for OpenAlex-backed follows.
+- **Metering caveat for a picker:** a browse/filter req = 1 credit, so populate the Field list from the **hardcoded
+  26-Field table above (0 credits)** — never a live `/fields` fetch per picker-open.
+
 api.biorxiv.org (native bio/med, un-gated) is the OTHER backend — contract in `docs/SPEC-P-FEEDS.md` §3
 (server-side `?category=`, verified). Governed by SPEC-P-FEEDS.

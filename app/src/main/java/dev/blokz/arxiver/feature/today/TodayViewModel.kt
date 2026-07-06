@@ -47,12 +47,14 @@ class TodayViewModel
             combine(
                 inboxRepository.observeInbox(),
                 syncScheduler.observeSyncRunning(),
-                followsRepository.observeGroupedCategories(),
-            ) { items, syncing, grouped ->
+                // Origin-agnostic (PF.3): a user whose only follows are non-arXiv still "has follows", so Today
+                // shows first-sync skeletons + a filling inbox instead of the "you follow nothing" empty state.
+                followsRepository.observeEnabledFollowCount(),
+            ) { items, syncing, followCount ->
                 TodayUiState(
                     items = items,
                     syncing = syncing,
-                    hasFollows = grouped.values.flatten().any { it.followed },
+                    hasFollows = followCount > 0,
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState())
 

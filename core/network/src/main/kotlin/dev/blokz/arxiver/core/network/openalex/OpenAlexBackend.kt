@@ -26,7 +26,8 @@ class OpenAlexBackend(
         if (sid == null) {
             return AppResult.Failure(AppError.Unexpected(IllegalArgumentException("no OpenAlex source id: $source")))
         }
-        return when (val r = client.browse(sid, sinceIso, cursor ?: "*")) {
+        // [category] is a source-appropriate OpenAlex Field token ("fields/N") or null for the whole source.
+        return when (val r = client.browse(sid, sinceIso, cursor ?: "*", category)) {
             is AppResult.Success -> {
                 val hits = r.value.results.mapNotNull { it.toHit(source) }
                 AppResult.Success(PreprintPage(hits, r.value.meta.nextCursor))

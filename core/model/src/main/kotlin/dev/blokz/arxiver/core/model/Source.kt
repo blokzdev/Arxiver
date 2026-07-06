@@ -19,6 +19,14 @@ enum class Source(val wire: String, val displayName: String) {
     CHEMRXIV("chemrxiv", "chemRxiv"),
     BIORXIV("biorxiv", "bioRxiv"),
     MEDRXIV("medrxiv", "medRxiv"),
+
+    // OpenAlex-served preprint sources (P-Feeds PF.3). [wire] is a PERMANENT storage-id/`papers.origin`/
+    // `follows.origin` prefix — there is NO migration to rename it once data exists, so it is chosen once,
+    // lowercase, and delimiter-collision-free (guarded by the BY_PREFIX round-trip test).
+    RESEARCH_SQUARE("researchsquare", "Research Square"),
+    SSRN("ssrn", "SSRN"),
+    PREPRINTS_ORG("preprintsorg", "Preprints.org"),
+    PSYARXIV("psyarxiv", "PsyArXiv"),
     S2("s2", "Semantic Scholar"),
     ;
 

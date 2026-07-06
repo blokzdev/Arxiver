@@ -3,6 +3,7 @@ package dev.blokz.arxiver.core.network.openalex
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
+import dev.blokz.arxiver.core.model.Source
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -145,10 +146,20 @@ class OpenAlexClient(
         sourceId: String,
         sinceIso: String,
         cursor: String = "*",
+        category: String? = null,
         perPage: Int = PAGE_SIZE,
     ): AppResult<OpenAlexResponse> =
         request { b ->
-            b.addQueryParameter("filter", "primary_location.source.id:$sourceId,from_publication_date:$sinceIso")
+            val filter =
+                buildString {
+                    append("primary_location.source.id:").append(sourceId)
+                    append(",from_publication_date:").append(sinceIso)
+                    // An OpenAlex Field ("fields/N", PF.3) narrows the source to a discipline. A wrong/stale id
+                    // fails SAFE (HTTP 200, meta.count=0 — live-verified), never an error; only append when
+                    // non-blank so the whole-source browse stays byte-identical (2-clause).
+                    category?.takeIf { it.isNotBlank() }?.let { append(",primary_topic.field.id:").append(it) }
+                }
+            b.addQueryParameter("filter", filter)
             b.addQueryParameter("sort", "publication_date:desc")
             b.addQueryParameter("per-page", perPage.toString())
             b.addQueryParameter("cursor", cursor)
@@ -211,5 +222,21 @@ class OpenAlexClient(
         const val SID_PREPRINTS_ORG = "S6309402219"
         const val SID_SSRN = "S4210172589"
         const val SID_PSYARXIV = "S4306401687"
+
+        /**
+         * A [Source] → its OpenAlex source id, for the OpenAlex-served sources (chemRxiv + the PF.3 new
+         * sources). `null` = not OpenAlex-served (arXiv/bio/med ride native backends; S2 is not a feed).
+         * Exhaustive with NO `else` → adding a [Source] compile-forces a decision here, so a new
+         * OpenAlex-served source can never silently resolve to `null` (the old `AppModule.sidFor` bug).
+         */
+        fun sidFor(source: Source): String? =
+            when (source) {
+                Source.CHEMRXIV -> SID_CHEMRXIV
+                Source.RESEARCH_SQUARE -> SID_RESEARCH_SQUARE
+                Source.SSRN -> SID_SSRN
+                Source.PREPRINTS_ORG -> SID_PREPRINTS_ORG
+                Source.PSYARXIV -> SID_PSYARXIV
+                Source.ARXIV, Source.BIORXIV, Source.MEDRXIV, Source.S2 -> null
+            }
     }
 }
