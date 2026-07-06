@@ -170,4 +170,50 @@ class FollowSyncWorkerTest {
             assertEquals(1, db.paperDao().count())
             assertTrue(db.inboxDao().activePaperIds().contains(ExternalRef(Source.BIORXIV, hit.doi).storageId))
         }
+
+    @Test
+    fun `a firehose source that fills the first-sync limit on page 1 issues exactly one browse`() =
+        runBlocking {
+            // A whole-source SSRN follow (value = "") spans all fields — a firehose. It must NOT page 5× per
+            // sync: the do/while stops once page 1 fills FIRST_SYNC_LIMIT. Guards the OpenAlex credit budget.
+            db.followDao().insert(
+                FollowEntity(
+                    type = FollowEntity.TYPE_CATEGORY,
+                    value = "",
+                    label = "All of SSRN",
+                    createdAt = 0,
+                    origin = Source.SSRN.wire,
+                ),
+            )
+            var calls = 0
+            val firehose =
+                object : PreprintBackend {
+                    override suspend fun browse(
+                        source: Source,
+                        category: String?,
+                        sinceIso: String,
+                        cursor: String?,
+                    ): AppResult<PreprintPage> {
+                        calls++
+                        val hits =
+                            (1..20).map {
+                                PreprintHit(
+                                    origin = source,
+                                    doi = "10.9999/ssrn.$it",
+                                    title = "t$it",
+                                    abstract = "a",
+                                    authors = emptyList(),
+                                    publishedIso = null,
+                                    oaPdfUrl = null,
+                                )
+                            }
+                        // Non-null nextCursor: the worker WOULD page again if the short-circuit didn't fire.
+                        return AppResult.Success(PreprintPage(hits, nextCursor = "more"))
+                    }
+                }
+            val backends = PreprintBackendRegistry(bioRxivBackend = firehose, openAlexBackend = firehose)
+
+            assertTrue(worker(attempt = 0, backends = backends).doWork() is ListenableWorker.Result.Success)
+            assertEquals(1, calls, "a page-1 fill of FIRST_SYNC_LIMIT must short-circuit paging")
+        }
 }

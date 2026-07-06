@@ -14,5 +14,5 @@
 - [LiteRT-LM Kotlin lacks constrained decoding](litert-lm-kotlin-no-constrained-decoding.md) — PA.0c: #1662 open; PA.4 pivoted to "app-draws-the-structure" (constrained decoding is the wrong tool at our scale)
 - [Qwen light-tier ModelSpec](qwen-light-tier-modelspec.md) — shipped in QwenEngine.SPEC: litert-community/Qwen3-0.6B → Qwen3-0.6B.litertlm (614 MB CPU); avoid the .mediatek NPU sibling; readiness via OnDeviceProvider.isReady()
 - [Readiness consumer-sweep rule](readiness-consumer-sweep.md) — PA.6 incident: when an abstraction's summary grows, sweep the summary's CONSUMERS; device-verify additive tiers ALONE, not just coexisting
-- [OpenAlex API contract](openalex-api-contract.md) — P-Feeds discovery backend: /works endpoints, source ids, cursor, inverted-index abstract, 2026 metering + BYOK `?api_key=`
+- [OpenAlex API contract](openalex-api-contract.md) — P-Feeds discovery backend: /works endpoints, source ids, cursor, inverted-index abstract, 2026 metering + BYOK `?api_key=`; PF.3 Field-filter grammar (`primary_topic.field.id:fields/<N>`, Chemistry=16 not 23, fails-safe count=0, 26-Field table)
 - [chemRxiv Cloudflare-blocked](chemrxiv-cloudflare-blocked.md) — chemRxiv direct API is CF-gated (search_chemrxiv is dead in prod) + PDF is Atypon cookie-walled → reach via OpenAlex, read via external-open

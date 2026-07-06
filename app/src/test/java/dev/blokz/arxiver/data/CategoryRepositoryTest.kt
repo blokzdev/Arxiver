@@ -1,0 +1,97 @@
+package dev.blokz.arxiver.data
+
+import android.content.Context
+import androidx.room.Room
+import androidx.test.core.app.ApplicationProvider
+import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.entity.FollowEntity
+import dev.blokz.arxiver.core.database.entity.InboxItemEntity
+import dev.blokz.arxiver.core.database.entity.PaperEntity
+import dev.blokz.arxiver.core.model.ArxivCategory
+import dev.blokz.arxiver.core.model.ArxivTaxonomy
+import dev.blokz.arxiver.core.model.Source
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/** Guards the PF.3 origin-aware follow lifecycle at the repository seam (create/unfollow/observe + inbox cleanup). */
+@RunWith(RobolectricTestRunner::class)
+class CategoryRepositoryTest {
+    private lateinit var db: ArxiverDatabase
+    private lateinit var repo: CategoryRepository
+
+    @Before
+    fun setUp() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        db =
+            Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
+                .setQueryExecutor { it.run() }
+                .setTransactionExecutor { it.run() }
+                .build()
+        repo = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao())
+    }
+
+    @After
+    fun tearDown() = db.close()
+
+    @Test
+    fun `follow writes the source origin, unfollow deletes only that origin`() =
+        runBlocking {
+            // Same category token followed on two sources — independent rows keyed by origin.
+            repo.setCategoryFollowed("neuroscience", "Neuroscience", Source.BIORXIV, followed = true)
+            repo.setCategoryFollowed("neuroscience", "Neuroscience", Source.MEDRXIV, followed = true)
+            assertEquals(
+                setOf("biorxiv", "medrxiv"),
+                db.followDao().observeAll().first().map { it.origin }.toSet(),
+            )
+
+            repo.setCategoryFollowed("neuroscience", "Neuroscience", Source.BIORXIV, followed = false)
+            val rows = db.followDao().observeAll().first()
+            assertEquals(1, rows.size)
+            assertEquals("medrxiv", rows.single().origin, "medRxiv follow of the same value survives")
+        }
+
+    @Test
+    fun `the arXiv grid toggle is origin=arxiv and independent of a same-value non-arXiv follow`() =
+        runBlocking {
+            repo.setCategoryFollowed("cs.LG", "ML", Source.CHEMRXIV, followed = true)
+            repo.setFollowed(ArxivCategory("cs.LG", "Machine Learning", ArxivTaxonomy.GROUP_CS), followed = true)
+            val byOrigin = db.followDao().observeAll().first().associateBy { it.origin }
+            assertTrue("arxiv" in byOrigin && "chemrxiv" in byOrigin, "both rows coexist under the (…,origin) index")
+            // The arXiv-scoped grid query sees only the arXiv follow.
+            assertEquals(listOf("cs.LG"), db.followDao().observeFollowedCategoryCodes().first())
+        }
+
+    @Test
+    fun `unfollow removes the follow's inbox rows`() =
+        runBlocking {
+            repo.setCategoryFollowed("neuroscience", "Neuroscience", Source.BIORXIV, followed = true)
+            val followId = db.followDao().find(FollowEntity.TYPE_CATEGORY, "neuroscience", "biorxiv")!!.id
+
+            db.paperDao().upsertPaper(paper("biorxiv:10.1101/x"))
+            db.inboxDao().insertAll(
+                listOf(InboxItemEntity(paperId = "biorxiv:10.1101/x", followId = followId, arrivedAt = 0)),
+            )
+            assertEquals(1, db.inboxDao().activePaperIds().size)
+
+            repo.setCategoryFollowed("neuroscience", "Neuroscience", Source.BIORXIV, followed = false)
+
+            assertTrue(db.inboxDao().activePaperIds().isEmpty(), "the unfollowed feed's inbox row is cleaned")
+            assertNull(db.followDao().find(FollowEntity.TYPE_CATEGORY, "neuroscience", "biorxiv"))
+        }
+
+    private fun paper(id: String) =
+        PaperEntity(
+            id = id, latestVersion = 1, title = id, abstract = "", publishedAt = 0, updatedAt = 0,
+            primaryCategory = "", authorsLine = "", comment = null, journalRef = null, doi = null,
+            pdfUrl = "", citationCount = null, s2PaperId = null, source = "arxiv", fetchedAt = 0,
+            embeddedAt = null, citationsSyncedAt = null,
+        )
+}

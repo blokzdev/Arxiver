@@ -334,6 +334,74 @@ class BackupManagerTest {
             assertEquals("read", db.libraryDao().observeEntry("2401.00001").first()?.status)
         }
 
+    // --- P-Feeds PF.3: follows carry origin through backup (else non-arXiv follows silently restore as arXiv) ---
+
+    @Test
+    fun `a non-arxiv follow round-trips its origin (PF3)`() =
+        runTest {
+            db.followDao().insert(
+                dev.blokz.arxiver.core.database.entity.FollowEntity(
+                    type = "category",
+                    value = "neuroscience",
+                    label = "Neuroscience",
+                    origin = "biorxiv",
+                    createdAt = 1,
+                ),
+            )
+            db.followDao().insert(
+                dev.blokz.arxiver.core.database.entity.FollowEntity(
+                    type = "category",
+                    value = "fields/16",
+                    label = "Chemistry",
+                    origin = "chemrxiv",
+                    createdAt = 1,
+                ),
+            )
+            val json = backupManager.export()
+
+            db.close()
+            setUp()
+            backupManager.import(json)
+
+            val origins = db.followDao().observeAll().first().associate { it.value to it.origin }
+            assertEquals("biorxiv", origins["neuroscience"], "a bioRxiv follow must not restore as arXiv")
+            assertEquals("chemrxiv", origins["fields/16"])
+        }
+
+    @Test
+    fun `a backup with no origin field imports the follow as arxiv (PF3 back-compat)`() =
+        runTest {
+            // A legacy/older backup whose follows predate the origin field: additive default keeps it importable.
+            val json =
+                """{"schema":"arxiver-backup/v2","exportedAt":"x","papers":[],""" +
+                    """"follows":[{"type":"category","value":"cs.LG","label":"ML"}]}"""
+            backupManager.import(json)
+            assertEquals("arxiv", db.followDao().observeAll().first().single().origin)
+        }
+
+    @Test
+    fun `import keeps a same-(type,value) follow that differs only by origin (PF3 index discriminates)`() =
+        runTest {
+            db.followDao().insert(
+                dev.blokz.arxiver.core.database.entity.FollowEntity(
+                    type = "category",
+                    value = "neuroscience",
+                    label = "Neuro",
+                    origin = "arxiv",
+                    createdAt = 1,
+                ),
+            )
+            val json =
+                """{"schema":"arxiver-backup/v2","exportedAt":"x","papers":[],""" +
+                    """"follows":[{"type":"category","value":"neuroscience","label":"Neuro","origin":"biorxiv"}]}"""
+            backupManager.import(json)
+            assertEquals(
+                setOf("arxiv", "biorxiv"),
+                db.followDao().observeAll().first().map { it.origin }.toSet(),
+                "the (type,value,origin) unique index keeps both — the import is not swallowed by IGNORE",
+            )
+        }
+
     // --- P-Chat PC.0: the chat-never-in-backup red line, converted from code-absence to a test ---
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)

@@ -65,6 +65,9 @@
 | created_at | INTEGER | |
 | last_synced_at | INTEGER? | **sync cursor**: next sync requests `submittedDate > last_synced_at` |
 | enabled | INTEGER | bool |
+| origin | TEXT | `Source.wire` of the followed feed (P-Feeds PF.2; default `'arxiv'`). Unique index is `(type, value, origin)` — the same category can be followed on multiple sources. A `category`-type follow with `value=''` is a **whole-source** follow (no category filter). |
+
+Backup (`arxiver-backup/v2`) carries `origin` (additive-defaulted, **no schema bump** — a legacy follow with no `origin` imports as `arxiv`), so a non-arXiv follow round-trips instead of silently collapsing to arXiv.
 
 ### inbox_items
 `inbox_items(paper_id PK → papers, follow_id → follows, arrived_at, state TEXT /* new / seen / saved / dismissed */, score REAL? /* similarity-to-library, Phase 3 */)`. Saving creates a `library_entries` row and marks state=saved. Dismissed rows pruned after 30 days.

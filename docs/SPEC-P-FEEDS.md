@@ -38,6 +38,12 @@ backend** — not a wholesale dependency.
 - Source ids: arXiv `S4306400194`, bioRxiv `S4306402567`, medRxiv `S3005729997`, chemRxiv `S4393918830`,
   Research Square `S4306525896`, Preprints.org `S6309402219`, SSRN `S4210172589`, PsyArXiv `S4306401687`.
 - Cursor pagination (`cursor=*` → `meta.next_cursor`, null at end).
+- **Category = an OpenAlex Field (PF.3):** append `,primary_topic.field.id:fields/<N>` to the browse filter (only
+  when non-blank — the whole-source browse stays byte-identical). There are **26 top-level Fields** (`/fields`,
+  stable ids, hardcoded in `OpenAlexFields.kt`); ids are non-obvious (**Chemistry=16, NOT 23** = Environmental
+  Science — live-verified). A wrong/stale id **fails SAFE** (HTTP 200, `meta.count=0`, no error) → an empty feed,
+  never a crash; the id→name table is pinned by a structural test. SSRN spans all 26 Fields (so a whole-source
+  escape hatch matters). Field ids populate the picker from the hardcoded table — **never a live `/fields` fetch**.
 - **Normalization quirks (the client handles):** `id`/`doi`/`source.id` are URL-prefixed (strip); the abstract is
   an **`abstract_inverted_index`** (`word → [positions]`), reconstructed to plain text; `best_oa_location.pdf_url`
   is often null → the hit is read-only.
@@ -70,12 +76,31 @@ New egress hosts (Co-Founder-approved with the phase): `api.openalex.org`, `api.
 Host-parse stays in `:core:network` (`AllowedHosts.isAllowedUrl`); `data/tool` imports no okhttp. New-source PDF
 hosts are **not** allowlisted (read-only) until a per-source decision.
 
-## 6. Follows generalization (PF.2)
+## 6. Follows generalization (PF.2) + origin-aware lifecycle (PF.3)
 
 Additive Room **v7→v8**: `follows.origin` (default `'arxiv'`) + unique index `(type,value)`→`(type,value,origin)`
 (new `Migration7To8` + `8.json` + identity-hash/zero-rows test). `FollowSyncWorker.syncFollow` gains an
-`origin`-dispatch: arXiv → native Atom, biorxiv/medrxiv → `BioRxivApiClient`, chemRxiv/new → `OpenAlexBackend.browse`
-(PF.3). Inbox is origin-agnostic (no inbox-UI change). No author/keyword follow for non-arXiv (category+date only).
+`origin`-dispatch: arXiv → native Atom, biorxiv/medrxiv → `BioRxivApiClient`, chemRxiv/new → `OpenAlexBackend.browse`.
+Inbox is origin-agnostic (no inbox-UI change). No author/keyword follow for non-arXiv (category+date only).
+
+**PF.3 — the follow lifecycle is origin-aware** (the `(type,value,origin)` index demands it):
+- `FollowDao.delete(type,value,origin)` (was origin-blind — would delete every source's row); `CategoryRepository`
+  writes `origin = source.wire` and, on unfollow, cleans the follow's inbox rows in the same op
+  (`InboxDao.deleteByFollowId`) so no row dangles on a dead `follow_id`. *(This means unfollowing also removes that
+  feed's already-arrived inbox items — a deliberate behavior change, incl. for arXiv.)*
+- `observeFollowedCategoryCodes` is scoped `origin='arxiv'` (feeds the arXiv taxonomy grid Boolean, so a bioRxiv
+  follow of the same code doesn't light the arXiv row). Today's "has any follows" reads a NEW origin-agnostic
+  `observeEnabledFollowCount()` — a non-arXiv-only follower still gets the inbox + first-sync skeletons, not the
+  "you follow nothing" empty state.
+- **New sources (additive, no migration; `papers.origin` is TEXT):** `RESEARCH_SQUARE`, `SSRN`, `PREPRINTS_ORG`,
+  `PSYARXIV` → `openAlexBackend` (SIDs via the exhaustive `OpenAlexClient.sidFor`, no silent `else→null`).
+- **Picker:** a `SourceFollowSheet` (in Explore, an `RssFeed` action) reads the static `PreprintSourceRegistry`
+  (zero network on open): pick source → whole-source or a source-appropriate category (bio/med native strings, or
+  an OpenAlex Field). Toggle state keys on `(origin,value)`. Whole-source = a `value=""` follow (flows through both
+  backends' non-blank category guard). A firehose source short-circuits paging once page 1 fills the first-sync
+  limit (credit budget). New-source PDFs stay host-gated → external-open (hosts not allowlisted; per-source
+  deferral). **Backup** now carries `follows.origin` (additive-defaulted; NO schema bump — stays
+  `arxiver-backup/v2`), so a chemRxiv/bio/med/new-source follow round-trips instead of silently collapsing to arXiv.
 
 ## 7. BYOK OpenAlex key (PF.4)
 
@@ -101,3 +126,11 @@ Committed cut PF.0–PF.2; expansion PF.3–PF.4.
   abandoned it). OpenAlex is the only path. chemRxiv PDF stays external-open (Atypon cookie-wall, verified).
 - **Hybrid over pure-OpenAlex:** native for arXiv + bio/med (fresher, un-metered, native categories); OpenAlex only
   where native fails (chemRxiv, API-less new sources). Metering confined to low-volume OpenAlex-backed sources.
+- **PF.3 category = OpenAlex Field (not Subfield/Topic):** 26 Fields keep the picker small + the vocab table
+  hardcodable (0 credits). Subfield (~250) granularity is a tracked backlog product decision. Ids live-verified;
+  a wrong id fails safe (count=0), so the table is structurally pinned.
+- **PF.3 unfollow cleans the inbox** (`deleteByFollowId` in the same op): prevents rows dangling on a dead
+  `follow_id` as multi-source follows grow. Accepts a rare over-delete when two follows on one source overlap on a
+  paper (self-heals on next in-window sync); full per-follow provenance (composite inbox PK) is deferred to backlog.
+- **PF.3 whole-source escape hatch** (`value=""`): SSRN/PsyArXiv span many Fields, so forcing a single Field would
+  hide most of the source. A firehose short-circuits paging on the page-1 first-sync fill to bound OpenAlex credits.

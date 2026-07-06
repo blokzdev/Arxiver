@@ -46,6 +46,7 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 > The `@HiltWorker` factories were R8-stripped v1.0.0–v1.1.1; v1.2.0 (minify off) is the
 > first build where they run — confirmed by B1.
 - [x] **B1 FollowSyncWorker** — followed categories populate the Today inbox after first sync. _Verified v1.2.0 (2026-06-14): fetching new articles works._
+- [ ] **B1a Non-arXiv follows (P-Feeds PF.3)** — open Explore → the RSS/feed action → the source picker; follow a bioRxiv/medRxiv category (native), a chemRxiv/SSRN Field (OpenAlex), and a whole-source follow. After a sync each lands papers in Today; a non-arXiv-only follower sees the inbox fill + skeletons (NOT "you follow nothing"). Opening the picker issues zero network requests. A new-source paper's PDF opens in the browser (host-gated), not in-app. Unfollowing removes that feed's inbox rows.
 - [E] **B2 EmbeddingWorker** — runs on unmetered network; un-embedded papers get embedded (Settings shows the embedded count climbing). _v2.0.2 (emu 2026-06-23): after the first sync the worker ran and Settings shows "28 papers embedded locally"; chat retrieval returns real chunks, confirming the embeddings exist._
 - [ ] **B3 CitationSyncWorker** — nightly citation fetch fills a saved paper's Connections (references/citations).
 - [ ] **B4 DispatchQueueWorker** — a dispatch queued while offline sends once back online.

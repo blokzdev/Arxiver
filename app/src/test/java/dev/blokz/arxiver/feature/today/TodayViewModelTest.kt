@@ -58,7 +58,7 @@ class TodayViewModelTest {
                 .build()
         library = LibraryRepository(db.libraryDao(), db.inboxDao())
         inbox = InboxRepository(db.inboxDao(), library)
-        categories = CategoryRepository(db.categoryDao(), db.followDao())
+        categories = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao())
         vm = TodayViewModel(inbox, SyncScheduler(context), library, categories)
     }
 

@@ -41,7 +41,7 @@ class BrowseViewModelTest {
                 .setQueryExecutor { it.run() }
                 .setTransactionExecutor { it.run() }
                 .build()
-        repo = CategoryRepository(db.categoryDao(), db.followDao())
+        repo = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao())
     }
 
     @After

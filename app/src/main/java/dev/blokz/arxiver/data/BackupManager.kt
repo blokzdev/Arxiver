@@ -20,6 +20,10 @@ data class BackupFollow(
     val type: String,
     val value: String,
     val label: String,
+    // Identity origin of the followed feed (P-Feeds PF.3). Additive + defaulted so a legacy backup with no
+    // `origin` field imports as `arxiv` (matches the DB default); a public lowercase Source.wire token, never a
+    // secret. Without it, every non-arXiv follow (chemRxiv/bio/med/new) would silently restore as arXiv.
+    val origin: String = "arxiv",
 )
 
 @Serializable
@@ -89,7 +93,7 @@ class BackupManager(
         val papers = libraryExporter.collectExportedPapers()
         val follows =
             followDao.observeAll().first().map {
-                BackupFollow(type = it.type, value = it.value, label = it.label)
+                BackupFollow(type = it.type, value = it.value, label = it.label, origin = it.origin)
             }
         val collections =
             libraryDao.observeCollections().first().map { collection ->
@@ -155,6 +159,7 @@ class BackupManager(
                     type = it.type,
                     value = it.value,
                     label = it.label,
+                    origin = it.origin,
                     createdAt = Instant.now().toEpochMilli(),
                 ),
             )

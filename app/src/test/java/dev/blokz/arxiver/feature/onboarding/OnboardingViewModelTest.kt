@@ -53,7 +53,7 @@ class OnboardingViewModelTest {
                 .setQueryExecutor { it.run() }
                 .setTransactionExecutor { it.run() }
                 .build()
-        categories = CategoryRepository(db.categoryDao(), db.followDao())
+        categories = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao())
         settings = SettingsRepository(context)
         vm = OnboardingViewModel(categories, settings, SyncScheduler(context))
     }

@@ -98,6 +98,27 @@ class OpenAlexClientTest {
         }
 
     @Test
+    fun `a non-blank category appends the OpenAlex Field clause, blank stays 2-clause (PF3)`() =
+        runTest {
+            // Field clause appended (live-verified grammar primary_topic.field.id:fields/N, Chemistry=16).
+            server.enqueue(MockResponse().setBody("""{"meta":{"count":0},"results":[]}"""))
+            client().browse("S4393918830", "2026-06-01", cursor = "*", category = "fields/16")
+            assertEquals(
+                "primary_location.source.id:S4393918830,from_publication_date:2026-06-01," +
+                    "primary_topic.field.id:fields/16",
+                server.takeRequest().requestUrl!!.queryParameter("filter"),
+            )
+
+            // A blank category must NOT append the clause — the whole-source filter stays byte-identical.
+            server.enqueue(MockResponse().setBody("""{"meta":{"count":0},"results":[]}"""))
+            client().browse("S4393918830", "2026-06-01", cursor = "*", category = "")
+            assertEquals(
+                "primary_location.source.id:S4393918830,from_publication_date:2026-06-01",
+                server.takeRequest().requestUrl!!.queryParameter("filter"),
+            )
+        }
+
+    @Test
     fun `an optional BYOK key is sent as api_key`() =
         runTest {
             server.enqueue(MockResponse().setBody("""{"results":[]}"""))

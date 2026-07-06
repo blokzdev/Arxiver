@@ -54,6 +54,16 @@ class AllowedHostsTest {
     }
 
     @Test
+    fun `PF3 new-source PDF hosts are NOT allowlisted, so their reads degrade to external-open`() {
+        // Research Square / SSRN / Preprints.org / OSF-PsyArXiv PDFs are host-gated read-only until a per-source
+        // Co-Founder allowlist decision (deferred). oaPdfUrl on these hosts must fail closed at download.
+        assertFalse(AllowedHosts.isAllowedUrl("https://www.researchsquare.com/article/rs-1/v1.pdf"))
+        assertFalse(AllowedHosts.isAllowedUrl("https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1.pdf"))
+        assertFalse(AllowedHosts.isAllowedUrl("https://www.preprints.org/manuscript/1/v1/download"))
+        assertFalse(AllowedHosts.isAllowedUrl("https://osf.io/preprints/psyarxiv/x/download"))
+    }
+
+    @Test
     fun `isAllowedUrl gates a full URL by its host, failing closed on doi and malformed`() {
         assertTrue(AllowedHosts.isAllowedUrl("https://www.biorxiv.org/content/10.1101/2024.01.07.574543v1.full.pdf"))
         assertTrue(AllowedHosts.isAllowedUrl("https://www.medrxiv.org/content/10.1101/2024.02.02.24302001v1.full.pdf"))
