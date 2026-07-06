@@ -12,8 +12,9 @@ import kotlin.test.assertSame
  * arXiv-group host [PdfHostPolicy] must return the EXACT [ArxivRateLimiter] singleton it was constructed
  * with (the one the Atom/HTML fetchers also hold), not merely a limiter that happens to be 3s-spaced —
  * else arXiv PDF requests stop FIFO-serializing against Atom/HTML and the global ≥3s spacing silently
- * breaks. (This test can't prove the *Hilt* wiring passes the singleton — the `:app` DI-identity test does
- * that — only that the policy returns what it was given.)
+ * breaks. This test proves the policy returns what it was CONSTRUCTED with; that the Hilt DI actually
+ * passes the injected singleton (not a fresh `ArxivRateLimiter()`) is guarded separately by the `:app`
+ * `PdfLimiterWiringTest` (a source-structural check on the `pdfDownloader` provider).
  */
 class PdfHostPolicyTest {
     private val arxiv = ArxivRateLimiter(minSpacingMs = 3_000)

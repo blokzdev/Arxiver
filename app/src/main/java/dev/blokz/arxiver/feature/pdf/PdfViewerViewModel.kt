@@ -27,6 +27,12 @@ data class PdfViewerUiState(
     val downloading: Boolean = true,
     val error: AppError? = null,
     val nightMode: Boolean = false,
+    /**
+     * The paper's canonical web URL (arXiv abstract page, else `doi.org/<doi>`, else the source PDF), set
+     * once the paper resolves. On a download failure the reader offers this as an "open in browser" escape
+     * — the graceful degrade for a non-arXiv PDF whose host isn't egress-allowlisted (never a dead retry).
+     */
+    val externalUrl: String? = null,
 )
 
 @HiltViewModel
@@ -64,13 +70,18 @@ class PdfViewerViewModel
                     _uiState.update { it.copy(downloading = false, error = AppError.Storage("unknown paper")) }
                     return@launch
                 }
+                val externalUrl = paper.canonicalUrl()
                 val safeName = PdfStorage.safeName(paperRef.storageId, paper.latestVersion)
                 val destination = File(PdfStorage.dir(context), safeName)
                 when (val result = pdfDownloader.download(paper.pdfUrl, destination)) {
                     is AppResult.Success ->
-                        _uiState.update { it.copy(file = result.value, downloading = false) }
+                        _uiState.update {
+                            it.copy(file = result.value, downloading = false, externalUrl = externalUrl)
+                        }
                     is AppResult.Failure ->
-                        _uiState.update { it.copy(downloading = false, error = result.error) }
+                        _uiState.update {
+                            it.copy(downloading = false, error = result.error, externalUrl = externalUrl)
+                        }
                 }
             }
         }

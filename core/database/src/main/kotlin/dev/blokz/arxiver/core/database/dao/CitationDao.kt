@@ -63,12 +63,18 @@ interface CitationDao {
         syncedAt: Long,
     )
 
-    /** Library papers due for a citation refresh, stalest first. */
+    /**
+     * Library papers due for a citation refresh, stalest first. arXiv-only: Semantic Scholar is keyed by
+     * arXiv id (`paperByArxivId`), so a non-arXiv (chemRxiv, PS.1) row would produce a malformed request
+     * every cycle — filter it out here, mirroring the DispatchRepository origin gate. Note the parentheses:
+     * `origin = 'arxiv' AND (…OR…)` (without them the OR would leak non-arXiv rows).
+     */
     @Query(
         """
         SELECT p.* FROM papers p
         JOIN library_entries le ON le.paper_id = p.id
-        WHERE p.citations_synced_at IS NULL OR p.citations_synced_at < :staleBefore
+        WHERE p.origin = 'arxiv'
+          AND (p.citations_synced_at IS NULL OR p.citations_synced_at < :staleBefore)
         ORDER BY p.citations_synced_at IS NOT NULL, p.citations_synced_at ASC
         LIMIT :limit
         """,

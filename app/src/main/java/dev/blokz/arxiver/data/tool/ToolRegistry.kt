@@ -32,6 +32,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.ZoneOffset
 
 @Serializable
@@ -612,10 +613,14 @@ class ToolRegistry(
 
     private fun JsonObject.intAt(path: String): Int? = primitiveAt(path)?.intOrNull
 
-    /** chemRxiv `publishedDate` → Instant: an ISO instant first, then a bare date; absent/unparseable → EPOCH. */
+    /**
+     * chemRxiv `publishedDate` → Instant. Tries, in order: an ISO instant (`…Z`/offset), an offset-less
+     * local date-time (`2024-03-01T00:00:00`, read as UTC), then a bare date; absent/unparseable → EPOCH.
+     */
     private fun String?.toInstantOrEpoch(): Instant =
         this?.let {
             runCatching { Instant.parse(it) }.getOrNull()
+                ?: runCatching { LocalDateTime.parse(it).toInstant(ZoneOffset.UTC) }.getOrNull()
                 ?: runCatching { LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant() }.getOrNull()
         } ?: Instant.EPOCH
 

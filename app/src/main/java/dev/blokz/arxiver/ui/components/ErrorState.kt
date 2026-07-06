@@ -31,6 +31,8 @@ fun ErrorState(
     message: String,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
 ) {
     Column(
         modifier =
@@ -51,15 +53,24 @@ fun ErrorState(
                 Text(stringResource(R.string.action_retry))
             }
         }
+        // Optional escape hatch (e.g. "Open in browser" when an in-app fetch fails but a canonical web URL
+        // exists) — the graceful degrade so a failed load is never a terminal dead end.
+        if (secondaryLabel != null && onSecondary != null) {
+            TextButton(onClick = onSecondary) {
+                Text(secondaryLabel)
+            }
+        }
     }
 }
 
-/** Maps a network/storage [AppError] to a user-facing message + retry. */
+/** Maps a network/storage [AppError] to a user-facing message + retry (+ an optional secondary action). */
 @Composable
 fun ErrorState(
     error: AppError?,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    secondaryLabel: String? = null,
+    onSecondary: (() -> Unit)? = null,
 ) {
     ErrorState(
         message =
@@ -70,6 +81,8 @@ fun ErrorState(
             },
         modifier = modifier,
         onRetry = onRetry,
+        secondaryLabel = secondaryLabel,
+        onSecondary = onSecondary,
     )
 }
 

@@ -20,6 +20,7 @@ import dev.blokz.arxiver.core.ai.ReaderPosition
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.data.PaperRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -85,6 +86,10 @@ class HtmlReaderViewModel
         private val applicationScope: CoroutineScope,
     ) : ViewModel() {
         internal val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
+
+        // The HTML edition (LaTeXML) is arXiv-only. If a non-arXiv storageId ("chemrxiv:…") ever reaches
+        // this route, load() degrades straight to PDF rather than mangle-fetching arxiv.org/html/<it> (PS.1).
+        private val isArxiv = PaperRef.fromStorageId(paperId.value).arxivIdOrNull != null
 
         private val _uiState = MutableStateFlow(HtmlReaderUiState())
         val uiState: StateFlow<HtmlReaderUiState> = _uiState.asStateFlow()
@@ -179,6 +184,11 @@ class HtmlReaderViewModel
         }
 
         private fun load() {
+            if (!isArxiv) {
+                // Defense-in-depth: never mangle-fetch arxiv.org/html/<non-arxiv-id> — go straight to PDF.
+                viewModelScope.launch { _effects.send(HtmlReaderEffect.FallbackToPdf(paperId.value)) }
+                return
+            }
             _uiState.update { it.copy(loading = true, doc = null, error = null) }
             viewModelScope.launch {
                 // latestVersion drives the cache key + the fetch URL; ?:1 is safe (the fetcher does a

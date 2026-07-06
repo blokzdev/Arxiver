@@ -14,9 +14,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * [dev.blokz.arxiver.core.network.AllowedHostsInterceptor] (also host-gated), and a caller can't pass the
  * wrong source for an `arxiv.org` URL to dodge the ≥3s line.
  *
- * RED LINE: [arxivLimiter] MUST be the SAME singleton the Atom/HTML fetchers hold (DI wires the injected
- * instance), else arXiv requests stop serializing against them and the global ≥3s spacing silently breaks.
- * `PdfHostPolicyTest` asserts reference identity of the returned limiter, not merely its spacing value.
+ * RED LINE: [arxivLimiter] MUST be the SAME singleton the Atom/HTML fetchers hold, else arXiv requests stop
+ * serializing against them and the global ≥3s spacing silently breaks. Two guards: `PdfHostPolicyTest`
+ * asserts this class returns the exact instance it was constructed with (reference identity, not spacing),
+ * and the `:app` `PdfLimiterWiringTest` asserts the `pdfDownloader` DI provider passes the injected
+ * singleton (not a fresh `ArxivRateLimiter()`) into [arxivLimiter].
  */
 class PdfHostPolicy(
     private val arxivLimiter: ArxivRateLimiter,

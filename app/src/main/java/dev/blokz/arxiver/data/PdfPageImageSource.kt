@@ -9,6 +9,7 @@ import android.util.Base64
 import androidx.core.graphics.createBitmap
 import dev.blokz.arxiver.core.ai.ChatImage
 import dev.blokz.arxiver.core.common.DispatcherProvider
+import dev.blokz.arxiver.core.model.PaperRef
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -76,10 +77,15 @@ class PdfPageImageSource(
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     val base64 = bitmap.toJpegBase64()
                     bitmap.recycle()
+                    // Provenance for the "what leaves the device" disclosure: an arXiv paper reads
+                    // "arXiv:<id>"; a non-arXiv storageId ("chemrxiv:<doi>") is already a sensible label,
+                    // so never prefix it with a false "arXiv:" (PS.1).
+                    val provenance =
+                        if (PaperRef.fromStorageId(paperId).arxivIdOrNull != null) "arXiv:$paperId" else paperId
                     ChatImage(
                         mediaType = "image/jpeg",
                         base64 = base64,
-                        label = "page ${pageIndex + 1} of arXiv:$paperId",
+                        label = "page ${pageIndex + 1} of $provenance",
                     )
                 }
             }
