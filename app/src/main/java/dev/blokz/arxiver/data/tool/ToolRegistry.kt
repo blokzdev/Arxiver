@@ -11,6 +11,8 @@ import dev.blokz.arxiver.core.model.ExternalPaperDraft
 import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.core.model.s2OriginFromVenue
+import dev.blokz.arxiver.core.network.AllowedHosts
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivItemHit
 import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivSearchResponse
@@ -186,18 +188,20 @@ class ToolRegistry(
     private val json = Json { ignoreUnknownKeys = true }
 
     /**
-     * Bounded LRU of importable chemRxiv drafts, keyed by DOI: populated at SEARCH time (with the full,
-     * untruncated abstract from the raw item), read at IMPORT time so import never re-fetches (chemRxiv has
-     * no get-by-DOI endpoint; a re-search would cost a second egress + politeness slot). Public metadata
-     * only — no tokens, no bytes (the red lines hold for an in-memory cache). A stale/evicted entry yields a
-     * clean "search first" error, never a fetch and never a fork. Synchronized: the tool loop is sequential,
-     * but this guards defensively against interleaved turns.
+     * Bounded LRU of importable external-source drafts (chemRxiv, bioRxiv, medRxiv), keyed by DOI:
+     * populated at SEARCH time (with the full, untruncated abstract from the raw hit), read at IMPORT time
+     * so import never re-fetches (neither chemRxiv nor the S2 search path has a cheap get-by-DOI; a
+     * re-search would cost a second egress + politeness slot). Public metadata only — no tokens, no bytes
+     * (the red lines hold for an in-memory cache). A stale/evicted entry yields a clean "search first"
+     * error, never a fetch and never a fork. DOI is globally unique, so a single flat DOI key is
+     * collision-free across sources. Synchronized: the tool loop is sequential, but this guards defensively
+     * against interleaved turns.
      */
-    private val chemDrafts: MutableMap<String, ExternalPaperDraft> =
+    private val externalDrafts: MutableMap<String, ExternalPaperDraft> =
         java.util.Collections.synchronizedMap(
             object : LinkedHashMap<String, ExternalPaperDraft>(16, 0.75f, true) {
                 override fun removeEldestEntry(eldest: Map.Entry<String, ExternalPaperDraft>): Boolean =
-                    size > CHEM_DRAFT_CACHE_SIZE
+                    size > EXTERNAL_DRAFT_CACHE_SIZE
             },
         )
 
@@ -335,12 +339,13 @@ class ToolRegistry(
         context: ToolContext,
     ): ToolExecution {
         val args = parseArgs(call)
-        // Source-aware: `source:chemrxiv` saves a cached chemRxiv draft (no network); the default (and any
-        // arXiv id) takes the existing arXiv Atom path verbatim.
-        return if (args?.stringAt("source")?.lowercase() == "chemrxiv") {
-            handleImportChemrxiv(call, args)
-        } else {
-            handleImportArxiv(call, args)
+        // Source-aware: an external `source` saves a cached draft (no network) via the shared external
+        // handler; the default (and any arXiv id) takes the existing arXiv Atom path verbatim.
+        return when (args?.stringAt("source")?.lowercase()) {
+            "chemrxiv" -> handleImportExternal(call, args, Source.CHEMRXIV)
+            "biorxiv" -> handleImportExternal(call, args, Source.BIORXIV)
+            "medrxiv" -> handleImportExternal(call, args, Source.MEDRXIV)
+            else -> handleImportArxiv(call, args)
         }
     }
 
@@ -359,17 +364,26 @@ class ToolRegistry(
         return okImport(call, id.value, imported = true, already = false, title = paper.title)
     }
 
-    private suspend fun handleImportChemrxiv(
+    private suspend fun handleImportExternal(
         call: ToolCall,
         args: JsonObject?,
+        source: Source,
     ): ToolExecution {
         val doi = args?.stringAt("doi").orEmpty()
         val draft =
-            chemDrafts[doi]
-                ?: return errorResult(call, doi, "unknown chemRxiv paper — search chemRxiv first", egress = true)
-        // Deterministic storageId ("chemrxiv:<doi>") short-circuits BEFORE any write, mirroring the arXiv
-        // path's isInLibrary check — there is no network cost on either branch.
-        val storageId = ExternalRef(Source.CHEMRXIV, doi).storageId
+            externalDrafts[doi]
+                ?: return errorResult(
+                    call,
+                    doi,
+                    "unknown ${source.displayName} paper — search first",
+                    egress = true,
+                )
+        // Deterministic storageId ("<origin>:<doi>") short-circuits BEFORE any write, mirroring the arXiv
+        // path's isInLibrary check — no network cost on either branch. Key on the DRAFT'S origin (set
+        // authoritatively at search time from the hit's venue), not the caller's `source` arg — that arg
+        // only routes here + labels the error; importExternal() persists under draft.origin, so probing the
+        // same key keeps the idempotency check honest even if the model mislabels the source.
+        val storageId = ExternalRef(draft.origin, doi).storageId
         if (isInLibrary(storageId)) {
             return okImport(call, storageId, imported = false, already = true, title = draft.title)
         }
@@ -461,6 +475,40 @@ class ToolRegistry(
         val hits =
             papers.map { p ->
                 val arxiv = p.externalIds?.ArXiv
+                val doi = p.externalIds?.DOI
+                val oaUrl = p.openAccessPdf?.url
+                val bioOrigin = s2OriginFromVenue(p.venue)
+                // De-dup chokepoint at the SEARCH site (the resolvePaperRef invariant, PaperRef.kt:102-108):
+                // arXiv-parse FIRST, so an arXiv-crossover hit is importable via the arXiv path (arXiv wins)
+                // and caches NO external draft. Only a true non-arXiv bio/medRxiv hit whose OA PDF host is
+                // ALLOWLISTED caches an importable-for-in-app-read draft (full pre-snippet abstract, from the
+                // raw hit). A doi.org / arbitrary-publisher OA URL fails closed → importable:false → read-only
+                // (the model cites it for external-open). Parse-first (not resolvePaperRef) avoids building a
+                // throwaway ref; because the bio branch is unreachable when arXiv parses, no `biorxiv:` draft
+                // ever forks an arXiv paper.
+                val importable: Boolean =
+                    if (ArxivId.parse(arxiv.orEmpty())?.first != null) {
+                        true
+                    } else if (bioOrigin != null && doi != null && oaUrl != null && AllowedHosts.isAllowedUrl(oaUrl)) {
+                        externalDrafts[doi] =
+                            ExternalPaperDraft(
+                                origin = bioOrigin,
+                                nativeId = doi,
+                                title = p.title.orEmpty(),
+                                // FULL abstract, pre-snippet — the offline read surface.
+                                abstract = p.abstract.orEmpty(),
+                                authors = p.authors.mapNotNull { it.name },
+                                // The S2 search DTO carries only `year` (no month/day) — coarse to Jan-1, else
+                                // EPOCH. Acceptable: the abstract, not the date, is the offline read surface.
+                                publishedAt =
+                                    p.year?.let { LocalDate.of(it, 1, 1).atStartOfDay(ZoneOffset.UTC).toInstant() }
+                                        ?: Instant.EPOCH,
+                                pdfUrl = oaUrl,
+                            )
+                        true
+                    } else {
+                        false
+                    }
                 S2HitDto(
                     paperId = p.paperId,
                     title = p.title.orEmpty(),
@@ -473,12 +521,11 @@ class ToolRegistry(
                     externalIds =
                         S2ExternalIdsDto(
                             arxiv = arxiv,
-                            doi = p.externalIds?.DOI,
+                            doi = doi,
                             pubmed = p.externalIds?.PubMed,
                         ),
-                    openAccessPdf = p.openAccessPdf?.url,
-                    // The exact gate handleImport uses — a hit is importable iff its arXiv id parses.
-                    importable = ArxivId.parse(arxiv.orEmpty())?.first != null,
+                    openAccessPdf = oaUrl,
+                    importable = importable,
                 )
             }
         val body = json.encodeToString(S2SearchResult.serializer(), S2SearchResult(hits))
@@ -512,7 +559,7 @@ class ToolRegistry(
                 // the RAW item — before the abstract is truncated to a snippet — so the stored paper keeps the
                 // whole abstract as its offline read surface.
                 if (doi != null && pdf != null) {
-                    chemDrafts[doi] =
+                    externalDrafts[doi] =
                         ExternalPaperDraft(
                             origin = Source.CHEMRXIV,
                             nativeId = doi,
@@ -651,7 +698,7 @@ class ToolRegistry(
         private const val ABSTRACT_SNIPPET_CHARS = 320
 
         /** Cap on the search→import chemRxiv draft LRU (public metadata only; a miss re-searches). */
-        private const val CHEM_DRAFT_CACHE_SIZE = 64
+        private const val EXTERNAL_DRAFT_CACHE_SIZE = 64
 
         private const val CITE_HINT =
             "Cite any paper you use in prose as arXiv:<id> — do NOT use bracketed [n] citations for these."
@@ -792,9 +839,10 @@ class ToolRegistry(
                 description =
                     "Save a paper to the user's on-device library. Default (arXiv): pass `arxiv_id` — its " +
                         "metadata is fetched from arxiv.org (a third party) if not already cached. To save a " +
-                        "chemRxiv hit from search_chemrxiv, pass `source:\"chemrxiv\"` and the hit's `doi` (only " +
-                        "hits with `importable:true` can be saved; no extra fetch — the search result is reused). " +
-                        "Idempotent: a paper already in the library is not re-added.",
+                        "non-arXiv hit, pass `source` and the hit's `doi`: `\"chemrxiv\"` for a search_chemrxiv " +
+                        "hit, or `\"biorxiv\"`/`\"medrxiv\"` for a search_semantic_scholar hit whose venue is " +
+                        "bioRxiv/medRxiv. Only hits with `importable:true` can be saved (no extra fetch — the " +
+                        "search result is reused). Idempotent: a paper already in the library is not re-added.",
                 inputSchema =
                     buildJsonObject {
                         put("type", "object")
@@ -814,7 +862,8 @@ class ToolRegistry(
                                         put("type", "string")
                                         put(
                                             "description",
-                                            "Set to \"chemrxiv\" to save a chemRxiv hit; omit for arXiv.",
+                                            "Set to \"chemrxiv\", \"biorxiv\", or \"medrxiv\" to save a non-arXiv " +
+                                                "hit; omit for arXiv.",
                                         )
                                     },
                                 )
@@ -822,7 +871,7 @@ class ToolRegistry(
                                     "doi",
                                     buildJsonObject {
                                         put("type", "string")
-                                        put("description", "The chemRxiv hit's DOI (required when source=chemrxiv).")
+                                        put("description", "The non-arXiv hit's DOI (required when `source` is set).")
                                     },
                                 )
                             },
@@ -838,8 +887,12 @@ class ToolRegistry(
                 description =
                     "Search Semantic Scholar (all fields of study, incl. non-arXiv papers). Your query is sent " +
                         "to api.semanticscholar.org, a third party. Returns public metadata (title, abstract/tldr, " +
-                        "authors, venue, year, citationCount, externalIds). Only hits with `importable:true` (an " +
-                        "arXiv id) can be saved via import_to_library. $CITE_HINT",
+                        "authors, venue, year, citationCount, externalIds, openAccessPdf). A hit is " +
+                        "`importable:true` when it has an arXiv id (save via `arxiv_id`) OR its venue is " +
+                        "bioRxiv/medRxiv with an open-access PDF we can read in-app (save via " +
+                        "`source:\"biorxiv\"`/`\"medrxiv\"` + `doi`). Other hits are read-only: cite their DOI/URL " +
+                        "in prose for the user to open externally — do not call import_to_library on them. " +
+                        "$CITE_HINT",
                 inputSchema =
                     buildJsonObject {
                         put("type", "object")
