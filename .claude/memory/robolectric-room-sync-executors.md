@@ -28,6 +28,15 @@ victim passes in isolation but flakes in the full suite). It is NOT a separate c
 distinct from the JDK-21 teardown flake in [[local-build-jdk17]] (that one WAS `ArxiverApplication.onCreate`
 fire-and-forget IO, fixed via a `CoroutineExceptionHandler`).
 
-**Fix applied to ALL 18 `:app` Room+Robolectric suites (PS.2, 2026-07-05)** — every in-memory `db` builder now
-carries the two synchronous executors, so no background refresh remains anywhere to leak, order-independent. Any
-NEW Room+Robolectric suite must add the same two lines.
+**Applied to ALL `:app` Room+Robolectric suites (PS.2, 2026-07-05; 19 suites as of PF.2)** — every in-memory `db`
+builder carries the two synchronous executors. Any NEW Room+Robolectric suite must add the same two lines.
+
+**These executors REDUCE but do NOT fully ELIMINATE the cross-test leak (corrected 2026-07-06, PF.2).** It
+recurred on a PF.2 full-suite run (`FilteredPapersViewModelTest` as the victim; green on a plain re-run — so it's
+nondeterministic, not a regression). Root cause the sync executors miss: the leftover invalidation refresh runs on
+**`ArchTaskExecutor`'s `arch_disk_io` thread**, which `setQueryExecutor`/`setTransactionExecutor` do **not**
+override. The root-cause kill is an `androidx.arch.core:core-testing` **`InstantTaskExecutorRule`** (or an
+equivalent `ArchTaskExecutor.getInstance().setDelegate` sync shim) on every Room+Robolectric suite — tracked as a
+focused test-infra PR in the ROADMAP backlog (repo-wide, watch the sync-emission-timing side effect above).
+**Operationally:** if the full `:app` suite flakes on `UncaughtExceptionsBeforeTest` in CI, re-kick once (loop step
+8) — it is this known race, not the diff under review.

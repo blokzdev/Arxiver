@@ -1,0 +1,50 @@
+{
+ "messages": [
+  {
+   "status": "ok",
+   "category": "neuroscience",
+   "interval": "2026-06-01:2026-06-07",
+   "funder": "all",
+   "cursor": 0,
+   "count": 30,
+   "count_new_papers": "172",
+   "total": "263"
+  }
+ ],
+ "collection": [
+  {
+   "title": "Transcutanenous auricular vagus nerve stimulation affects sustained attention in an order-dependent manner.",
+   "authors": "Wienke, C.; Woller, J. P.; Zuberer, A.; Gharabaghi, A.; Zaehle, T.",
+   "author_corresponding": "Tino Zaehle",
+   "author_corresponding_institution": "Otto-von-Guericke University Magdeburg",
+   "doi": "10.1101/2025.10.07.680948",
+   "date": "2026-06-01",
+   "version": "3",
+   "type": "new results",
+   "license": "",
+   "category": "neuroscience",
+   "jatsxml": "https://www.biorxiv.org/content/early/2026/06/01/2025.10.07.680948.source.xml",
+   "abstract": "BackgroundSustained attention, the ability to remain focused during a task, relies on Locus coeruleus - Noradrenaline (LC-NA) activity. Noninvasive transcutaneous auricular vagus nerve stimulation (taVNS) is a promising tool to modulate LC-NA activity. We investigated the effects of taVNS on behavioral and electrophysiological markers of sustained attention during a Go-Nogo task.\n\nMethodsForty-four healthy participants (36 female) performed the gradual-onset Continuous Performance Task (gradCPT) on two days > 24 hours apart while EEG was recorded. 500 ms trains of taVNS or Sham stimulation was applied with each stimulus in a pseudorandomized fashion. Brain activity during the task was recorded with EEG. Behavioral and electrophysiological parameters of sustained attention were analyzed using (generalized) linear mixed models.\n\nResultsWhen delivered during the first session, taVNS accelerated reaction times and enhanced fronto-central P1-N1 and parietal N1-P2 amplitudes. Larger P1-N1 amplitudes predicted faster responses, linking early cortical gain to behavioral performance. RT improvements persisted into the next-day sham session, whereas taVNS applied only during the familiar second session was ineffective. However, taVNS also increased RT variability, speaking against a general beneficial effect of taVNS on response automation.\n\nConclusionWe show that taVNS modulates behavioral and electrophysiologial parameters of sustained attention and that this modulation depended on the applied stimulation order. These observations have important implications for future taVNS studies where the order of stimulation is counterbalanced across subjects.",
+   "funder": "NA",
+   "published": "NA",
+   "server": "bioRxiv"
+  },
+  {
+   "title": "Axially decoupled photo-stimulation and two photon readout (ADePT) for mapping functional connectivity of neural circuits",
+   "authors": "Koh, M.; Anselmi, F.; Kaushalya, S. K.; Hernandez, D. E.; Bast, W. G.; Villar, P. S.; Chae, H.; Davis, M. B.; Teja, S. S.; Qu, Z.; Gradinaru, V.; Gupta, P.; Banerjee, A.; Albeanu, D. F.",
+   "author_corresponding": "Dinu F Albeanu",
+   "author_corresponding_institution": "Cold Spring Harbor Laboratory",
+   "doi": "10.1101/2025.02.24.639992",
+   "date": "2026-06-01",
+   "version": "4",
+   "type": "new results",
+   "license": "",
+   "category": "neuroscience",
+   "jatsxml": "https://www.biorxiv.org/content/early/2026/06/01/2025.02.24.639992.source.xml",
+   "abstract": "All-optical in vivo physiology enables three-dimensional interrogation of neural circuits function. Here, we introduce ADePT (Axially-Decoupled Photo-stimulation and Two-photon readout), a strategy that combines flexible optogenetic stimulation with neural activity imaging. ADePT achieves axially contained widefield patterned stimulation by coupling a digital micro-mirror device illuminated by a solid-state laser to a motorized holographic diffuser, while in parallel performing multiphoton imaging across different z-planes. As a proof of principle, we apply ADePT to map excitatory and inhibitory functional connectivity in the mouse early olfactory system. By controlling activity in individual glomeruli on the olfactory bulb surface and recording responses from output mitral and tufted cells in deeper layers, we identify cohorts of sister cells driven by the same parent glomerulus and analyze their distinct connectivity patterns. We further report specificity in the inhibitory circuitry, as we find that GABAergic/dopaminergic (DAT+) interneurons associated with different glomeruli selectively suppress baseline and odor-evoked activity in distinct mitral and tufted cell populations. Together, these results establish ADePT as a platform for high-throughput functional connectivity mapping in optically accessible brain regions.",
+   "funder": "NA",
+   "published": "NA",
+   "server": "bioRxiv"
+  }
+ ]
+}

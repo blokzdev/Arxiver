@@ -405,6 +405,36 @@ object AppModule {
             apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.OPENALEX) },
         )
 
+    // P-Feeds PF.2: native bioRxiv/medRxiv discovery client (api.biorxiv.org, un-gated, server-side category).
+    // Own 1.2s polite mutex — NOT the ≥3s arXiv limiter. Serves the follow engine, not a chat tool.
+    @Provides
+    @Singleton
+    fun bioRxivApiClient(
+        @ArxivClient httpClient: OkHttpClient,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.network.biorxiv.BioRxivApiClient =
+        dev.blokz.arxiver.core.network.biorxiv.BioRxivApiClient(httpClient, dispatchers)
+
+    // P-Feeds PF.2: the multi-source follow engine. Each source resolves to its best backend — bio/med native,
+    // chemRxiv (+ new sources, PF.3) via OpenAlex. arXiv keeps its native Atom path (backendFor → null).
+    @Provides
+    @Singleton
+    fun preprintBackendRegistry(
+        bioRxivApiClient: dev.blokz.arxiver.core.network.biorxiv.BioRxivApiClient,
+        openAlexClient: dev.blokz.arxiver.core.network.openalex.OpenAlexClient,
+    ): dev.blokz.arxiver.core.network.PreprintBackendRegistry =
+        dev.blokz.arxiver.core.network.PreprintBackendRegistry(
+            bioRxivBackend = dev.blokz.arxiver.core.network.biorxiv.BioRxivBackend(bioRxivApiClient),
+            openAlexBackend =
+                dev.blokz.arxiver.core.network.openalex.OpenAlexBackend(openAlexClient) { s ->
+                    when (s) {
+                        dev.blokz.arxiver.core.model.Source.CHEMRXIV ->
+                            dev.blokz.arxiver.core.network.openalex.OpenAlexClient.SID_CHEMRXIV
+                        else -> null // new sources (Research Square/SSRN/…) land in PF.3
+                    }
+                },
+        )
+
     @Provides
     fun embeddingDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.EmbeddingDao = db.embeddingDao()
 

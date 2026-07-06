@@ -11,9 +11,9 @@ import kotlin.test.assertTrue
  * either directly (`rateLimiter.acquire()`) or, since P-Sources PS.1's per-host PDF policy, via
  * `hostPolicy.limiterFor(url).acquire()` (matched by the `.limiterFor(` marker — [PdfHostPolicy] always
  * `.acquire()`s the returned limiter at that call site). The exceptions are the self-spacing search
- * clients `SemanticScholarClient` (`/s2/`, PT.3), `ChemRxivClient` (`/chemrxiv/`, PT.4), and `OpenAlexClient`
- * (`/openalex/`, P-Feeds), each with its own 1.2s politeness mutex — host-gated on the `@ArxivClient` allowlist
- * but deliberately NOT ≥3s-throttled by the shared arXiv limiter.
+ * clients `SemanticScholarClient` (`/s2/`, PT.3), `ChemRxivClient` (`/chemrxiv/`, PT.4), `OpenAlexClient`
+ * (`/openalex/`) and `BioRxivApiClient` (`/biorxiv/`, both P-Feeds), each with its own 1.2s politeness mutex —
+ * host-gated on the `@ArxivClient` allowlist but deliberately NOT ≥3s-throttled by the shared arXiv limiter.
  */
 class NoDirectNewCallStructuralTest {
     @Test
@@ -34,7 +34,8 @@ class NoDirectNewCallStructuralTest {
                     // mutex, not the ≥3s ArxivRateLimiter — documented exceptions, gated on the @ArxivClient host.
                     val path = f.path.replace('\\', '/')
                     val isSelfSpacedException =
-                        path.contains("/s2/") || path.contains("/chemrxiv/") || path.contains("/openalex/")
+                        path.contains("/s2/") || path.contains("/chemrxiv/") ||
+                            path.contains("/openalex/") || path.contains("/biorxiv/")
                     !hasAcquire && !isSelfSpacedException
                 }
                 .map { it.name }
