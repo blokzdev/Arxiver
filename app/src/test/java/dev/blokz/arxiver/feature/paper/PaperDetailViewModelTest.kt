@@ -55,7 +55,14 @@ class PaperDetailViewModelTest {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         server = MockWebServer().apply { start() }
         val context = ApplicationProvider.getApplicationContext<Context>()
-        db = Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java).build()
+        db =
+            Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
+                // Synchronous executors so the InvalidationTracker refresh can't race db.close() and
+                // leak an "Illegal connection pointer" into the next test (memory
+                // robolectric-room-sync-executors).
+                .setQueryExecutor { it.run() }
+                .setTransactionExecutor { it.run() }
+                .build()
         val client =
             ArxivApiClient(
                 httpClient = OkHttpClient(),

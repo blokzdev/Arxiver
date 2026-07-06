@@ -20,4 +20,14 @@ Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
 
 **Side effect to watch:** the sync executor changes StateFlow emission *timing* — the initial state may already be populated, so a Turbine test that assumed a separate empty `awaitItem()` before the populated one breaks. Use an `awaitItemMatching { … }` drain (loop `awaitItem()` until the predicate holds) instead of positional `awaitItem()` assumptions.
 
-Distinct from the JDK-21 coroutine-teardown flake in [[local-build-jdk17]] (that one was `ArxiverApplication.onCreate` fire-and-forget IO leaking into the next `runTest`, fixed via a `CoroutineExceptionHandler`). ~14 other Room+Robolectric suites still use the default async builder — adopt this pattern if they flake.
+**The cross-test symptom is the SAME family.** `kotlinx.coroutines.test.UncaughtExceptionsBeforeTest` (thrown at
+the *next* test's `runTest` startup) is this same InvalidationTracker refresh leaking from a *prior* suite that
+lacked the fix — its background refresh throws `Illegal connection pointer` on the `arch_disk_io` thread AFTER
+that suite's `db.close()`, and kotlinx-coroutines-test reports it against whatever test starts next (so the
+victim passes in isolation but flakes in the full suite). It is NOT a separate coroutine-leak family, and it is
+distinct from the JDK-21 teardown flake in [[local-build-jdk17]] (that one WAS `ArxiverApplication.onCreate`
+fire-and-forget IO, fixed via a `CoroutineExceptionHandler`).
+
+**Fix applied to ALL 18 `:app` Room+Robolectric suites (PS.2, 2026-07-05)** — every in-memory `db` builder now
+carries the two synchronous executors, so no background refresh remains anywhere to leak, order-independent. Any
+NEW Room+Robolectric suite must add the same two lines.

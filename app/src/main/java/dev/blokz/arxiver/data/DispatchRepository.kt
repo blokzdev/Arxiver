@@ -42,7 +42,22 @@ sealed interface DispatchSubmission {
     data class AuthRejected(val dispatchId: Long) : DispatchSubmission
 
     data class PayloadTooLarge(val byteSize: Int, val limit: Int) : DispatchSubmission
+
+    /** A non-PING selection that built to zero papers (all filtered out) — nothing was POSTed. */
+    data object NothingToDispatch : DispatchSubmission
 }
+
+/**
+ * A non-PING dispatch whose selection was non-empty but built to ZERO papers (every selected paper was
+ * dropped — e.g. an all-non-arXiv selection filtered out by [DispatchRepository]'s arXiv-only payload
+ * chokepoint) must NOT POST a paperless envelope. PING legitimately carries zero papers, so it is never
+ * suppressed. Pure so the guard is unit-testable without the repository's Room/TokenVault graph.
+ */
+internal fun isEmptyNonPingDispatch(
+    requestedPaperCount: Int,
+    builtPaperCount: Int,
+    action: RoutineAction,
+): Boolean = requestedPaperCount > 0 && builtPaperCount == 0 && action != RoutineAction.PING
 
 @Singleton
 class DispatchRepository
@@ -119,6 +134,11 @@ class DispatchRepository
                 return DispatchSubmission.PayloadTooLarge(payload.byteSize, payload.limit)
             }
             val ready = payload as PayloadResult.Ready
+            if (isEmptyNonPingDispatch(paperIds.size, ready.paperCount, action)) {
+                // Every selected paper was filtered out (e.g. an all-non-arXiv selection). Don't record or
+                // POST a paperless envelope — surface "nothing to dispatch" to the caller instead.
+                return DispatchSubmission.NothingToDispatch
+            }
             val dispatchId =
                 routineDao.insertDispatch(
                     RoutineDispatchEntity(

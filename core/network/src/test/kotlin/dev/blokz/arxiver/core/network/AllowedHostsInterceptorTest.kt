@@ -102,6 +102,17 @@ class AllowedHostsInterceptorTest {
     }
 
     @Test
+    fun `a bioRxiv PDF hop proceeds but an off-host CDN redirect is blocked per hop (PS2)`() {
+        val pdfHop = FakeChain(req("https://www.biorxiv.org/content/10.1101/2024.01.07.574543v1.full.pdf"))
+        interceptor.intercept(pdfHop)
+        assertTrue(pdfHop.proceeded)
+        // A 302 to an off-host CDN is a NEW disallowed host — the per-hop network interceptor throws.
+        val cdnHop = FakeChain(req("https://cdn.biorxiv.org/content/x.full.pdf"))
+        assertFailsWith<IOException> { interceptor.intercept(cdnHop) }
+        assertFalse(cdnHop.proceeded, "an off-host CDN origin must be blocked per hop")
+    }
+
+    @Test
     fun `as an application interceptor a disallowed host opens no socket`() {
         // The app-interceptor slot runs before ConnectInterceptor, so this throws with NO real network
         // (we never reach evil.example). Proves the pre-connection gate end-to-end.

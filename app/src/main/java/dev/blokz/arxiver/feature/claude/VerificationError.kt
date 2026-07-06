@@ -45,6 +45,8 @@ sealed interface VerificationError {
                         else -> Rejected(submission.httpCode)
                     }
                 is DispatchSubmission.PayloadTooLarge -> Rejected(null)
+                // Not a verification error (a PING never builds an empty non-PING selection); no error to show.
+                is DispatchSubmission.NothingToDispatch -> null
             }
     }
 }

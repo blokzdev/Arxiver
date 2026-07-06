@@ -392,17 +392,24 @@ class ToolRegistryTest {
     private fun s2Paper(
         title: String,
         arxiv: String? = null,
+        // PS.2 overrides — venue drives the bio/medRxiv classifier, oaUrl the host-gate. Defaults keep the
+        // PT.3 hits non-importable (venue NeurIPS, OA host "x" not allowlisted) exactly as before.
+        venue: String = "NeurIPS",
+        oaUrl: String? = "https://x/$title.pdf",
+        doi: String? = "10.1/$title",
+        abstract: String = "Abstract of $title",
+        year: Int? = 2024,
     ) = S2SearchPaper(
         paperId = "s2:$title",
         title = title,
-        abstract = "Abstract of $title",
+        abstract = abstract,
         tldr = S2Tldr(text = "tldr of $title"),
-        externalIds = S2ExternalIds(ArXiv = arxiv, DOI = "10.1/$title"),
-        venue = "NeurIPS",
-        year = 2024,
+        externalIds = S2ExternalIds(ArXiv = arxiv, DOI = doi),
+        venue = venue,
+        year = year,
         authors = listOf(S2Author(name = "A. Author")),
         citationCount = 42,
-        openAccessPdf = S2OpenAccessPdf(url = "https://x/$title.pdf"),
+        openAccessPdf = oaUrl?.let { S2OpenAccessPdf(url = it) },
     )
 
     @Test
@@ -418,7 +425,7 @@ class ToolRegistryTest {
         assertTrue(r.egress)
         val hits = body(r.result.contentJson)["hits"]!!.jsonArray
         assertEquals(2, hits.size)
-        // Hit A carries an arXiv id → importable; hit B does not → read-only (non-arXiv import is out of scope).
+        // Hit A carries an arXiv id → importable; hit B (venue NeurIPS, no arXiv, non-preprint) → read-only.
         assertEquals(true, hits[0].jsonObject["importable"]!!.jsonPrimitive.boolean)
         assertEquals(false, hits[1].jsonObject["importable"]!!.jsonPrimitive.boolean)
         assertEquals("tldr of A", hits[0].jsonObject["tldr"]!!.jsonPrimitive.content)
@@ -451,6 +458,158 @@ class ToolRegistryTest {
         val r = exec(failReg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
         assertTrue(r.result.isError)
         assertTrue(r.egress)
+    }
+
+    // --- PS.2: bioRxiv/medRxiv S2 import (host-gated importability + de-dup, venue-classified) ---
+
+    @Test
+    fun `a bioRxiv S2 hit with an allowlisted OA PDF is importable, caches the full abstract, stores a biorxiv row`() {
+        val longAbstract = "genomics ".repeat(50) // 450 chars > ABSTRACT_SNIPPET_CHARS (320)
+        val bioUrl = "https://www.biorxiv.org/content/10.1101/2024.01.07.574543v1.full.pdf"
+        val saved = mutableSetOf<String>()
+        val drafts = mutableListOf<ExternalPaperDraft>()
+        val reg =
+            registry(
+                savedIds = saved,
+                importedDrafts = drafts,
+                searchSemanticScholar = { _, _, _, _, _ ->
+                    AppResult.Success(
+                        S2SearchResponse(
+                            data =
+                                listOf(
+                                    s2Paper(
+                                        "Bio",
+                                        venue = "bioRxiv",
+                                        oaUrl = bioUrl,
+                                        doi = "10.1101/2024.01.07.574543",
+                                        abstract = longAbstract,
+                                    ),
+                                ),
+                        ),
+                    )
+                },
+            )
+        // 1) search: importable, and the DTO body carries only the truncated snippet.
+        val search = exec(reg, """{"query":"genomics"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        val hit = body(search.result.contentJson)["hits"]!!.jsonArray.single().jsonObject
+        assertTrue(hit["importable"]!!.jsonPrimitive.boolean, "a bioRxiv hit with an allowlisted OA host is importable")
+        assertEquals(320, hit["abstractSnippet"]!!.jsonPrimitive.content.length, "the DTO snippet is truncated")
+        // 2) import by source+doi → biorxiv:<doi> row, no network, imported=true.
+        val import =
+            exec(reg, """{"source":"biorxiv","doi":"10.1101/2024.01.07.574543"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertFalse(import.result.isError)
+        assertTrue(import.egress, "external import is egress-classed")
+        assertEquals(true, body(import.result.contentJson)["imported"]!!.jsonPrimitive.boolean)
+        assertTrue("biorxiv:10.1101/2024.01.07.574543" in saved, "library keyed under the bioRxiv storage id")
+        assertEquals(Source.BIORXIV, drafts.single().origin)
+        assertEquals(longAbstract, drafts.single().abstract, "the STORED draft kept the full pre-snippet abstract")
+        assertEquals(bioUrl, drafts.single().pdfUrl, "S2's OA PDF url is stored verbatim")
+        // 3) re-import short-circuits as already-in-library, does NOT store again.
+        val again =
+            exec(reg, """{"source":"biorxiv","doi":"10.1101/2024.01.07.574543"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertEquals(true, body(again.result.contentJson)["alreadyInLibrary"]!!.jsonPrimitive.boolean)
+        assertEquals(1, drafts.size, "a re-import must not store twice")
+    }
+
+    @Test
+    fun `a medRxiv S2 hit with an allowlisted OA PDF stores a medrxiv row`() {
+        val medUrl = "https://www.medrxiv.org/content/10.1101/2024.02.02.24302001v1.full.pdf"
+        val doi = "10.1101/2024.02.02.24302001"
+        val saved = mutableSetOf<String>()
+        val drafts = mutableListOf<ExternalPaperDraft>()
+        val papers = listOf(s2Paper("Med", venue = "medRxiv", oaUrl = medUrl, doi = doi))
+        val reg =
+            registry(
+                savedIds = saved,
+                importedDrafts = drafts,
+                searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse(data = papers)) },
+            )
+        exec(reg, """{"query":"trial"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        val import = exec(reg, """{"source":"medrxiv","doi":"$doi"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertFalse(import.result.isError)
+        assertTrue("medrxiv:$doi" in saved, "library keyed under the medRxiv storage id")
+        assertEquals(Source.MEDRXIV, drafts.single().origin)
+    }
+
+    @Test
+    fun `a bio-med hit with a non-allowlisted or absent OA PDF fails closed — read-only, not cached`() {
+        val drafts = mutableListOf<ExternalPaperDraft>()
+        val papers =
+            listOf(
+                // bio venue, but the OA URL is a DOI resolver (not allowlisted) → read-only.
+                s2Paper("Doi", venue = "bioRxiv", oaUrl = "https://doi.org/x", doi = "10.1101/doi"),
+                // med venue, but NO OA PDF at all → read-only.
+                s2Paper("NoPdf", venue = "medRxiv", oaUrl = null, doi = "10.1101/nopdf"),
+                // a non-preprint venue even WITH an allowlisted OA host → read-only (the venue gate).
+                s2Paper("Jrnl", venue = "Nature", oaUrl = "https://www.biorxiv.org/j.pdf", doi = "10.1/j"),
+            )
+        val reg =
+            registry(
+                importedDrafts = drafts,
+                searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse(data = papers)) },
+            )
+        val search = exec(reg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        val hits = body(search.result.contentJson)["hits"]!!.jsonArray
+        assertEquals(false, hits[0].jsonObject["importable"]!!.jsonPrimitive.boolean, "doi.org OA host fails closed")
+        assertEquals(false, hits[1].jsonObject["importable"]!!.jsonPrimitive.boolean, "no OA PDF → read-only")
+        assertEquals(false, hits[2].jsonObject["importable"]!!.jsonPrimitive.boolean, "non-preprint venue → read-only")
+        // none cached → a source import errors cleanly, no network, nothing stored.
+        val imp = exec(reg, """{"source":"biorxiv","doi":"10.1101/doi"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertTrue(imp.result.isError, "a non-cached DOI cannot be imported")
+        assertTrue(imp.egress)
+        assertTrue(drafts.isEmpty(), "nothing stored")
+    }
+
+    @Test
+    fun `a bioRxiv hit with a blank DOI fails closed — never keys a poisoned biorxiv row`() {
+        // A `"DOI":""` from S2 deserializes to "" (nullable field). Without the blank-filter it would key
+        // externalDrafts[""] and persist a `biorxiv:` PK every empty-DOI hit collides on.
+        val drafts = mutableListOf<ExternalPaperDraft>()
+        val papers =
+            listOf(s2Paper("Blank", venue = "bioRxiv", oaUrl = "https://www.biorxiv.org/x.full.pdf", doi = ""))
+        val reg =
+            registry(
+                importedDrafts = drafts,
+                searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse(data = papers)) },
+            )
+        val search = exec(reg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        val hit = body(search.result.contentJson)["hits"]!!.jsonArray.single().jsonObject
+        assertEquals(false, hit["importable"]!!.jsonPrimitive.boolean, "a blank DOI is not importable")
+        // and a source:biorxiv import with an empty doi errors (nothing cached), never stores a `biorxiv:` row.
+        val imp = exec(reg, """{"source":"biorxiv","doi":""}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertTrue(imp.result.isError)
+        assertTrue(drafts.isEmpty(), "no poisoned row stored")
+    }
+
+    @Test
+    fun `a pathological S2 year degrades one hit to EPOCH, never nuking the whole result set`() {
+        // LocalDate.of(year,1,1) throws for a year outside the ISO range; inside papers.map that would
+        // discard EVERY hit. runCatching must degrade only the offending hit's date.
+        val bioUrl = "https://www.biorxiv.org/x.full.pdf"
+        val papers =
+            listOf(s2Paper("Bad", venue = "bioRxiv", oaUrl = bioUrl, doi = "10.1101/bad", year = Int.MAX_VALUE))
+        val reg =
+            registry(searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse(data = papers)) })
+        val search = exec(reg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        assertFalse(search.result.isError, "a bad year must not fail the whole search")
+        val hits = body(search.result.contentJson)["hits"]!!.jsonArray
+        assertEquals(1, hits.size, "the hit still returns (its date just falls back to EPOCH)")
+    }
+
+    @Test
+    fun `an arXiv-crossover bioRxiv hit is importable via arXiv and caches no biorxiv draft (no fork)`() {
+        val bioUrl = "https://www.biorxiv.org/content/10.1101/x.full.pdf"
+        val papers = listOf(s2Paper("X", arxiv = "2401.99999", venue = "bioRxiv", oaUrl = bioUrl, doi = "10.1101/x"))
+        val reg =
+            registry(
+                searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse(data = papers)) },
+            )
+        val search = exec(reg, """{"query":"x"}""", extCtx, ToolRegistry.SEARCH_SEMANTIC_SCHOLAR_NAME)
+        val hit = body(search.result.contentJson)["hits"]!!.jsonArray.single().jsonObject
+        assertTrue(hit["importable"]!!.jsonPrimitive.boolean, "importable via the arXiv path (arXiv wins)")
+        // The arXiv-parse-first gate cached NO biorxiv draft → a source:biorxiv import fails closed (no fork).
+        val fork = exec(reg, """{"source":"biorxiv","doi":"10.1101/x"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertTrue(fork.result.isError, "no biorxiv draft cached — the arXiv id wins, the crossover never forks")
     }
 
     // --- PT.4: search_chemrxiv (EXTERNAL) ---

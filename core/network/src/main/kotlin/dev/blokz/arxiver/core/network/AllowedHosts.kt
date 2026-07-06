@@ -1,5 +1,7 @@
 package dev.blokz.arxiver.core.network
 
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+
 /**
  * The egress allowlist for the app's network red line (SPEC-P-HTML §7, CLAUDE.md "Network calls only
  * to …"). Every host the app is permitted to reach over HTTPS, lowercased and canonical. Enforced by
@@ -31,9 +33,29 @@ object AllowedHosts {
             // fetch may get a 200 HTML challenge, which PdfDownloader rejects → the reader degrades to
             // external-open; device-verify per VERIFICATION §Q-PS4.)
             "chemrxiv.org",
+            // bioRxiv / medRxiv PDF hosts (P-Sources PS.2, user-approved). S2 hands back a paper's
+            // open-access PDF URL verbatim; a hit is importable-for-in-app-read only when that URL's host
+            // is one of these (host-gated, not origin-gated — the OA host and the identity origin are
+            // independent). Exact-match: a `doi.org` or arbitrary-publisher OA URL fails closed (read-only,
+            // external-open), and an off-host CDN redirect is rejected per hop.
+            "www.biorxiv.org",
+            "www.medrxiv.org",
             // the pinned model-download host
             "huggingface.co",
         )
 
     fun isAllowed(host: String?): Boolean = host != null && host.lowercase() in ALLOWED
+
+    /**
+     * Host-gate a full URL: true iff it is **https** AND its parsed host is allowlisted. A
+     * null/malformed/non-HTTP(S)/http URL fails closed. Requiring https here keeps the search-time
+     * importability gate aligned with the fetch-time [AllowedHostsInterceptor] (which rejects non-https),
+     * so a hit is never flagged importable only to fail at download. Host extraction lives here in
+     * `:core:network` (which already depends on okhttp) so callers in `:app`'s `data/tool` package never
+     * import okhttp directly — the `ToolPackageNoOkHttpStructuralTest` red line.
+     */
+    fun isAllowedUrl(url: String?): Boolean {
+        val parsed = url?.toHttpUrlOrNull() ?: return false
+        return parsed.scheme == "https" && isAllowed(parsed.host)
+    }
 }

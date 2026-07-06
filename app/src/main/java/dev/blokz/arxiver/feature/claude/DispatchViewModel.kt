@@ -172,6 +172,17 @@ class DispatchViewModel
                         _uiState.update {
                             it.copy(sending = false, error = "Dispatch failed: ${submission.reason}")
                         }
+                    is DispatchSubmission.NothingToDispatch ->
+                        _uiState.update {
+                            it.copy(
+                                sending = false,
+                                // Cause-neutral: the guard can't distinguish the arXiv-only filter from a
+                                // paper missing in the DB — state the outcome, give the common reason as context.
+                                error =
+                                    "Nothing to dispatch from the selection — routines currently " +
+                                        "accept arXiv papers only.",
+                            )
+                        }
                     is DispatchSubmission.PayloadTooLarge ->
                         _uiState.update {
                             it.copy(

@@ -36,6 +36,19 @@ class PdfHostPolicyTest {
     }
 
     @Test
+    fun `bioRxiv and medRxiv PDF hosts resolve to the polite limiter, never the arxiv singleton (PS2)`() {
+        // Host-keyed: the two new allowlisted PDF hosts self-space on the ~1.2s polite slot and must NEVER
+        // serialize on the arXiv ≥3s singleton (the R6 red line). PdfHostPolicy needs no change — it keys
+        // on host, so both fall to `politeLimiter` automatically.
+        val bio = policy.limiterFor("https://www.biorxiv.org/content/10.1101/2024.01.07.574543v1.full.pdf")
+        assertSame(polite, bio)
+        assertNotSame(arxiv, bio)
+        val med = policy.limiterFor("https://www.medrxiv.org/content/10.1101/2024.02.02.24302001v1.full.pdf")
+        assertSame(polite, med)
+        assertNotSame(arxiv, med)
+    }
+
+    @Test
     fun `an off-host chemrxiv CDN sub-domain is polite, not arxiv`() {
         // A `pdfUrl` that 302s to a CDN sub-domain must NOT be mistaken for an arXiv host (it isn't one of
         // the three named arXiv hosts) — it self-spaces on the polite slot.
