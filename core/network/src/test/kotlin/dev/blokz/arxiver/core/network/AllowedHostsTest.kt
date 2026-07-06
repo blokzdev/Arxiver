@@ -42,4 +42,31 @@ class AllowedHostsTest {
         assertFalse(AllowedHosts.isAllowed("use.typekit.net"))
         assertFalse(AllowedHosts.isAllowed("cdn.jsdelivr.net"))
     }
+
+    @Test
+    fun `bioRxiv and medRxiv PDF hosts are allowlisted, their bare-domain and CDN variants are not (PS2)`() {
+        assertTrue(AllowedHosts.isAllowed("www.biorxiv.org"))
+        assertTrue(AllowedHosts.isAllowed("WWW.MedRxiv.org"))
+        // Exact-match: the bare apex and any CDN/sub-domain variant fail closed.
+        assertFalse(AllowedHosts.isAllowed("biorxiv.org"))
+        assertFalse(AllowedHosts.isAllowed("medrxiv.org"))
+        assertFalse(AllowedHosts.isAllowed("cdn.biorxiv.org"))
+    }
+
+    @Test
+    fun `isAllowedUrl gates a full URL by its host, failing closed on doi and malformed`() {
+        assertTrue(AllowedHosts.isAllowedUrl("https://www.biorxiv.org/content/10.1101/2024.01.07.574543v1.full.pdf"))
+        assertTrue(AllowedHosts.isAllowedUrl("https://www.medrxiv.org/content/10.1101/2024.02.02.24302001v1.full.pdf"))
+        assertTrue(AllowedHosts.isAllowedUrl("https://chemrxiv.org/engage/api-gateway/chemrxiv/assets/x.pdf"))
+        // A DOI resolver or arbitrary publisher host is NOT allowlisted → read-only, never in-app.
+        assertFalse(AllowedHosts.isAllowedUrl("https://doi.org/10.1101/2024.01.07.574543"))
+        assertFalse(AllowedHosts.isAllowedUrl("https://www.nature.com/articles/x.pdf"))
+        // An off-host CDN variant of an allowlisted domain fails closed.
+        assertFalse(AllowedHosts.isAllowedUrl("https://assets.chemrxiv.org/x.pdf"))
+        // Null / malformed / non-HTTP → null host → false.
+        assertFalse(AllowedHosts.isAllowedUrl(null))
+        assertFalse(AllowedHosts.isAllowedUrl(""))
+        assertFalse(AllowedHosts.isAllowedUrl("not a url"))
+        assertFalse(AllowedHosts.isAllowedUrl("ftp://www.biorxiv.org/x.pdf"))
+    }
 }
