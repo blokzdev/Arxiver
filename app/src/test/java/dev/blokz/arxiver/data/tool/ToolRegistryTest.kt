@@ -13,12 +13,13 @@ import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperSource
 import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
-import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAsset
-import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAssetOriginal
-import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivAuthor
-import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivItem
-import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivItemHit
-import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivSearchResponse
+import dev.blokz.arxiver.core.network.openalex.OpenAlexAuthor
+import dev.blokz.arxiver.core.network.openalex.OpenAlexAuthorship
+import dev.blokz.arxiver.core.network.openalex.OpenAlexClient
+import dev.blokz.arxiver.core.network.openalex.OpenAlexLocation
+import dev.blokz.arxiver.core.network.openalex.OpenAlexResponse
+import dev.blokz.arxiver.core.network.openalex.OpenAlexSource
+import dev.blokz.arxiver.core.network.openalex.OpenAlexWork
 import dev.blokz.arxiver.core.network.s2.S2Author
 import dev.blokz.arxiver.core.network.s2.S2ExternalIds
 import dev.blokz.arxiver.core.network.s2.S2OpenAccessPdf
@@ -88,9 +89,9 @@ class ToolRegistryTest {
         // PT.3 seam — defaulted no-op so PT.1/PT.2 tests are unaffected.
         searchSemanticScholar: suspend (String, Int, String?, Int?, Int?) -> AppResult<S2SearchResponse> =
             { _, _, _, _, _ -> AppResult.Success(S2SearchResponse()) },
-        // PT.4 seam — defaulted no-op.
-        searchChemRxiv: suspend (String, Int, Int) -> AppResult<ChemRxivSearchResponse> =
-            { _, _, _ -> AppResult.Success(ChemRxivSearchResponse()) },
+        // PT.4/P-Feeds PF.1 seam — chemRxiv discovers via OpenAlex now; defaulted no-op.
+        searchOpenAlex: suspend (String, Int, String?) -> AppResult<OpenAlexResponse> =
+            { _, _, _ -> AppResult.Success(OpenAlexResponse()) },
         // PS.1 seam — records the drafts it persisted so tests can assert the stored (full) abstract.
         importedDrafts: MutableList<ExternalPaperDraft> = mutableListOf(),
     ) = ToolRegistry(
@@ -106,7 +107,7 @@ class ToolRegistryTest {
         savePaper = { id -> savedIds.add(id) },
         isInLibrary = { id -> id in savedIds },
         searchSemanticScholar = searchSemanticScholar,
-        searchChemRxiv = searchChemRxiv,
+        searchOpenAlex = searchOpenAlex,
         importExternal = { draft ->
             importedDrafts.add(draft)
             Paper(
@@ -240,7 +241,7 @@ class ToolRegistryTest {
                 savePaper = { },
                 isInLibrary = { false },
                 searchSemanticScholar = { _, _, _, _, _ -> AppResult.Success(S2SearchResponse()) },
-                searchChemRxiv = { _, _, _ -> AppResult.Success(ChemRxivSearchResponse()) },
+                searchOpenAlex = { _, _, _ -> AppResult.Success(OpenAlexResponse()) },
                 importExternal = { throw RuntimeException("unused") },
             )
         val r = exec(reg, """{"query":"x"}""")
@@ -612,67 +613,65 @@ class ToolRegistryTest {
         assertTrue(fork.result.isError, "no biorxiv draft cached — the arXiv id wins, the crossover never forks")
     }
 
-    // --- PT.4: search_chemrxiv (EXTERNAL) ---
+    // --- P-Feeds PF.1: search_chemrxiv via OpenAlex (chemRxiv's own API is Cloudflare-dead) ---
 
-    private fun chemHit(
+    // Builds an OpenAlex work as chemRxiv's search backend returns it: a `https://doi.org/…` doi, an
+    // `abstract_inverted_index`, and a `best_oa_location.pdf_url`. The plain [abstract] is inverted so the
+    // client's reconstruction round-trips it.
+    private fun openAlexWork(
         title: String,
-        name: String? = null,
-        firstLast: Pair<String, String>? = null,
-        pdfUrl: String? = null,
-        assetUrl: String? = null,
-    ) = ChemRxivItemHit(
-        item =
-            ChemRxivItem(
-                id = "cr:$title",
-                title = title,
-                abstract = "Abstract of $title",
-                doi = "10.26434/$title",
-                publishedDate = "2024-01-01T00:00:00Z",
-                pdfUrl = pdfUrl,
-                authors =
-                    listOfNotNull(
-                        name?.let { ChemRxivAuthor(name = it) },
-                        firstLast?.let { ChemRxivAuthor(firstName = it.first, lastName = it.second) },
-                    ),
-                asset = assetUrl?.let { ChemRxivAsset(original = ChemRxivAssetOriginal(url = it)) },
-            ),
+        doi: String? = "10.26434/$title",
+        pdfUrl: String? = "https://chemrxiv.org/$title.pdf",
+        author: String? = "Ada Lovelace",
+        abstract: String = "Abstract of $title",
+        sourceId: String = OpenAlexClient.SID_CHEMRXIV,
+    ) = OpenAlexWork(
+        id = "https://openalex.org/W$title",
+        doi = doi?.let { "https://doi.org/$it" },
+        title = title,
+        publicationDate = "2024-01-01",
+        abstractInvertedIndex = invert(abstract),
+        authorships = listOfNotNull(author?.let { OpenAlexAuthorship(OpenAlexAuthor(displayName = it)) }),
+        primaryLocation = OpenAlexLocation(source = OpenAlexSource(id = "https://openalex.org/$sourceId")),
+        bestOaLocation = pdfUrl?.let { OpenAlexLocation(pdfUrl = it) },
     )
 
+    private fun invert(text: String): Map<String, List<Int>> =
+        text.split(" ").withIndex().groupBy({ it.value }, { it.index })
+
+    private fun works(vararg w: OpenAlexWork) =
+        { _: String, _: Int, _: String? -> AppResult.Success(OpenAlexResponse(results = w.toList())) }
+
     @Test
-    fun `search_chemrxiv maps the itemHits-dot-item envelope incl both author shapes and pdf fallback`() {
+    fun `search_chemrxiv maps OpenAlex works — title, stripped doi, authors, pdf, reconstructed abstract`() {
         val reg =
             registry(
-                searchChemRxiv = { _, _, _ ->
-                    AppResult.Success(
-                        ChemRxivSearchResponse(
-                            totalCount = 2,
-                            itemHits =
-                                listOf(
-                                    chemHit("A", name = "Ada Lovelace", pdfUrl = "https://chemrxiv.org/a.pdf"),
-                                    chemHit(
-                                        "B",
-                                        firstLast = "Alan" to "Turing",
-                                        assetUrl = "https://chemrxiv.org/b.pdf",
-                                    ),
-                                ),
+                searchOpenAlex =
+                    works(
+                        openAlexWork(
+                            "A",
+                            author = "Ada Lovelace",
+                            pdfUrl = "https://chemrxiv.org/a.pdf",
+                            abstract = "hello world again",
                         ),
-                    )
-                },
+                        openAlexWork("B", author = "Alan Turing", pdfUrl = "https://chemrxiv.org/b.pdf"),
+                    ),
             )
         val r = exec(reg, """{"term":"catalysis"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
         assertFalse(r.result.isError)
         assertTrue(r.egress)
         val hits = body(r.result.contentJson)["hits"]!!.jsonArray
-        assertEquals(2, hits.size, "the itemHits[].item nesting is unwrapped (a flat DTO would give 0)")
+        assertEquals(2, hits.size)
         assertEquals("A", hits[0].jsonObject["title"]!!.jsonPrimitive.content)
-        // author `name` shape:
+        assertEquals("10.26434/A", hits[0].jsonObject["doi"]!!.jsonPrimitive.content, "the doi.org prefix is stripped")
         assertEquals("Ada Lovelace", hits[0].jsonObject["authors"]!!.jsonArray.single().jsonPrimitive.content)
-        // top-level pdfUrl wins:
         assertEquals("https://chemrxiv.org/a.pdf", hits[0].jsonObject["pdfUrl"]!!.jsonPrimitive.content)
-        // firstName+lastName shape joins:
-        assertEquals("Alan Turing", hits[1].jsonObject["authors"]!!.jsonArray.single().jsonPrimitive.content)
-        // asset.original.url fallback when no top-level pdfUrl:
-        assertEquals("https://chemrxiv.org/b.pdf", hits[1].jsonObject["pdfUrl"]!!.jsonPrimitive.content)
+        assertEquals(
+            "hello world again",
+            hits[0].jsonObject["abstractSnippet"]!!.jsonPrimitive.content,
+            "inverted index reconstructed",
+        )
+        assertTrue(hits[0].jsonObject["importable"]!!.jsonPrimitive.boolean, "an allowlisted-host OA PDF is importable")
     }
 
     @Test
@@ -680,82 +679,71 @@ class ToolRegistryTest {
         var searched = false
         val reg =
             registry(
-                searchChemRxiv = { _, _, _ ->
+                searchOpenAlex = { _, _, _ ->
                     searched = true
-                    AppResult.Success(ChemRxivSearchResponse())
+                    AppResult.Success(OpenAlexResponse())
                 },
             )
         val r = exec(reg, """{"term":"x"}""", ctx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
         assertTrue(r.result.isError)
         assertTrue(r.egress, "an attempted external call is disclosed as egress-class")
-        assertFalse(searched, "the chemRxiv seam must NOT run without web consent")
+        assertFalse(searched, "the OpenAlex seam must NOT run without web consent")
     }
 
     @Test
     fun `every search_chemrxiv path is egress incl error paths`() {
         assertTrue(exec(registry(), """{"term":"x"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME).egress)
         assertTrue(exec(registry(), """{"term":"  "}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME).egress)
-        val failReg = registry(searchChemRxiv = { _, _, _ -> AppResult.Failure(AppError.Upstream(429)) })
+        val failReg = registry(searchOpenAlex = { _, _, _ -> AppResult.Failure(AppError.Upstream(429)) })
         val r = exec(failReg, """{"term":"x"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
         assertTrue(r.result.isError)
         assertTrue(r.egress)
     }
 
     @Test
-    fun `search_chemrxiv clamps limit and threads skip, never throwing`() {
+    fun `search_chemrxiv clamps limit and filters to the chemRxiv OpenAlex source`() {
         var capturedLimit = 0
-        var capturedSkip = -1
+        var capturedSource: String? = "unset"
         val reg =
             registry(
-                searchChemRxiv = { _, limit, skip ->
+                searchOpenAlex = { _, limit, source ->
                     capturedLimit = limit
-                    capturedSkip = skip
-                    AppResult.Success(ChemRxivSearchResponse())
+                    capturedSource = source
+                    AppResult.Success(OpenAlexResponse())
                 },
             )
-        val r = exec(reg, """{"term":"x","limit":9999,"skip":20}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
+        val r = exec(reg, """{"term":"x","limit":9999}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
         assertFalse(r.result.isError)
         assertEquals(25, capturedLimit, "limit clamped to 25")
-        assertEquals(20, capturedSkip, "skip threaded to the seam")
+        assertEquals(OpenAlexClient.SID_CHEMRXIV, capturedSource, "filtered to the chemRxiv source id")
     }
 
-    // --- PS.1: chemRxiv import (search caches the draft → import stores it, source-aware + de-dup) ---
+    // --- chemRxiv import (search caches the draft → import stores it, source-aware + de-dup) ---
 
     @Test
     fun `chemrxiv import caches the full abstract at search, stores an ExternalRef row, and de-dups`() {
-        val longAbstract = "chemistry ".repeat(60) // 600 chars > ABSTRACT_SNIPPET_CHARS (320)
+        val longAbstract = "chemistry ".repeat(60).trim() // 599 chars > ABSTRACT_SNIPPET_CHARS (320)
         val saved = mutableSetOf<String>()
         val drafts = mutableListOf<ExternalPaperDraft>()
         val reg =
             registry(
                 savedIds = saved,
                 importedDrafts = drafts,
-                searchChemRxiv = { _, _, _ ->
-                    AppResult.Success(
-                        ChemRxivSearchResponse(
-                            itemHits =
-                                listOf(
-                                    ChemRxivItemHit(
-                                        ChemRxivItem(
-                                            id = "cr:cat",
-                                            title = "Catalysis",
-                                            abstract = longAbstract,
-                                            doi = "10.26434/chemrxiv-cat",
-                                            publishedDate = "2024-05-01T00:00:00Z",
-                                            pdfUrl = "https://chemrxiv.org/cat.pdf",
-                                            authors = listOf(ChemRxivAuthor(name = "Ada Lovelace")),
-                                        ),
-                                    ),
-                                ),
+                searchOpenAlex =
+                    works(
+                        openAlexWork(
+                            "Catalysis",
+                            doi = "10.26434/chemrxiv-cat",
+                            pdfUrl = "https://chemrxiv.org/cat.pdf",
+                            abstract = longAbstract,
                         ),
-                    )
-                },
+                    ),
             )
 
         // 1) search: the hit is importable, and the DTO body carries only the truncated snippet.
         val search = exec(reg, """{"term":"catalysis"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
         val hit = body(search.result.contentJson)["hits"]!!.jsonArray.single().jsonObject
-        assertTrue(hit["importable"]!!.jsonPrimitive.boolean, "a DOI+PDF hit is importable")
+        assertTrue(hit["importable"]!!.jsonPrimitive.boolean, "a DOI + allowlisted-host PDF hit is importable")
         assertEquals(320, hit["abstractSnippet"]!!.jsonPrimitive.content.length, "the DTO snippet is truncated")
 
         // 2) import by source+doi: stores one row under the composite id, no network, imported=true.
@@ -767,7 +755,7 @@ class ToolRegistryTest {
         assertEquals(true, b["imported"]!!.jsonPrimitive.boolean)
         assertEquals(false, b["alreadyInLibrary"]!!.jsonPrimitive.boolean)
         assertTrue("chemrxiv:10.26434/chemrxiv-cat" in saved, "library keyed under the composite storage id")
-        // the STORED draft kept the whole abstract (not the snippet) — the offline read surface is complete.
+        // the STORED draft kept the whole (reconstructed) abstract, not the snippet — the offline read surface.
         assertEquals(longAbstract, drafts.single().abstract)
         assertEquals(Source.CHEMRXIV, drafts.single().origin)
 
@@ -789,38 +777,30 @@ class ToolRegistryTest {
     }
 
     @Test
-    fun `a non-importable chemrxiv hit (no pdf) is not cached and cannot be imported`() {
+    fun `a chemRxiv hit fails closed — no PDF, or an off-host OA PDF, is read-only and not cached (host-gated)`() {
         val drafts = mutableListOf<ExternalPaperDraft>()
         val reg =
             registry(
                 importedDrafts = drafts,
-                searchChemRxiv = { _, _, _ ->
-                    AppResult.Success(
-                        ChemRxivSearchResponse(
-                            itemHits =
-                                listOf(
-                                    ChemRxivItemHit(
-                                        ChemRxivItem(
-                                            id = "cr:np",
-                                            title = "No PDF",
-                                            abstract = "x",
-                                            doi = "10.26434/no-pdf",
-                                            publishedDate = "2024-05-01T00:00:00Z",
-                                            pdfUrl = null,
-                                            authors = emptyList(),
-                                        ),
-                                    ),
-                                ),
-                        ),
-                    )
-                },
+                searchOpenAlex =
+                    works(
+                        openAlexWork("NoPdf", doi = "10.26434/nopdf", pdfUrl = null),
+                        // an OA PDF on a non-allowlisted host (doi.org) → read-only, never in-app.
+                        openAlexWork("OffHost", doi = "10.26434/offhost", pdfUrl = "https://doi.org/10.26434/offhost"),
+                    ),
             )
-        val search = exec(reg, """{"term":"x"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME)
-        val hit = body(search.result.contentJson)["hits"]!!.jsonArray.single().jsonObject
-        assertEquals(false, hit["importable"]!!.jsonPrimitive.boolean, "no PDF ⇒ not importable")
-        // Importing it fails: the non-importable hit was never cached as a draft.
-        val import = exec(reg, """{"source":"chemrxiv","doi":"10.26434/no-pdf"}""", extCtx, ToolRegistry.IMPORT_NAME)
-        assertTrue(import.result.isError)
+        val hits =
+            body(
+                exec(reg, """{"term":"x"}""", extCtx, ToolRegistry.SEARCH_CHEMRXIV_NAME).result.contentJson,
+            )["hits"]!!.jsonArray
+        assertEquals(false, hits[0].jsonObject["importable"]!!.jsonPrimitive.boolean, "no PDF ⇒ not importable")
+        assertEquals(
+            false,
+            hits[1].jsonObject["importable"]!!.jsonPrimitive.boolean,
+            "off-host OA PDF ⇒ read-only (host-gated)",
+        )
+        val imp = exec(reg, """{"source":"chemrxiv","doi":"10.26434/offhost"}""", extCtx, ToolRegistry.IMPORT_NAME)
+        assertTrue(imp.result.isError, "a non-cached hit cannot be imported")
         assertTrue(drafts.isEmpty())
     }
 

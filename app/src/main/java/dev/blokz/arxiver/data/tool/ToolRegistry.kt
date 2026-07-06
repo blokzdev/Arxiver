@@ -14,8 +14,9 @@ import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.model.s2OriginFromVenue
 import dev.blokz.arxiver.core.network.AllowedHosts
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
-import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivItemHit
-import dev.blokz.arxiver.core.network.chemrxiv.ChemRxivSearchResponse
+import dev.blokz.arxiver.core.network.openalex.OpenAlexClient
+import dev.blokz.arxiver.core.network.openalex.OpenAlexResponse
+import dev.blokz.arxiver.core.network.openalex.OpenAlexWork
 import dev.blokz.arxiver.core.network.s2.S2SearchPaper
 import dev.blokz.arxiver.core.network.s2.S2SearchResponse
 import dev.blokz.arxiver.core.search.HybridFusion
@@ -180,8 +181,9 @@ class ToolRegistry(
             yearFrom: Int?,
             yearTo: Int?,
         ) -> AppResult<S2SearchResponse>,
-    /** EXTERNAL: chemRxiv (Open Engage) search through the host-gated, 1.2s-spaced client (`search_chemrxiv`). */
-    private val searchChemRxiv: suspend (term: String, limit: Int, skip: Int) -> AppResult<ChemRxivSearchResponse>,
+    /** EXTERNAL: OpenAlex discovery through the host-gated, 1.2s-spaced client — `search_chemrxiv` filters to
+     *  the chemRxiv source (its own API is Cloudflare-dead, P-Feeds PF.1). [sourceId] is an OpenAlex source id. */
+    private val searchOpenAlex: suspend (query: String, limit: Int, sourceId: String?) -> AppResult<OpenAlexResponse>,
     /** Persist a non-arXiv search hit ([ExternalPaperDraft]) as a `papers` row — NO network (chemRxiv import). */
     private val importExternal: suspend (draft: ExternalPaperDraft) -> Paper,
 ) : ToolExecutor {
@@ -417,9 +419,9 @@ class ToolRegistry(
         val term = args?.stringAt("term").orEmpty().trim()
         if (term.isBlank()) return errorResult(call, "", "empty query", egress = true)
         val limit = (args?.intAt("limit") ?: DEFAULT_CHEM_RESULTS).coerceIn(1, MAX_CHEM_RESULTS)
-        val skip = (args?.intAt("skip") ?: 0).coerceAtLeast(0)
-        return when (val r = searchChemRxiv(term, limit, skip)) {
-            is AppResult.Success -> okChemSearch(call, term, r.value.itemHits)
+        // chemRxiv's own API is Cloudflare-dead (P-Feeds) — discover via OpenAlex, filtered to the chemRxiv source.
+        return when (val r = searchOpenAlex(term, limit, OpenAlexClient.SID_CHEMRXIV)) {
+            is AppResult.Success -> okOpenAlexChemSearch(call, term, r.value.results)
             is AppResult.Failure -> errorResult(call, term, "search failed", egress = true)
         }
     }
@@ -545,55 +547,49 @@ class ToolRegistry(
         )
     }
 
-    private fun okChemSearch(
+    private fun okOpenAlexChemSearch(
         call: ToolCall,
         query: String,
-        itemHits: List<ChemRxivItemHit>,
+        works: List<OpenAlexWork>,
     ): ToolExecution {
         val hits =
-            itemHits.mapNotNull { it.item }.map { item ->
-                val authorNames =
-                    item.authors
-                        .map { a ->
-                            // An author carries a combined `name` OR separate first/last (mirrors the API).
-                            a.name?.takeIf { it.isNotBlank() }
-                                ?: listOfNotNull(a.firstName, a.lastName).joinToString(" ").trim()
-                        }
-                        .filter { it.isNotBlank() }
-                // Top-level pdfUrl when present, else the nested asset original (mirrors the API).
-                val pdf = item.pdfUrl ?: item.asset?.original?.url
+            works.map { w ->
                 // Blank-filter (same PK-poison guard as the S2 path): a "" DOI must not key a `chemrxiv:` row.
-                val doi = item.doi?.takeIf { it.isNotBlank() }
-                // Importable iff it has BOTH a DOI (identity) and a PDF (readable). Cache the draft NOW, from
-                // the RAW item — before the abstract is truncated to a snippet — so the stored paper keeps the
-                // whole abstract as its offline read surface.
-                if (doi != null && pdf != null) {
-                    externalDrafts[doi] =
+                val doi = w.bareDoi()
+                val pdf = w.oaPdfUrl()
+                val fullAbstract = w.abstractText()
+                // Importable iff a DOI AND an OA PDF whose host is ALLOWLISTED (an off-host / doi.org OA url →
+                // read-only, external-open). Cache the draft NOW with the FULL abstract — the offline read surface.
+                val importable = doi != null && pdf != null && AllowedHosts.isAllowedUrl(pdf)
+                if (importable) {
+                    externalDrafts[doi!!] =
                         ExternalPaperDraft(
                             origin = Source.CHEMRXIV,
                             nativeId = doi,
-                            title = item.title.orEmpty(),
-                            abstract = item.abstract.orEmpty(),
-                            authors = authorNames,
-                            publishedAt = item.publishedDate.toInstantOrEpoch(),
-                            pdfUrl = pdf,
+                            title = w.title.orEmpty(),
+                            abstract = fullAbstract.orEmpty(),
+                            authors = w.authorNames(),
+                            // OpenAlex publication_date is `YYYY-MM-DD` (date-only) — the shared helper's bare-date
+                            // branch handles it; absent/unparseable → EPOCH.
+                            publishedAt = w.publicationDate.toInstantOrEpoch(),
+                            pdfUrl = pdf!!,
                         )
                 }
                 ChemHitDto(
-                    title = item.title.orEmpty(),
-                    abstractSnippet = item.abstract?.take(ABSTRACT_SNIPPET_CHARS),
+                    title = w.title.orEmpty(),
+                    abstractSnippet = fullAbstract?.take(ABSTRACT_SNIPPET_CHARS),
                     doi = doi,
-                    authors = authorNames,
-                    publishedDate = item.publishedDate,
+                    authors = w.authorNames(),
+                    publishedDate = w.publicationDate,
                     pdfUrl = pdf,
-                    importable = doi != null && pdf != null,
+                    importable = importable,
                 )
             }
         val body = json.encodeToString(ChemSearchResult.serializer(), ChemSearchResult(hits))
         return ToolExecution(
             result = ToolResult(call.id, call.name, body, isError = false),
             query = query,
-            resultSummary = "${hits.size} results from chemRxiv",
+            resultSummary = "${hits.size} results from chemRxiv (via OpenAlex)",
             egress = true,
         )
     }
@@ -670,8 +666,9 @@ class ToolRegistry(
     private fun JsonObject.intAt(path: String): Int? = primitiveAt(path)?.intOrNull
 
     /**
-     * chemRxiv `publishedDate` → Instant. Tries, in order: an ISO instant (`…Z`/offset), an offset-less
-     * local date-time (`2024-03-01T00:00:00`, read as UTC), then a bare date; absent/unparseable → EPOCH.
+     * A source's published-date string → Instant. Tries, in order: an ISO instant (`…Z`/offset), an offset-less
+     * local date-time (`2024-03-01T00:00:00`, read as UTC), then a bare date (OpenAlex's `YYYY-MM-DD`);
+     * absent/unparseable → EPOCH.
      */
     private fun String?.toInstantOrEpoch(): Instant =
         this?.let {
@@ -964,11 +961,12 @@ class ToolRegistry(
             ToolDef(
                 name = SEARCH_CHEMRXIV_NAME,
                 description =
-                    "Search chemRxiv (Cambridge Open Engage), the chemistry preprint server. Your query is " +
-                        "sent to chemrxiv.org, a third party. Returns public metadata (title, abstract, DOI, " +
-                        "authors, date, PDF link). These are DOI-keyed preprints, NOT arXiv. A hit with " +
-                        "`importable:true` can be saved with import_to_library using `source:\"chemrxiv\"` and " +
-                        "the hit's `doi`. $CITE_HINT",
+                    "Search chemRxiv, the chemistry preprint server, **via OpenAlex** (chemRxiv's own API is " +
+                        "unavailable). Your query is sent to api.openalex.org, a third party. Returns public " +
+                        "metadata (title, abstract, DOI, authors, date, PDF link). DOI-keyed preprints, NOT " +
+                        "arXiv. A hit with `importable:true` can be saved with import_to_library using " +
+                        "`source:\"chemrxiv\"` and the hit's `doi`; its PDF opens in the browser if the in-app " +
+                        "download is blocked. $CITE_HINT",
                 inputSchema =
                     buildJsonObject {
                         put("type", "object")
@@ -987,13 +985,6 @@ class ToolRegistry(
                                     buildJsonObject {
                                         put("type", "integer")
                                         put("description", "Max results (default 8, capped 25).")
-                                    },
-                                )
-                                put(
-                                    "skip",
-                                    buildJsonObject {
-                                        put("type", "integer")
-                                        put("description", "Results to skip, for pagination (default 0).")
                                     },
                                 )
                             },

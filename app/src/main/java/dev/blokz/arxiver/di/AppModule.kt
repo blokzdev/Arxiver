@@ -375,9 +375,10 @@ object AppModule {
             apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.SEMANTIC_SCHOLAR) },
         )
 
-    // P-Tools PT.4: chemRxiv (Cambridge Open Engage) search client on the @ArxivClient host-gated client
-    // (egress allowlisted to chemrxiv.org; off-host asset redirects blocked per-hop). Its own 1.2s polite
-    // mutex — NOT the ≥3s arXiv limiter. Keyless (no BYOK). Mirrors semanticScholarClient.
+    // P-Tools PT.4: chemRxiv (Cambridge Open Engage) search client. **UNWIRED since P-Feeds PF.1** — chemRxiv's
+    // API is Cloudflare-dead for scripted clients (memory chemrxiv-cloudflare-blocked), so `search_chemrxiv`
+    // now discovers via OpenAlex. Kept in-tree (+ its test) in case the API ever un-gates; this provider has no
+    // consumer today (Hilt never builds an unused @Provides).
     @Provides
     @Singleton
     fun chemRxivClient(
@@ -554,7 +555,7 @@ object AppModule {
         paperRepository: dev.blokz.arxiver.data.PaperRepository,
         libraryRepository: dev.blokz.arxiver.data.LibraryRepository,
         semanticScholarClient: dev.blokz.arxiver.core.network.s2.SemanticScholarClient,
-        chemRxivClient: dev.blokz.arxiver.core.network.chemrxiv.ChemRxivClient,
+        openAlexClient: dev.blokz.arxiver.core.network.openalex.OpenAlexClient,
     ): dev.blokz.arxiver.data.tool.ToolExecutor =
         dev.blokz.arxiver.data.tool.ToolRegistry(
             keywordSearch = { query, includeNotes, limit ->
@@ -581,9 +582,10 @@ object AppModule {
             searchSemanticScholar = { query, limit, venue, from, to ->
                 semanticScholarClient.searchPapers(query, limit, venue, from, to)
             },
-            // EXTERNAL seam (PT.4): the host-gated, 1.2s-mutex-spaced chemRxiv client. No HTTP client
-            // reaches the registry — only this lambda; the structural no-okhttp-in-data/tool test stays green.
-            searchChemRxiv = { term, limit, skip -> chemRxivClient.searchItems(term, limit, skip) },
+            // EXTERNAL seam (P-Feeds PF.1): the host-gated, 1.2s-mutex-spaced OpenAlex client. chemRxiv's own
+            // API is Cloudflare-dead (search_chemrxiv now discovers via OpenAlex, filtered to the chemRxiv
+            // source); the structural no-okhttp-in-data/tool test stays green — only this lambda reaches the tool.
+            searchOpenAlex = { query, limit, sourceId -> openAlexClient.search(query, limit, sourceId) },
             // PS.1: persist a cached chemRxiv draft as a real `papers` row — no network (the draft carries
             // the full metadata). Origin-blind library save then rides the existing `savePaper` seam.
             importExternal = { draft -> paperRepository.saveExternalPaper(draft) },
