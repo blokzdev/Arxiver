@@ -20,4 +20,11 @@ Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
 
 **Side effect to watch:** the sync executor changes StateFlow emission *timing* — the initial state may already be populated, so a Turbine test that assumed a separate empty `awaitItem()` before the populated one breaks. Use an `awaitItemMatching { … }` drain (loop `awaitItem()` until the predicate holds) instead of positional `awaitItem()` assumptions.
 
-Distinct from the JDK-21 coroutine-teardown flake in [[local-build-jdk17]] (that one was `ArxiverApplication.onCreate` fire-and-forget IO leaking into the next `runTest`, fixed via a `CoroutineExceptionHandler`). ~14 other Room+Robolectric suites still use the default async builder — adopt this pattern if they flake.
+This fixes the **Room async-executor** family only. A **separate, still-open** family also flakes the `:app`
+suite: `kotlinx.coroutines.test.UncaughtExceptionsBeforeTest` — an app-startup / prior-test coroutine leaks an
+uncaught throw into the *next* test's `runTest` startup (seen 2026-07-05 on `FilteredPapersViewModelTest`;
+passes in isolation + on re-run). `ArxiverApplication.onCreate` already has a `CoroutineExceptionHandler` (see
+[[local-build-jdk17]]), so that isn't the whole source — the sync-executor fix does NOT address this family.
+Re-run clears it; a proper root-cause of the cross-test coroutine bleed is a tracked backlog task. ~14 other
+Room+Robolectric suites still use the default async builder — adopt the sync-executor pattern if they flake with
+the Room symptoms above.
