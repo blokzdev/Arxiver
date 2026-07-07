@@ -2,7 +2,9 @@ package dev.blokz.arxiver.core.claude
 
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.Source
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -39,6 +41,30 @@ class PayloadBuilderTest {
             status = "read",
             rating = 4,
             notes = listOf("Compare with S4."),
+        )
+
+    /** A non-arXiv (chemRxiv) paper — its `ref` is an [ExternalRef], so `paper.id` would `error()` (P-Dispatch). */
+    private val chemPaper =
+        PaperWithAnnotations(
+            paper =
+                Paper(
+                    ref = ExternalRef(Source.CHEMRXIV, "10.26434/chemrxiv-2024-xyz"),
+                    latestVersion = 1,
+                    title = "A Chemistry Preprint",
+                    abstract = "We study a reaction.",
+                    publishedAt = Instant.parse("2024-05-01T09:00:00Z"),
+                    updatedAt = Instant.parse("2024-05-01T09:00:00Z"),
+                    primaryCategory = "",
+                    categories = emptyList(),
+                    authors = listOf("Marie Curie"),
+                    doi = "10.26434/chemrxiv-2024-xyz",
+                    citationCount = null,
+                    pdfUrl = "https://chemrxiv.org/engage/chemrxiv/assets/xyz.pdf",
+                ),
+            tags = listOf("catalysis"),
+            status = "to_read",
+            rating = null,
+            notes = listOf("secret chem note"),
         )
 
     private val relations =
@@ -213,6 +239,56 @@ class PayloadBuilderTest {
                 assertTrue(PayloadBuilder.defaultInstruction(action).isNotBlank(), "missing template: $action")
             }
         }
+    }
+
+    /** P-Dispatch: a non-arXiv paper omits the arXiv keys and carries source identity + an honest fetchable flag. */
+    @Test
+    fun `a non-arXiv paper omits arxiv keys and carries source identity`() {
+        val result = builder.build(RoutineAction.DIGEST, "x", listOf(chemPaper), includeNotes = true, librarySize = 1)
+        val ready = assertIs<PayloadResult.Ready>(result)
+        val p = Json.parseToJsonElement(ready.json).jsonObject.getValue("papers").jsonArray[0].jsonObject
+
+        // arXiv-shaped keys are structurally ABSENT (null-tolerant access — str()/getValue would throw).
+        assertTrue(p["arxiv_id"] == null, "no arxiv_id on a non-arXiv paper")
+        assertTrue(p["version"] == null)
+        assertTrue(p["abs_url"] == null)
+        // Source identity present + honest un-fetchable signal.
+        assertEquals("chemrxiv", p.str("source"))
+        assertEquals("10.26434/chemrxiv-2024-xyz", p.str("native_id"))
+        assertEquals("https://doi.org/10.26434/chemrxiv-2024-xyz", p.str("url"))
+        assertEquals("false", p.str("pdf_fetchable"))
+        assertEquals("https://chemrxiv.org/engage/chemrxiv/assets/xyz.pdf", p.str("pdf_url"))
+    }
+
+    /** P-Dispatch additivity proof: in a mixed selection the arXiv row stays byte-shaped; the non-arXiv row omits arXiv keys. */
+    @Test
+    fun `a mixed selection keeps the arXiv row byte-shaped and omits arxiv keys on the non-arXiv row`() {
+        val result =
+            builder.build(RoutineAction.DIGEST, "x", listOf(paper, chemPaper), includeNotes = false, librarySize = 2)
+        val ready = assertIs<PayloadResult.Ready>(result)
+        val papers = Json.parseToJsonElement(ready.json).jsonObject.getValue("papers").jsonArray
+
+        val arxiv = papers[0].jsonObject
+        assertEquals("2403.01234", arxiv.str("arxiv_id"))
+        assertEquals("2", arxiv.str("version"))
+        assertEquals("https://arxiv.org/abs/2403.01234v2", arxiv.str("abs_url"))
+        assertTrue(arxiv["source"] == null, "an arXiv row never carries the source keys")
+        assertTrue(arxiv["pdf_fetchable"] == null, "an arXiv row stays byte-identical (no new keys)")
+
+        val chem = papers[1].jsonObject
+        assertTrue(chem["arxiv_id"] == null)
+        assertEquals("chemrxiv", chem.str("source"))
+    }
+
+    /** Red line: structural note/tag redaction holds with a non-arXiv paper in the mix. */
+    @Test
+    fun `notes off strips user keys even with a non-arXiv paper present`() {
+        val result =
+            builder.build(RoutineAction.DIGEST, "x", listOf(paper, chemPaper), includeNotes = false, librarySize = 2)
+        val ready = assertIs<PayloadResult.Ready>(result)
+        assertTrue("\"user\"" !in ready.json)
+        assertTrue("secret chem note" !in ready.json)
+        assertTrue("catalysis" !in ready.json)
     }
 
     private fun JsonObject.str(key: String): String = getValue(key).jsonPrimitive.content
