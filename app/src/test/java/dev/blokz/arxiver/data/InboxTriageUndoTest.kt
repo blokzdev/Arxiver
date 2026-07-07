@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.entity.InboxItemEntity
+import dev.blokz.arxiver.core.database.entity.PaperFeedbackEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
@@ -19,6 +20,7 @@ import org.robolectric.RobolectricTestRunner
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -44,7 +46,7 @@ class InboxTriageUndoTest {
                 .setTransactionExecutor { it.run() }
                 .build()
         libraryRepository = LibraryRepository(db.libraryDao(), db.inboxDao())
-        inboxRepository = InboxRepository(db.inboxDao(), libraryRepository)
+        inboxRepository = InboxRepository(db.inboxDao(), libraryRepository, db.paperFeedbackDao())
     }
 
     @After
@@ -92,14 +94,21 @@ class InboxTriageUndoTest {
         }
 
     @Test
-    fun `undoing a dismiss restores the inbox row in its prior state`() =
+    fun `undoing a dismiss restores the inbox row and clears the negative label`() =
         runTest {
             seedInboxPaper("2401.00002")
             inboxRepository.dismiss("2401.00002")
             assertFalse("2401.00002" in activeIds())
+            assertEquals(
+                PaperFeedbackEntity.SIGNAL_NEGATIVE,
+                db.paperFeedbackDao().voteFor("2401.00002"),
+                "dismiss snapshots a durable negative label",
+            )
 
-            inboxRepository.restoreState("2401.00002", InboxItemEntity.STATE_NEW)
+            // What TodayViewModel.undo does for a DISMISSED event.
+            inboxRepository.undoDismiss("2401.00002", InboxItemEntity.STATE_NEW)
 
             assertEquals(listOf("2401.00002"), activeIds())
+            assertNull(db.paperFeedbackDao().voteFor("2401.00002"), "undo clears the label the dismiss wrote")
         }
 }

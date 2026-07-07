@@ -1,7 +1,9 @@
 package dev.blokz.arxiver.data
 
 import dev.blokz.arxiver.core.database.dao.InboxDao
+import dev.blokz.arxiver.core.database.dao.PaperFeedbackDao
 import dev.blokz.arxiver.core.database.entity.InboxItemEntity
+import dev.blokz.arxiver.core.database.entity.PaperFeedbackEntity
 import dev.blokz.arxiver.core.database.toListDomain
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.coroutines.flow.Flow
@@ -23,6 +25,7 @@ class InboxRepository
     constructor(
         private val inboxDao: InboxDao,
         private val libraryRepository: LibraryRepository,
+        private val paperFeedbackDao: PaperFeedbackDao,
     ) {
         fun observeInbox(): Flow<List<InboxPaper>> =
             inboxDao.observeActiveInbox().map { rows ->
@@ -40,9 +43,33 @@ class InboxRepository
 
         suspend fun saveToLibrary(paperId: String) = libraryRepository.save(paperId)
 
-        suspend fun dismiss(paperId: String) = inboxDao.setState(paperId, InboxItemEntity.STATE_DISMISSED)
+        /**
+         * Dismiss a paper: flip its inbox state AND snapshot a durable negative label (P4). The label lives
+         * in `paper_feedback`, not `inbox_items`, so it survives [InboxDao.pruneDismissed] and keeps teaching
+         * the two-sided ranker to demote similar papers.
+         */
+        suspend fun dismiss(paperId: String) {
+            inboxDao.setState(paperId, InboxItemEntity.STATE_DISMISSED)
+            paperFeedbackDao.upsert(
+                PaperFeedbackEntity(
+                    paperId = paperId,
+                    signal = PaperFeedbackEntity.SIGNAL_NEGATIVE,
+                    source = PaperFeedbackEntity.SOURCE_DISMISS,
+                    createdAt = Instant.now().toEpochMilli(),
+                ),
+            )
+        }
 
-        /** Undo support: put a triaged item back into its pre-swipe state. */
+        /** Undo a dismiss: restore the pre-swipe state AND clear the negative label the dismiss wrote. */
+        suspend fun undoDismiss(
+            paperId: String,
+            previousState: String,
+        ) {
+            inboxDao.setState(paperId, previousState)
+            paperFeedbackDao.clear(paperId)
+        }
+
+        /** Undo support: put a triaged item back into its pre-swipe state (save-undo path; no feedback written). */
         suspend fun restoreState(
             paperId: String,
             state: String,

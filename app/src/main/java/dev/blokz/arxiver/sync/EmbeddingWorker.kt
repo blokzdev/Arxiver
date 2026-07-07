@@ -9,13 +9,11 @@ import dagger.assisted.AssistedInject
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
-import dev.blokz.arxiver.core.database.dao.InboxDao
 import dev.blokz.arxiver.core.database.dao.LibraryDao
 import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
 import dev.blokz.arxiver.core.ml.EmbeddingService
 import dev.blokz.arxiver.core.ml.ModelDownloader
-import dev.blokz.arxiver.core.search.KMeans
 import dev.blokz.arxiver.core.search.VectorIndex
 import dev.blokz.arxiver.rag.RagIndexer
 import timber.log.Timber
@@ -23,8 +21,8 @@ import java.time.Instant
 
 /**
  * Background semantic pipeline (ARCHITECTURE §3.5): embeds un-embedded papers
- * (library first), refreshes related-papers for the library, then recomputes
- * interest centroids and inbox triage scores (SPEC-SEARCH §4–5).
+ * (library first), refreshes related-papers for the library, then hands off to
+ * [InboxScorer] for two-sided inbox triage scores (SPEC-SEARCH §4–5).
  */
 @HiltWorker
 class EmbeddingWorker
@@ -34,7 +32,7 @@ class EmbeddingWorker
         @Assisted params: WorkerParameters,
         private val embeddingDao: EmbeddingDao,
         private val libraryDao: LibraryDao,
-        private val inboxDao: InboxDao,
+        private val inboxScorer: InboxScorer,
         private val embeddingService: EmbeddingService,
         private val modelDownloader: ModelDownloader,
         private val vectorIndex: VectorIndex,
@@ -51,7 +49,7 @@ class EmbeddingWorker
             embedPending()
             indexLibraryChunks()
             refreshRelatedPapers()
-            scoreInbox()
+            inboxScorer.scoreInbox { isStopped }
             return Result.success()
         }
 
@@ -124,26 +122,6 @@ class EmbeddingWorker
             }
         }
 
-        private suspend fun scoreInbox() {
-            val libraryVectors =
-                libraryDao.allPaperIds()
-                    .mapNotNull { embeddingDao.byPaperId(it) }
-                    .map { PaperEmbeddingEntity.blobToFloats(it.vector) }
-            if (libraryVectors.size < COLD_START_MINIMUM) return // SPEC-SEARCH §5 cold start
-
-            val centroids = KMeans.centroids(libraryVectors, k = CENTROID_COUNT)
-            for (paperId in inboxDao.activePaperIds()) {
-                if (isStopped) return
-                val embedding = embeddingDao.byPaperId(paperId) ?: continue
-                val score =
-                    KMeans.similarityToNearest(
-                        PaperEmbeddingEntity.blobToFloats(embedding.vector),
-                        centroids,
-                    )
-                inboxDao.setScore(paperId, score)
-            }
-        }
-
         companion object {
             const val UNIQUE_PERIODIC = "embedding_periodic"
             const val UNIQUE_ONESHOT = "embedding_now"
@@ -151,7 +129,5 @@ class EmbeddingWorker
             private const val BATCH_SIZE = 8
             private const val CHUNK_BACKFILL_PER_RUN = 50
             private const val RELATED_COUNT = 8
-            private const val CENTROID_COUNT = 5
-            private const val COLD_START_MINIMUM = 10
         }
     }
