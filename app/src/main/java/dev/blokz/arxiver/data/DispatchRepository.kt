@@ -20,9 +20,9 @@ import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.toDomain
-import dev.blokz.arxiver.core.model.ArxivId
-import dev.blokz.arxiver.core.model.PaperRef
-import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.core.database.toListDomain
+import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.PaperSource
 import dev.blokz.arxiver.core.search.dotSimilarity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -258,15 +258,16 @@ class DispatchRepository
         ): PayloadResult {
             val annotated =
                 paperIds
-                    // PS.1: routine payloads are arXiv-shaped (SPEC-CLAUDE-BRIDGE — eprint id + arxiv.org
-                    // URL). A non-arXiv (chemRxiv) paper is excluded here rather than dispatched with a
-                    // mangled arxiv.org URL; this single chokepoint covers every dispatch entry point
-                    // (detail, multi-select Library/Filtered/Explore). Source-aware payloads are PS.2.
-                    .filter { PaperRef.fromStorageId(it).origin == Source.ARXIV }
+                    // P-Dispatch: dispatch is source-aware — a non-arXiv paper rides source/native_id/url/
+                    // pdf_fetchable (PayloadBuilder), no longer filtered out. The only drop is a non-arXiv paper
+                    // with no citeable link (no DOI + blank pdfUrl): it can't be dispatched usefully, so it's
+                    // dropped here (feeding the NothingToDispatch guard) rather than emitted with a blank url.
                     .mapNotNull { id ->
                         val full = paperDao.paperWithRelations(id) ?: return@mapNotNull null
+                        val domain = full.toDomain()
+                        if (domain.ref !is ArxivRef && domain.canonicalUrl().isBlank()) return@mapNotNull null
                         PaperWithAnnotations(
-                            paper = full.toDomain(),
+                            paper = domain,
                             tags = libraryDao.observeTagsFor(id).first().map { it.name },
                             status = libraryDao.observeEntry(id).first()?.status,
                             rating = libraryDao.observeEntry(id).first()?.rating,
@@ -311,17 +312,22 @@ class DispatchRepository
             val neighbors =
                 paperIds.flatMap { id ->
                     embeddingDao.neighborsFor(id, NEIGHBORS_PER_PAPER)
-                        // PS.1: a non-arXiv neighbor would synthesize a mangled arxiv.org URL below — exclude
-                        // it. Source-aware neighbor URLs ship with the rest of the payload work in PS.2.
-                        .filter { it.paper.id !in selection && it.paper.origin == Source.ARXIV.wire }
-                        .map {
+                        // Exclude the selection itself + skeletal citation stubs (title/abstract-less). Stubs can't
+                        // actually reach here (they're never embedded, so never in related_papers), but the filter
+                        // states the intent — a neighbor is a real paper, arXiv or not (P-Dispatch un-gate).
+                        .filter { it.paper.id !in selection && it.paper.source != PaperSource.S2_STUB.name }
+                        .map { row ->
+                            val paper = row.paper.toListDomain()
+                            val arxivRef = paper.ref as? ArxivRef
                             PayloadNeighbor(
-                                arxivId = it.paper.id,
+                                arxivId = arxivRef?.id?.value,
                                 near = id,
-                                title = it.paper.title,
-                                cosine = it.similarity.round3(),
-                                inLibrary = it.in_library,
-                                absUrl = ArxivId(it.paper.id).absUrl(it.paper.latestVersion),
+                                title = paper.title,
+                                cosine = row.similarity.round3(),
+                                inLibrary = row.in_library,
+                                absUrl = arxivRef?.absUrl(paper.latestVersion),
+                                source = if (arxivRef == null) paper.ref.origin.wire else null,
+                                url = if (arxivRef == null) paper.canonicalUrl() else null,
                             )
                         }
                 }
