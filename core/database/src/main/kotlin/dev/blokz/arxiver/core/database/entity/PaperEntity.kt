@@ -11,6 +11,9 @@ import androidx.room.PrimaryKey
     indices = [
         Index("primary_category"),
         Index("updated_at"),
+        // Cross-source de-dup lookup by DOI (P-FeedPolish). NON-unique — existing installs may already hold two
+        // rows sharing a DOI (an imported arXiv row with a `doi` + a followed `chemrxiv:` row).
+        Index("doi"),
     ],
 )
 data class PaperEntity(

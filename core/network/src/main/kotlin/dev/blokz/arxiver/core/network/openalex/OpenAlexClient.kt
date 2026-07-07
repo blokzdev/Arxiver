@@ -45,6 +45,9 @@ data class OpenAlexWork(
     val authorships: List<OpenAlexAuthorship> = emptyList(),
     @SerialName("primary_location") val primaryLocation: OpenAlexLocation? = null,
     @SerialName("best_oa_location") val bestOaLocation: OpenAlexLocation? = null,
+    // All locations (arXiv + institutional + journal). Already in the default browse payload — no `select` needed;
+    // `ignoreUnknownKeys` was silently dropping it. Carries the arXiv cross-id for de-dup (P-FeedPolish).
+    val locations: List<OpenAlexLocation> = emptyList(),
     @SerialName("open_access") val openAccess: OpenAlexOpenAccess? = null,
     @SerialName("primary_topic") val primaryTopic: OpenAlexTopic? = null,
 ) {
@@ -65,6 +68,17 @@ data class OpenAlexWork(
 
     /** The best directly-usable OA PDF url, if OpenAlex has one (often null → the hit is read-only). */
     fun oaPdfUrl(): String? = bestOaLocation?.pdfUrl ?: primaryLocation?.pdfUrl
+
+    /**
+     * The arXiv cross-id landing URL this work carries in [locations] (P-FeedPolish de-dup), preferring the
+     * parse-safe `arxiv.org/abs|pdf` form (the `doi.org/10.48550/arxiv.` form doesn't parse → skipped). A
+     * chemRxiv-*primary* work CAN carry an arXiv location, so this is the cross-source fork key; null if none.
+     */
+    fun arxivLandingUrl(): String? {
+        val arxivLocations = locations.filter { it.source?.id?.substringAfterLast('/') == OpenAlexClient.SID_ARXIV }
+        return arxivLocations.firstNotNullOfOrNull { it.landingPageUrl?.takeIf { u -> "arxiv.org/" in u } }
+            ?: arxivLocations.firstNotNullOfOrNull { it.landingPageUrl }
+    }
 
     fun authorNames(): List<String> = authorships.mapNotNull { it.author?.displayName?.takeIf { n -> n.isNotBlank() } }
 }

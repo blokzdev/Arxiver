@@ -39,5 +39,16 @@ sources we can't reach natively (chemRxiv, new preprint servers) — see [[chemr
 - **Metering caveat for a picker:** a browse/filter req = 1 credit, so populate the Field list from the **hardcoded
   26-Field table above (0 credits)** — never a live `/fields` fetch per picker-open.
 
+- **arXiv cross-id is NOT in `ids` (live-verified 2026-07-07):** an OpenAlex work exposes **no `ids.arxiv` key** —
+  `ids` on a modern work carries only `openalex` (+ sometimes `mag`/`doi`). The arXiv identity lives ONLY in
+  **`locations[]`**: an entry with `source.id == S4306400194` (arXiv) whose `landing_page_url` is
+  `http(s)://arxiv.org/abs/<id>` (or `/pdf/<id>`, or `https://doi.org/10.48550/arxiv.<id>`). A single work often
+  has **multiple `locations`** across sources (arXiv + institutional repo + journal), and `primary_location` may
+  be a preprint server while an arXiv location coexists — so a chemRxiv-primary work CAN carry an arXiv location
+  (the cross-source fork case). To crosswalk at ingest: model `locations[].{landing_page_url, source.id}`, pick the
+  arXiv-source entry, and feed its URL straight to `ArxivId.parse` (which already accepts a `arxiv.org/abs/…` URL)
+  → `resolvePaperRef`. The browse must `select` (or just model) `locations`; `ignoreUnknownKeys` silently drops it
+  otherwise. This is data already in the browse response — **no extra fetch, no rate-budget cost.**
+
 api.biorxiv.org (native bio/med, un-gated) is the OTHER backend — contract in `docs/SPEC-P-FEEDS.md` §3
 (server-side `?category=`, verified). Governed by SPEC-P-FEEDS.

@@ -81,6 +81,14 @@ interface PaperDao {
     @Query("SELECT * FROM papers WHERE id = :id")
     suspend fun paperById(id: String): PaperEntity?
 
+    /**
+     * The canonical stored id for a DOI (P-FeedPolish cross-source de-dup) — arXiv-origin preferred (a paper
+     * that was also on arXiv keys under the bare arXiv id), case-insensitive. Lets a follow re-key a hit onto
+     * an already-stored row that shares the DOI instead of forking a second row.
+     */
+    @Query("SELECT id FROM papers WHERE doi = :doi COLLATE NOCASE ORDER BY (origin = 'arxiv') DESC, id ASC LIMIT 1")
+    suspend fun paperIdByDoi(doi: String): String?
+
     /** Cached papers in a category, newest first — the cache-first Browse feed (no network). */
     @Query(
         """

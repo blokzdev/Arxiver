@@ -17,6 +17,12 @@ data class PreprintHit(
     val publishedIso: String?,
     val oaPdfUrl: String?,
     val version: String? = null,
+    /**
+     * A candidate arXiv cross-id this hit carries (P-FeedPolish de-dup) — an arXiv-source location URL for an
+     * OpenAlex work that is also on arXiv; null when the source carries no arXiv crosswalk. The worker feeds it
+     * through `resolvePaperRef` so a cross-posted arXiv paper keys under the bare arXiv id (never forks).
+     */
+    val arxivId: String? = null,
 )
 
 /** A page of [hits] plus an opaque [nextCursor] to fetch the next page (null when exhausted). */

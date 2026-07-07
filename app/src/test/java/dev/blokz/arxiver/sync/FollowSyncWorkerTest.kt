@@ -11,7 +11,11 @@ import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.entity.FollowEntity
+import dev.blokz.arxiver.core.database.toEntity
+import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.ExternalRef
+import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.network.PreprintBackend
 import dev.blokz.arxiver.core.network.PreprintBackendRegistry
@@ -30,7 +34,9 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -215,5 +221,115 @@ class FollowSyncWorkerTest {
 
             assertTrue(worker(attempt = 0, backends = backends).doWork() is ListenableWorker.Result.Success)
             assertEquals(1, calls, "a page-1 fill of FIRST_SYNC_LIMIT must short-circuit paging")
+        }
+
+    // --- P-FeedPolish PFP.1: cross-source de-dup at feed-ingest ---
+
+    private fun page(vararg hits: PreprintHit) = AppResult.Success(PreprintPage(hits.toList(), nextCursor = null))
+
+    private fun chemFollow() =
+        FollowEntity(
+            type = FollowEntity.TYPE_CATEGORY,
+            value = "fields/16",
+            label = "Chem",
+            createdAt = 0,
+            origin = Source.CHEMRXIV.wire,
+        )
+
+    private fun hit(
+        origin: Source,
+        doi: String,
+        arxivId: String? = null,
+        oaPdfUrl: String? = null,
+    ) = PreprintHit(
+        origin = origin,
+        doi = doi,
+        title = "t",
+        abstract = "a",
+        authors = emptyList(),
+        publishedIso = null,
+        oaPdfUrl = oaPdfUrl,
+        arxivId = arxivId,
+    )
+
+    private suspend fun seed(p: Paper) = db.paperDao().upsertPaperWithRelations(p.toEntity(), p.authors, p.categories)
+
+    @Test
+    fun `an OpenAlex hit carrying an arXiv cross-id collapses onto the existing arXiv row (no fork, no clobber)`() =
+        runBlocking {
+            // A real arXiv paper already stored via the native path, with rich metadata.
+            seed(
+                Paper(
+                    ref = ArxivRef(ArxivId("2403.09999")), latestVersion = 2, title = "Rich arXiv Title",
+                    abstract = "a", publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH,
+                    primaryCategory = "cs.LG", categories = listOf("cs.LG"), authors = listOf("A"),
+                    pdfUrl = "https://arxiv.org/pdf/2403.09999v2",
+                ),
+            )
+            db.followDao().insert(chemFollow())
+            // The SAME paper served by a chemRxiv follow — its OpenAlex work carries an arXiv location.
+            val h =
+                hit(
+                    Source.CHEMRXIV,
+                    "10.26434/chemrxiv-2024-x",
+                    arxivId = "https://arxiv.org/abs/2403.09999",
+                    oaPdfUrl = "https://chemrxiv.org/x.pdf",
+                )
+
+            worker(attempt = 0, backends = registryReturning(page(h))).doWork()
+
+            assertEquals(1, db.paperDao().count(), "the cross-posted paper does not fork")
+            assertTrue(db.inboxDao().activePaperIds().contains("2403.09999"), "inbox keyed under the bare arXiv id")
+            // Degraded-metadata guard: the rich native-arXiv row was NOT clobbered by the OpenAlex hit.
+            assertEquals(
+                "https://arxiv.org/pdf/2403.09999v2",
+                assertNotNull(db.paperDao().paperById("2403.09999")).pdfUrl,
+            )
+        }
+
+    @Test
+    fun `an OpenAlex hit with no arXiv cross-id keys under its source ExternalRef`() =
+        runBlocking {
+            db.followDao().insert(chemFollow())
+
+            worker(
+                attempt = 0,
+                backends = registryReturning(page(hit(Source.CHEMRXIV, "10.26434/chemrxiv-2024-y"))),
+            ).doWork()
+
+            assertEquals(1, db.paperDao().count())
+            assertTrue(
+                db.inboxDao().activePaperIds().contains(
+                    ExternalRef(Source.CHEMRXIV, "10.26434/chemrxiv-2024-y").storageId,
+                ),
+            )
+        }
+
+    @Test
+    fun `a hit sharing a DOI with a stored paper reuses that row, case-insensitively (no fork)`() =
+        runBlocking {
+            seed(
+                Paper(
+                    ref = ExternalRef(Source.BIORXIV, "10.1101/z"), latestVersion = 1, title = "Bio", abstract = "a",
+                    publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH, primaryCategory = "",
+                    categories = emptyList(),
+                    authors = listOf("A"), doi = "10.1101/Z", pdfUrl = "https://www.biorxiv.org/z.pdf",
+                ),
+            )
+            db.followDao().insert(
+                FollowEntity(
+                    type = FollowEntity.TYPE_CATEGORY,
+                    value = "",
+                    label = "SSRN",
+                    createdAt = 0,
+                    origin = Source.SSRN.wire,
+                ),
+            )
+
+            // Same DOI (lowercase), no arXiv cross-id → reuse the stored bioRxiv row via paperIdByDoi COLLATE NOCASE.
+            worker(attempt = 0, backends = registryReturning(page(hit(Source.SSRN, "10.1101/z")))).doWork()
+
+            assertEquals(1, db.paperDao().count(), "the same DOI reuses the stored row (case-insensitive)")
+            assertTrue(db.inboxDao().activePaperIds().contains("biorxiv:10.1101/z"))
         }
 }
