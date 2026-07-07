@@ -41,7 +41,7 @@ User-Agent: Arxiver/<version>
 
 Live testing showed two failure modes of sending bare payload JSON as the turn: (1) routines with their own instructions don't recognize the blob as research content, and (2) test pings start a real run (the fire API has no dry-run) and the routine just executes its configured instructions. The turn text is therefore rendered by `DispatchEnvelope` and is **self-describing**:
 
-- **Research dispatches** open with `ARXIVER RESEARCH DISPATCH (schema arxiver/v1)`, state the action, the user's instruction, and a short paper list, then embed the canonical arxiver/v1 JSON in a ` ```json ` fence with a note on how to use it (incl. fetching `pdf_url` for full text). Works with zero routine setup; starter instructions remain a quality upgrade, not a requirement.
+- **Research dispatches** open with `ARXIVER RESEARCH DISPATCH (schema arxiver/v1)`, state the action, the user's instruction, and a short paper list (each paper labelled `arXiv:<id>` or, for a non-arXiv preprint, `<source>:<native_id>` — never `arXiv:null`), then embed the canonical arxiver/v1 JSON in a ` ```json ` fence with a note on how to use it: the source discriminator (`arxiv_id` vs `source`+`url`) and fetching `pdf_url` for full text when `pdf_fetchable` isn't false. Works with zero routine setup; starter instructions remain a quality upgrade, not a requirement.
 - **Pings** open with `ARXIVER CONNECTIVITY TEST` and contain only a stand-down directive: skip the routine's normal instructions, acknowledge in one line, end the run. A ping still consumes a run — the UI confirms before sending and says so.
 - The dispatch sheet preview renders the full envelope — exactly the text that leaves the device.
 
@@ -88,8 +88,8 @@ Versioned envelope; `schema` bumps on breaking change. Routine authors can rely 
       "abstract": "…",
       "primary_category": "cs.LG",
       "categories": ["cs.LG", "stat.ML"],
-      "published": "2024-03-02",
-      "updated": "2024-03-15",
+      "published": "2024-03-02T18:00:01Z",
+      "updated": "2024-03-15T17:59:59Z",
       "doi": null,
       "abs_url": "https://arxiv.org/abs/2403.01234v2",
       "pdf_url": "https://arxiv.org/pdf/2403.01234v2",
@@ -100,17 +100,34 @@ Versioned envelope; `schema` bumps on breaking change. Routine authors can rely 
         "rating": 4,
         "notes": ["My note text…"]
       }
+    },
+    {
+      "title": "A Chemistry Preprint",
+      "authors": ["M. Curie"],
+      "abstract": "…",
+      "primary_category": "",
+      "categories": [],
+      "published": "2024-05-01T09:00:00Z",
+      "updated": "2024-05-01T09:00:00Z",
+      "doi": "10.26434/chemrxiv-2024-xyz",
+      "pdf_url": "https://chemrxiv.org/…/xyz.pdf",
+      "citation_count": null,
+      "source": "chemrxiv",
+      "native_id": "10.26434/chemrxiv-2024-xyz",
+      "url": "https://doi.org/10.26434/chemrxiv-2024-xyz",
+      "pdf_fetchable": false
     }
   ]
 }
 ```
 
+- **Source discriminator (P-Dispatch):** each `papers[]` (and `library_neighbors[]`) entry is EITHER an arXiv paper — it has an `arxiv_id` (+ `version`, `abs_url` with arxiv.org URLs) — OR a non-arXiv preprint (chemRxiv/bioRxiv/medRxiv), where `arxiv_id`/`version`/`abs_url` are structurally **absent** and identity comes from `source` (`chemrxiv`/`biorxiv`/…) + `native_id` (the DOI) + `url` (the canonical `doi.org` link). `pdf_url` is always present. `pdf_fetchable` (present only on non-arXiv papers, always `false` today) tells the routine's Claude the full PDF likely can't be fetched — work from the abstract for that paper. This is an **additive** extension of `arxiver/v1` (see §4.1) — an all-arXiv payload is byte-identical to the pre-P-Dispatch shape.
 - `papers[].user` present only when `include_notes` is toggled on for the dispatch (per-dispatch toggle, defaulting to the routine config's setting). Privacy: the confirm sheet always previews exactly what leaves the device.
 - `relations` (optional, additive — absent when there is nothing to report) ships the device's precomputed analysis primitives so the routine can *compose* relationships instead of re-deriving them from raw text (interface design informed by SpatialClaw, arXiv 2606.13673: agents reason better over composable perception primitives than over flat inputs behind a rigid interface):
   - `similarity`: pairwise embedding cosine between selected papers (only pairs where both embeddings exist; rounded to 3 decimals).
   - `citations`: citation edges whose *both* endpoints are in the selection.
   - `library_neighbors`: each selected paper's top-3 precomputed semantic neighbors from the local corpus (`near` names the anchor). These reveal what's on the user's device, so they ride the `include_notes` privacy gate — with notes off the key is structurally absent.
-- Abstract always included (Claude shouldn't need to re-fetch); PDFs never uploaded — links suffice, routines can fetch.
+- Abstract always included (Claude shouldn't need to re-fetch); PDFs never uploaded — links suffice, routines can fetch (a non-arXiv paper may carry `pdf_fetchable: false`, meaning only the abstract is reliably available).
 - Size guard: > 256 KB (≈ >40 papers with notes) → app refuses with "split the selection" message.
 
 ### 4.1 Versioning & breaking changes
@@ -118,6 +135,7 @@ Versioned envelope; `schema` bumps on breaking change. Routine authors can rely 
 `schema` (`arxiver/v1`) is the contract routine authors parse, so its evolution is governed:
 
 - **Additive, non-breaking changes** (new optional keys, e.g. the `relations` block) keep `arxiver/v1`. Routines that ignore unknown keys keep working.
+  - **P-Dispatch (2026-07-07) is the canonical additive case:** making payloads source-aware kept `arxiver/v1` — an all-arXiv payload is byte-identical (the golden passes unchanged) and a non-arXiv paper is a net-new object no deployed routine could previously receive, so no *currently-successful* parse breaks. A clean `arxiver/v2` (and a v1/v2 dual-emit) was **rejected**: it would strand every existing arXiv routine for zero capability additive can't deliver. Single-user app, so the one residual is that *your own* routine must handle the source discriminator once you start sending it non-arXiv papers.
 - **Breaking changes** (renaming/removing a field, changing a type or meaning) require, in the *same* commit:
   1. Bump `ArxiverPayload.SCHEMA` (`core/claude/.../Payload.kt`) to the next `arxiver/vN`.
   2. Update the golden fixtures so the change is reviewable as a diff.

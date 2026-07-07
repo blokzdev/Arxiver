@@ -59,7 +59,10 @@ object DispatchEnvelope {
                 appendLine()
                 appendLine("PAPERS:")
                 payload.papers.take(MAX_LISTED_PAPERS).forEach { paper ->
-                    appendLine("- ${paper.title} (arXiv:${paper.arxivId})")
+                    // Source-aware label (P-Dispatch): arXiv papers show arXiv:<id>; a non-arXiv paper shows
+                    // <source>:<native_id> — never "arXiv:null".
+                    val ref = paper.arxivId?.let { "arXiv:$it" } ?: "${paper.source}:${paper.nativeId}"
+                    appendLine("- ${paper.title} ($ref)")
                 }
                 if (payload.papers.size > MAX_LISTED_PAPERS) {
                     appendLine("- …and ${payload.papers.size - MAX_LISTED_PAPERS} more")
@@ -67,14 +70,18 @@ object DispatchEnvelope {
             }
             appendLine()
             appendLine("The complete research payload follows as JSON. It contains, per paper: title,")
-            appendLine("authors, abstract, categories, links (abs_url, and pdf_url for full text),")
-            appendLine("citation counts, and optionally my own tags/status/rating/notes under \"user\".")
+            appendLine("authors, abstract, categories, links, citation counts, and optionally my own")
+            appendLine("tags/status/rating/notes under \"user\". Each paper is EITHER an arXiv paper (it")
+            appendLine("has an \"arxiv_id\" with arxiv.org \"abs_url\"/\"pdf_url\") OR a non-arXiv preprint")
+            appendLine("(it has \"source\"+\"native_id\"+\"url\" instead). A paper with \"pdf_fetchable\":")
+            appendLine("false likely can't have its full PDF retrieved — work from the abstract for that one.")
             if (payload.relations != null && !payload.relations.isEmpty()) {
                 appendLine("It also includes \"relations\" — analysis precomputed on my device (embedding")
                 appendLine("similarity, citation edges, library neighbors): compose these instead of")
                 appendLine("re-deriving relationships from the text.")
             }
-            appendLine("Work from this payload; fetch PDFs from pdf_url when full text is needed.")
+            appendLine("Work from this payload; fetch a paper's PDF from \"pdf_url\" when full text is")
+            appendLine("needed and its \"pdf_fetchable\" isn't false.")
             appendLine()
             appendLine("```json")
             appendLine(payloadJson)
