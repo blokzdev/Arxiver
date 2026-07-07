@@ -2,7 +2,9 @@ package dev.blokz.arxiver.core.claude
 
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.Source
 import org.junit.Test
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -27,6 +29,26 @@ class DispatchEnvelopeTest {
                 primaryCategory = "cs.LG",
                 categories = listOf("cs.LG"),
                 authors = listOf("Ada Researcher"),
+            ),
+    )
+
+    private fun chemPaper(
+        nativeId: String,
+        title: String,
+    ) = PaperWithAnnotations(
+        paper =
+            Paper(
+                ref = ExternalRef(Source.CHEMRXIV, nativeId),
+                latestVersion = 1,
+                title = title,
+                abstract = "Abstract of $title.",
+                publishedAt = Instant.parse("2024-05-01T09:00:00Z"),
+                updatedAt = Instant.parse("2024-05-01T09:00:00Z"),
+                primaryCategory = "",
+                categories = emptyList(),
+                authors = listOf("Marie Curie"),
+                doi = nativeId,
+                pdfUrl = "https://chemrxiv.org/$nativeId.pdf",
             ),
     )
 
@@ -96,8 +118,9 @@ class DispatchEnvelopeTest {
 
         assertTrue("…and 4 more" in text)
         assertTrue("Papers attached: 14" in text)
-        // Every paper still present in the fenced payload.
-        assertEquals(14, Regex("\"arxiv_id\"").findAll(text).count())
+        // Every paper still present in the fenced payload. Scope the count to the JSON fence — the P-Dispatch
+        // envelope prose now names "arxiv_id" in its discriminator line, so a whole-text count would over-count.
+        assertEquals(14, Regex("\"arxiv_id\"").findAll(text.substringAfter("```json")).count())
     }
 
     @Test
@@ -124,6 +147,17 @@ class DispatchEnvelopeTest {
             ).json
         val text = DispatchEnvelope.render(withRelations)
         assertTrue("analysis precomputed on my device" in text)
+    }
+
+    @Test
+    fun `a non-arXiv paper is labelled by source, never arXiv-null`() {
+        val json = payloadJson(RoutineAction.DIGEST, "x", listOf(chemPaper("10.26434/xyz", "A Chemistry Preprint")))
+        val text = DispatchEnvelope.render(json)
+
+        assertTrue("- A Chemistry Preprint (chemrxiv:10.26434/xyz)" in text, "labelled by source, not arXiv")
+        assertFalse("arXiv:null" in text, "the arXiv:null bug must never recur")
+        // The prose carries the source discriminator + honest fetchability guidance.
+        assertTrue("pdf_fetchable" in text)
     }
 
     @Test
