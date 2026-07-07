@@ -52,4 +52,12 @@ data class Paper(
             is ArxivRef -> r.absUrl()
             else -> doi?.let { "https://doi.org/$it" } ?: pdfUrl
         }
+
+    /**
+     * Whether a downstream consumer (a Claude routine, P-Dispatch §4) can likely fetch this paper's full PDF.
+     * Conservative-and-honest: arXiv PDFs are openly fetchable; every non-arXiv source is reported unfetchable
+     * (chemRxiv is Atypon cookie-walled; bioRxiv/medRxiv are actually open, so this under-promises for them —
+     * a per-host reachability refinement is tracked in the ROADMAP backlog). Never over-promises.
+     */
+    fun isPdfFetchable(): Boolean = ref is ArxivRef
 }

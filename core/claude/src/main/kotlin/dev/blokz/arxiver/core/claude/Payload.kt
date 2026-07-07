@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.core.claude
 
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -29,8 +30,11 @@ data class PayloadUser(
 
 @Serializable
 data class PayloadPaper(
-    @SerialName("arxiv_id") val arxivId: String,
-    val version: Int,
+    // arXiv identity — present for an arXiv paper, structurally ABSENT for a non-arXiv one (P-Dispatch;
+    // explicitNulls=false). Declared before the source-identity keys + user so an arXiv payload serializes
+    // byte-identically to the pre-P-Dispatch shape (the new nullable keys simply vanish).
+    @SerialName("arxiv_id") val arxivId: String? = null,
+    val version: Int? = null,
     val title: String,
     val authors: List<String>,
     val abstract: String,
@@ -39,9 +43,15 @@ data class PayloadPaper(
     val published: String,
     val updated: String,
     val doi: String?,
-    @SerialName("abs_url") val absUrl: String,
+    @SerialName("abs_url") val absUrl: String? = null,
     @SerialName("pdf_url") val pdfUrl: String,
     @SerialName("citation_count") val citationCount: Int?,
+    // Source identity — present for a non-arXiv paper, ABSENT for arXiv. Discriminator: arxiv_id present ⇒ arXiv;
+    // absent ⇒ read source + native_id + url, and check pdf_fetchable before attempting the PDF.
+    val source: String? = null,
+    @SerialName("native_id") val nativeId: String? = null,
+    val url: String? = null,
+    @SerialName("pdf_fetchable") val pdfFetchable: Boolean? = null,
     val user: PayloadUser? = null,
 )
 
@@ -70,12 +80,15 @@ data class PayloadCitationEdge(
 /** A semantically near paper from the local corpus, anchored to a selected paper. */
 @Serializable
 data class PayloadNeighbor(
-    @SerialName("arxiv_id") val arxivId: String,
+    @SerialName("arxiv_id") val arxivId: String? = null,
     val near: String,
     val title: String,
     val cosine: Double,
     @SerialName("in_library") val inLibrary: Boolean,
-    @SerialName("abs_url") val absUrl: String,
+    @SerialName("abs_url") val absUrl: String? = null,
+    // Source identity for a non-arXiv neighbor (P-Dispatch) — absent for arXiv, keeping arXiv neighbors byte-identical.
+    val source: String? = null,
+    val url: String? = null,
 )
 
 /**
@@ -178,28 +191,53 @@ class PayloadBuilder(
         }
     }
 
-    private fun PaperWithAnnotations.toPayloadPaper(includeNotes: Boolean): PayloadPaper =
-        PayloadPaper(
-            arxivId = paper.id.value,
-            version = paper.latestVersion,
-            title = paper.title,
-            authors = paper.authors,
-            abstract = paper.abstract,
-            primaryCategory = paper.primaryCategory,
-            categories = paper.categories,
-            published = paper.publishedAt.toString(),
-            updated = paper.updatedAt.toString(),
-            doi = paper.doi,
-            absUrl = paper.id.absUrl(paper.latestVersion),
-            pdfUrl = paper.pdfUrl,
-            citationCount = paper.citationCount,
-            user =
-                if (includeNotes) {
-                    PayloadUser(tags = tags, status = status, rating = rating, notes = notes)
-                } else {
-                    null
-                },
-        )
+    /**
+     * Source-aware (P-Dispatch): an arXiv paper serializes byte-identically to the pre-P-Dispatch shape
+     * (arxiv_id/version/abs_url present); a non-arXiv paper omits those and carries source/native_id/url +
+     * an honest pdf_fetchable flag. Reads [Paper.ref] directly — never the deprecated `paper.id` shim, which
+     * `error()`s on a non-arXiv paper.
+     */
+    private fun PaperWithAnnotations.toPayloadPaper(includeNotes: Boolean): PayloadPaper {
+        val user = if (includeNotes) PayloadUser(tags = tags, status = status, rating = rating, notes = notes) else null
+        val arxivRef = paper.ref as? ArxivRef
+        return if (arxivRef != null) {
+            PayloadPaper(
+                arxivId = arxivRef.id.value,
+                version = paper.latestVersion,
+                title = paper.title,
+                authors = paper.authors,
+                abstract = paper.abstract,
+                primaryCategory = paper.primaryCategory,
+                categories = paper.categories,
+                published = paper.publishedAt.toString(),
+                updated = paper.updatedAt.toString(),
+                doi = paper.doi,
+                absUrl = arxivRef.absUrl(paper.latestVersion),
+                pdfUrl = paper.pdfUrl,
+                citationCount = paper.citationCount,
+                user = user,
+            )
+        } else {
+            PayloadPaper(
+                title = paper.title,
+                authors = paper.authors,
+                abstract = paper.abstract,
+                primaryCategory = paper.primaryCategory,
+                categories = paper.categories,
+                published = paper.publishedAt.toString(),
+                updated = paper.updatedAt.toString(),
+                doi = paper.doi,
+                pdfUrl = paper.pdfUrl,
+                citationCount = paper.citationCount,
+                source = paper.ref.origin.wire,
+                nativeId = paper.ref.nativeId,
+                url = paper.canonicalUrl(),
+                // Only ever emitted as `false` (non-arXiv); arXiv leaves it absent (arxiv_id already implies fetchable).
+                pdfFetchable = paper.isPdfFetchable(),
+                user = user,
+            )
+        }
+    }
 
     companion object {
         /** SPEC-CLAUDE-BRIDGE §4 size guard. */
