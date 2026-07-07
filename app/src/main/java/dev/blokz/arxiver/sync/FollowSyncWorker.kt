@@ -47,15 +47,32 @@ class FollowSyncWorker
         private val arxivApiClient: ArxivApiClient,
         private val preprintBackends: PreprintBackendRegistry,
     ) : CoroutineWorker(context, params) {
+        /**
+         * The outcome of syncing one follow (PFP.3). [Fetched] carries the delivered count so a zero-delivery sync
+         * can bump the health streak while a *failure* never does; [Failed] is a fetch error (retry, cursor frozen);
+         * [Skipped] is a config-dead follow (bad origin) that neither retries nor touches the streak.
+         */
+        private sealed interface SyncResult {
+            @JvmInline
+            value class Fetched(val count: Int) : SyncResult
+
+            data object Failed : SyncResult
+
+            data object Skipped : SyncResult
+        }
+
         override suspend fun doWork(): Result {
             val follows = followDao.enabledFollows()
             if (follows.isEmpty()) return Result.success()
 
             var anyFailure = false
+            val now = Instant.now().toEpochMilli()
             follows.forEach { follow ->
-                when (syncFollow(follow)) {
-                    true -> followDao.markSynced(follow.id, Instant.now().toEpochMilli())
-                    false -> anyFailure = true
+                when (val outcome = syncFollow(follow)) {
+                    // Only a real fetch touches the cursor + streak; count==0 bumps, any delivery resets.
+                    is SyncResult.Fetched -> followDao.markSynced(follow.id, now, outcome.count)
+                    SyncResult.Failed -> anyFailure = true
+                    SyncResult.Skipped -> Unit // config-dead follow: freeze cursor AND streak (never retries)
                 }
             }
             inboxDao.pruneDismissed(cutoff = Instant.now().minusSeconds(DISMISSED_RETENTION_S).toEpochMilli())
@@ -72,14 +89,14 @@ class FollowSyncWorker
         }
 
         /** Origin dispatch: arXiv → native Atom; every other source → its [PreprintBackend]. */
-        private suspend fun syncFollow(follow: FollowEntity): Boolean =
+        private suspend fun syncFollow(follow: FollowEntity): SyncResult =
             if (follow.origin == Source.ARXIV.wire) {
                 syncFollowViaArxiv(follow)
             } else {
                 syncFollowViaBackend(follow)
             }
 
-        private suspend fun syncFollowViaArxiv(follow: FollowEntity): Boolean {
+        private suspend fun syncFollowViaArxiv(follow: FollowEntity): SyncResult {
             val query =
                 when (follow.type) {
                     FollowEntity.TYPE_CATEGORY -> ArxivQuery.category(follow.value, maxResults = PAGE_SIZE)
@@ -102,11 +119,13 @@ class FollowSyncWorker
                     inboxDao.insertAll(
                         fresh.map { InboxItemEntity(paperId = it.id.value, followId = follow.id, arrivedAt = now) },
                     )
-                    true
+                    // Count is pre-inbox-IGNORE: a working-but-redundant follow (papers already seen) still reports
+                    // delivered>0 so it resets the health streak, not reads as dead (PFP.3).
+                    SyncResult.Fetched(fresh.size)
                 }
                 is AppResult.Failure -> {
                     Timber.w("Follow sync failed for ${follow.type}:${follow.value} — ${result.error}")
-                    false
+                    SyncResult.Failed
                 }
             }
         }
@@ -116,12 +135,12 @@ class FollowSyncWorker
          * paging until exhausted or a bound, then upsert + inbox the fresh papers. The inbox `IGNORE` conflict
          * dedups an already-seen paper on re-sync; a `false` return retries only this follow.
          */
-        private suspend fun syncFollowViaBackend(follow: FollowEntity): Boolean {
+        private suspend fun syncFollowViaBackend(follow: FollowEntity): SyncResult {
             val source = Source.entries.firstOrNull { it.wire == follow.origin }
             val backend = source?.let { preprintBackends.backendFor(it) }
             if (source == null || backend == null) {
                 Timber.w("Follow sync: unknown/unsupported origin '${follow.origin}' — skipping")
-                return true // not retryable — a bad origin never recovers
+                return SyncResult.Skipped // config-dead: never retries, never touches the streak
             }
             val category = follow.value.takeIf { follow.type == FollowEntity.TYPE_CATEGORY }
             val sinceIso = sinceIsoFor(follow)
@@ -137,7 +156,7 @@ class FollowSyncWorker
                     }
                     is AppResult.Failure -> {
                         Timber.w("Follow sync failed for ${follow.origin}:${follow.value} — ${r.error}")
-                        return false
+                        return SyncResult.Failed
                     }
                 }
             } while (cursor != null && ++pages < MAX_FOLLOW_PAGES && hits.size < FIRST_SYNC_LIMIT)
@@ -158,7 +177,9 @@ class FollowSyncWorker
                     InboxItemEntity(paperId = ref.storageId, followId = follow.id, arrivedAt = now)
                 }
             inboxDao.insertAll(inboxRows)
-            return true
+            // Pre-inbox-IGNORE count (same contract as the arXiv path): the feed returned this many in-window
+            // hits, so a redundant-but-live follow resets its health streak rather than reading as dead (PFP.3).
+            return SyncResult.Fetched(fresh.size)
         }
 
         /**

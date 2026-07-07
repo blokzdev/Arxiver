@@ -42,6 +42,7 @@ import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
+import dev.blokz.arxiver.core.database.migration.MIGRATION_10_11
 import dev.blokz.arxiver.core.database.migration.MIGRATION_1_2
 import dev.blokz.arxiver.core.database.migration.MIGRATION_2_3
 import dev.blokz.arxiver.core.database.migration.MIGRATION_3_4
@@ -113,7 +114,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
         const val NAME = "arxiver.db"
 
         /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
-        const val VERSION = 10
+        const val VERSION = 11
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema
@@ -131,6 +132,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
                     MIGRATION_7_8,
                     MIGRATION_8_9,
                     MIGRATION_9_10,
+                    MIGRATION_10_11,
                 )
                 .build()
     }

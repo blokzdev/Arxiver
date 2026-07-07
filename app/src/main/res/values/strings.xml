@@ -26,6 +26,7 @@
     <string name="cd_unfollow">Unfollow %1$s</string>
     <string name="follow_type_author">Author</string>
     <string name="follow_type_query">Saved search</string>
+    <string name="follow_health_quiet">No new papers recently</string>
     <string name="cd_back">Back</string>
     <string name="cd_clear_query">Clear search query</string>
     <string name="cd_toggle_night_mode">Toggle night mode</string>
