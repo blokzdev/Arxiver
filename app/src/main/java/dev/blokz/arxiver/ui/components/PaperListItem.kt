@@ -18,9 +18,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ThumbDown
+import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.outlined.ThumbDown
+import androidx.compose.material.icons.outlined.ThumbUp
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
@@ -56,7 +61,7 @@ data class PaperBadge(val label: String, val tone: StatusTone)
  * THE paper list cell (SPEC-UI §4): Today, Browse, Search, and Library all
  * render through this composable. Context slots are optional — [score] for
  * inbox relevance, [status]/[rating] for library rows, [badge] for search
- * provenance — and absent slots cost no space.
+ * provenance, [onVote]/[vote] for the Today relevance thumbs — and absent slots cost no space.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -72,6 +77,8 @@ fun PaperListItem(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onLongClick: (() -> Unit)? = null,
+    vote: Int? = null,
+    onVote: ((Boolean) -> Unit)? = null,
 ) {
     val background by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
@@ -116,7 +123,10 @@ fun PaperListItem(
                 )
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(Spacing.xs),
+        ) {
             Text(
                 text = paper.title,
                 style = MaterialTheme.typography.titleMedium,
@@ -195,6 +205,9 @@ fun PaperListItem(
                 )
             }
         }
+        if (onVote != null) {
+            RelevanceVoteButtons(vote = vote, onVote = onVote)
+        }
     }
     if (showDivider) {
         HorizontalDivider(
@@ -213,6 +226,42 @@ private fun statusLabel(status: String): String =
         else -> status
     }
 
+/**
+ * The Today relevance thumbs (P4.2): tap the set direction again to clear it. The filled/outline icon
+ * state IS the confirmation (no snackbar); state-aware content descriptions announce it to TalkBack.
+ */
+@Composable
+private fun RelevanceVoteButtons(
+    vote: Int?,
+    onVote: (Boolean) -> Unit,
+) {
+    val upLabel = stringResource(if (vote == 1) R.string.cd_relevance_vote_up_active else R.string.cd_relevance_vote_up)
+    val downLabel =
+        stringResource(if (vote == -1) R.string.cd_relevance_vote_down_active else R.string.cd_relevance_vote_down)
+    Row {
+        IconButton(
+            onClick = { onVote(true) },
+            modifier = Modifier.semantics { contentDescription = upLabel },
+        ) {
+            Icon(
+                imageVector = if (vote == 1) Icons.Filled.ThumbUp else Icons.Outlined.ThumbUp,
+                contentDescription = null,
+                tint = if (vote == 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(
+            onClick = { onVote(false) },
+            modifier = Modifier.semantics { contentDescription = downLabel },
+        ) {
+            Icon(
+                imageVector = if (vote == -1) Icons.Filled.ThumbDown else Icons.Outlined.ThumbDown,
+                contentDescription = null,
+                tint = if (vote == -1) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
@@ -225,6 +274,8 @@ private fun PaperListItemPreview() {
                 onClick = {},
                 badge = PaperBadge("semantic", StatusTone.Machine),
                 score = 0.83,
+                vote = 1,
+                onVote = {},
             )
             PaperListItem(
                 paper = PreviewFixtures.papers[2],

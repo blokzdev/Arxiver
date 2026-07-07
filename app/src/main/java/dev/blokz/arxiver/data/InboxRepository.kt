@@ -17,6 +17,8 @@ data class InboxPaper(
     val arrivedAt: Instant,
     val state: String,
     val score: Double?,
+    /** The user's explicit relevance thumb: +1 up, -1 down, null if unvoted (P4.2). */
+    val vote: Int?,
 )
 
 @Singleton
@@ -35,6 +37,7 @@ class InboxRepository
                         arrivedAt = Instant.ofEpochMilli(it.arrived_at),
                         state = it.state,
                         score = it.score,
+                        vote = it.vote,
                     )
                 }
             }
@@ -76,4 +79,28 @@ class InboxRepository
         ) = inboxDao.setState(paperId, state)
 
         suspend fun markSeen(paperId: String) = inboxDao.setState(paperId, InboxItemEntity.STATE_SEEN)
+
+        /**
+         * Toggle an explicit relevance thumb (P4.2). Tapping the already-set direction clears it; otherwise
+         * the vote is (re)set. Thumb-up joins the ranker's positives, thumb-down its negatives — but unlike a
+         * dismiss the paper stays in the inbox (a soft "less/more like this", not a removal).
+         */
+        suspend fun setRelevanceVote(
+            paperId: String,
+            up: Boolean,
+        ) {
+            val desired = if (up) PaperFeedbackEntity.SIGNAL_POSITIVE else PaperFeedbackEntity.SIGNAL_NEGATIVE
+            if (paperFeedbackDao.voteFor(paperId) == desired) {
+                paperFeedbackDao.clear(paperId)
+            } else {
+                paperFeedbackDao.upsert(
+                    PaperFeedbackEntity(
+                        paperId = paperId,
+                        signal = desired,
+                        source = PaperFeedbackEntity.SOURCE_THUMB,
+                        createdAt = Instant.now().toEpochMilli(),
+                    ),
+                )
+            }
+        }
     }

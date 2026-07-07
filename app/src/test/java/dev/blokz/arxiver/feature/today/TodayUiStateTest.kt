@@ -29,6 +29,7 @@ class TodayUiStateTest {
             arrivedAt = Instant.EPOCH,
             state = "new",
             score = null,
+            vote = null,
         )
 
     @Test

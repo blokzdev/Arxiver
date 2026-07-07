@@ -54,6 +54,8 @@ fun SwipeablePaperRow(
     status: String? = null,
     rating: Int? = null,
     badge: PaperBadge? = null,
+    vote: Int? = null,
+    onVote: ((Boolean) -> Unit)? = null,
 ) {
     val haptics = LocalHapticFeedback.current
     // Read the latest callbacks/mode inside confirmValueChange (the state captures it once).
@@ -132,6 +134,8 @@ fun SwipeablePaperRow(
                 selectionMode = selectionMode,
                 selected = selected,
                 showDivider = showDivider,
+                vote = vote,
+                onVote = onVote,
             )
         }
     }
