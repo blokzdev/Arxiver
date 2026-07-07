@@ -94,10 +94,11 @@ data class ExternalRef(
  * that arXiv id, not `s2:<paperId>`). Only when there is no parseable arXiv id does it key under the
  * source's own [nativeId] as an [ExternalRef].
  *
- * [arxivId] is the *candidate* arXiv identity a source hit may carry (S2's `externalIds.arxiv`); it is
- * `null` for a source with no arXiv crosswalk (chemRxiv — a [ChemRxivItem] carries none, so chemRxiv is
- * de-dup-safe by construction). [ArxivId.parse] is the EXACT gate `import_to_library`'s arXiv path uses,
- * so "resolvable arXiv id" means one thing everywhere.
+ * [arxivId] is the *candidate* arXiv identity a source hit may carry (S2's `externalIds.arxiv`, or an OpenAlex
+ * work's arXiv `locations[]` URL — P-FeedPolish); `null` when the hit carries no arXiv crosswalk. (An
+ * OpenAlex-served chemRxiv *work* CAN carry an arXiv location, so chemRxiv is NOT de-dup-safe by construction —
+ * the feed worker extracts that cross-id and passes it here.) [ArxivId.parse] is the EXACT gate
+ * `import_to_library`'s arXiv path uses, so "resolvable arXiv id" means one thing everywhere.
  */
 fun resolvePaperRef(
     arxivId: String?,
@@ -106,3 +107,22 @@ fun resolvePaperRef(
 ): PaperRef =
     arxivId?.let { ArxivId.parse(it)?.first }?.let(::ArxivRef)
         ?: ExternalRef(origin, nativeId)
+
+private val VERSIONED_DOI_SUFFIX = Regex("""\.v\d+$""")
+
+/**
+ * Normalize a DOI for cross-source equality (P-FeedPolish de-dup): trim + lowercase, strip resolver prefixes
+ * (`https://doi.org/`, `doi:`), and strip a trailing versioned-preprint suffix (`.vN` — e.g. chemRxiv's
+ * `10.26434/chemrxiv.7234721.v5`). Returns null for a blank/absent DOI — a null DOI is NEVER a cross-merge key.
+ * The suffix strip is scoped to a `.v<digits>` tail, so a legitimate DOI merely ending in a dotted number is untouched.
+ */
+fun normalizeDoi(raw: String?): String? {
+    val bare =
+        (raw?.trim()?.lowercase() ?: return null)
+            .removePrefix("https://doi.org/")
+            .removePrefix("http://doi.org/")
+            .removePrefix("http://dx.doi.org/")
+            .removePrefix("doi:")
+            .trim()
+    return VERSIONED_DOI_SUFFIX.replace(bare, "").takeIf { it.isNotBlank() }
+}

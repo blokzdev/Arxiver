@@ -48,6 +48,9 @@ class OpenAlexBackend(
             // Host-gated at read time (PdfDownloader interceptor + magic-byte). chemRxiv's is cookie-walled →
             // degrades to open-in-browser; null when OpenAlex has no OA pdf url.
             oaPdfUrl = oaPdfUrl(),
+            // The arXiv cross-id URL, if this work is also on arXiv — the worker resolves it to the bare arXiv id
+            // so a cross-posted paper doesn't fork (P-FeedPolish de-dup).
+            arxivId = arxivLandingUrl(),
         )
     }
 }

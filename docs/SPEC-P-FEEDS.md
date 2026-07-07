@@ -64,6 +64,15 @@ Reuses SPEC-P-SOURCES §3 **verbatim**: a hit → `ExternalPaperDraft` → `reso
 allowlisted host); else read-only (external-open). arXiv cross-id always wins (no fork). PDF **bytes** still fetch
 from each source's own allowlisted host through `PdfDownloader` (per-host limiter, `%PDF` magic-byte guard).
 
+**Feed-ingest de-dup (P-FeedPolish PFP.1), distinct from import.** `FollowSyncWorker` resolves ONE canonical
+`PaperRef` per hit *before* storing the paper or the inbox row, so a cross-posted paper never forks: (1) an
+OpenAlex work carries its arXiv cross-id in `locations[]` (a chemRxiv-*primary* work CAN carry an arXiv location —
+memory `openalex-api-contract`), extracted to `PreprintHit.arxivId` and run through the same `resolvePaperRef`
+chokepoint (arXiv wins → the bare arXiv id); (2) else an origin-blind normalized-DOI lookup reuses an
+already-stored row (`paperIdByDoi`, arXiv-origin-preferred, case-insensitive); (3) else the source's `ExternalRef`.
+A hit collapsing onto an existing arXiv row is **insert-if-absent** (never clobbers the richer native-arXiv row).
+**Forward-only:** existing on-device forks are not retroactively merged.
+
 **chemRxiv honesty:** OpenAlex fixes **discovery + metadata**; the chemRxiv **PDF is Atypon cookie-walled** (the
 asset url 301-chains to `chemrxiv.org/action/cookieAbsent` HTML, not a PDF), so in-app PDF **degrades to
 open-in-browser** — do NOT claim in-app chemRxiv PDF. bioRxiv/medRxiv PDF bytes come from S2's `openAccessPdf.url`

@@ -13,10 +13,13 @@ import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.entity.FollowEntity
 import dev.blokz.arxiver.core.database.entity.InboxItemEntity
 import dev.blokz.arxiver.core.database.toEntity
-import dev.blokz.arxiver.core.model.ExternalRef
+import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.core.model.PaperSource
 import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.core.model.normalizeDoi
+import dev.blokz.arxiver.core.model.resolvePaperRef
 import dev.blokz.arxiver.core.network.PreprintBackendRegistry
 import dev.blokz.arxiver.core.network.PreprintHit
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
@@ -123,13 +126,13 @@ class FollowSyncWorker
             val category = follow.value.takeIf { follow.type == FollowEntity.TYPE_CATEGORY }
             val sinceIso = sinceIsoFor(follow)
 
-            val hits = LinkedHashMap<String, PreprintHit>() // dedup by DOI, preserve order
+            val hits = LinkedHashMap<String, PreprintHit>() // dedup by NORMALIZED DOI, preserve order
             var cursor: String? = null
             var pages = 0
             do {
                 when (val r = backend.browse(source, category, sinceIso, cursor)) {
                     is AppResult.Success -> {
-                        r.value.hits.forEach { hits.putIfAbsent(it.doi, it) }
+                        r.value.hits.forEach { hits.putIfAbsent(normalizeDoi(it.doi) ?: it.doi, it) }
                         cursor = r.value.nextCursor
                     }
                     is AppResult.Failure -> {
@@ -140,21 +143,36 @@ class FollowSyncWorker
             } while (cursor != null && ++pages < MAX_FOLLOW_PAGES && hits.size < FIRST_SYNC_LIMIT)
 
             val fresh = hits.values.take(FIRST_SYNC_LIMIT)
-            fresh.forEach { hit ->
-                val paper = hit.toPaper()
-                paperDao.upsertPaperWithRelations(paper.toEntity(), paper.authors, paper.categories)
-            }
             val now = Instant.now().toEpochMilli()
-            inboxDao.insertAll(
-                fresh.map {
-                    InboxItemEntity(
-                        paperId = ExternalRef(it.origin, it.doi).storageId,
-                        followId = follow.id,
-                        arrivedAt = now,
-                    )
-                },
-            )
+            val inboxRows =
+                fresh.map { hit ->
+                    // One canonical ref per hit (P-FeedPolish cross-source de-dup) — used for BOTH the paper row
+                    // and the inbox row, so a cross-posted paper can never fork into two rows.
+                    val ref = canonicalRef(hit)
+                    // Degraded-metadata guard: a hit that collapsed onto a bare arXiv id must not clobber a richer
+                    // native-arXiv row (toPaper hardcodes primaryCategory=""/pdfUrl). Insert-if-absent for that case.
+                    if (!(ref is ArxivRef && paperDao.paperById(ref.storageId) != null)) {
+                        val paper = hit.toPaper(ref)
+                        paperDao.upsertPaperWithRelations(paper.toEntity(), paper.authors, paper.categories)
+                    }
+                    InboxItemEntity(paperId = ref.storageId, followId = follow.id, arrivedAt = now)
+                }
+            inboxDao.insertAll(inboxRows)
             return true
+        }
+
+        /**
+         * Resolve one canonical [PaperRef] for a hit (P-FeedPolish de-dup): an arXiv cross-id wins (a cross-posted
+         * arXiv paper keys under the bare arXiv id via [resolvePaperRef]); else reuse an already-stored row that
+         * shares the DOI (arXiv-origin preferred); else the source's own `ExternalRef`.
+         */
+        private suspend fun canonicalRef(hit: PreprintHit): PaperRef {
+            val resolved = resolvePaperRef(arxivId = hit.arxivId, origin = hit.origin, nativeId = hit.doi)
+            if (resolved is ArxivRef) return resolved
+            normalizeDoi(hit.doi)?.let { norm ->
+                paperDao.paperIdByDoi(norm)?.let { return PaperRef.fromStorageId(it) }
+            }
+            return resolved // ExternalRef(origin, doi)
         }
 
         /** The `YYYY-MM-DD` lower bound for a backend browse — the last-synced date, or a first-sync window. */
@@ -169,13 +187,13 @@ class FollowSyncWorker
             return date.toString()
         }
 
-        private fun PreprintHit.toPaper(): Paper {
+        private fun PreprintHit.toPaper(ref: PaperRef): Paper {
             val published =
                 publishedIso
                     ?.let { runCatching { LocalDate.parse(it).atStartOfDay(ZoneOffset.UTC).toInstant() }.getOrNull() }
                     ?: Instant.EPOCH
             return Paper(
-                ref = ExternalRef(origin, doi),
+                ref = ref,
                 latestVersion = version?.toIntOrNull() ?: 1,
                 title = title,
                 abstract = abstract,
