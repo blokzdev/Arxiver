@@ -187,13 +187,10 @@ fun PaperDetailScreen(
                         IconButton(onClick = { showAsk = true }) {
                             Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_ask))
                         }
-                        // Send-to-Claude routines are arXiv-shaped (SPEC-CLAUDE-BRIDGE). Hidden for a
-                        // non-arXiv paper — no dead affordance, and it can't reach the arXiv-only payload
-                        // path (source-aware dispatch is PS.2). Consistent with hiding Read HTML below.
-                        if (paper.ref.origin == Source.ARXIV) {
-                            IconButton(onClick = { showDispatch = true }) {
-                                Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
-                            }
+                        // Send-to-Claude routines are source-aware (P-Dispatch) — available for any paper; a
+                        // non-arXiv paper rides source/native_id/url in the payload.
+                        IconButton(onClick = { showDispatch = true }) {
+                            Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
                         }
                         IconButton(
                             onClick = {
