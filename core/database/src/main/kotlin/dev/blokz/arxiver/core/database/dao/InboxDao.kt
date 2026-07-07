@@ -41,6 +41,19 @@ interface InboxDao {
     @Query("SELECT paper_id FROM inbox_items WHERE state IN ('new', 'seen')")
     suspend fun activePaperIds(): List<String>
 
+    /**
+     * Active-inbox paper ids surfaced by *enabled* follows — the P4 cold-start interest seed (SPEC-SEARCH §5).
+     * Joins the recorded origin follow so papers left behind by a since-disabled follow don't seed the model.
+     */
+    @Query(
+        """
+        SELECT i.paper_id FROM inbox_items i
+        JOIN follows f ON f.id = i.follow_id
+        WHERE i.state IN ('new', 'seen') AND f.enabled = 1
+        """,
+    )
+    suspend fun activeIdsFromEnabledFollows(): List<String>
+
     @Query("UPDATE inbox_items SET score = :score WHERE paper_id = :paperId")
     suspend fun setScore(
         paperId: String,

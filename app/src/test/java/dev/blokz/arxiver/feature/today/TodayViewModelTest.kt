@@ -8,6 +8,7 @@ import app.cash.turbine.test
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.entity.InboxItemEntity
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
+import dev.blokz.arxiver.core.database.entity.PaperFeedbackEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
@@ -31,6 +32,7 @@ import org.robolectric.RobolectricTestRunner
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -57,7 +59,7 @@ class TodayViewModelTest {
                 .setTransactionExecutor { it.run() }
                 .build()
         library = LibraryRepository(db.libraryDao(), db.inboxDao())
-        inbox = InboxRepository(db.inboxDao(), library)
+        inbox = InboxRepository(db.inboxDao(), library, db.paperFeedbackDao())
         categories = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao())
         vm = TodayViewModel(inbox, SyncScheduler(context), library, categories)
     }
@@ -125,6 +127,32 @@ class TodayViewModelTest {
 
             assertFalse(library.observeIsSaved("2401.00001").first())
             assertTrue(inbox.observeInbox().first().any { it.paper.id.value == "2401.00001" })
+        }
+
+    @Test
+    fun `dismiss writes a durable negative label and undo clears it`() =
+        runTest {
+            seedInbox("2401.00001")
+            val item = inbox.observeInbox().first().single()
+
+            vm.dismiss(item)
+
+            assertEquals(
+                PaperFeedbackEntity.SIGNAL_NEGATIVE,
+                db.paperFeedbackDao().voteFor("2401.00001"),
+                "dismiss snapshots a durable negative",
+            )
+            assertFalse(
+                inbox.observeInbox().first().any { it.paper.id.value == "2401.00001" },
+                "dismissed leaves the inbox",
+            )
+
+            val event = vm.triageEvent.first { it != null }!!
+            assertEquals(TriageKind.DISMISSED, event.kind)
+            vm.undo(event)
+
+            assertNull(db.paperFeedbackDao().voteFor("2401.00001"), "undo clears the dismiss label")
+            assertTrue(inbox.observeInbox().first().any { it.paper.id.value == "2401.00001" }, "the row is restored")
         }
 
     @Test

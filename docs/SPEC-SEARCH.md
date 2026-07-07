@@ -47,7 +47,7 @@ For every **library** paper: top-8 nearest neighbors (cosine) over the whole loc
 
 ## 5. Semantic triage (inbox ranking)
 
-Inbox score = max cosine similarity between the inbox paper and the user's **library centroid set**: the centroids of (up to) the 5 k-means clusters of library embeddings, recomputed weekly by `EmbeddingWorker`. Rationale (from arxiv-sanity's per-user SVM): cheap personalization from revealed preferences, no feedback UI needed in v1. Inbox sorts by score descending; score also drives a "likely relevant" section header. Cold start (library < 10 papers): inbox sorts by recency, no scores shown.
+Inbox score = a two-sided **Rocchio relevance** in `[0,1]`: `clamp01(α·maxCosine(v, positiveCentroids) − γ·cosine(v, negativeCentroid))`, with `α = 1.0`, `γ = 0.5` (tunable constants). **Positive centroids** are the (up to 5) k-means clusters of the user's library saves **plus explicit thumbs-up** papers; the **negative centroid** is the pooled, re-normalized mean of **dismissed and thumbs-down** papers (≥ 3 required), read from the durable `paper_feedback` table so a dismiss survives inbox pruning. Recomputed by `InboxScorer` (driven by `EmbeddingWorker`) on every periodic run (~6 h) and on every manual sync. **The scale is preserved**: with no negatives the score is bit-identical to the prior positive-only `maxCosine` — a purely additive deepen — so the `[0,1]` range, the `score DESC` ordering, and the ≥ 0.55 "Likely relevant" section header are unchanged. **Cold start** (library < 10 papers): seed the positive set from papers the user's *enabled follows* have already surfaced into the inbox (minus any disliked ones), so a follows-only user gets ranking instead of pure recency; only a truly empty profile (no library, no follows) falls back to recency with no scores. Rationale (from arxiv-sanity): cheap personalization from revealed preferences (saves **and** dismisses) plus an optional explicit thumbs signal. *(The literal arxiv-sanity logistic/linear-SVM classifier is a tracked follow-on — Rocchio is the deterministic, scale-preserving first step; see ROADMAP Phase P4.)*
 
 ## 6. Embedding pipeline contract
 
@@ -60,6 +60,7 @@ Inbox score = max cosine similarity between the inbox paper and the user's **lib
 - Fusion math: pure-function unit tests (normalization, weighting, gate, dedupe) with synthetic legs.
 - FTS: Robolectric DB tests — tokenization edge cases (hyphenated terms, unicode, LaTeX fragments in titles).
 - Vector: `VectorStore` contract tests run against both sqlite-vec and the BLOB fallback implementation.
+- Two-sided ranker (P4): pure-function tests over synthetic clusters — a dismiss-cluster paper ranks below a save-cluster paper; **empty negatives ≡ positive-only similarity**; deterministic; output ∈ [0,1] (`RocchioRankerTest`). Scorer wiring against real DAOs — dismiss demotes, follows cold-start yields scores (not recency), an empty profile stays null, stale-model vectors are skipped (`InboxScorerTest`).
 - Golden relevance set: ~20 hand-written (query → expected-paper) cases over a fixture corpus of ~100 real arXiv abstracts; hybrid must hit expected paper in top 5 for ≥ 80% of cases. Guards tuning regressions.
 
 ## 8. RAG retrieval (P2)

@@ -90,11 +90,17 @@ class TodayViewModel
             }
         }
 
-        /** Reverses a triage swipe exactly: library entry and inbox state. */
+        /** Reverses a triage swipe exactly: library entry / inbox state / and any label the swipe wrote. */
         fun undo(event: TriageEvent) {
             viewModelScope.launch {
-                if (event.kind == TriageKind.SAVED) libraryRepository.unsave(event.paperId)
-                inboxRepository.restoreState(event.paperId, event.previousState)
+                when (event.kind) {
+                    TriageKind.SAVED -> {
+                        libraryRepository.unsave(event.paperId)
+                        inboxRepository.restoreState(event.paperId, event.previousState)
+                    }
+                    // Dismiss also wrote a durable negative label — undoDismiss clears it (P4).
+                    TriageKind.DISMISSED -> inboxRepository.undoDismiss(event.paperId, event.previousState)
+                }
             }
         }
 
