@@ -31,6 +31,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.ExpandMore
@@ -135,6 +136,7 @@ fun ExploreScreen(
     var organizeIds by remember { mutableStateOf<List<String>?>(null) }
     var showDispatch by remember { mutableStateOf(false) }
     var showSourceFollow by remember { mutableStateOf(false) }
+    var showManageFollows by remember { mutableStateOf(false) }
 
     BackHandler(enabled = selection.isActive) { selection.clear() }
 
@@ -180,6 +182,9 @@ fun ExploreScreen(
                 TopAppBar(
                     title = { Text(stringResource(R.string.nav_explore)) },
                     actions = {
+                        IconButton(onClick = { showManageFollows = true }) {
+                            Icon(Icons.Filled.Bookmarks, stringResource(R.string.cd_manage_follows))
+                        }
                         IconButton(onClick = { showSourceFollow = true }) {
                             Icon(Icons.Filled.RssFeed, stringResource(R.string.cd_follow_sources))
                         }
@@ -318,6 +323,16 @@ fun ExploreScreen(
 
     if (showSourceFollow) {
         SourceFollowSheet(onDismiss = { showSourceFollow = false })
+    }
+
+    if (showManageFollows) {
+        ManageFollowsSheet(
+            onDismiss = { showManageFollows = false },
+            onAddFollows = {
+                showManageFollows = false
+                showSourceFollow = true
+            },
+        )
     }
 
     if (showDispatch) {

@@ -94,4 +94,15 @@ class CategoryRepository
                 followDao.delete(FollowEntity.TYPE_CATEGORY, value, source.wire)
             }
         }
+
+        /**
+         * Remove any follow (P-FeedPolish PFP.2 manage screen) — type- and origin-aware, unlike
+         * [setCategoryFollowed], which only ever deletes `category` follows. This is the only path that can drop an
+         * author/query follow. Cleans the follow's inbox rows in the same operation (the unfollow contract), keyed
+         * by the entity's own [FollowEntity.id] so no extra `find` round-trip is needed.
+         */
+        suspend fun removeFollow(follow: FollowEntity) {
+            inboxDao.deleteByFollowId(follow.id)
+            followDao.delete(follow.type, follow.value, follow.origin)
+        }
     }

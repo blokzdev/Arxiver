@@ -87,6 +87,31 @@ class CategoryRepositoryTest {
             assertNull(db.followDao().find(FollowEntity.TYPE_CATEGORY, "neuroscience", "biorxiv"))
         }
 
+    @Test
+    fun `removeFollow drops an author follow (which setCategoryFollowed cannot) and its inbox rows`() =
+        runBlocking {
+            // An author follow — TYPE_AUTHOR, so the category-only setCategoryFollowed path could never remove it.
+            val id =
+                db.followDao().insert(
+                    FollowEntity(
+                        type = FollowEntity.TYPE_AUTHOR,
+                        value = "Yann LeCun",
+                        label = "Yann LeCun",
+                        createdAt = 0,
+                    ),
+                )
+            db.paperDao().upsertPaper(paper("arxiv:2401.00001"))
+            db.inboxDao().insertAll(
+                listOf(InboxItemEntity(paperId = "arxiv:2401.00001", followId = id, arrivedAt = 0)),
+            )
+            assertEquals(1, db.inboxDao().activePaperIds().size)
+
+            repo.removeFollow(db.followDao().observeAll().first().single())
+
+            assertTrue(db.followDao().observeAll().first().isEmpty(), "the author follow is removed")
+            assertTrue(db.inboxDao().activePaperIds().isEmpty(), "its inbox row is cleaned in the same operation")
+        }
+
     private fun paper(id: String) =
         PaperEntity(
             id = id, latestVersion = 1, title = id, abstract = "", publishedAt = 0, updatedAt = 0,

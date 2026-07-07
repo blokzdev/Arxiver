@@ -19,6 +19,13 @@
     <string name="follow_sources_subtitle">Get new papers from more preprint servers in your Today feed.</string>
     <string name="follow_sources_whole">All of %1$s</string>
     <string name="follow_sources_external_note">Papers from these sources open in your browser.</string>
+    <string name="cd_manage_follows">Manage what you follow</string>
+    <string name="manage_follows_title">Following</string>
+    <string name="manage_follows_empty">You\'re not following anything yet.</string>
+    <string name="manage_follows_empty_cta">Follow sources</string>
+    <string name="cd_unfollow">Unfollow %1$s</string>
+    <string name="follow_type_author">Author</string>
+    <string name="follow_type_query">Saved search</string>
     <string name="cd_back">Back</string>
     <string name="cd_clear_query">Clear search query</string>
     <string name="cd_toggle_night_mode">Toggle night mode</string>

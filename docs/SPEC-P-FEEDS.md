@@ -110,6 +110,13 @@ Inbox is origin-agnostic (no inbox-UI change). No author/keyword follow for non-
   limit (credit budget). New-source PDFs stay host-gated → external-open (hosts not allowlisted; per-source
   deferral). **Backup** now carries `follows.origin` (additive-defaulted; NO schema bump — stays
   `arxiver-backup/v2`), so a chemRxiv/bio/med/new-source follow round-trips instead of silently collapsing to arXiv.
+- **Manage screen (P-FeedPolish PFP.2):** a `ManageFollowsSheet` (sibling of the picker, a second Explore top-bar
+  action) lists *every* follow — all sources AND all types (category / whole-source / author / query) — grouped by
+  source, each removable. It reuses `observeFollows()` (pure DB → zero network on open, same red line as the
+  picker) and a new type-aware `CategoryRepository.removeFollow(follow)` (the picker's `setCategoryFollowed` is
+  `TYPE_CATEGORY`-only, so it can't drop an author/query follow); removal cleans the follow's inbox rows in the same
+  op (same lifecycle as PF.3 unfollow). `wire→Source` uses the public `Source.entries` scan, NOT `BY_PREFIX` (which
+  is `internal` and excludes ARXIV). No migration, no new DAO. The empty state routes back to the picker.
 
 ## 7. BYOK OpenAlex key (PF.4)
 
