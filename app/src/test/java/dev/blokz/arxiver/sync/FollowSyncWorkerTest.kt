@@ -11,6 +11,7 @@ import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.entity.FollowEntity
+import dev.blokz.arxiver.core.database.entity.InboxItemEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
@@ -37,6 +38,7 @@ import org.robolectric.RobolectricTestRunner
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -331,5 +333,100 @@ class FollowSyncWorkerTest {
 
             assertEquals(1, db.paperDao().count(), "the same DOI reuses the stored row (case-insensitive)")
             assertTrue(db.inboxDao().activePaperIds().contains("biorxiv:10.1101/z"))
+        }
+
+    // --- P-FeedPolish PFP.3: follow health streak ---
+
+    private fun bioFollow(streak: Int = 0) =
+        FollowEntity(
+            type = FollowEntity.TYPE_CATEGORY,
+            value = "neuroscience",
+            label = "Neuro",
+            createdAt = 0,
+            origin = Source.BIORXIV.wire,
+            emptySyncStreak = streak,
+        )
+
+    private suspend fun bioStreak() =
+        assertNotNull(db.followDao().find(FollowEntity.TYPE_CATEGORY, "neuroscience", Source.BIORXIV.wire))
+
+    @Test
+    fun `an empty-delivery sync bumps the health streak once per sync`() =
+        runBlocking {
+            db.followDao().insert(bioFollow())
+            // Default backend returns an empty page → Fetched(0) every sync.
+            repeat(FollowEntity.EMPTY_STREAK_WARN) { worker(attempt = 0).doWork() }
+            assertEquals(
+                FollowEntity.EMPTY_STREAK_WARN,
+                bioStreak().emptySyncStreak,
+                "each empty sync increments the streak (it climbs to the warn threshold, not capping early)",
+            )
+        }
+
+    @Test
+    fun `a delivering sync resets the health streak to zero`() =
+        runBlocking {
+            db.followDao().insert(bioFollow(streak = 2))
+            worker(attempt = 0, backends = registryReturning(page(hit(Source.BIORXIV, "10.1101/new")))).doWork()
+            assertEquals(0, bioStreak().emptySyncStreak, "any delivery resets the streak")
+        }
+
+    @Test
+    fun `a redundant sync (papers already in the inbox) still resets the streak — count is pre-IGNORE`() =
+        runBlocking {
+            db.followDao().insert(bioFollow(streak = 3))
+            val followId = bioStreak().id
+            val h = hit(Source.BIORXIV, "10.1101/redundant")
+            val storageId = ExternalRef(Source.BIORXIV, h.doi).storageId
+            // Pre-seed the paper + its inbox row so the re-delivery is a genuine no-op at @Insert IGNORE.
+            seed(
+                Paper(
+                    ref = ExternalRef(Source.BIORXIV, h.doi), latestVersion = 1, title = "t", abstract = "a",
+                    publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH, primaryCategory = "",
+                    categories = emptyList(), authors = emptyList(), doi = h.doi, pdfUrl = "",
+                ),
+            )
+            db.inboxDao().insertAll(listOf(InboxItemEntity(paperId = storageId, followId = followId, arrivedAt = 0)))
+
+            worker(attempt = 0, backends = registryReturning(page(h))).doWork()
+
+            assertEquals(0, bioStreak().emptySyncStreak, "a working-but-redundant follow is NOT read as dead")
+            assertEquals(1, db.paperDao().count(), "the redundant paper is not duplicated")
+        }
+
+    @Test
+    fun `a failed fetch does not bump the streak and never advances the cursor`() =
+        runBlocking {
+            // origin defaults to arxiv → the native Atom path; a 404 is a fetch Failure.
+            db.followDao().insert(
+                FollowEntity(type = FollowEntity.TYPE_CATEGORY, value = "cs.LG", label = "ML", createdAt = 0),
+            )
+            server.enqueue(MockResponse().setResponseCode(404))
+
+            assertTrue(worker(attempt = 0).doWork() is ListenableWorker.Result.Retry)
+
+            val row = assertNotNull(db.followDao().find(FollowEntity.TYPE_CATEGORY, "cs.LG", Source.ARXIV.wire))
+            assertEquals(0, row.emptySyncStreak, "a fetch failure must never inflate the health streak")
+            assertNull(row.lastSyncedAt, "a failure never advances the cursor (so retry refetches)")
+        }
+
+    @Test
+    fun `a skipped follow (unknown origin) neither retries nor touches the streak`() =
+        runBlocking {
+            db.followDao().insert(
+                FollowEntity(
+                    type = FollowEntity.TYPE_CATEGORY,
+                    value = "x",
+                    label = "x",
+                    createdAt = 0,
+                    origin = "nonexistent",
+                ),
+            )
+
+            assertTrue(worker(attempt = 0).doWork() is ListenableWorker.Result.Success)
+
+            val row = assertNotNull(db.followDao().find(FollowEntity.TYPE_CATEGORY, "x", "nonexistent"))
+            assertEquals(0, row.emptySyncStreak, "a config-dead follow's streak is frozen (not a quiet-feed signal)")
+            assertNull(row.lastSyncedAt, "Skipped freezes the cursor")
         }
 }

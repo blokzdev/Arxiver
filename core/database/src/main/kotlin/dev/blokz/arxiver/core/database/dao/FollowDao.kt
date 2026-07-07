@@ -45,9 +45,17 @@ interface FollowDao {
     @Query("SELECT COUNT(*) FROM follows WHERE enabled = 1")
     fun observeEnabledFollowCount(): Flow<Int>
 
-    @Query("UPDATE follows SET last_synced_at = :syncedAt WHERE id = :id")
+    // PFP.3: advance the cursor AND fold the delivered-count into the health streak in one atomic statement —
+    // zero delivered bumps the streak, any delivery resets it. Called ONLY on a real fetch (never on a Failure/
+    // Skip), so a fetch error can't inflate the streak.
+    @Query(
+        "UPDATE follows SET last_synced_at = :syncedAt, " +
+            "empty_sync_streak = CASE WHEN :delivered = 0 THEN empty_sync_streak + 1 ELSE 0 END " +
+            "WHERE id = :id",
+    )
     suspend fun markSynced(
         id: Long,
         syncedAt: Long,
+        delivered: Int,
     )
 }

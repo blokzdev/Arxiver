@@ -22,6 +22,9 @@ data class FollowRowUi(val entity: FollowEntity) {
     val isWholeSource: Boolean get() = entity.value.isBlank()
     val label: String get() = entity.label
     val type: String get() = entity.type
+
+    /** PFP.3: the last [FollowEntity.EMPTY_STREAK_WARN] syncs delivered zero → show the soft "quiet feed" hint. */
+    val isQuiet: Boolean get() = entity.emptySyncStreak >= FollowEntity.EMPTY_STREAK_WARN
 }
 
 /** One source's follows, grouped for the manage screen. */

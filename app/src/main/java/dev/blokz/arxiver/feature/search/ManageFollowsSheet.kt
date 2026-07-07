@@ -165,6 +165,15 @@ private fun FollowManageRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            // Soft health hint (PFP.3): a follow whose last EMPTY_STREAK_WARN syncs delivered nothing. Muted
+            // onSurfaceVariant (not error) — an empty feed is a Success, not a failure; the copy stays gentle.
+            if (row.isQuiet) {
+                Text(
+                    stringResource(R.string.follow_health_quiet),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         IconButton(
             onClick = {
@@ -182,7 +191,8 @@ private fun FollowManageRow(
 @Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
 @Composable
 private fun ManageFollowsContentPreview() {
-    // chemRxiv whole-source + a category, and an arXiv author follow — exercises grouping, "All of X", type labels.
+    // chemRxiv whole-source + a category (with the quiet-feed hint) + an arXiv author follow — exercises grouping,
+    // "All of X", type labels, and the PFP.3 health subtitle.
     val follows =
         listOf(
             FollowEntity(id = 1, type = "category", value = "", label = "chemRxiv", createdAt = 0, origin = "chemrxiv"),
@@ -193,6 +203,7 @@ private fun ManageFollowsContentPreview() {
                 label = "Computer Science",
                 createdAt = 0,
                 origin = "chemrxiv",
+                emptySyncStreak = 4,
             ),
             FollowEntity(id = 3, type = "author", value = "Yann LeCun", label = "Yann LeCun", createdAt = 0),
             FollowEntity(id = 4, type = "query", value = "diffusion models", label = "diffusion models", createdAt = 0),

@@ -117,6 +117,16 @@ Inbox is origin-agnostic (no inbox-UI change). No author/keyword follow for non-
   `TYPE_CATEGORY`-only, so it can't drop an author/query follow); removal cleans the follow's inbox rows in the same
   op (same lifecycle as PF.3 unfollow). `wire→Source` uses the public `Source.entries` scan, NOT `BY_PREFIX` (which
   is `internal` and excludes ARXIV). No migration, no new DAO. The empty state routes back to the picker.
+- **Follow health hint (P-FeedPolish PFP.3):** `follows.empty_sync_streak` (migration v10→v11, additive) counts
+  **consecutive zero-delivery syncs**. `FollowSyncWorker` returns a three-way `SyncResult { Fetched(count) | Failed
+  | Skipped }`; only `Fetched` calls the count-aware `FollowDao.markSynced(id, syncedAt, delivered)` (`empty_sync_streak
+  = CASE WHEN :delivered = 0 THEN +1 ELSE 0`), so a **fetch failure never inflates the streak** (it stays a "quiet
+  feed" signal, not a "sync error" one) and a config-dead follow (bad origin → `Skipped`) freezes both cursor and
+  streak. The count is measured **pre-inbox-IGNORE** (`fresh.size`), so a working-but-redundant follow resets rather
+  than reading as dead. The streak counts sync *events*, not wall-clock; `EMPTY_STREAK_WARN = 4` (≈24 h at the
+  default 6 h cadence) is the floor before the manage screen shows a soft `onSurfaceVariant` "No new papers recently"
+  subtitle (universal across follow types). No notification, no auto-unfollow, no analytics. The sharper
+  OpenAlex-`meta.count` mis-map signal is deferred (backlog).
 
 ## 7. BYOK OpenAlex key (PF.4)
 
@@ -150,3 +160,10 @@ Committed cut PF.0–PF.2; expansion PF.3–PF.4.
   paper (self-heals on next in-window sync); full per-follow provenance (composite inbox PK) is deferred to backlog.
 - **PF.3 whole-source escape hatch** (`value=""`): SSRN/PsyArXiv span many Fields, so forcing a single Field would
   hide most of the source. A firehose short-circuits paging on the page-1 first-sync fill to bound OpenAlex credits.
+- **PFP.3 health streak — failure vs empty are distinct outcomes:** the worker's `SyncResult` splits `Failed`
+  (fetch error → retry, streak untouched) from `Fetched(0)` (a real empty delivery → streak +1). Conflating them
+  (the old `Boolean`) would let a rate-limit/outage masquerade as a dead feed. `Skipped` (bad origin) freezes both.
+- **PFP.3 `EMPTY_STREAK_WARN = 4`, not 3 (tech-lead map's value):** the streak counts sync events, not wall-clock,
+  and `syncNow` injects extra events; 3 (≈18 h at 6 h cadence) fires inside normal niche-feed lulls → false-positive
+  fatigue. 4 (≈24 h) clears a quiet day first. The copy is time-agnostic ("No new papers recently"), soft
+  `onSurfaceVariant`, so a residual false-positive is harmless. UX call — overridable via HUMAN.md.
