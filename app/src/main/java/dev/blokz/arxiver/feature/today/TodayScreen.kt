@@ -140,6 +140,7 @@ fun TodayScreen(
                         onPaperClick = onPaperClick,
                         onSave = viewModel::save,
                         onDismiss = viewModel::dismiss,
+                        onVote = viewModel::relevanceVote,
                     )
             }
         }
@@ -177,6 +178,7 @@ private fun InboxList(
     onPaperClick: (String) -> Unit,
     onSave: (InboxPaper) -> Unit,
     onDismiss: (InboxPaper) -> Unit,
+    onVote: (InboxPaper, Boolean) -> Unit,
 ) {
     // SPEC-SEARCH §5: scored items lead under "Likely relevant"; rest follow.
     val (scored, unscored) = items.partition { (it.score ?: 0.0) >= RELEVANT_THRESHOLD }
@@ -192,6 +194,8 @@ private fun InboxList(
                     onSwipeSave = { onSave(item) },
                     onSwipeDismiss = { onDismiss(item) },
                     score = item.score,
+                    vote = item.vote,
+                    onVote = { up -> onVote(item, up) },
                     // No trailing divider on the final row (unless the rest-list follows).
                     showDivider = index != scored.lastIndex || unscored.isNotEmpty(),
                     modifier = Modifier.animateItem(),
@@ -209,6 +213,8 @@ private fun InboxList(
                     onSwipeSave = { onSave(item) },
                     onSwipeDismiss = { onDismiss(item) },
                     score = item.score,
+                    vote = item.vote,
+                    onVote = { up -> onVote(item, up) },
                     showDivider = index != unscored.lastIndex,
                     modifier = Modifier.animateItem(),
                 )
@@ -229,6 +235,7 @@ private fun InboxListPreview() {
             onPaperClick = {},
             onSave = {},
             onDismiss = {},
+            onVote = { _, _ -> },
         )
     }
 }

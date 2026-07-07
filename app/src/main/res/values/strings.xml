@@ -127,6 +127,10 @@
     <string name="cd_weekly_review">Send weekly review to Claude</string>
     <string name="cd_save_paper">Save to library</string>
     <string name="cd_dismiss_paper">Dismiss</string>
+    <string name="cd_relevance_vote_up">More like this</string>
+    <string name="cd_relevance_vote_up_active">Marked more like this, tap to clear</string>
+    <string name="cd_relevance_vote_down">Less like this</string>
+    <string name="cd_relevance_vote_down_active">Marked less like this, tap to clear</string>
     <string name="today_snackbar_saved">Saved to library</string>
     <string name="today_snackbar_dismissed">Paper dismissed</string>
     <string name="action_undo">Undo</string>

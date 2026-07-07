@@ -71,9 +71,9 @@ object PreviewFixtures {
 
     val inboxPapers =
         listOf(
-            InboxPaper(paper = papers[0], arrivedAt = paper.updatedAt, state = "new", score = 0.86),
-            InboxPaper(paper = papers[1], arrivedAt = paper.updatedAt, state = "new", score = 0.61),
-            InboxPaper(paper = papers[2], arrivedAt = paper.updatedAt, state = "new", score = null),
+            InboxPaper(paper = papers[0], arrivedAt = paper.updatedAt, state = "new", score = 0.86, vote = 1),
+            InboxPaper(paper = papers[1], arrivedAt = paper.updatedAt, state = "new", score = 0.61, vote = -1),
+            InboxPaper(paper = papers[2], arrivedAt = paper.updatedAt, state = "new", score = null, vote = null),
         )
 
     val libraryPapers =

@@ -90,6 +90,16 @@ class TodayViewModel
             }
         }
 
+        /** Toggle an explicit relevance thumb (P4.2). The visible icon state is the confirmation — no snackbar. */
+        fun relevanceVote(
+            item: InboxPaper,
+            up: Boolean,
+        ) {
+            viewModelScope.launch {
+                inboxRepository.setRelevanceVote(item.paper.ref.storageId, up)
+            }
+        }
+
         /** Reverses a triage swipe exactly: library entry / inbox state / and any label the swipe wrote. */
         fun undo(event: TriageEvent) {
             viewModelScope.launch {

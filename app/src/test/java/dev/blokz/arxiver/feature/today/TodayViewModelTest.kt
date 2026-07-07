@@ -156,6 +156,26 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `a relevance thumb toggles the durable label and surfaces on the row`() =
+        runTest {
+            seedInbox("2401.00001")
+            val item = inbox.observeInbox().first().single()
+
+            vm.relevanceVote(item, up = true)
+            assertEquals(PaperFeedbackEntity.SIGNAL_POSITIVE, db.paperFeedbackDao().voteFor("2401.00001"))
+            assertEquals(1, inbox.observeInbox().first().single().vote, "the up-vote surfaces on the row")
+
+            vm.relevanceVote(item, up = true) // tapping the same direction clears it
+            assertNull(db.paperFeedbackDao().voteFor("2401.00001"))
+            assertNull(inbox.observeInbox().first().single().vote)
+
+            vm.relevanceVote(item, up = false)
+            assertEquals(PaperFeedbackEntity.SIGNAL_NEGATIVE, db.paperFeedbackDao().voteFor("2401.00001"))
+            // A thumb-down keeps the paper in the inbox (soft signal, not a removal).
+            assertTrue(inbox.observeInbox().first().any { it.paper.id.value == "2401.00001" })
+        }
+
+    @Test
     fun `weekly review selection unions recent library adds and top inbox`() =
         runTest {
             seedInbox("2401.00001")

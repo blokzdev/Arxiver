@@ -14,6 +14,7 @@ data class InboxRow(
     val arrived_at: Long,
     val state: String,
     val score: Double?,
+    val vote: Int?,
 )
 
 @Dao
@@ -24,8 +25,9 @@ interface InboxDao {
 
     @Query(
         """
-        SELECT p.*, i.arrived_at, i.state, i.score FROM papers p
+        SELECT p.*, i.arrived_at, i.state, i.score, f.signal AS vote FROM papers p
         JOIN inbox_items i ON i.paper_id = p.id
+        LEFT JOIN paper_feedback f ON f.paper_id = p.id AND f.source = 'thumb'
         WHERE i.state IN ('new', 'seen')
         ORDER BY i.score IS NULL, i.score DESC, i.arrived_at DESC
         """,
