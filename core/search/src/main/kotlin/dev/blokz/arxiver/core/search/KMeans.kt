@@ -22,12 +22,12 @@ object KMeans {
         repeat(iterations) {
             val assignments =
                 vectors.groupBy { vector ->
-                    centers.indices.maxBy { dot(vector, centers[it]) }
+                    centers.indices.maxBy { dotSimilarity(vector, centers[it]) }
                 }
             centers =
                 centers.mapIndexed { index, old ->
                     val members = assignments[index] ?: return@mapIndexed old
-                    mean(members).l2Normalized()
+                    meanVector(members).l2Normalized()
                 }
         }
         return centers
@@ -37,30 +37,7 @@ object KMeans {
     fun similarityToNearest(
         vector: FloatArray,
         centroids: List<FloatArray>,
-    ): Double = centroids.maxOfOrNull { dot(vector, it) } ?: 0.0
-
-    private fun mean(vectors: List<FloatArray>): FloatArray {
-        val out = FloatArray(vectors.first().size)
-        vectors.forEach { v -> v.forEachIndexed { i, x -> out[i] += x } }
-        for (i in out.indices) out[i] /= vectors.size
-        return out
-    }
-
-    private fun dot(
-        a: FloatArray,
-        b: FloatArray,
-    ): Double {
-        var sum = 0.0
-        for (i in a.indices) sum += a[i] * b[i]
-        return sum
-    }
-
-    private fun FloatArray.l2Normalized(): FloatArray {
-        var sum = 0.0
-        for (v in this) sum += v * v
-        val norm = kotlin.math.sqrt(sum).toFloat()
-        return if (norm == 0f) this else FloatArray(size) { this[it] / norm }
-    }
+    ): Double = centroids.maxOfOrNull { dotSimilarity(vector, it) } ?: 0.0
 
     private const val SEED = 42L
 }
