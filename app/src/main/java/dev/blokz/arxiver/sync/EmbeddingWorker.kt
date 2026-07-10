@@ -56,10 +56,11 @@ class EmbeddingWorker
             embedPending()
             indexLibraryChunks()
             refreshRelatedPapers()
-            inboxScorer.scoreInbox { isStopped }
-            // The offline ranker eval (P5.1) — once per run, after fresh scores land; a stop skips it (the
-            // next unmetered window recomputes). Diagnostic only: it must never fail the worker.
+            // The offline ranker eval runs BEFORE scoring (P5.2): it selects this pass's shrinkage λ, so a
+            // fresh selection applies immediately (its inbox-distribution snapshot therefore describes the
+            // previous pass — documented on the runner). Diagnostic + tuning only: it must never fail the worker.
             if (!isStopped) runCatching { rankerEvalRunner.run(RELEVANT_THRESHOLD) }
+            inboxScorer.scoreInbox { isStopped }
             return Result.success()
         }
 

@@ -40,28 +40,54 @@ class RankerEval(
         val titleOnly: Boolean,
     )
 
+    /** One built fold: the model's parts (built ONCE) + its held-out test set. */
+    private data class Fold(
+        val centroids: List<FloatArray>,
+        val negative: FloatArray?,
+        val regime: Pair<Boolean, Boolean>,
+        val test: List<LabeledExample>,
+        val isTimeSplit: Boolean,
+    )
+
+    private fun cap(examples: List<LabeledExample>): List<LabeledExample> =
+        examples.sortedByDescending { it.createdAt }.take(LABEL_CAP).sortedBy { it.createdAt }
+
+    /** Build every fold's model exactly once — shrinkage variants re-score these, never rebuild. */
+    private fun builtFolds(
+        capped: List<LabeledExample>,
+        seedVectors: Map<String, FloatArray>,
+    ): List<Fold> {
+        val raw = mutableListOf<Triple<List<LabeledExample>, List<LabeledExample>, Boolean>>()
+        timeSplit(capped)?.let { raw += Triple(it.first, it.second, true) }
+        if (meetsKFoldFloor(capped)) raw += stratifiedKFold(capped).map { Triple(it.first, it.second, false) }
+        return raw.mapNotNull { (train, test, isTime) ->
+            val heldOut = test.map { it.paperId }.toSet()
+            val model = buildModel(train, seedVectors.filterKeys { it !in heldOut }) ?: return@mapNotNull null
+            Fold(model.centroids, model.negative, model.regime, test, isTime)
+        }
+    }
+
+    private fun score(
+        fold: Fold,
+        lambda: Double,
+    ): List<Scored> {
+        val centroids = RocchioRanker.shrinkCentroids(fold.centroids, lambda)
+        return fold.test.map { ex ->
+            Scored(RocchioRanker.score(ex.vector, centroids, fold.negative), ex.positive, ex.weight, ex.titleOnly)
+        }
+    }
+
     fun evaluate(
         examples: List<LabeledExample>,
         seedVectors: Map<String, FloatArray>,
         evaluatedAtMs: Long,
+        lambda: Double = 0.0,
     ): EvalReport {
         // Bound the on-device cost: the newest LABEL_CAP labels are the operative history.
-        val capped = examples.sortedByDescending { it.createdAt }.take(LABEL_CAP).sortedBy { it.createdAt }
-
-        val folds = mutableListOf<Pair<List<LabeledExample>, List<LabeledExample>>>()
-        timeSplit(capped)?.let(folds::add)
-        if (meetsKFoldFloor(capped)) folds += stratifiedKFold(capped)
-
-        val outputs = mutableListOf<Scored>()
-        val regimes = mutableListOf<Pair<Boolean, Boolean>>() // (seeded, negativeOn) per scored fold
-        folds.forEach { (train, test) ->
-            val heldOut = test.map { it.paperId }.toSet()
-            val model = buildModel(train, seedVectors.filterKeys { it !in heldOut }) ?: return@forEach
-            regimes += model.regime
-            test.forEach { ex ->
-                outputs += Scored(model.score(ex.vector), ex.positive, ex.weight, ex.titleOnly)
-            }
-        }
+        val capped = cap(examples)
+        val folds = builtFolds(capped, seedVectors)
+        val outputs = folds.flatMap { score(it, lambda) }
+        val regimes = folds.map { it.regime }
 
         // Regime honesty: the PRODUCTION model (all labels + seeds) defines the ranker being shipped; any
         // scored fold that ran under a different regime (seeded↔unseeded, negative-centroid on↔off — e.g. a
@@ -84,12 +110,10 @@ class RankerEval(
     // --- model building: replicates InboxScorer's live construction, as a pure function ---
 
     private class Model(
-        private val centroids: List<FloatArray>,
-        private val negative: FloatArray?,
+        val centroids: List<FloatArray>,
+        val negative: FloatArray?,
         val regime: Pair<Boolean, Boolean>,
-    ) {
-        fun score(vector: FloatArray): Double = RocchioRanker.score(vector, centroids, negative)
-    }
+    )
 
     private fun buildModel(
         train: List<LabeledExample>,
@@ -108,6 +132,38 @@ class RankerEval(
             negative = negativeCentroid,
             regime = seeded to (negativeCentroid != null),
         )
+    }
+
+    /**
+     * Per-user shrinkage selection (P5.2): pick λ from the PRE-REGISTERED [grid] by pooled k-fold AUC, then
+     * CONFIRM the winner on the temporally-disjoint time split — selection and confirmation on different splits
+     * is the multiplicity guard (a grid search on one split alone would overfit it). Returns 0.0 (bit-identical
+     * scoring) below the k-fold floor, when no time split exists, or when the winner fails confirmation.
+     * Costs ZERO extra k-means rebuilds: shrinkage re-scores each fold's already-built centroids.
+     */
+    fun selectShrinkage(
+        examples: List<LabeledExample>,
+        seedVectors: Map<String, FloatArray>,
+        grid: List<Double> = SHRINKAGE_GRID,
+    ): Double {
+        val capped = cap(examples)
+        if (!meetsKFoldFloor(capped)) return 0.0
+        val folds = builtFolds(capped, seedVectors)
+        val kFolds = folds.filter { !it.isTimeSplit }
+        val timeFold = folds.firstOrNull { it.isTimeSplit } ?: return 0.0
+        if (kFolds.isEmpty()) return 0.0
+
+        fun auc(
+            fs: List<Fold>,
+            lambda: Double,
+        ): Double {
+            val outs = fs.flatMap { score(it, lambda) }
+            return weightedAuc(outs.filter { it.positive }, outs.filter { !it.positive })
+        }
+
+        val winner = grid.maxBy { auc(kFolds, it) }
+        if (winner <= 0.0) return 0.0
+        return if (auc(listOf(timeFold), winner) >= auc(listOf(timeFold), 0.0)) winner else 0.0
     }
 
     // --- folds ---
@@ -250,6 +306,9 @@ class RankerEval(
         const val LABEL_CAP = 500
         const val KFOLDS = 5
         const val TIME_SPLIT_TRAIN = 0.7
+
+        /** The pre-registered λ grid (P5.2) — fixed BEFORE any data is seen, never tuned per run. */
+        val SHRINKAGE_GRID = listOf(0.0, 0.1, 0.2, 0.3)
 
         /** PU down-weighting: an explicit save/thumb is full evidence; a dismiss is a weak "not now". */
         const val WEIGHT_EXPLICIT = 1.0

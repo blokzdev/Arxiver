@@ -38,6 +38,26 @@ object RocchioRanker {
         return meanVector(negatives).l2Normalized()
     }
 
+    /**
+     * Nearest-shrunken-centroid regularization (P5.2): pull each positive centroid toward the global save-mean
+     * by [lambda], then re-normalize. Cuts the variance of noisy small-n clusters — the cold-start n≈10 band —
+     * at the cost of smoothing a genuinely multi-interest profile, which is why [lambda] is **selected per-user
+     * by the P5.1 harness on a pre-registered grid and confirmed on the time split**, never a shipped constant
+     * (no telemetry ⇒ a hardcoded default would be calibrated on one developer's library).
+     *
+     * `lambda = 0` returns the SAME list instance — bit-identical to the pre-P5.2 scorer by construction.
+     */
+    fun shrinkCentroids(
+        centroids: List<FloatArray>,
+        lambda: Double,
+    ): List<FloatArray> {
+        if (lambda <= 0.0 || centroids.size < 2) return centroids
+        val mean = meanVector(centroids)
+        return centroids.map { c ->
+            FloatArray(c.size) { i -> ((1 - lambda) * c[i] + lambda * mean[i]).toFloat() }.l2Normalized()
+        }
+    }
+
     /** Relevance of [vector] in `[0,1]` given positive interest centroids and an optional pooled negative. */
     fun score(
         vector: FloatArray,

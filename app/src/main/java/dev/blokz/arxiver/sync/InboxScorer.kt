@@ -28,6 +28,7 @@ class InboxScorer
         private val inboxDao: InboxDao,
         private val embeddingDao: EmbeddingDao,
         private val paperFeedbackDao: PaperFeedbackDao,
+        private val tuning: RankerTuning,
     ) {
         /**
          * Recompute every active inbox paper's relevance score. [shouldStop] is polled per paper so the
@@ -50,7 +51,12 @@ class InboxScorer
                 }
             if (positiveVectors.size < COLD_START_MINIMUM) return // true zero state → recency (scores stay null)
 
-            val positiveCentroids = KMeans.centroids(positiveVectors, k = CENTROID_COUNT)
+            // P5.2: harness-selected shrinkage (λ=0 ⇒ the same list instance — bit-identical to P4 scoring).
+            val positiveCentroids =
+                RocchioRanker.shrinkCentroids(
+                    KMeans.centroids(positiveVectors, k = CENTROID_COUNT),
+                    tuning.shrinkageLambda,
+                )
             val negativeCentroid = RocchioRanker.negativeCentroid(negativeIds.mapNotNull { vectorFor(it) })
 
             for (paperId in inboxDao.activePaperIds()) {
