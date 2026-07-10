@@ -243,6 +243,7 @@ class FollowSyncWorkerTest {
         doi: String,
         arxivId: String? = null,
         oaPdfUrl: String? = null,
+        fieldName: String? = null,
     ) = PreprintHit(
         origin = origin,
         doi = doi,
@@ -252,6 +253,7 @@ class FollowSyncWorkerTest {
         publishedIso = null,
         oaPdfUrl = oaPdfUrl,
         arxivId = arxivId,
+        fieldName = fieldName,
     )
 
     private suspend fun seed(p: Paper) = db.paperDao().upsertPaperWithRelations(p.toEntity(), p.authors, p.categories)
@@ -333,6 +335,36 @@ class FollowSyncWorkerTest {
 
             assertEquals(1, db.paperDao().count(), "the same DOI reuses the stored row (case-insensitive)")
             assertTrue(db.inboxDao().activePaperIds().contains("biorxiv:10.1101/z"))
+        }
+
+    // --- P-Explorer PE.0: the source's discipline label reaches the stored paper ---
+
+    @Test
+    fun `a hit's field name is stored as the paper's primary category (not blank)`() =
+        runBlocking {
+            db.followDao().insert(chemFollow())
+            val h = hit(Source.CHEMRXIV, "10.26434/chemrxiv-2024-cat", fieldName = "Chemistry")
+
+            worker(attempt = 0, backends = registryReturning(page(h))).doWork()
+
+            val stored = assertNotNull(db.paperDao().paperById(ExternalRef(Source.CHEMRXIV, h.doi).storageId))
+            assertEquals(
+                "Chemistry",
+                stored.primaryCategory,
+                "the OpenAlex Field label reaches papers.primary_category",
+            )
+        }
+
+    @Test
+    fun `a hit with no field name still stores a blank category (no crash, no fake label)`() =
+        runBlocking {
+            db.followDao().insert(chemFollow())
+            val h = hit(Source.CHEMRXIV, "10.26434/chemrxiv-2024-nocat", fieldName = null)
+
+            worker(attempt = 0, backends = registryReturning(page(h))).doWork()
+
+            val stored = assertNotNull(db.paperDao().paperById(ExternalRef(Source.CHEMRXIV, h.doi).storageId))
+            assertEquals("", stored.primaryCategory)
         }
 
     // --- P-FeedPolish PFP.3: follow health streak ---

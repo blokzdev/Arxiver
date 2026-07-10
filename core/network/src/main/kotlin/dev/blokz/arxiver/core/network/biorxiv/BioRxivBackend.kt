@@ -61,6 +61,8 @@ class BioRxivBackend(
             publishedIso = date,
             oaPdfUrl = pdf,
             version = version,
+            // The server's own native category ("neuroscience") — already returned, never threaded until PE.0.
+            fieldName = category?.takeIf { it.isNotBlank() },
         )
     }
 }

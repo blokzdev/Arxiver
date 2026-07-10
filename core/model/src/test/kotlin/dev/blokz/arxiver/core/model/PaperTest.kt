@@ -3,6 +3,8 @@ package dev.blokz.arxiver.core.model
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PaperTest {
     private fun paper(version: Int = 1) =
@@ -78,5 +80,50 @@ class PaperTest {
                 pdfUrl = "https://chemrxiv.org/x.pdf",
             )
         assertEquals("https://chemrxiv.org/x.pdf", p.canonicalUrl())
+    }
+
+    // --- P-Explorer PE.0: honest, source-aware pdf_fetchable (closes the P-Dispatch deferral) ---
+
+    private fun external(
+        source: Source,
+        pdfUrl: String,
+    ) = Paper(
+        ref = ExternalRef(source, "native-1"),
+        latestVersion = 1,
+        title = "t",
+        abstract = "a",
+        publishedAt = Instant.EPOCH,
+        updatedAt = Instant.EPOCH,
+        primaryCategory = "",
+        categories = emptyList(),
+        authors = listOf("A"),
+        pdfUrl = pdfUrl,
+    )
+
+    @Test
+    fun `bioRxiv and medRxiv report their pdf as fetchable (they serve real PDF bytes on an allowlisted host)`() {
+        // The old `ref is ArxivRef` rule reported these false — the bug this closes.
+        assertTrue(external(Source.BIORXIV, "https://www.biorxiv.org/content/10.1101/xv1.full.pdf").isPdfFetchable())
+        assertTrue(external(Source.MEDRXIV, "https://www.medrxiv.org/content/10.1101/yv1.full.pdf").isPdfFetchable())
+    }
+
+    @Test
+    fun `gated and shared-CDN sources report their pdf as unfetchable`() {
+        // chemRxiv: Atypon cookie-wall · SSRN: ToS-banned + Cloudflare · Preprints.org: edge-deny
+        // PsyArXiv: only reachable via multi-tenant storage.googleapis.com · Research Square: pending device check
+        listOf(Source.CHEMRXIV, Source.SSRN, Source.PREPRINTS_ORG, Source.PSYARXIV, Source.RESEARCH_SQUARE)
+            .forEach {
+                assertFalse(external(it, "https://example.org/x.pdf").isPdfFetchable(), "$it must be browser-only")
+            }
+    }
+
+    @Test
+    fun `an in-app source with no pdf url still reports unfetchable (never over-promises)`() {
+        assertFalse(external(Source.BIORXIV, "").isPdfFetchable())
+    }
+
+    @Test
+    fun `an arXiv paper reports its pdf as fetchable`() {
+        assertTrue(paper().isPdfFetchable())
     }
 }
