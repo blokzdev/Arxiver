@@ -9,7 +9,9 @@ import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.data.LibraryExporter
 import dev.blokz.arxiver.data.LibraryRepository
 import kotlinx.coroutines.Dispatchers
@@ -137,6 +139,55 @@ class LibraryViewModelTest {
                 repo.observeCollectionPapers(restored.single().id).first { it.isNotEmpty() }
                     .map { it.paper.id.value },
             )
+        }
+
+    // --- P-Explorer PE.5: the source dimension ---
+
+    private suspend fun saveExternal(
+        source: Source,
+        nativeId: String,
+    ) {
+        val p =
+            Paper(
+                ref = ExternalRef(source, nativeId),
+                latestVersion = 1,
+                title = "T $nativeId",
+                abstract = "A",
+                publishedAt = Instant.EPOCH,
+                updatedAt = Instant.EPOCH,
+                primaryCategory = "",
+                categories = emptyList(),
+                authors = listOf("A"),
+                pdfUrl = "",
+            )
+        db.paperDao().upsertPaperWithRelations(p.toEntity(), p.authors, p.categories)
+        db.libraryDao().upsertEntry(
+            LibraryEntryEntity(paperId = p.ref.storageId, addedAt = 0, status = LibraryEntryEntity.STATUS_TO_READ),
+        )
+    }
+
+    @Test
+    fun `source filter narrows to one origin and presentSources lists only what exists`() =
+        runTest {
+            savePaper("2401.00001", LibraryEntryEntity.STATUS_TO_READ)
+            saveExternal(Source.CHEMRXIV, "10.26434/x")
+
+            vm.uiState.test {
+                val populated = awaitItemMatching { it.papers.size == 2 }
+                // Only the two origins actually present — never an SSRN chip for a library with no SSRN paper.
+                assertEquals(listOf(Source.ARXIV, Source.CHEMRXIV), populated.presentSources)
+
+                vm.setSourceFilter(Source.CHEMRXIV)
+                val filtered = awaitItemMatching { it.sourceFilter == Source.CHEMRXIV }
+                assertEquals(listOf("chemrxiv:10.26434/x"), filtered.papers.map { it.paper.ref.storageId })
+                // presentSources derives from the status-filtered list, so picking a chip can't erase the row.
+                assertEquals(listOf(Source.ARXIV, Source.CHEMRXIV), filtered.presentSources)
+
+                vm.setSourceFilter(null)
+                val cleared = awaitItemMatching { it.sourceFilter == null }
+                assertEquals(2, cleared.papers.size)
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 }
 

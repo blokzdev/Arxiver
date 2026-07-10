@@ -674,7 +674,11 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   restore; saveHit FK-safety).
 - [ ] **PE.4 — Unified Browse-&-Follow directory** (Co-Founder-approved IA). arXiv a peer row with its native
   taxonomy at full-screen real estate; both write seams already exist (`setFollowed`/`setCategoryFollowed`).
-- [ ] **PE.5 — Library source dimension.** `sourceFilter: Source?`; chips show only sources actually present.
+- [x] **PE.5 — Library source dimension.** `LibraryUiState.sourceFilter: Source?` + a second chip row in the
+  papers tab that renders **only when the library genuinely spans >1 source** (an all-arXiv library sees zero added
+  chrome) and lists **only sources actually present** (never an SSRN chip with no SSRN paper). `presentSources`
+  derives from the status-filtered list, so picking a chip can never erase its own row. Tap-again clears. No data
+  change (`paper.ref.origin` was already there). `LibraryViewModelTest` pins the filter + presence rules.
 - [ ] **PE.6 — Docs & deferral sweep.** PRD §1/§3/§4 (arXiv-frozen while §1 claims "unifies discovery"); mark
   ROADMAP PS.3 superseded-by-PF.2; **retire + replace the stale `assets.chemrxiv.org` HUMAN.md row**; VERIFICATION
   device rows (bio/med in-app read; the Research Square shard check); P-Explorer deferrals block.
