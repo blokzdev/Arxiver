@@ -34,8 +34,28 @@ sources we can't reach natively (chemRxiv, new preprint servers) — see [[chemr
 - **Fails safe:** an unknown/wrong field id (e.g. `fields/999`) returns **HTTP 200, meta.count=0, `results:[]`** —
   never an error → a stale id degrades to an empty feed, not a crash. A missing category clause = the whole source.
 - **Field spread is real per source (group_by `primary_topic.field.id`):** chemRxiv/Chemistry(16) = ~15.8k of ~62k;
-  **SSRN spans all 26 Fields** (top Social Sciences ~19%, top-3 ~50%) — NOT a single-field source, so a per-source
-  Field picker + a "whole source (no filter)" escape hatch both matter for OpenAlex-backed follows.
+  **SSRN spans all 26 Fields** — NOT a single-field source, so a per-source Field picker + a "whole source (no
+  filter)" escape hatch both matter for OpenAlex-backed follows.
+- **ALL-TIME vs RECENT distributions differ sharply — always window the census (measured 2026-07-10).** The
+  all-time SSRN reading (top Social Sciences ~19%) is a TRAP: filtered to `from_publication_date:2024-01-01`,
+  SSRN's #1 Field is **Engineering 21.87%** (Social Sciences 11.57%, Economics 7.75%) — post-Elsevier "Preprints
+  with SSRN" made it a broad STEM firehose. A follow feed shows *recent* works, so curate on the recent window,
+  never all-time. Recent (2024+) leaders: chemRxiv → Chemistry 24.3 / Materials 19.4 / Engineering 15.5 (CompSci
+  4.7 and Medicine 3.9 are real, not noise); PsyArXiv → Psychology 40.3 / Neuroscience 20.9 / Medicine 9.0.
+- **`has_abstract` is a LIAR — never gate on it.** It reports `true` even when the response omits
+  `abstract_inverted_index` (it means OpenAlex holds the abstract *internally*, before a licensing strip). Measured
+  presence of the actual field in the body: SSRN **0%**, Research Square **14%** (a permanent licensing strip, not
+  an ingest lag), chemRxiv 99.5%, bio/med + Preprints.org 100%. Judge abstract presence from the body only.
+- **PsyArXiv (OSF-hosted) breaks three assumptions.** (1) **98.97% DOI-null** (5,498/5,555) — any code doing
+  `bareDoi() ?: return null` silently discards it, and any DOI-keyed de-dup can never match it. chemRxiv is 0.00%
+  DOI-null, so this is OSF-specific. (2) ~100% `pdf_url`-null → identity/link must come from the OpenAlex work id +
+  `landing_page_url`. (3) **`publication_date` is a re-harvest artifact** (99% of works dated 2025), so
+  `from_publication_date` windowing misbehaves — prefer `from_created_date` for OSF sources. SSRN is ~16% DOI-null.
+- **The arXiv `locations[]` crosswalk is real but near-inert: 6 of 61,795 chemRxiv works (0.0097%), measured
+  2026-07-10.** The "a chemRxiv-primary work CAN carry an arXiv location" claim below is TRUE and stands — but do
+  NOT infer that it carries cross-source de-dup. OpenAlex keeps a cross-post as **two separate works with different
+  DOIs** (`10.48550/arXiv.*` vs `10.26434/chemrxiv-*`), so neither the crosswalk nor DOI-matching catches the
+  common arXiv↔chemRxiv cross-post; that needs title normalization. The crosswalk code is still correct and cheap.
 - **Metering caveat for a picker:** a browse/filter req = 1 credit, so populate the Field list from the **hardcoded
   26-Field table above (0 credits)** — never a live `/fields` fetch per picker-open.
 
