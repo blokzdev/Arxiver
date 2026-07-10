@@ -103,7 +103,11 @@ Inbox is origin-agnostic (no inbox-UI change). No author/keyword follow for non-
   "you follow nothing" empty state.
 - **New sources (additive, no migration; `papers.origin` is TEXT):** `RESEARCH_SQUARE`, `SSRN`, `PREPRINTS_ORG`,
   `PSYARXIV` → `openAlexBackend` (SIDs via the exhaustive `OpenAlexClient.sidFor`, no silent `else→null`).
-- **Picker:** a `SourceFollowSheet` (in Explore, an `RssFeed` action) reads the static `PreprintSourceRegistry`
+- **Picker → SUBSUMED (P-Explorer PE.4):** the `SourceFollowSheet` is deleted; following now happens in the unified
+  **Browse-&-Follow directory** (Explore's Library resting state), where arXiv is a peer row with its native
+  taxonomy and each preprint source expands to whole-source + curated categories. The RssFeed action routes there.
+  The original contract below still governs the vocabulary + zero-network rule. *(Historical:)* a `SourceFollowSheet`
+  (in Explore, an `RssFeed` action) read the static `PreprintSourceRegistry`
   (zero network on open): pick source → whole-source or a source-appropriate category (bio/med native strings, or
   an OpenAlex Field). Toggle state keys on `(origin,value)`. Whole-source = a `value=""` follow (flows through both
   backends' non-blank category guard). A firehose source short-circuits paging once page 1 fills the first-sync
