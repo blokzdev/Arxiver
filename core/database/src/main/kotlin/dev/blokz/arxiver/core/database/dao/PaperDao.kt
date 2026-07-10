@@ -82,11 +82,18 @@ interface PaperDao {
     suspend fun paperById(id: String): PaperEntity?
 
     /**
-     * The canonical stored id for a DOI (P-FeedPolish cross-source de-dup) — arXiv-origin preferred (a paper
-     * that was also on arXiv keys under the bare arXiv id), case-insensitive. Lets a follow re-key a hit onto
-     * an already-stored row that shares the DOI instead of forking a second row.
+     * The canonical stored id for a DOI (cross-source de-dup) — arXiv-origin preferred (a paper that was also on
+     * arXiv keys under the bare arXiv id), case-insensitive. Lets a follow *or an import* re-key onto an
+     * already-stored row that shares the DOI instead of forking a second row.
+     *
+     * Matches the **normalized** key (P-Explorer PE.2): every caller passes `normalizeDoi(...)`, and every stored
+     * row's `doi_norm` is written through that same function in `Paper.toEntity()` — so both sides agree by
+     * construction. Before PE.2 this matched the RAW `doi` column, so a versioned DOI (`…7234721.v5`) never
+     * de-duped.
      */
-    @Query("SELECT id FROM papers WHERE doi = :doi COLLATE NOCASE ORDER BY (origin = 'arxiv') DESC, id ASC LIMIT 1")
+    @Query(
+        "SELECT id FROM papers WHERE doi_norm = :doi COLLATE NOCASE ORDER BY (origin = 'arxiv') DESC, id ASC LIMIT 1",
+    )
     suspend fun paperIdByDoi(doi: String): String?
 
     /** Cached papers in a category, newest first — the cache-first Browse feed (no network). */

@@ -337,6 +337,37 @@ class FollowSyncWorkerTest {
             assertTrue(db.inboxDao().activePaperIds().contains("biorxiv:10.1101/z"))
         }
 
+    @Test
+    fun `a hit reuses a stored paper whose DOI is VERSIONED — the doi_norm key (PE_2 regression)`() =
+        runBlocking {
+            // Stored raw with a `.vN` suffix. Before PE.2, `paperIdByDoi` matched the RAW doi column while the
+            // worker queried with `normalizeDoi(...)` (suffix stripped) — so this row was invisible and the hit
+            // FORKED into a second paper. `doi_norm` makes both sides agree.
+            seed(
+                Paper(
+                    ref = ExternalRef(Source.BIORXIV, "10.1101/zed.v3"), latestVersion = 1, title = "Bio",
+                    abstract = "a", publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH, primaryCategory = "",
+                    categories = emptyList(), authors = listOf("A"), doi = "10.1101/zed.v3",
+                    pdfUrl = "https://www.biorxiv.org/zed.pdf",
+                ),
+            )
+            db.followDao().insert(
+                FollowEntity(
+                    type = FollowEntity.TYPE_CATEGORY,
+                    value = "",
+                    label = "SSRN",
+                    createdAt = 0,
+                    origin = Source.SSRN.wire,
+                ),
+            )
+
+            // Same paper, un-versioned DOI, surfaced through a different source.
+            worker(attempt = 0, backends = registryReturning(page(hit(Source.SSRN, "10.1101/zed")))).doWork()
+
+            assertEquals(1, db.paperDao().count(), "the versioned stored DOI is reused, not forked")
+            assertTrue(db.inboxDao().activePaperIds().contains("biorxiv:10.1101/zed.v3"))
+        }
+
     // --- P-Explorer PE.0: the source's discipline label reaches the stored paper ---
 
     @Test
