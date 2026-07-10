@@ -23,6 +23,12 @@ data class PreprintHit(
      * through `resolvePaperRef` so a cross-posted arXiv paper keys under the bare arXiv id (never forks).
      */
     val arxivId: String? = null,
+    /**
+     * The hit's own discipline label — an OpenAlex `primary_topic.field.display_name` ("Chemistry") or a bio/med
+     * native category ("neuroscience"). Null when the source supplies none. Threaded into `Paper.primaryCategory`
+     * at ingest (P-Explorer PE.0) so a non-arXiv paper stops storing `""` and rendering an empty category chip.
+     */
+    val fieldName: String? = null,
 )
 
 /** A page of [hits] plus an opaque [nextCursor] to fetch the next page (null when exhausted). */

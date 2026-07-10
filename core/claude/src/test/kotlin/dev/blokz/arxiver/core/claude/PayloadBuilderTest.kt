@@ -260,6 +260,38 @@ class PayloadBuilderTest {
         assertEquals("https://chemrxiv.org/engage/chemrxiv/assets/xyz.pdf", p.str("pdf_url"))
     }
 
+    /**
+     * P-Explorer PE.0: `pdf_fetchable` is now source-aware, not the old `ref is ArxivRef` tautology (which was
+     * always `false` in this branch). bioRxiv/medRxiv serve real `%PDF` bytes over an already-allowlisted host,
+     * so a routine must be told it CAN fetch them — while chemRxiv (Atypon cookie-wall) stays honestly `false`.
+     */
+    @Test
+    fun `a bioRxiv paper reports pdf_fetchable true (it serves real PDF bytes on an allowlisted host)`() {
+        val bio =
+            PaperWithAnnotations(
+                paper =
+                    Paper(
+                        ref = ExternalRef(Source.BIORXIV, "10.1101/2026.01.02.680000"),
+                        latestVersion = 1,
+                        title = "A Brain Preprint",
+                        abstract = "We study brains.",
+                        publishedAt = Instant.parse("2026-01-02T09:00:00Z"),
+                        updatedAt = Instant.parse("2026-01-02T09:00:00Z"),
+                        primaryCategory = "neuroscience",
+                        categories = listOf("neuroscience"),
+                        authors = listOf("Ada Lovelace"),
+                        doi = "10.1101/2026.01.02.680000",
+                        pdfUrl = "https://www.biorxiv.org/content/10.1101/2026.01.02.680000v1.full.pdf",
+                    ),
+            )
+        val result = builder.build(RoutineAction.DIGEST, "x", listOf(bio), includeNotes = false, librarySize = 1)
+        val ready = assertIs<PayloadResult.Ready>(result)
+        val p = Json.parseToJsonElement(ready.json).jsonObject.getValue("papers").jsonArray[0].jsonObject
+
+        assertEquals("biorxiv", p.str("source"))
+        assertEquals("true", p.str("pdf_fetchable"), "bioRxiv PDFs are fetchable — the old rule wrongly said false")
+    }
+
     /** P-Dispatch additivity proof: in a mixed selection the arXiv row stays byte-shaped; the non-arXiv row omits arXiv keys. */
     @Test
     fun `a mixed selection keeps the arXiv row byte-shaped and omits arxiv keys on the non-arXiv row`() {

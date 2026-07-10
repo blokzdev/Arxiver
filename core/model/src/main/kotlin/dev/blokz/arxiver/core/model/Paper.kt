@@ -54,10 +54,16 @@ data class Paper(
         }
 
     /**
-     * Whether a downstream consumer (a Claude routine, P-Dispatch §4) can likely fetch this paper's full PDF.
-     * Conservative-and-honest: arXiv PDFs are openly fetchable; every non-arXiv source is reported unfetchable
-     * (chemRxiv is Atypon cookie-walled; bioRxiv/medRxiv are actually open, so this under-promises for them —
-     * a per-host reachability refinement is tracked in the ROADMAP backlog). Never over-promises.
+     * Whether a downstream consumer (a Claude routine, P-Dispatch §4) can actually fetch this paper's full PDF.
+     *
+     * Source-aware since P-Explorer PE.0 — this **closes** the recorded `pdf_fetchable` host-reachability
+     * deferral. It previously read `ref is ArxivRef`, which is *tautologically false* at its only call site (the
+     * non-arXiv branch of `toPayloadPaper`), so every non-arXiv paper told the routine "unfetchable" — including
+     * bioRxiv/medRxiv, whose PDFs demonstrably serve real `%PDF` bytes over an already-allowlisted host.
+     *
+     * The tier comes from the evidence-backed [pdfAccess] map, and we must additionally *hold* a URL to fetch.
+     * Never over-promises: an [PdfAccess.IN_APP] source with no [pdfUrl] still reports false, and the per-hop
+     * egress gate + `PdfDownloader`'s `%PDF` magic-byte guard back-stop any residual optimism.
      */
-    fun isPdfFetchable(): Boolean = ref is ArxivRef
+    fun isPdfFetchable(): Boolean = ref.origin.pdfAccess() == PdfAccess.IN_APP && pdfUrl.isNotBlank()
 }

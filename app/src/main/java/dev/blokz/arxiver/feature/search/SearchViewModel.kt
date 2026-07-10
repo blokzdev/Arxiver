@@ -210,7 +210,10 @@ class SearchViewModel
                 is AppResult.Success ->
                     _uiState.update {
                         it.copy(
-                            results = (it.results + result.value.papers).distinctBy { p -> p.id },
+                            // Key on the opaque storage id, NEVER `p.id` — that shim `error()`s on a non-arXiv
+                            // paper, so the old `distinctBy { p.id }` crashed the instant a multi-source result
+                            // reached this list (P-Explorer PE.0; prerequisite for PE.3 search).
+                            results = (it.results + result.value.papers).distinctBy { p -> p.ref.storageId },
                             totalResults = result.value.totalResults,
                             nextStart = result.value.nextStart,
                             searching = false,

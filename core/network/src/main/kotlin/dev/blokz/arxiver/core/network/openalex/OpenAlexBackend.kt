@@ -51,6 +51,8 @@ class OpenAlexBackend(
             // The arXiv cross-id URL, if this work is also on arXiv — the worker resolves it to the bare arXiv id
             // so a cross-posted paper doesn't fork (P-FeedPolish de-dup).
             arxivId = arxivLandingUrl(),
+            // OpenAlex's own discipline label ("Chemistry"); absent when the work has no primary topic (PE.0).
+            fieldName = primaryTopic?.field?.displayName?.takeIf { it.isNotBlank() },
         )
     }
 }

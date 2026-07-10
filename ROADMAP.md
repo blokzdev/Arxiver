@@ -567,6 +567,88 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   `:core:* ∌ :app` (Payload/DispatchEnvelope stay pure in `:core:claude`, structurally enforced); SPEC-CLAUDE-BRIDGE
   §3.1/§4/§4.1 + ROADMAP + HUMAN self-heals landed. Checked in its own commit `checkpoint: phase P-Dispatch`.
 
+## Phase P-Explorer — complete the multi-source discovery surface (plan approved 2026-07-10)
+
+> **Co-Founder device session (2026-07-10)** found the P-Sources/P-Feeds multi-source expansion is complete at the
+> *client* layer but never surfaced in the UI: Explore search is arXiv-only; the follow picker excludes arXiv; every
+> OpenAlex-served source shows the same generic 26-Field list (chemRxiv offers "Dentistry"). Asked for a thorough
+> audit + a rich, world-class Explorer UX. Planned via an Ultracode Workflow (4 surface maps → gap inventory → 3
+> competing IA designs → 3 adversarial stress passes → completeness critic → synthesis) **+ a personal adversarial
+> validation** grounding every load-bearing claim at file:line, **+ a 9-agent PDF-host egress probe** (PE.2h).
+>
+> **Verdict (IA):** Explore becomes one discovery surface where **source is a dimension of the query, not a separate
+> app**. Search stays **single-source per submit** (arXiv → native Atom + full filters; each non-arXiv source → one
+> metered OpenAlex `search()`), which delivers the reach promise while structurally sidestepping the fan-out tar-pit
+> (cross-leg display de-dup, incomparable-rank merge, dual pagination) — fan-out "All sources" is a recorded
+> follow-on, not v1. Follows unify into **one Browse-&-Follow directory** with arXiv as a peer row. Library stays
+> "my shelf" + a source filter. *Explore = the world, Library = mine.*
+>
+> **The audit found five latent bugs in shipped code**, independent of the feature request: (1) `SearchViewModel`'s
+> `distinctBy { p.id }` `error()`s on any non-arXiv paper (a crash-trap gating all of PE.3); (2) `saveExternalPaper`
+> **forks** a cross-posted paper (passes `arxivId=null`, never calls `paperIdByDoi`) — PFP.1 fixed only the
+> follow-ingest path, so the *import* path still forks; (3) `paperIdByDoi` matches the **raw** `doi` column while
+> callers pass `normalizeDoi(...)` → a `.vN`-versioned DOI silently fails to de-dup; (4) `isPdfFetchable()` was
+> `ref is ArxivRef` — *tautologically false* at its only call site (the non-arXiv payload branch), so every
+> non-arXiv paper told Claude routines "PDF unfetchable", **including bioRxiv/medRxiv whose PDFs demonstrably fetch**;
+> (5) the `primaryCategory` chip renders unguarded while every non-arXiv paper stores `""`.
+>
+> **PE.2h egress probe verdict (evidence-backed; no new host needed to win):** bio/medRxiv serve `200`, 0 redirects,
+> `application/pdf`, `%PDF` on **already-allowlisted** hosts → in-app read is real. chemRxiv is Atypon-cookie-walled
+> via an un-allowlisted OIDC hop (shipped browser-open is *correct*). SSRN (ToS bans automated queries) and
+> Preprints.org (Akamai edge-deny) are gated → fetching either would circumvent an access control. **PsyArXiv/OSF
+> resolves only through `storage.googleapis.com`** — multi-tenant GCS whose bucket is in the URL *path*, so
+> exact-host allowlisting cannot scope it to OSF; **granting it would open egress to any bucket → rejected.** The
+> standing `assets.chemrxiv.org` HUMAN.md row is **stale** (NXDOMAIN; real PDFs are on the already-allowlisted
+> `chemrxiv.org`) → retire + replace it. **We never spoof a browser UA**: bio/medRxiv's robots.txt permits honest
+> custom agents, and a blocked honest UA means "no" → degrade to browser.
+>
+> **Co-Founder decisions:** unified full-screen follow directory · Research Square + Preprints.org keep **all 26**
+> Fields (genuine megajournals — curating hides real content); curate only chemRxiv/PsyArXiv/SSRN · investigate all
+> PDF hosts now (done) · Research Square **authorized pending an on-device shard check** · chemRxiv in-app read
+> **revisited after P-Explorer**.
+
+- [~] **PE.0 — Foundation: provenance + honest fetchability + the crash-trap.** `distinctBy { it.ref.storageId }`
+  (bug 1). New `PdfAccess` tier + `Source.pdfAccess()` in `:core:model` (evidence-backed, exhaustive `when`) →
+  `Paper.isPdfFetchable()` stops being a tautology, **closing the recorded P-Dispatch `pdf_fetchable`
+  host-reachability deferral** (bio/med now honestly `true`; arXiv payload byte-identity untouched — the arXiv
+  branch never sets the key). New `PreprintHit.fieldName` threaded from `OpenAlexBackend` (`primary_topic.field`)
+  and `BioRxivBackend` (its `category`, already returned, never used) into `Paper.primaryCategory` at ingest
+  (bug 5's data side). Structural `PdfAccessAllowlistTest` pins the tier to `AllowedHosts` (an IN_APP source whose
+  host isn't allowlisted breaks the build) **and** pins the probe-rejected hosts (`storage.googleapis.com` et al.)
+  as permanently un-allowlisted.
+- [ ] **PE.1 — Per-source curated Field vocabulary** (the reported chemRxiv/"Dentistry" incoherence). chemRxiv →
+  Chemistry · Chemical Engineering · Materials Science · Biochem/Genetics/Mol Bio · Pharmacology · Energy ·
+  Engineering · Environmental Science · Physics & Astronomy; PsyArXiv → Psychology · Neuroscience · Social Sciences;
+  SSRN → Economics/Econometrics/Finance · Business/Management/Accounting · Social Sciences · Decision Sciences;
+  Research Square + Preprints.org → **all 26** (megajournals). Whole-source (`value=""`) row stays the prominent
+  default — single-field filtering silently under-returns. Compile-time only; a wrong token fails safe (200/count 0).
+- [ ] **PE.2 — Close the import-path de-dup fork** (bug 2) + `doi_norm` additive column/index (bug 3, migration
+  v11→v12 + identity-hash test). `saveExternalPaper` adopts `canonicalRef` (crosswalk ref → `paperIdByDoi` reuse →
+  insert-if-absent). Forward-only, consistent with the PFP.1 no-retroactive-merge ruling.
+- [ ] **PE.3 — Multi-source keyword search.** `Library | arXiv` → `Library | Online`; bottom-sheet radio source
+  picker (a11y over an unreachable chip strip), default arXiv, followed sources ★-sorted. `searchSidFor()` (broader
+  than browse's `sidFor`, null for bio/med by design); new `OpenAlexWork.toPaper()` in `:core:network` feeding
+  `arxivLandingUrl()` → `resolvePaperRef` (a cross-post keys under the bare arXiv id); `searchExternal` +
+  `cacheSearchHit` (persist-on-interaction, replicating `canonicalRef`, **never** the forking import seam) with the
+  full `Paper` threaded through `openHit`/`saveHit` to dodge the FK crash. **v1 un-paginated (`nextStart = null`)**,
+  which structurally no-ops the metered `lastIndex - 5` auto-load-more. Honest "via OpenAlex" labeling + lag hint for
+  bio/med. Redact `?api_key=` from surfaced errors.
+- [ ] **PE.4 — Unified Browse-&-Follow directory** (Co-Founder-approved IA). arXiv a peer row with its native
+  taxonomy at full-screen real estate; both write seams already exist (`setFollowed`/`setCategoryFollowed`).
+- [ ] **PE.5 — Library source dimension.** `sourceFilter: Source?`; chips show only sources actually present.
+- [ ] **PE.6 — Docs & deferral sweep.** PRD §1/§3/§4 (arXiv-frozen while §1 claims "unifies discovery"); mark
+  ROADMAP PS.3 superseded-by-PF.2; **retire + replace the stale `assets.chemrxiv.org` HUMAN.md row**; VERIFICATION
+  device rows (bio/med in-app read; the Research Square shard check); P-Explorer deferrals block.
+- [ ] **CHECKPOINT P-Explorer** — full build green; migration identity-hash-tested; red-line audit (egress unchanged
+  except any Co-Founder-approved host; OpenAlex credits: explicit-submit + un-paginated v1; arXiv ≥3s limiter
+  untouched; zero-network-on-open; no telemetry; `:core:* ∌ :app`); device checks in VERIFICATION.md.
+
+**P-Explorer deferrals (recorded, never silently dropped):** fan-out "All sources" search (multi-SID merge +
+display de-dup + sectioned results) · cursor pagination for external search (explicit "Load more" tap only — it's
+BYOK-billed) · S2 as a cross-corpus search leg · interactive non-arXiv category browse · OpenAlex Subfield
+granularity (~250 vs 26) · discipline-crosswalk source badges on the arXiv grid · Library group-by-source ·
+`PdfDownloader` retry-on-transient-403 hardening · chemRxiv in-app read (CookieJar + `chemrxiv.scienceconnect.io`).
+
 ## Phase P-FeedPolish — cross-source feed polish (plan approved 2026-07-07)
 
 > Approved by the Co-Founder (second harvested cluster after P4/P-Dispatch; the classifier + loose-ends sweep stay

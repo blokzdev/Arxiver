@@ -220,8 +220,10 @@ class FollowSyncWorker
                 abstract = abstract,
                 publishedAt = published,
                 updatedAt = published,
-                primaryCategory = "",
-                categories = emptyList(),
+                // The source's own discipline label (OpenAlex Field / bio-med native category), not "" (PE.0) —
+                // a blank here rendered an empty category chip on every non-arXiv row.
+                primaryCategory = fieldName.orEmpty(),
+                categories = listOfNotNull(fieldName),
                 authors = authors,
                 doi = doi,
                 pdfUrl = oaPdfUrl ?: "",
