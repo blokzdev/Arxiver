@@ -5,6 +5,7 @@ import dev.blokz.arxiver.core.database.entity.PaperEntity
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.core.model.PaperSource
+import dev.blokz.arxiver.core.model.normalizeDoi
 import java.time.Instant
 
 fun Paper.toEntity(): PaperEntity =
@@ -22,6 +23,9 @@ fun Paper.toEntity(): PaperEntity =
         comment = comment,
         journalRef = journalRef,
         doi = doi,
+        // The single write chokepoint for the de-dup key: every stored row's `doi_norm` is, by construction,
+        // exactly what `paperIdByDoi` will be queried with (P-Explorer PE.2).
+        doiNorm = normalizeDoi(doi),
         pdfUrl = pdfUrl,
         citationCount = citationCount,
         s2PaperId = null,

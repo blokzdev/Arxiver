@@ -11,9 +11,10 @@ import androidx.room.PrimaryKey
     indices = [
         Index("primary_category"),
         Index("updated_at"),
-        // Cross-source de-dup lookup by DOI (P-FeedPolish). NON-unique — existing installs may already hold two
-        // rows sharing a DOI (an imported arXiv row with a `doi` + a followed `chemrxiv:` row).
-        Index("doi"),
+        // Cross-source de-dup lookup, keyed on the NORMALIZED doi (P-Explorer PE.2 — the raw `doi` index it
+        // replaces could never match the normalized key its only caller passed). NON-unique: existing installs may
+        // already hold two rows sharing a DOI (an imported arXiv row with a `doi` + a followed `chemrxiv:` row).
+        Index("doi_norm"),
     ],
 )
 data class PaperEntity(
@@ -41,4 +42,11 @@ data class PaperEntity(
     // `source` acquisition enum. The SQL `DEFAULT 'arxiv'` MUST byte-match `defaultValue = "'arxiv'"`.
     @ColumnInfo(name = "origin", defaultValue = "'arxiv'") val origin: String = "arxiv",
     @ColumnInfo(name = "native_id") val nativeId: String? = null,
+    /**
+     * The cross-source de-dup KEY: `normalizeDoi(doi)` (P-Explorer PE.2). Distinct from [doi], which stays the
+     * verbatim citeable DOI for display/export. Before PE.2 the lookup matched the RAW `doi` column while every
+     * caller passed a *normalized* DOI, so a versioned chemRxiv DOI (`…7234721.v5`) silently failed to de-dup.
+     * Null iff [doi] is null. Appended last — `ADD COLUMN` appends and Room's identity hash is order-sensitive.
+     */
+    @ColumnInfo(name = "doi_norm") val doiNorm: String? = null,
 )

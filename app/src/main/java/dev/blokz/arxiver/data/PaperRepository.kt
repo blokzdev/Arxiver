@@ -12,6 +12,7 @@ import dev.blokz.arxiver.core.model.ExternalPaperDraft
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.core.model.PaperSource
+import dev.blokz.arxiver.core.model.normalizeDoi
 import dev.blokz.arxiver.core.model.resolvePaperRef
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivFeed
@@ -81,7 +82,10 @@ class PaperRepository
          * Persist a non-arXiv paper captured from a search hit ([ExternalPaperDraft]) as a real `papers` row,
          * with NO network (the draft already carries the full metadata). Idempotent via `@Upsert`. The ref is
          * chosen through [resolvePaperRef] — the single de-dup chokepoint — so a source that ever carries an
-         * arXiv cross-id would key under the bare arXiv id instead of forking (chemRxiv never does).
+         * arXiv cross-id would key under the bare arXiv id instead of forking. (The old note here claimed
+         * "chemRxiv never does" — measured 2026-07-10, only 0.0097% of chemRxiv works carry an arXiv
+         * `locations[]` entry, so the crosswalk is near-inert and the normalized-DOI reuse below is what
+         * actually prevents the fork.)
          *
          * `primaryCategory = ""` + `categories = emptyList()` is a deliberate sentinel: the chip row renders
          * empty (no fake "chemrxiv" category), the FTS mirror indexes title/abstract/authors only, and
@@ -89,6 +93,16 @@ class PaperRepository
          * gate so the paper becomes semantically searchable like any other.
          */
         suspend fun saveExternalPaper(draft: ExternalPaperDraft): Paper {
+            // Cross-source de-dup at the IMPORT seam (P-Explorer PE.2). PFP.1 taught the *follow* path to reuse an
+            // already-stored row sharing a DOI (`FollowSyncWorker.canonicalRef`); this path never learned it, so
+            // importing a paper you already hold under another origin FORKED it. Reuse wins, and we deliberately
+            // do NOT overwrite the stored row — an import's metadata is thinner (no category/version), so
+            // clobbering a richer native row would be a regression (the PFP.1 degraded-metadata lesson).
+            normalizeDoi(draft.nativeId)?.let { normalized ->
+                paperDao.paperIdByDoi(normalized)?.let { existingId ->
+                    paperDao.paperById(existingId)?.let { return it.toListDomain() }
+                }
+            }
             val ref = resolvePaperRef(arxivId = null, origin = draft.origin, nativeId = draft.nativeId)
             val paper =
                 Paper(
