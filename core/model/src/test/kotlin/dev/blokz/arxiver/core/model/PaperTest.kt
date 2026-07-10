@@ -126,4 +126,47 @@ class PaperTest {
     fun `an arXiv paper reports its pdf as fetchable`() {
         assertTrue(paper().isPdfFetchable())
     }
+
+    // --- P-Explorer PE.1b: a DOI-less, PDF-less source still has a reachable link ---
+
+    @Test
+    fun `canonicalUrl falls back to the landing page when a paper has neither doi nor pdf`() {
+        // An OSF-hosted PsyArXiv paper. Before PE.1b this resolved to "" — literally no link at all.
+        val p =
+            Paper(
+                ref = ExternalRef(Source.PSYARXIV, "W7112150394"),
+                latestVersion = 1,
+                title = "t",
+                abstract = "a",
+                publishedAt = Instant.EPOCH,
+                updatedAt = Instant.EPOCH,
+                primaryCategory = "Psychology",
+                categories = emptyList(),
+                authors = listOf("A"),
+                doi = null,
+                pdfUrl = "",
+                landingUrl = "https://osf.io/szf8y",
+            )
+        assertEquals("https://osf.io/szf8y", p.canonicalUrl())
+    }
+
+    @Test
+    fun `the doi resolver still outranks the landing page when both exist`() {
+        val p =
+            Paper(
+                ref = ExternalRef(Source.CHEMRXIV, "10.26434/x"),
+                latestVersion = 1,
+                title = "t",
+                abstract = "a",
+                publishedAt = Instant.EPOCH,
+                updatedAt = Instant.EPOCH,
+                primaryCategory = "Chemistry",
+                categories = emptyList(),
+                authors = listOf("A"),
+                doi = "10.26434/x",
+                pdfUrl = "https://chemrxiv.org/x.pdf",
+                landingUrl = "https://chemrxiv.org/engage/item/x",
+            )
+        assertEquals("https://doi.org/10.26434/x", p.canonicalUrl(), "the DOI stays the citeable canonical")
+    }
 }

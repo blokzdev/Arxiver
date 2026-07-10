@@ -49,4 +49,9 @@ data class PaperEntity(
      * Null iff [doi] is null. Appended last — `ADD COLUMN` appends and Room's identity hash is order-sensitive.
      */
     @ColumnInfo(name = "doi_norm") val doiNorm: String? = null,
+    /**
+     * The source's own landing page (P-Explorer PE.1b). Only load-bearing for a source with neither a DOI nor a
+     * PDF url (OSF-hosted PsyArXiv), where it is the paper's ONLY link. Appended last — ADD COLUMN appends.
+     */
+    @ColumnInfo(name = "landing_url") val landingUrl: String? = null,
 )

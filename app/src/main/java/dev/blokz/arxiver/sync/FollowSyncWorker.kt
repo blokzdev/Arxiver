@@ -151,7 +151,9 @@ class FollowSyncWorker
             do {
                 when (val r = backend.browse(source, category, sinceIso, cursor)) {
                     is AppResult.Success -> {
-                        r.value.hits.forEach { hits.putIfAbsent(normalizeDoi(it.doi) ?: it.doi, it) }
+                        // Key on the normalized DOI, falling back to the source-native id — a DOI-less source (OSF) would
+                        // otherwise collapse every hit onto one key and deliver a single paper (PE.1b).
+                        r.value.hits.forEach { hits.putIfAbsent(normalizeDoi(it.doi) ?: it.nativeId, it) }
                         cursor = r.value.nextCursor
                     }
                     is AppResult.Failure -> {
@@ -188,7 +190,7 @@ class FollowSyncWorker
          * shares the DOI (arXiv-origin preferred); else the source's own `ExternalRef`.
          */
         private suspend fun canonicalRef(hit: PreprintHit): PaperRef {
-            val resolved = resolvePaperRef(arxivId = hit.arxivId, origin = hit.origin, nativeId = hit.doi)
+            val resolved = resolvePaperRef(arxivId = hit.arxivId, origin = hit.origin, nativeId = hit.nativeId)
             if (resolved is ArxivRef) return resolved
             normalizeDoi(hit.doi)?.let { norm ->
                 paperDao.paperIdByDoi(norm)?.let { return PaperRef.fromStorageId(it) }
@@ -226,6 +228,7 @@ class FollowSyncWorker
                 categories = listOfNotNull(fieldName),
                 authors = authors,
                 doi = doi,
+                landingUrl = landingUrl,
                 pdfUrl = oaPdfUrl ?: "",
                 source = PaperSource.FOLLOW,
             )

@@ -162,6 +162,7 @@ class FollowSyncWorkerTest {
             val hit =
                 PreprintHit(
                     origin = Source.BIORXIV,
+                    nativeId = "10.1101/2026.01.02.680000",
                     doi = "10.1101/2026.01.02.680000",
                     title = "A brain paper",
                     abstract = "We studied brains.",
@@ -176,7 +177,7 @@ class FollowSyncWorkerTest {
 
             // The external paper landed under its origin-blind ExternalRef storage id (no arXiv fork).
             assertEquals(1, db.paperDao().count())
-            assertTrue(db.inboxDao().activePaperIds().contains(ExternalRef(Source.BIORXIV, hit.doi).storageId))
+            assertTrue(db.inboxDao().activePaperIds().contains(ExternalRef(Source.BIORXIV, hit.nativeId).storageId))
         }
 
     @Test
@@ -207,6 +208,7 @@ class FollowSyncWorkerTest {
                             (1..20).map {
                                 PreprintHit(
                                     origin = source,
+                                    nativeId = "10.9999/ssrn.$it",
                                     doi = "10.9999/ssrn.$it",
                                     title = "t$it",
                                     abstract = "a",
@@ -240,13 +242,17 @@ class FollowSyncWorkerTest {
 
     private fun hit(
         origin: Source,
-        doi: String,
+        doi: String?,
         arxivId: String? = null,
         oaPdfUrl: String? = null,
         fieldName: String? = null,
+        nativeId: String = doi ?: error("a DOI-less hit must pass an explicit nativeId"),
+        landingUrl: String? = null,
     ) = PreprintHit(
         origin = origin,
+        nativeId = nativeId,
         doi = doi,
+        landingUrl = landingUrl,
         title = "t",
         abstract = "a",
         authors = emptyList(),
@@ -368,6 +374,55 @@ class FollowSyncWorkerTest {
             assertTrue(db.inboxDao().activePaperIds().contains("biorxiv:10.1101/zed.v3"))
         }
 
+    // --- P-Explorer PE.1b: a DOI-less source (OSF-hosted PsyArXiv) must not be discarded at ingest ---
+
+    private fun psyFollow() =
+        FollowEntity(
+            type = FollowEntity.TYPE_CATEGORY,
+            value = "",
+            label = "PsyArXiv",
+            createdAt = 0,
+            origin = Source.PSYARXIV.wire,
+        )
+
+    @Test
+    fun `a DOI-less hit is ingested under its work id — not silently dropped`() =
+        runBlocking {
+            db.followDao().insert(psyFollow())
+            // 99.4% of recent PsyArXiv works look exactly like this: no DOI, no PDF, only a work id + landing page.
+            val h =
+                hit(
+                    origin = Source.PSYARXIV,
+                    doi = null,
+                    nativeId = "W7112150394",
+                    landingUrl = "https://osf.io/szf8y",
+                )
+
+            worker(attempt = 0, backends = registryReturning(page(h))).doWork()
+
+            assertEquals(1, db.paperDao().count(), "before PE.1b `bareDoi() ?: return null` discarded this hit")
+            val stored = assertNotNull(db.paperDao().paperById("psyarxiv:W7112150394"))
+            assertNull(stored.doi, "a DOI-less source stores no DOI — the work id is the identity, not a fake DOI")
+            assertEquals("https://osf.io/szf8y", stored.landingUrl, "its only reachable link is preserved")
+        }
+
+    @Test
+    fun `several DOI-less hits stay distinct — the intra-page key falls back to the work id`() =
+        runBlocking {
+            db.followDao().insert(psyFollow())
+            val hits =
+                page(
+                    hit(Source.PSYARXIV, doi = null, nativeId = "W1", landingUrl = "https://osf.io/a"),
+                    hit(Source.PSYARXIV, doi = null, nativeId = "W2", landingUrl = "https://osf.io/b"),
+                    hit(Source.PSYARXIV, doi = null, nativeId = "W3", landingUrl = "https://osf.io/c"),
+                )
+
+            worker(attempt = 0, backends = registryReturning(hits)).doWork()
+
+            // A `normalizeDoi(doi) ?: doi` key would map every null-DOI hit onto ONE bucket and deliver one paper.
+            assertEquals(3, db.paperDao().count(), "DOI-less hits must not collapse onto a single dedup key")
+        }
+
     // --- P-Explorer PE.0: the source's discipline label reaches the stored paper ---
 
     @Test
@@ -378,7 +433,7 @@ class FollowSyncWorkerTest {
 
             worker(attempt = 0, backends = registryReturning(page(h))).doWork()
 
-            val stored = assertNotNull(db.paperDao().paperById(ExternalRef(Source.CHEMRXIV, h.doi).storageId))
+            val stored = assertNotNull(db.paperDao().paperById(ExternalRef(Source.CHEMRXIV, h.nativeId).storageId))
             assertEquals(
                 "Chemistry",
                 stored.primaryCategory,
@@ -394,7 +449,7 @@ class FollowSyncWorkerTest {
 
             worker(attempt = 0, backends = registryReturning(page(h))).doWork()
 
-            val stored = assertNotNull(db.paperDao().paperById(ExternalRef(Source.CHEMRXIV, h.doi).storageId))
+            val stored = assertNotNull(db.paperDao().paperById(ExternalRef(Source.CHEMRXIV, h.nativeId).storageId))
             assertEquals("", stored.primaryCategory)
         }
 
@@ -440,11 +495,11 @@ class FollowSyncWorkerTest {
             db.followDao().insert(bioFollow(streak = 3))
             val followId = bioStreak().id
             val h = hit(Source.BIORXIV, "10.1101/redundant")
-            val storageId = ExternalRef(Source.BIORXIV, h.doi).storageId
+            val storageId = ExternalRef(Source.BIORXIV, h.nativeId).storageId
             // Pre-seed the paper + its inbox row so the re-delivery is a genuine no-op at @Insert IGNORE.
             seed(
                 Paper(
-                    ref = ExternalRef(Source.BIORXIV, h.doi), latestVersion = 1, title = "t", abstract = "a",
+                    ref = ExternalRef(Source.BIORXIV, h.nativeId), latestVersion = 1, title = "t", abstract = "a",
                     publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH, primaryCategory = "",
                     categories = emptyList(), authors = emptyList(), doi = h.doi, pdfUrl = "",
                 ),

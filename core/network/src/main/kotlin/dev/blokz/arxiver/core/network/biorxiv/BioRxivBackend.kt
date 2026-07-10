@@ -54,7 +54,10 @@ class BioRxivBackend(
         val pdf = version?.takeIf { it.isNotBlank() }?.let { "https://$host/content/${d}v$it.full.pdf" }
         return PreprintHit(
             origin = source,
+            // bio/med always publish a DOI, so identity and DOI coincide here.
+            nativeId = d,
             doi = d,
+            landingUrl = "https://$host/content/$d",
             title = title.orEmpty(),
             abstract = abstract.orEmpty(),
             authors = authorList(),

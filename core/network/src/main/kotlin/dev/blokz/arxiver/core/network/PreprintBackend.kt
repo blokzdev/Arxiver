@@ -10,7 +10,15 @@ import dev.blokz.arxiver.core.model.Source
  */
 data class PreprintHit(
     val origin: Source,
-    val doi: String,
+    /**
+     * The source-native identity this hit is stored under (`ExternalRef(origin, nativeId)`). Usually the DOI —
+     * but **not every source has one**: PsyArXiv (OSF-hosted) is 99.4% DOI-null on any recent window, so it keys
+     * on its OpenAlex work id instead. Distinct from [doi] since P-Explorer PE.1b; before that, ingest did
+     * `bareDoi() ?: return null` and silently discarded ~99% of PsyArXiv.
+     */
+    val nativeId: String,
+    /** The citeable DOI when the source publishes one — null for OSF-hosted works. Never the identity. */
+    val doi: String?,
     val title: String,
     val abstract: String,
     val authors: List<String>,
@@ -29,6 +37,11 @@ data class PreprintHit(
      * at ingest (P-Explorer PE.0) so a non-arXiv paper stops storing `""` and rendering an empty category chip.
      */
     val fieldName: String? = null,
+    /**
+     * The source's own landing page (`https://osf.io/szf8y`). For a DOI-less, PDF-less source this is the paper's
+     * ONLY reachable link, so it becomes the paper's `canonicalUrl()` (P-Explorer PE.1b).
+     */
+    val landingUrl: String? = null,
 )
 
 /** A page of [hits] plus an opaque [nextCursor] to fetch the next page (null when exhausted). */
