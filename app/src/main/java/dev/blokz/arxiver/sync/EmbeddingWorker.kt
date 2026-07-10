@@ -38,6 +38,7 @@ class EmbeddingWorker
         private val vectorIndex: VectorIndex,
         private val chunkEmbeddingDao: ChunkEmbeddingDao,
         private val ragIndexer: RagIndexer,
+        private val rankerEvalRunner: RankerEvalRunner,
     ) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
             // Model download is bound to this worker's unmetered-network constraint.
@@ -46,10 +47,19 @@ class EmbeddingWorker
                 is AppResult.Success -> Unit
             }
 
+            // Paper-level stale-model wipe (P5.1) — the guard vectorFor() relies on but nothing enforced:
+            // without it a MODEL_NAME bump leaves every paper vector tag-mismatched and the feed permanently
+            // unranked. Marks clear FIRST (the query reads the rows the delete removes).
+            embeddingDao.clearMarksForModelMismatch(MODEL_NAME)
+            embeddingDao.deleteByModelMismatch(MODEL_NAME)
+
             embedPending()
             indexLibraryChunks()
             refreshRelatedPapers()
             inboxScorer.scoreInbox { isStopped }
+            // The offline ranker eval (P5.1) — once per run, after fresh scores land; a stop skips it (the
+            // next unmetered window recomputes). Diagnostic only: it must never fail the worker.
+            if (!isStopped) runCatching { rankerEvalRunner.run(RELEVANT_THRESHOLD) }
             return Result.success()
         }
 
@@ -125,6 +135,10 @@ class EmbeddingWorker
         companion object {
             const val UNIQUE_PERIODIC = "embedding_periodic"
             const val UNIQUE_ONESHOT = "embedding_now"
+
+            /** Mirrors TodayScreen's "Likely relevant" cut — the aboveCut diagnostic must describe the real UI. */
+            const val RELEVANT_THRESHOLD = 0.55
+
             const val MODEL_NAME = "bge-small-en-v1.5-q8"
             private const val BATCH_SIZE = 8
             private const val CHUNK_BACKFILL_PER_RUN = 50

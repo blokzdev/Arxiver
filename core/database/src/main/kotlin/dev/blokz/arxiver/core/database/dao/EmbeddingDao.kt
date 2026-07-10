@@ -45,6 +45,21 @@ interface EmbeddingDao {
     @Query("DELETE FROM paper_embeddings")
     suspend fun deleteAll()
 
+    /**
+     * Paper-level stale-model wipe (P5.1) — the trigger that never existed: `deleteByModelMismatch` was
+     * chunk-only, so on a MODEL_NAME bump every paper vector failed `vectorFor`'s tag guard and the feed went
+     * permanently unranked (and any future learned head would train on nothing). Clearing `embedded_at` for the
+     * wiped rows re-queues them for `unembeddedPapers`, so the next runs re-embed under the new model.
+     */
+    @Query(
+        "UPDATE papers SET embedded_at = NULL " +
+            "WHERE id IN (SELECT paper_id FROM paper_embeddings WHERE model != :model)",
+    )
+    suspend fun clearMarksForModelMismatch(model: String)
+
+    @Query("DELETE FROM paper_embeddings WHERE model != :model")
+    suspend fun deleteByModelMismatch(model: String)
+
     /** Library and inbox papers first — the corpus that matters most. */
     @Query(
         """

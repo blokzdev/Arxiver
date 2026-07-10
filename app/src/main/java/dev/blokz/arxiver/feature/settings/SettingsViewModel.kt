@@ -39,7 +39,12 @@ class SettingsViewModel
         private val syncScheduler: SyncScheduler,
         private val backupManager: dev.blokz.arxiver.data.BackupManager,
         private val dispatchers: DispatcherProvider,
+        rankerEvalState: dev.blokz.arxiver.sync.RankerEvalState,
     ) : ViewModel() {
+        /** P5.1 debug diagnostic — the latest on-device ranker eval (null until a worker run publishes one). */
+        val rankerHealth: kotlinx.coroutines.flow.StateFlow<dev.blokz.arxiver.sync.RankerHealth?> =
+            rankerEvalState.latest
+
         private val pdfCacheMb = MutableStateFlow(0L)
 
         private val _backupJson = MutableStateFlow<String?>(null)

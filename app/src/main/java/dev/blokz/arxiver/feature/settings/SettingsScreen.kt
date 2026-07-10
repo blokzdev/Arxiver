@@ -73,6 +73,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val rankerHealth by viewModel.rankerHealth.collectAsState()
     val backupJson by viewModel.backupJson.collectAsState()
     val importResult by viewModel.importResult.collectAsState()
     val context = LocalContext.current
@@ -135,6 +136,7 @@ fun SettingsScreen(
     ) { padding ->
         SettingsContent(
             state = state,
+            rankerHealth = rankerHealth,
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -164,6 +166,7 @@ fun SettingsScreen(
 @Composable
 private fun SettingsContent(
     state: SettingsUiState,
+    rankerHealth: dev.blokz.arxiver.sync.RankerHealth?,
     modifier: Modifier = Modifier,
     onSyncInterval: (Int) -> Unit,
     onDownloadModel: () -> Unit,
@@ -290,6 +293,13 @@ private fun SettingsContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = Spacing.xl),
         )
+
+        // P5.1: the on-device ranker-eval readout. DEBUG-gated at the call site so R8 strips the card from
+        // release; the metrics are computed by the background worker over the user's own labels — never here,
+        // never transmitted.
+        if (BuildConfig.DEBUG) {
+            RankerHealthCard(rankerHealth)
+        }
     }
 }
 
@@ -355,6 +365,7 @@ private fun SettingsContentPreview() {
                     embeddedCount = 412,
                     pdfCacheMb = 96,
                 ),
+            rankerHealth = null,
             onSyncInterval = {},
             onDownloadModel = {},
             onReindex = {},

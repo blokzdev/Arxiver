@@ -1,6 +1,15 @@
 # SPEC-SEARCH — Hybrid Search Engine
 
 
+
+> **P5.1 — the ranker is now measurable.** An offline, on-device eval (`:core:search/eval`) scores the live
+> Rocchio construction over the user's own labels (saves ∪ feedback; PU-weighted; Kish-ESS floors; segmented on
+> `abstract = ''` — the P-Explorer mixed-quality axis) with a seeded bootstrap CI, a fold contract that excludes
+> held-out ids from positives/negatives/cold-start seeds alike, and regime honesty (a fold that ran a different
+> model regime than production flags the report). Runs once per EmbeddingWorker pass; zero egress (structurally
+> tested); results surface only in a debug Settings card. Every later P5 promotion (shrinkage λ, calibration,
+> the gated head's β) must clear this harness per-segment.
+
 > **Multi-source online search (P-Explorer PE.3):** the Explore Online scope searches ONE source per submit —
 > arXiv natively (this spec's §2 pipeline, unchanged), any other source via a single OpenAlex `search()` call
 > (host `api.openalex.org`, ~1.2s self-spacing, metered → explicit-submit-only + un-paginated v1). The local

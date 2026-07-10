@@ -567,6 +567,44 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   `:core:* ∌ :app` (Payload/DispatchEnvelope stay pure in `:core:claude`, structurally enforced); SPEC-CLAUDE-BRIDGE
   §3.1/§4/§4.1 + ROADMAP + HUMAN self-heals landed. Checked in its own commit `checkpoint: phase P-Dispatch`.
 
+## Phase P5 — Calibrated, measurable inbox relevance (refined plan approved 2026-07-10)
+
+> Researched under Opus (13-agent workflow + web research), then **reviewed and refined post-P-Explorer at the
+> Co-Founder's instruction** (8-agent refinement workflow + tech-lead file:line verification). The refinement
+> caught **two defects in the original plan** — a label reader that would have said "insufficient data" forever
+> (saves never write feedback rows) and stale-embedder machinery referencing a paper-level wipe that didn't exist —
+> plus the mixed-quality embedding axis P-Explorer created (SSRN ~100% / recent RS ~86% abstract-stripped →
+> title-only vectors through the same 0.55 cut). Locked Co-Founder decisions: the learned head is GATED (a PR the
+> harness earns); "Likely relevant" becomes top-k by calibrated score; centroid shrinkage promoted to its own
+> subphase. Working plan: the plan file + `p5_refined.md` (session scratchpad). Migration budget: **v13→v14** (P5.3).
+
+- [x] **P5.1 — Offline eval harness** (`:core:search/eval`, pure, dark; ships in RELEASE — P5.4's β-auto-revert
+  depends on it on user hardware; only the readout card is debug-gated). `RankerEval`: time-split primary +
+  stratified 5-fold above the floor (cost bound ≤6 k-means rebuilds, test-pinned); **Kish-ESS floors (≥15/class),
+  not raw rows**; PU-weighted (dismiss 0.3); **segmented on the causal axis `abstract = ''`** with a test proving
+  a flat aggregate cannot hide a degraded title-only segment; fold contract closes all three leakage paths incl.
+  the cold-start-seed re-entry; seeded bootstrap CI over frozen fold outputs; ECE only ≥50 labels (Brier below);
+  **regime honesty** = any fold that ran a different regime than the production model flags the report (the
+  original >30%-of-folds rule was DEAD CODE — the ESS floor makes k-fold train sides unable to straddle the
+  gates; caught by writing the test). `PaperFeedbackDao.labeledExamples(modelTag)` **UNIONs library saves**
+  (defect 1); `EmbeddingDao.clearMarksForModelMismatch` + paper-level `deleteByModelMismatch` at worker start
+  (defect 2 — without it a MODEL_NAME bump leaves the feed permanently unranked); `InboxDao.activeScoresBySegment`
+  feeds the label-free per-segment distribution tripwire; `RankerEvalRunner` (once per worker pass, never fails
+  the worker) publishes to an in-memory `RankerEvalState`; debug-only `RankerHealthCard` in Settings; an
+  eval-package NoOkHttp structural test. Tests: `RankerEvalTest` ×9, `PaperFeedbackDaoTest` +5, structural ×1.
+- [ ] **P5.2 — Positive-centroid shrinkage** (pure math; λ selected per-user on a pre-registered grid via the
+  harness — LOO-selected, time-split-confirmed; λ=0 below floor ⇒ bit-identical to today).
+- [ ] **P5.3 — Per-user calibrated threshold + top-k section** (migration v13→v14: single-row `relevance_model`
+  designed to also hold P5.4's weights + `paper_feedback.score_at_label` — the D14 exposure-context call). The
+  RAW blend persists in `inbox_items.score`; the monotone Platt map translates the probability floor once in the
+  ViewModel (ordering never reshuffles; "exactly 0.55 below floor" stays a trivial golden).
+- [ ] **P5.4 — GATED learned logistic head** (~385 params, pure Kotlin; β auto-→0 whenever the blend fails to
+  beat pure Rocchio per-segment on held-out data; gates on ≥8-10 REAL explicit negatives). **Ships only if P5.1
+  proves Rocchio leaves precision on the table.**
+- [ ] **CHECKPOINT P5** — full build green; migration identity-hash-tested; red-line audit (zero egress from
+  ranking — airplane-mode ranks; no new model/host; weights never in backups incl. the serial-descriptor snapshot
+  guard; no telemetry; `:core:search ∌ :app`); the harness's device row verified.
+
 ## Phase P-Explorer — complete the multi-source discovery surface (plan approved 2026-07-10)
 
 > **Co-Founder device session (2026-07-10)** found the P-Sources/P-Feeds multi-source expansion is complete at the
