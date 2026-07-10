@@ -70,6 +70,20 @@ interface InboxDao {
     suspend fun pruneDismissed(cutoff: Long)
 
     /**
+     * Scored active-inbox rows with the title-only segment flag (P5.1) — feeds the label-free per-segment
+     * score-distribution tripwire (a systematically-lower-scoring title-only population would silently starve
+     * below the "Likely relevant" cut with zero labels to prove it).
+     */
+    @Query(
+        """
+        SELECT i.score AS score, (p.abstract = '') AS titleOnly FROM inbox_items i
+        JOIN papers p ON p.id = i.paper_id AND p.embedded_at IS NOT NULL
+        WHERE i.state IN ('new', 'seen') AND i.score IS NOT NULL
+        """,
+    )
+    suspend fun activeScoresBySegment(): List<ScoredSegmentRow>
+
+    /**
      * Delete the inbox rows a follow put here — called in the same operation as unfollow (P-Feeds PF.3), so an
      * unfollowed source's rows don't dangle on a dead `follow_id`. Inbox PK is `paper_id` alone (a paper appears
      * once regardless of how many follows surfaced it), so this removes rows whose *recorded* origin follow is
@@ -78,3 +92,9 @@ interface InboxDao {
     @Query("DELETE FROM inbox_items WHERE follow_id = :followId")
     suspend fun deleteByFollowId(followId: Long)
 }
+
+/** One active-inbox score + its embedding-quality segment (P5.1 tripwire). */
+data class ScoredSegmentRow(
+    val score: Double,
+    val titleOnly: Boolean,
+)

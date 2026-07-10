@@ -26,6 +26,21 @@
     <string name="follow_type_author">Author</string>
     <string name="follow_type_query">Saved search</string>
     <string name="library_filter_all_sources">All sources</string>
+
+    <!-- P5.1 debug-only ranker-health card (BuildConfig.DEBUG call site; stripped from release) -->
+    <string name="debug_ranker_health_title">Ranker health (debug)</string>
+    <string name="debug_ranker_health_pending">No eval yet — runs with the next background embedding pass.</string>
+    <string name="debug_ranker_segment_overall">Overall</string>
+    <string name="debug_ranker_segment_rich">Rich</string>
+    <string name="debug_ranker_segment_title_only">Title-only</string>
+    <string name="debug_ranker_measured">%1$s: AUC %2$.2f [%3$.2f–%4$.2f] · P@10 %5$.2f</string>
+    <string name="debug_ranker_insufficient">%1$s: insufficient data (ESS +%2$.1f / −%3$.1f)</string>
+    <string name="debug_ranker_distribution">%1$s inbox: n=%2$d · p50 %3$.2f · p90 %4$.2f · above cut %5$.0f%%</string>
+    <string name="debug_ranker_regime_contaminated">⚠ regime-contaminated fold mix — not promotion-grade</string>
+    <plurals name="debug_ranker_label_count">
+        <item quantity="one">%1$d label evaluated</item>
+        <item quantity="other">%1$d labels evaluated</item>
+    </plurals>
     <string name="follow_health_quiet">No new papers recently</string>
     <string name="search_tab_online">Online</string>
     <string name="search_hint_library">Search your library</string>

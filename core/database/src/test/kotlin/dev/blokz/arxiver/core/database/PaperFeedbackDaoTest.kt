@@ -105,4 +105,94 @@ class PaperFeedbackDaoTest {
 
             assertNull(feedback.voteFor("x"))
         }
+    // --- P5.1: labeledExamples() — the eval's label feed ---
+
+    private suspend fun embeddedPaper(
+        id: String,
+        abstract: String = "An abstract.",
+        model: String = "bge-test",
+        embedded: Boolean = true,
+    ) {
+        db.paperDao().upsertPaper(paper(id).copy(abstract = abstract, embeddedAt = if (embedded) 1L else null))
+        if (embedded) {
+            db.embeddingDao().upsert(
+                dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity(
+                    paperId = id,
+                    vector =
+                        dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity.floatsToBlob(
+                            FloatArray(4) { 0.5f },
+                        ),
+                    model = model,
+                    dim = 4,
+                ),
+            )
+        }
+    }
+
+    private suspend fun save(id: String) =
+        db.libraryDao().upsertEntry(
+            dev.blokz.arxiver.core.database.entity.LibraryEntryEntity(paperId = id, addedAt = 7L),
+        )
+
+    @Test
+    fun `library saves are positives even without a feedback row`() =
+        runTest {
+            // The defect the refinement caught: saves are the ranker's dominant positive and never write a
+            // feedback row — a feedback-only read would report "insufficient data" forever.
+            embeddedPaper("s1")
+            save("s1")
+
+            val rows = db.paperFeedbackDao().labeledExamples("bge-test")
+
+            assertEquals(1, rows.size)
+            assertEquals(true, rows.single().positive)
+            assertEquals("save", rows.single().labelSource)
+            assertEquals(7L, rows.single().createdAt)
+        }
+
+    @Test
+    fun `a saved-then-dismissed paper counts positive exactly once`() =
+        runTest {
+            embeddedPaper("s2")
+            save("s2")
+            db.paperFeedbackDao().upsert(negative("s2"))
+
+            val rows = db.paperFeedbackDao().labeledExamples("bge-test")
+
+            assertEquals(1, rows.size, "positive wins — the live scorer's dedupe rule")
+            assertEquals(true, rows.single().positive)
+        }
+
+    @Test
+    fun `a thumbed-up saved paper is one positive, not two`() =
+        runTest {
+            embeddedPaper("s3")
+            save("s3")
+            db.paperFeedbackDao().upsert(positive("s3"))
+
+            assertEquals(1, db.paperFeedbackDao().labeledExamples("bge-test").size)
+        }
+
+    @Test
+    fun `a dismiss surfaces as a negative and a blank abstract marks the title-only segment`() =
+        runTest {
+            embeddedPaper("s4", abstract = "") // the census case: SSRN strips abstracts
+            db.paperFeedbackDao().upsert(negative("s4"))
+
+            val row = db.paperFeedbackDao().labeledExamples("bge-test").single()
+            assertEquals(false, row.positive)
+            assertEquals("dismiss", row.labelSource)
+            assertEquals(true, row.titleOnly)
+        }
+
+    @Test
+    fun `stale-model vectors and never-embedded papers never reach a fold`() =
+        runTest {
+            embeddedPaper("s5", model = "old-model")
+            save("s5")
+            embeddedPaper("s6", embedded = false)
+            save("s6")
+
+            assertEquals(0, db.paperFeedbackDao().labeledExamples("bge-test").size)
+        }
 }
