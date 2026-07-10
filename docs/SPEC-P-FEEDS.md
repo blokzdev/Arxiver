@@ -110,6 +110,19 @@ Inbox is origin-agnostic (no inbox-UI change). No author/keyword follow for non-
   limit (credit budget). New-source PDFs stay host-gated → external-open (hosts not allowlisted; per-source
   deferral). **Backup** now carries `follows.origin` (additive-defaulted; NO schema bump — stays
   `arxiver-backup/v2`), so a chemRxiv/bio/med/new-source follow round-trips instead of silently collapsing to arXiv.
+- **Per-source curated Field vocabulary (P-Explorer PE.1):** every OpenAlex-served source used to offer the same
+  generic 26-Field list, so chemRxiv advertised "Dentistry". The vocabulary is now **empirically curated**: a Field
+  is offered iff it carries **≥1% of that source's works published since 2024-01-01** (measured via
+  `group_by=primary_topic.field.id`, captured 2026-07-10), and curated lists render in **descending real mass** so
+  the dominant discipline leads. Measured outcomes — chemRxiv 11 Fields (95.9% cumulative; **Computer Science 4.7%
+  and Medicine 3.9% are real mass**, not noise — comp-chem/med-chem); PsyArXiv 10 (97.5%; **Medicine 9.0%** is
+  clinical psych, the one omission an intuitive 3-Field set makes); SSRN 18 (96.2%; **Engineering 21.9% is its #1
+  recent Field** — the post-Elsevier "Preprints with SSRN" expansion made it a broad STEM firehose, so the intuitive
+  {Econ, Business, Social, Decision} set covers a mere **27.9%** and would hide most of the source; OpenAlex has no
+  "Law" Field, so legal scholarship rolls into Social Sciences — honest, not native). **Research Square and
+  Preprints.org keep all 26**: their distributions are genuinely flat (top-10 covers only ~80–84%; every Field
+  carries >0.15%), so curating would *hide real content* rather than remove noise. Still compile-time (zero network
+  on open); an unknown Field id now fails **loud** at build rather than degrading to a silently-empty follow.
 - **Manage screen (P-FeedPolish PFP.2):** a `ManageFollowsSheet` (sibling of the picker, a second Explore top-bar
   action) lists *every* follow — all sources AND all types (category / whole-source / author / query) — grouped by
   source, each removable. It reuses `observeFollows()` (pure DB → zero network on open, same red line as the
