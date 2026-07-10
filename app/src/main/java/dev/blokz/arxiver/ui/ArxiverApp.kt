@@ -221,7 +221,10 @@ fun ArxiverApp(
                     ChatSessionScreen(
                         onBack = { navController.popBackStack() },
                         onConfigureProvider = { navController.navigate(Routes.AI_SETTINGS) },
-                        onOpenPaper = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenPaper = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onNewConversation = { scope, title ->
                             navController.navigate(Routes.chatNew(scope, title))
                         },
@@ -231,7 +234,10 @@ fun ArxiverApp(
                     ChatSessionScreen(
                         onBack = { navController.popBackStack() },
                         onConfigureProvider = { navController.navigate(Routes.AI_SETTINGS) },
-                        onOpenPaper = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onOpenPaper = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onNewConversation = { scope, title ->
                             navController.navigate(Routes.chatNew(scope, title))
                         },
@@ -245,7 +251,10 @@ fun ArxiverApp(
                     popExitTransition = fadeThroughExit,
                 ) {
                     TodayScreen(
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                         onGoBrowse = {
@@ -279,7 +288,10 @@ fun ArxiverApp(
                     popExitTransition = fadeThroughExit,
                 ) { backStackEntry ->
                     ExploreScreen(
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onCategoryClick = { code, title ->
                             navController.navigate(Routes.categoryFeed(code, title))
                         },
@@ -295,7 +307,10 @@ fun ArxiverApp(
                     popExitTransition = fadeThroughExit,
                 ) {
                     LibraryScreen(
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                         onOpenHistory = { navController.navigate(Routes.DISPATCH_HISTORY) },
                         onCollectionClick = { id, name ->
@@ -332,7 +347,10 @@ fun ArxiverApp(
                 composable(Routes.FILTERED_PAPERS) {
                     FilteredPapersScreen(
                         onBack = { navController.popBackStack() },
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                         onOpenKnowledgeMap = { cid ->
@@ -344,7 +362,10 @@ fun ArxiverApp(
                 composable(Routes.CATEGORY_FEED) {
                     CategoryFeedScreen(
                         onBack = { navController.popBackStack() },
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                     )
                 }
@@ -353,7 +374,10 @@ fun ArxiverApp(
                         onBack = { navController.popBackStack() },
                         onOpenPdf = { id -> navController.navigate(Routes.pdfViewer(id)) },
                         onOpenHtml = { id -> navController.navigate(Routes.htmlViewer(id)) },
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onOpenConnections = { id -> navController.navigate(Routes.connections(id)) },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                         onOpenAiSettings = { navController.navigate(Routes.AI_SETTINGS) },
@@ -372,7 +396,10 @@ fun ArxiverApp(
                                 popUpTo(Routes.HTML_VIEWER) { inclusive = true }
                             }
                         },
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                     )
                 }
                 composable(Routes.ROUTINES) {
@@ -423,14 +450,20 @@ fun ArxiverApp(
                 composable(Routes.CONNECTIONS) {
                     ConnectionsScreen(
                         onBack = { navController.popBackStack() },
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                         onOpenMap = { id -> navController.navigate(Routes.knowledgeMap("paper", id)) },
                     )
                 }
                 composable(Routes.KNOWLEDGE_MAP) {
                     KnowledgeMapScreen(
                         onBack = { navController.popBackStack() },
-                        onPaperClick = { id -> navController.navigate("paper/${Uri.encode(id)}") },
+                        onPaperClick = {
+                                id ->
+                            navController.navigate("paper/${Uri.encode(id)}") { launchSingleTop = true }
+                        },
                     )
                 }
             }

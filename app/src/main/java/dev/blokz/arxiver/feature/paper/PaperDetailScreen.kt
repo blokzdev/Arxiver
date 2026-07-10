@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmark
@@ -71,6 +72,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -452,12 +454,29 @@ private fun PaperDetailContent(
                     )
                 }
             }
-            FilledTonalButton(onClick = { onOpenPdf(paper.ref.storageId) }) {
-                Icon(Icons.Filled.PictureAsPdf, contentDescription = null)
-                Text(
-                    text = stringResource(R.string.action_open_pdf),
-                    modifier = Modifier.padding(start = Spacing.sm),
-                )
+            // Honest per-source affordance (PE.3): an in-app-fetchable PDF gets the reader; a gated source
+            // (SSRN/PsyArXiv/Research Square/Preprints.org/chemRxiv) gets a DIRECT browser button instead of a
+            // download-spinner detour that was always going to fail closed.
+            if (paper.isPdfFetchable()) {
+                FilledTonalButton(onClick = { onOpenPdf(paper.ref.storageId) }) {
+                    Icon(Icons.Filled.PictureAsPdf, contentDescription = null)
+                    Text(
+                        text = stringResource(R.string.action_open_pdf),
+                        modifier = Modifier.padding(start = Spacing.sm),
+                    )
+                }
+            } else {
+                val uriHandler = LocalUriHandler.current
+                val url = paper.canonicalUrl()
+                if (url.isNotBlank()) {
+                    FilledTonalButton(onClick = { uriHandler.openUri(url) }) {
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
+                        Text(
+                            text = stringResource(R.string.pdf_open_in_browser),
+                            modifier = Modifier.padding(start = Spacing.sm),
+                        )
+                    }
+                }
             }
             FilledTonalButton(onClick = { onOpenConnections(paper.ref.storageId) }) {
                 Icon(Icons.Filled.Hub, contentDescription = null)
@@ -474,8 +493,18 @@ private fun PaperDetailContent(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        DetailHeading(stringResource(R.string.paper_abstract_heading))
-        ExpandableAbstract(paper.abstract)
+        // SSRN strips 100% of abstracts and Research Square 86% (licensing, permanent) — a dead heading over
+        // nothing reads as a rendering bug; say honestly that the source doesn't provide one (PE.3).
+        if (paper.abstract.isNotBlank()) {
+            DetailHeading(stringResource(R.string.paper_abstract_heading))
+            ExpandableAbstract(paper.abstract)
+        } else {
+            Text(
+                stringResource(R.string.paper_no_abstract, paper.ref.origin.displayName),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 

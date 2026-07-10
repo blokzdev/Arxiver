@@ -3,6 +3,7 @@ package dev.blokz.arxiver.data
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.toEntity
@@ -14,6 +15,7 @@ import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
+import dev.blokz.arxiver.core.network.openalex.OpenAlexClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -26,6 +28,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * Guards the IMPORT-seam cross-source de-dup (P-Explorer PE.2). PFP.1 fixed the *follow* path
@@ -34,6 +37,7 @@ import kotlin.test.assertEquals
  *
  * The MockWebServer is never hit: `saveExternalPaper` is a pure-local, zero-network path.
  */
+
 @RunWith(RobolectricTestRunner::class)
 class PaperRepositoryTest {
     private lateinit var db: ArxiverDatabase
@@ -64,7 +68,7 @@ class PaperRepositoryTest {
                 baseUrl = server.url("/api/query").toString(),
                 retryDelaysMs = emptyList(),
             )
-        repo = PaperRepository(client, db.paperDao())
+        repo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server))
     }
 
     @After
@@ -133,4 +137,78 @@ class PaperRepositoryTest {
             assertEquals("chemrxiv:10.26434/brand-new", imported.ref.storageId)
             assertEquals("Imported chemRxiv edition", imported.title)
         }
+    // --- P-Explorer PE.3: external search + persist-on-interaction ---
+
+    private fun enqueueGolden() {
+        val body =
+            checkNotNull(
+                Thread.currentThread().contextClassLoader?.getResource("openalex/chemrxiv_search.json"),
+            ).readText()
+        server.enqueue(okhttp3.mockwebserver.MockResponse().setBody(body).setHeader("Content-Type", "application/json"))
+    }
+
+    @Test
+    fun `searchExternal maps the golden page and never caches eagerly`() =
+        runBlocking {
+            enqueueGolden()
+
+            val page = (repo.searchExternal(Source.CHEMRXIV, "catalysis") as AppResult.Success).value
+
+            assertEquals(2, page.papers.size)
+            assertEquals(12805, page.totalResults)
+            assertNull(page.nextStart, "un-paginated v1: a scroll can never bill a BYOK key")
+            assertEquals(0, db.paperDao().count(), "search results persist on interaction, not on render")
+            assertEquals("Materials Science", page.papers.first().primaryCategory)
+        }
+
+    @Test
+    fun `cacheSearchHit persists a new hit and returns it`() =
+        runBlocking {
+            enqueueGolden()
+            val hit = (repo.searchExternal(Source.CHEMRXIV, "catalysis") as AppResult.Success).value.papers.first()
+
+            val stored = repo.cacheSearchHit(hit)
+
+            assertEquals(hit.ref.storageId, stored.ref.storageId)
+            assertEquals(1, db.paperDao().count())
+            // Idempotent: a second interaction is a no-op.
+            repo.cacheSearchHit(hit)
+            assertEquals(1, db.paperDao().count())
+        }
+
+    @Test
+    fun `cacheSearchHit reuses an existing same-DOI row and does not clobber it`() =
+        runBlocking {
+            seed(
+                Paper(
+                    ref = ArxivRef(ArxivId("2403.09999")), latestVersion = 2, title = "Rich arXiv Title",
+                    abstract = "a", publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH,
+                    primaryCategory = "cs.LG", categories = listOf("cs.LG"), authors = listOf("A"),
+                    doi = "10.26434/chemrxiv-2024-9lpb9", pdfUrl = "https://arxiv.org/pdf/2403.09999v2",
+                ),
+            )
+            enqueueGolden()
+            val hit = (repo.searchExternal(Source.CHEMRXIV, "catalysis") as AppResult.Success).value.papers.first()
+
+            val stored = repo.cacheSearchHit(hit)
+
+            assertEquals("2403.09999", stored.ref.storageId, "the winning id is the stored row's, not the hit's")
+            assertEquals("Rich arXiv Title", stored.title, "the richer stored row is not clobbered")
+            assertEquals(1, db.paperDao().count())
+        }
 }
+
+/** A real [OpenAlexClient] pointed at the test's [MockWebServer] — shared by every repo-constructing test. */
+fun testOpenAlexClient(server: MockWebServer): OpenAlexClient =
+    OpenAlexClient(
+        httpClient = OkHttpClient(),
+        dispatchers =
+            object : DispatcherProvider {
+                override val io: CoroutineDispatcher = Dispatchers.IO
+                override val default: CoroutineDispatcher = Dispatchers.Default
+                override val main: CoroutineDispatcher = Dispatchers.Default
+            },
+        mailto = "test@example.com",
+        baseUrl = server.url("/oa").toString().trimEnd('/'),
+        minSpacingMs = 0,
+    )

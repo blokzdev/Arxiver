@@ -11,6 +11,7 @@ import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.data.testOpenAlexClient
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -69,7 +70,7 @@ class CategoryFeedViewModelTest {
                 baseUrl = server.url("/api/query").toString(),
                 retryDelaysMs = emptyList(),
             )
-        paperRepo = PaperRepository(client, db.paperDao())
+        paperRepo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server))
         libraryRepo = LibraryRepository(db.libraryDao(), db.inboxDao())
     }
 

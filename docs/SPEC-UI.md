@@ -50,6 +50,23 @@ Stacked routes (from anywhere):
 
 Deep links: `https://arxiv.org/abs/{id}` and `arxiv.org/pdf/{id}` (share-in + link interception) → `paper/{id}`.
 
+
+### Explore — the Online scope is multi-source (P-Explorer PE.3)
+
+The scope toggle reads **Library | Online**. Under Online, a **source picker** (leftmost chip in the filter bar →
+a bottom-sheet radio list; arXiv default, followed sources ★-sorted, browser-only sources captioned) selects ONE
+source per submit: arXiv rides its untouched native Atom path with the full filter sheet; every other source is
+one `OpenAlexClient.search` call per explicit submit, optionally narrowed server-side by a curated PE.1 Field chip.
+**Metering contract (tested by counting real requests):** keystrokes never touch the network (the local leg is
+debounced separately); a source switch cancels in-flight work, clears results, and never auto-searches; external
+results are un-paginated v1 (`nextStart = null` → the auto-load-more is structurally inert). Result rows persist
+**on interaction** (open/save/dispatch — never on render) through the atomic reuse-or-insert, and every action uses
+the returned *winning id* (reuse can re-key a hit onto an existing row). Honesty: the external count header shows
+reachable rows (never OpenAlex's full `meta.count`); non-arXiv scopes carry a "via OpenAlex" caption (+ a lag hint
+for bio/med, whose native API has no keyword search); abstract-less sources (SSRN ~100%, Research Square ~86% —
+licensing strips, permanent) render short cards and an explicit "No abstract available from %s" on detail; a
+BROWSER-tier paper's detail screen offers **Open in browser** instead of a doomed in-app PDF button.
+
 ## 3. Screen inventory
 
 ### Today (inbox)

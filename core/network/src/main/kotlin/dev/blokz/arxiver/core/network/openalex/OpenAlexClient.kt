@@ -4,6 +4,7 @@ import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.model.Source
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -153,16 +154,26 @@ class OpenAlexClient(
     private val mutex = Mutex()
     private var lastRequestAtMs = Long.MIN_VALUE / 2
 
-    /** Full-text search across works, optionally restricted to one OpenAlex source id. */
+    /**
+     * Full-text search across works, optionally restricted to one OpenAlex source id and/or one Field
+     * (`fields/N`, PE.3) — both ride ONE `filter=` param, so a Field-narrowed search is still a single call
+     * per submit (the metering red line). A wrong/stale Field id fails safe (HTTP 200, count 0).
+     */
     suspend fun search(
         query: String,
         limit: Int,
         sourceId: String? = null,
+        fieldToken: String? = null,
     ): AppResult<OpenAlexResponse> =
         request { b ->
             b.addQueryParameter("search", query)
             b.addQueryParameter("per-page", limit.toString())
-            sourceId?.let { b.addQueryParameter("filter", "primary_location.source.id:$it") }
+            val clauses =
+                buildList {
+                    sourceId?.let { add("primary_location.source.id:$it") }
+                    fieldToken?.takeIf { it.isNotBlank() }?.let { add("primary_topic.field.id:$it") }
+                }
+            if (clauses.isNotEmpty()) b.addQueryParameter("filter", clauses.joinToString(","))
         }
 
     /**
@@ -228,9 +239,14 @@ class OpenAlexClient(
                 }
             }
         }.getOrElse { e ->
+            // A cancel must stay a cancel (PE.3): converting it to a Failure would surface a ghost error when
+            // the user merely switched search source mid-flight.
+            if (e is CancellationException) throw e
             when (e) {
                 is IOException -> AppResult.Failure(AppError.Offline)
-                else -> AppResult.Failure(AppError.Unexpected(e))
+                // B5 red line: the request URL carries `?api_key=` on the BYOK tier — never let it reach a
+                // surfaced error. Redacted at this single chokepoint (the only Unexpected(...) this client builds).
+                else -> AppResult.Failure(AppError.Unexpected(redactApiKey(e)))
             }
         }
 
@@ -265,5 +281,41 @@ class OpenAlexClient(
                 Source.PSYARXIV -> SID_PSYARXIV
                 Source.ARXIV, Source.BIORXIV, Source.MEDRXIV, Source.S2 -> null
             }
+
+        /**
+         * A [Source] → its OpenAlex source id **for keyword SEARCH** (PE.3) — deliberately broader than
+         * [sidFor]: bio/med get their SIDs here because their native api.biorxiv.org has NO keyword search, so
+         * OpenAlex is their only search path (labeled "via OpenAlex" in the UI). Browse keeps [sidFor]'s nulls —
+         * the native bio/med FEED is fresher and stays authoritative. arXiv searches its own Atom API; S2 is not
+         * a search leg. Exhaustive with NO `else` for the same compile-force reason.
+         */
+        fun searchSidFor(source: Source): String? =
+            when (source) {
+                Source.BIORXIV -> SID_BIORXIV
+                Source.MEDRXIV -> SID_MEDRXIV
+                Source.CHEMRXIV -> SID_CHEMRXIV
+                Source.RESEARCH_SQUARE -> SID_RESEARCH_SQUARE
+                Source.SSRN -> SID_SSRN
+                Source.PREPRINTS_ORG -> SID_PREPRINTS_ORG
+                Source.PSYARXIV -> SID_PSYARXIV
+                Source.ARXIV, Source.S2 -> null
+            }
+
+        private val API_KEY_PARAM = Regex("""api_key=[^&\s"']*""")
+
+        /**
+         * B5: scrub `api_key=` from a throwable's WHOLE cause chain (wrappers re-leak via toString /
+         * printStackTrace). When tainted, flatten every message — redacted — into one cause-less exception;
+         * never re-wrap the original (its cause would still carry the key). Untainted returns the same instance.
+         */
+        internal fun redactApiKey(e: Throwable): Throwable {
+            val chain = generateSequence(e) { it.cause }.toList()
+            if (chain.none { "api_key=" in it.message.orEmpty() }) return e
+            val flat =
+                chain.joinToString(" <- ") {
+                    "${it::class.simpleName}: ${API_KEY_PARAM.replace(it.message.orEmpty(), "api_key=REDACTED")}"
+                }
+            return RuntimeException(flat)
+        }
     }
 }

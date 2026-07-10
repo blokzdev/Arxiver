@@ -144,16 +144,20 @@ fun PaperListItem(
                 horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SuggestionChip(
-                    onClick = onClick,
-                    label = { Text(paper.primaryCategory, style = MaterialTheme.typography.labelSmall) },
-                    colors =
-                        SuggestionChipDefaults.suggestionChipColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        ),
-                    border = null,
-                )
+                // Guarded (PE.3): a non-arXiv paper can legitimately have no category (SSRN ~0.01% topic-less;
+                // imports store "") — an empty chip renders as a floating pill of nothing.
+                if (paper.primaryCategory.isNotBlank()) {
+                    SuggestionChip(
+                        onClick = onClick,
+                        label = { Text(paper.primaryCategory, style = MaterialTheme.typography.labelSmall) },
+                        colors =
+                            SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            ),
+                        border = null,
+                    )
+                }
                 Text(
                     text = dateFormat.format(paper.updatedAt.atZone(ZoneId.systemDefault())),
                     style = MaterialTheme.typography.labelSmall,
