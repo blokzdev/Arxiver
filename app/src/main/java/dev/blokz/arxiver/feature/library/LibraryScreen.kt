@@ -59,6 +59,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.ui.components.EmptyState
 import dev.blokz.arxiver.ui.components.PaperListItem
 import dev.blokz.arxiver.ui.components.SelectionState
@@ -165,6 +166,7 @@ fun LibraryScreen(
                         state = state,
                         selection = selection,
                         onFilter = viewModel::setStatusFilter,
+                        onSourceFilter = viewModel::setSourceFilter,
                         onPaperClick = onPaperClick,
                     )
                 1 ->
@@ -219,6 +221,7 @@ private fun PapersTab(
     state: LibraryUiState,
     selection: SelectionState,
     onFilter: (String?) -> Unit,
+    onSourceFilter: (Source?) -> Unit,
     onPaperClick: (String) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
@@ -243,6 +246,32 @@ private fun PapersTab(
                     onClick = { onFilter(value) },
                     label = { Text(label) },
                 )
+            }
+        }
+        // Source dimension (P-Explorer PE.5) — rendered ONLY when the library genuinely spans >1 source, so an
+        // all-arXiv library (the majority case) sees zero added chrome. Chips show only sources actually present.
+        if (state.presentSources.size > 1) {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = Spacing.lg)
+                        .padding(bottom = Spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            ) {
+                FilterChip(
+                    selected = state.sourceFilter == null,
+                    onClick = { onSourceFilter(null) },
+                    label = { Text(stringResource(R.string.library_filter_all_sources)) },
+                )
+                state.presentSources.forEach { source ->
+                    FilterChip(
+                        selected = state.sourceFilter == source,
+                        onClick = { onSourceFilter(if (state.sourceFilter == source) null else source) },
+                        label = { Text(source.displayName) },
+                    )
+                }
             }
         }
         if (state.papers.isEmpty()) {
@@ -452,6 +481,7 @@ private fun LibraryPapersPreview() {
             state = LibraryUiState(papers = dev.blokz.arxiver.ui.fixtures.PreviewFixtures.libraryPapers),
             selection = SelectionState(),
             onFilter = {},
+            onSourceFilter = {},
             onPaperClick = {},
         )
     }

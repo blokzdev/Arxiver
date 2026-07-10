@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.database.entity.CollectionEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.data.LibraryExporter
 import dev.blokz.arxiver.data.LibraryPaper
 import dev.blokz.arxiver.data.LibraryRepository
@@ -23,6 +24,13 @@ data class LibraryUiState(
     val collections: List<CollectionEntity> = emptyList(),
     val tags: List<TagEntity> = emptyList(),
     val statusFilter: String? = null,
+    /** Which source's papers to show (P-Explorer PE.5); null = all. */
+    val sourceFilter: Source? = null,
+    /**
+     * Sources actually present in the (status-filtered) library, in [Source] declaration order. The chip row
+     * renders ONLY these, and only when more than one exists — an all-arXiv library sees zero added chrome.
+     */
+    val presentSources: List<Source> = emptyList(),
 )
 
 @HiltViewModel
@@ -33,6 +41,7 @@ class LibraryViewModel
         private val exporter: LibraryExporter,
     ) : ViewModel() {
         private val statusFilter = MutableStateFlow<String?>(null)
+        private val sourceFilter = MutableStateFlow<Source?>(null)
 
         val uiState: StateFlow<LibraryUiState> =
             combine(
@@ -40,12 +49,20 @@ class LibraryViewModel
                 libraryRepository.observeCollections(),
                 libraryRepository.observeTags(),
                 statusFilter,
-            ) { papers, collections, tags, filter ->
+                sourceFilter,
+            ) { papers, collections, tags, filter, source ->
+                val byStatus = if (filter == null) papers else papers.filter { it.status == filter }
+                // Present-sources derive from the status-filtered list (not the source-filtered one), so the
+                // chip row never erases itself the moment a chip is picked (PE.5).
+                val present =
+                    Source.entries.filter { s -> byStatus.any { it.paper.ref.origin == s } }
                 LibraryUiState(
-                    papers = if (filter == null) papers else papers.filter { it.status == filter },
+                    papers = if (source == null) byStatus else byStatus.filter { it.paper.ref.origin == source },
                     collections = collections,
                     tags = tags,
                     statusFilter = filter,
+                    sourceFilter = source,
+                    presentSources = present,
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LibraryUiState())
 
@@ -54,6 +71,11 @@ class LibraryViewModel
 
         fun setStatusFilter(status: String?) {
             statusFilter.value = status
+        }
+
+        /** PE.5: filter the papers tab to one source (null = all). Resets nothing else. */
+        fun setSourceFilter(source: Source?) {
+            sourceFilter.value = source
         }
 
         fun createCollection(name: String) {

@@ -25,6 +25,7 @@
     <string name="cd_unfollow">Unfollow %1$s</string>
     <string name="follow_type_author">Author</string>
     <string name="follow_type_query">Saved search</string>
+    <string name="library_filter_all_sources">All sources</string>
     <string name="follow_health_quiet">No new papers recently</string>
     <string name="search_tab_online">Online</string>
     <string name="search_hint_library">Search your library</string>
