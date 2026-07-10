@@ -26,6 +26,7 @@ fun Paper.toEntity(): PaperEntity =
         // The single write chokepoint for the de-dup key: every stored row's `doi_norm` is, by construction,
         // exactly what `paperIdByDoi` will be queried with (P-Explorer PE.2).
         doiNorm = normalizeDoi(doi),
+        landingUrl = landingUrl,
         pdfUrl = pdfUrl,
         citationCount = citationCount,
         s2PaperId = null,
@@ -59,6 +60,7 @@ fun PaperEntity.toListDomain(): Paper =
         citationCount = citationCount,
         source = runCatching { PaperSource.valueOf(source) }.getOrDefault(PaperSource.SEARCH),
         fetchedAt = Instant.ofEpochMilli(fetchedAt),
+        landingUrl = landingUrl,
     )
 
 fun PaperWithRelations.toDomain(): Paper =
@@ -79,4 +81,5 @@ fun PaperWithRelations.toDomain(): Paper =
         citationCount = paper.citationCount,
         source = runCatching { PaperSource.valueOf(paper.source) }.getOrDefault(PaperSource.SEARCH),
         fetchedAt = Instant.ofEpochMilli(paper.fetchedAt),
+        landingUrl = paper.landingUrl,
     )

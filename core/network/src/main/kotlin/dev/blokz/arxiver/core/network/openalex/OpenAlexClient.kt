@@ -63,6 +63,19 @@ data class OpenAlexWork(
     /** Bare DOI (strip the `https://doi.org/` prefix, lowercased by OpenAlex) — null if blank/absent. */
     fun bareDoi(): String? = doi?.removePrefix("https://doi.org/")?.takeIf { it.isNotBlank() }
 
+    /**
+     * The bare OpenAlex work id (`https://openalex.org/W123` → `W123`) — the identity FALLBACK for a source that
+     * publishes no DOI (P-Explorer PE.1b: PsyArXiv is 99.4% DOI-null on any recent window). Always present.
+     */
+    fun openAlexId(): String? = id?.substringAfterLast('/')?.takeIf { it.startsWith("W") }
+
+    /**
+     * The work's landing page (`https://osf.io/szf8y`). For a DOI-less, PDF-less source this is the paper's ONLY
+     * reachable link, so it becomes its `canonicalUrl()`.
+     */
+    fun landingPageUrl(): String? =
+        (bestOaLocation?.landingPageUrl ?: primaryLocation?.landingPageUrl)?.takeIf { it.isNotBlank() }
+
     /** The primary source's OpenAlex id (`https://openalex.org/S123` -> `S123`); null if not an `S…` id. */
     fun sourceId(): String? = primaryLocation?.source?.id?.substringAfterLast('/')?.takeIf { it.startsWith("S") }
 

@@ -46,11 +46,16 @@ sources we can't reach natively (chemRxiv, new preprint servers) — see [[chemr
   `abstract_inverted_index` (it means OpenAlex holds the abstract *internally*, before a licensing strip). Measured
   presence of the actual field in the body: SSRN **0%**, Research Square **14%** (a permanent licensing strip, not
   an ingest lag), chemRxiv 99.5%, bio/med + Preprints.org 100%. Judge abstract presence from the body only.
-- **PsyArXiv (OSF-hosted) breaks three assumptions.** (1) **98.97% DOI-null** (5,498/5,555) — any code doing
-  `bareDoi() ?: return null` silently discards it, and any DOI-keyed de-dup can never match it. chemRxiv is 0.00%
-  DOI-null, so this is OSF-specific. (2) ~100% `pdf_url`-null → identity/link must come from the OpenAlex work id +
-  `landing_page_url`. (3) **`publication_date` is a re-harvest artifact** (99% of works dated 2025), so
-  `from_publication_date` windowing misbehaves — prefer `from_created_date` for OSF sources. SSRN is ~16% DOI-null.
+- **PsyArXiv (OSF-hosted) breaks two assumptions.** (1) **98.97% DOI-null** (5,498/5,555 all-time; **340 of 342 =
+  99.4% on the recent window a follow actually syncs**) — any code doing `bareDoi() ?: return null` silently
+  discards it, and any DOI-keyed de-dup can never match it. chemRxiv is 0.00% DOI-null, so this is OSF-specific.
+  (2) ~100% `pdf_url`-null → identity + link must come from the OpenAlex work id (`W…`) + `landing_page_url`
+  (`https://osf.io/<id>`), which ARE always present. SSRN is ~16% DOI-null.
+- **DEBUNKED (verified 2026-07-10, do not re-adopt):** a plausible-sounding claim that PsyArXiv's
+  `publication_date` is a re-harvest artifact (99% dated 2025) and that OSF sources need `from_created_date`.
+  **Both halves are false.** `from_publication_date:2026-06-26` returns 342 PsyArXiv works — a healthy window —
+  and **`from_created_date` is not a valid OpenAlex filter** (the API errors). Acting on it would have broken
+  PsyArXiv outright. Recorded because it is exactly the kind of claim that reads as authoritative.
 - **The arXiv `locations[]` crosswalk is real but near-inert: 6 of 61,795 chemRxiv works (0.0097%), measured
   2026-07-10.** The "a chemRxiv-primary work CAN carry an arXiv location" claim below is TRUE and stands — but do
   NOT infer that it carries cross-source de-dup. OpenAlex keeps a cross-post as **two separate works with different

@@ -30,6 +30,11 @@ data class Paper(
     val citationCount: Int? = null,
     val source: PaperSource = PaperSource.SEARCH,
     val fetchedAt: Instant = Instant.now(),
+    /**
+     * The source's own landing page, when it has one (P-Explorer PE.1b). Load-bearing only for a source that
+     * publishes neither a DOI nor a PDF url (OSF-hosted PsyArXiv) — there it is the paper's ONLY link.
+     */
+    val landingUrl: String? = null,
 ) {
     /**
      * TEMPORARY PS.0 shim — the arXiv-only read sites (`paper.id.value` / `.absUrl()`) keep compiling and
@@ -50,7 +55,10 @@ data class Paper(
     fun canonicalUrl(): String =
         when (val r = ref) {
             is ArxivRef -> r.absUrl()
-            else -> doi?.let { "https://doi.org/$it" } ?: pdfUrl
+            // DOI resolver first (the citeable canonical), then the source's landing page, then the PDF. The
+            // landing-page rung exists because an OSF-hosted paper has NO doi and NO pdf — before P-Explorer
+            // PE.1b it would have resolved to the empty string, i.e. no link at all.
+            else -> doi?.let { "https://doi.org/$it" } ?: landingUrl?.takeIf { it.isNotBlank() } ?: pdfUrl
         }
 
     /**

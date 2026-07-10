@@ -37,10 +37,14 @@ class OpenAlexBackend(
     }
 
     private fun OpenAlexWork.toHit(source: Source): PreprintHit? {
-        val d = bareDoi() ?: return null
+        // Identity: the DOI when the source publishes one, else the OpenAlex work id (P-Explorer PE.1b). The old
+        // `bareDoi() ?: return null` silently discarded ~99% of PsyArXiv, which is OSF-hosted and DOI-less.
+        val nativeId = bareDoi() ?: openAlexId() ?: return null
         return PreprintHit(
             origin = source,
-            doi = d,
+            nativeId = nativeId,
+            doi = bareDoi(),
+            landingUrl = landingPageUrl(),
             title = title.orEmpty(),
             abstract = abstractText().orEmpty(),
             authors = authorNames(),
