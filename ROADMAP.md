@@ -592,8 +592,16 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   feeds the label-free per-segment distribution tripwire; `RankerEvalRunner` (once per worker pass, never fails
   the worker) publishes to an in-memory `RankerEvalState`; debug-only `RankerHealthCard` in Settings; an
   eval-package NoOkHttp structural test. Tests: `RankerEvalTest` ×9, `PaperFeedbackDaoTest` +5, structural ×1.
-- [ ] **P5.2 — Positive-centroid shrinkage** (pure math; λ selected per-user on a pre-registered grid via the
-  harness — LOO-selected, time-split-confirmed; λ=0 below floor ⇒ bit-identical to today).
+- [x] **P5.2 — Positive-centroid shrinkage.** `RocchioRanker.shrinkCentroids` (nearest-shrunken-centroid toward
+  the centroids' mean, re-normalized; **λ=0 returns the same list instance** — bit-identity by construction).
+  **λ is a per-user selection RULE, never a constant:** `RankerEval.selectShrinkage` picks from the pre-registered
+  grid {0, .1, .2, .3} by pooled k-fold AUC and **confirms the winner on the temporally-disjoint time split**
+  (selection and confirmation on different splits = the multiplicity guard); 0 below the ESS floor. **Zero extra
+  k-means rebuilds** — shrinkage re-scores each fold's already-built centroids, so the ≤6-rebuild cost bound
+  holds across the whole grid. Applied live via an in-memory `RankerTuning` (@Singleton, default 0; durable
+  tuning arrives with P5.3's `relevance_model`); the worker runs the eval BEFORE scoring so a fresh selection
+  applies same-run. Tests: λ=0 instance-identity; shrink-toward-mean + unit-norm; below-floor→0; grid membership;
+  the confirmation invariant (a returned λ never tanks the pooled AUC).
 - [ ] **P5.3 — Per-user calibrated threshold + top-k section** (migration v13→v14: single-row `relevance_model`
   designed to also hold P5.4's weights + `paper_feedback.score_at_label` — the D14 exposure-context call). The
   RAW blend persists in `inbox_items.score`; the monotone Platt map translates the probability floor once in the

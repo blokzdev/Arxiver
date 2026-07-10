@@ -40,7 +40,7 @@ class InboxScorerTest {
                 .setQueryExecutor { it.run() }
                 .setTransactionExecutor { it.run() }
                 .build()
-        scorer = InboxScorer(db.libraryDao(), db.inboxDao(), db.embeddingDao(), db.paperFeedbackDao())
+        scorer = InboxScorer(db.libraryDao(), db.inboxDao(), db.embeddingDao(), db.paperFeedbackDao(), RankerTuning())
     }
 
     @After
