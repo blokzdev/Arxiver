@@ -139,17 +139,20 @@ fun ExploreScreen(
     resetToLibrary: Boolean = false,
     viewModel: SearchViewModel = hiltViewModel(),
     browseViewModel: BrowseViewModel = hiltViewModel(),
+    sourceFollowViewModel: SourceFollowViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val browseState by browseViewModel.uiState.collectAsState()
+    val sourceFollowState by sourceFollowViewModel.uiState.collectAsState()
     // Group expansion is view state (plain remember, CS open by default) — mirrors the old
     // BrowseScreen; process-death restoration is a recorded backlog item, unchanged here.
     val expandedGroups = remember { mutableStateMapOf("Computer Science" to true) }
+    // Source expansion for the unified directory (PE.4); arXiv defaults open (absent = expanded).
+    val expandedSources = remember { mutableStateMapOf<String, Boolean>() }
     val selection = rememberSelectionState()
     val feedback = LocalFeedbackController.current
     var organizeIds by remember { mutableStateOf<List<String>?>(null) }
     var dispatchIds by remember { mutableStateOf<List<String>?>(null) }
-    var showSourceFollow by remember { mutableStateOf(false) }
     var showManageFollows by remember { mutableStateOf(false) }
     // Hoisted above the Scaffold (PE.3): the selection top bar's actions must know whether the selected ids
     // belong to un-persisted external search hits. Still rememberSaveable — survives config change.
@@ -215,7 +218,14 @@ fun ExploreScreen(
                         IconButton(onClick = { showManageFollows = true }) {
                             Icon(Icons.Filled.Bookmarks, stringResource(R.string.cd_manage_follows))
                         }
-                        IconButton(onClick = { showSourceFollow = true }) {
+                        // The follow affordance now routes to the unified directory (the Library resting
+                        // state) — the old picker sheet is subsumed by it (PE.4).
+                        IconButton(
+                            onClick = {
+                                tab = 0
+                                viewModel.onQueryChange("")
+                            },
+                        ) {
                             Icon(Icons.Filled.RssFeed, stringResource(R.string.cd_follow_sources))
                         }
                     },
@@ -309,8 +319,11 @@ fun ExploreScreen(
                     onSave = saveOne,
                     taxonomy = browseState.groups,
                     expandedGroups = expandedGroups,
+                    sourceFollowState = sourceFollowState,
+                    expandedSources = expandedSources,
                     onCategoryClick = onCategoryClick,
                     onFollowToggle = browseViewModel::setFollowed,
+                    onSourceFollowToggle = sourceFollowViewModel::setFollowed,
                 )
             } else {
                 var showFilters by rememberSaveable { mutableStateOf(false) }
@@ -429,16 +442,13 @@ fun ExploreScreen(
         dev.blokz.arxiver.feature.organize.OrganizeSheet(paperIds = ids, onDismiss = { organizeIds = null })
     }
 
-    if (showSourceFollow) {
-        SourceFollowSheet(onDismiss = { showSourceFollow = false })
-    }
-
     if (showManageFollows) {
         ManageFollowsSheet(
             onDismiss = { showManageFollows = false },
             onAddFollows = {
                 showManageFollows = false
-                showSourceFollow = true
+                tab = 0
+                viewModel.onQueryChange("")
             },
         )
     }
@@ -789,18 +799,24 @@ private fun LibraryPane(
     onSave: (String) -> Unit,
     taxonomy: List<CategoryGroup>,
     expandedGroups: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
+    sourceFollowState: SourceFollowUiState,
+    expandedSources: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
     onCategoryClick: (code: String, name: String) -> Unit,
     onFollowToggle: (ArxivCategory, Boolean) -> Unit,
+    onSourceFollowToggle: (source: Source, value: String, label: String, followed: Boolean) -> Unit,
 ) {
     when {
-        // Blank query = the resting state: the category taxonomy (the old Browse tab), now the
-        // app's category directory, reached by clearing the query on the Library scope (PC.2).
+        // Blank query = the resting state: the unified Browse-&-Follow directory (PE.4) — arXiv's taxonomy as a
+        // peer row beside every preprint source, one follow surface for the whole app.
         state.query.isBlank() ->
-            TaxonomyList(
+            FollowDirectory(
                 groups = taxonomy,
                 expandedGroups = expandedGroups,
+                sourceFollowState = sourceFollowState,
+                expandedSources = expandedSources,
                 onCategoryClick = onCategoryClick,
                 onFollowToggle = onFollowToggle,
+                onSourceFollowToggle = onSourceFollowToggle,
             )
         state.localResults.isEmpty() ->
             EmptyState(
@@ -925,45 +941,208 @@ private fun SearchingState(source: Source) {
     }
 }
 
-/** The category taxonomy (moved verbatim from the old BrowseScreen) — the Explore resting state. */
+/**
+ * The unified Browse-&-Follow directory (P-Explorer PE.4) — Explore's Library-scope resting state and the ONE
+ * add-follow surface. arXiv is a **peer row** whose expansion is its full native grouped taxonomy (the old
+ * Browse tab, verbatim); every preprint source expands to a whole-source toggle + its PE.1-curated (or bio/med
+ * native) category toggles. Subsumes the old `SourceFollowSheet` picker — the split that made arXiv look
+ * "missing" from the follow UI. Everything here is compile-time vocabulary + local DB state: opening the
+ * directory issues ZERO network requests (the OpenAlex metering red line).
+ */
 @Composable
-private fun TaxonomyList(
+private fun FollowDirectory(
     groups: List<CategoryGroup>,
     expandedGroups: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
+    sourceFollowState: SourceFollowUiState,
+    expandedSources: androidx.compose.runtime.snapshots.SnapshotStateMap<String, Boolean>,
     onCategoryClick: (code: String, name: String) -> Unit,
     onFollowToggle: (ArxivCategory, Boolean) -> Unit,
+    onSourceFollowToggle: (source: Source, value: String, label: String, followed: Boolean) -> Unit,
 ) {
+    val arxivExpanded = expandedSources[Source.ARXIV.wire] != false // default-expanded: today's muscle memory
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(groups, key = { "group-${it.name}" }) { group ->
-            val expanded = expandedGroups[group.name] == true
-            // Header + categories live in one item so the group expands as a unit.
-            Column {
-                GroupHeader(
-                    group = group,
-                    expanded = expanded,
-                    onToggle = { expandedGroups[group.name] = !expanded },
+        item(key = "directory-header") {
+            Column(modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs)) {
+                Text(
+                    stringResource(R.string.follow_sources_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                AnimatedVisibility(
-                    visible = expanded,
-                    enter =
-                        expandVertically(tween(ArxiverMotion.DURATION_MEDIUM)) +
-                            fadeIn(tween(ArxiverMotion.DURATION_MEDIUM)),
-                    exit =
-                        shrinkVertically(tween(ArxiverMotion.DURATION_MEDIUM)) +
-                            fadeOut(tween(ArxiverMotion.DURATION_SHORT)),
-                ) {
-                    Column {
-                        group.categories.forEach { item ->
-                            CategoryRow(
-                                item = item,
-                                onClick = { onCategoryClick(item.category.code, item.category.name) },
-                                onFollowToggle = { onFollowToggle(item.category, it) },
-                            )
+            }
+        }
+
+        // arXiv — a peer row whose expansion is the native grouped taxonomy at full-screen real estate.
+        item(key = "source-arxiv") {
+            SourceHeader(
+                name = Source.ARXIV.displayName,
+                followedCount = groups.sumOf { g -> g.categories.count { it.followed } },
+                expanded = arxivExpanded,
+                onToggle = { expandedSources[Source.ARXIV.wire] = !arxivExpanded },
+            )
+        }
+        if (arxivExpanded) {
+            items(groups, key = { "group-${it.name}" }) { group ->
+                val expanded = expandedGroups[group.name] == true
+                // Header + categories live in one item so the group expands as a unit.
+                Column {
+                    GroupHeader(
+                        group = group,
+                        expanded = expanded,
+                        onToggle = { expandedGroups[group.name] = !expanded },
+                    )
+                    AnimatedVisibility(
+                        visible = expanded,
+                        enter =
+                            expandVertically(tween(ArxiverMotion.DURATION_MEDIUM)) +
+                                fadeIn(tween(ArxiverMotion.DURATION_MEDIUM)),
+                        exit =
+                            shrinkVertically(tween(ArxiverMotion.DURATION_MEDIUM)) +
+                                fadeOut(tween(ArxiverMotion.DURATION_SHORT)),
+                    ) {
+                        Column {
+                            group.categories.forEach { item ->
+                                CategoryRow(
+                                    item = item,
+                                    onClick = { onCategoryClick(item.category.code, item.category.name) },
+                                    onFollowToggle = { onFollowToggle(item.category, it) },
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+
+        // The preprint sources — each a peer row: whole-source toggle, then its curated/native categories.
+        sourceFollowState.sources.forEach { info ->
+            val source = info.source
+            val expanded = expandedSources[source.wire] == true
+            item(key = "source-${source.wire}") {
+                SourceHeader(
+                    name = source.displayName,
+                    followedCount =
+                        sourceFollowState.followedKeys.count { it.startsWith("${source.wire} ") },
+                    expanded = expanded,
+                    onToggle = { expandedSources[source.wire] = !expanded },
+                )
+            }
+            if (expanded) {
+                if (info.allowsWholeSource) {
+                    item(key = "whole-${source.wire}") {
+                        DirectoryFollowRow(
+                            label = stringResource(R.string.follow_sources_whole, source.displayName),
+                            checked =
+                                sourceFollowState.isFollowed(source, PreprintSourceRegistry.WHOLE_SOURCE_VALUE),
+                            onCheckedChange = {
+                                onSourceFollowToggle(
+                                    source,
+                                    PreprintSourceRegistry.WHOLE_SOURCE_VALUE,
+                                    source.displayName,
+                                    it,
+                                )
+                            },
+                        )
+                    }
+                }
+                items(info.categories, key = { "cat-${source.wire}-${it.value}" }) { option ->
+                    DirectoryFollowRow(
+                        label = option.label,
+                        checked = sourceFollowState.isFollowed(source, option.value),
+                        onCheckedChange = { onSourceFollowToggle(source, option.value, option.label, it) },
+                    )
+                }
+                item(key = "note-${source.wire}") {
+                    Text(
+                        stringResource(R.string.follow_sources_external_note),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A source's directory header — the peer-row chrome shared by arXiv and every preprint source. */
+@Composable
+private fun SourceHeader(
+    name: String,
+    followedCount: Int,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+) {
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        animationSpec = tween(ArxiverMotion.DURATION_MEDIUM),
+        label = "source-chevron",
+    )
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.sm, vertical = 2.dp)
+                .clip(MaterialTheme.shapes.medium)
+                .background(
+                    if (expanded) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface,
+                )
+                .clickable(onClick = onToggle)
+                .padding(horizontal = Spacing.sm, vertical = Spacing.md)
+                .semantics { heading() },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.weight(1f),
+        )
+        if (followedCount > 0) {
+            StatusChip(
+                text = pluralStringResource(R.plurals.browse_following_count, followedCount, followedCount),
+                modifier = Modifier.padding(end = Spacing.sm),
+            )
+        }
+        Icon(
+            imageVector = Icons.Filled.ExpandMore,
+            contentDescription =
+                stringResource(
+                    if (expanded) R.string.cd_collapse_group else R.string.cd_expand_group,
+                ),
+            modifier = Modifier.rotate(chevronRotation),
+        )
+    }
+}
+
+/** A followable row inside a preprint source's expansion (whole-source or one category). */
+@Composable
+private fun DirectoryFollowRow(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    val cd = stringResource(R.string.cd_follow_category, label)
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.weight(1f),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onCheckedChange(it)
+            },
+            modifier = Modifier.semantics { contentDescription = cd },
+        )
     }
 }
 
@@ -1074,8 +1253,11 @@ private fun LocalResultsPreview() {
             onSave = {},
             taxonomy = emptyList(),
             expandedGroups = remember { androidx.compose.runtime.mutableStateMapOf() },
+            sourceFollowState = SourceFollowUiState(),
+            expandedSources = remember { androidx.compose.runtime.mutableStateMapOf() },
             onCategoryClick = { _, _ -> },
             onFollowToggle = { _, _ -> },
+            onSourceFollowToggle = { _, _, _, _ -> },
         )
     }
 }
@@ -1109,8 +1291,11 @@ private fun ExploreTaxonomyRestingPreview() {
             onSave = {},
             taxonomy = fixture,
             expandedGroups = remember { androidx.compose.runtime.mutableStateMapOf("Computer Science" to true) },
+            sourceFollowState = SourceFollowUiState(),
+            expandedSources = remember { androidx.compose.runtime.mutableStateMapOf() },
             onCategoryClick = { _, _ -> },
             onFollowToggle = { _, _ -> },
+            onSourceFollowToggle = { _, _, _, _ -> },
         )
     }
 }
