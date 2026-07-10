@@ -45,6 +45,25 @@ interface PaperDao {
     suspend fun clearPaperCategories(paperId: String)
 
     /**
+     * Atomic reuse-or-insert (P-Explorer PE.3) — the single chokepoint for persisting a paper that may already
+     * exist under another identity: same storage id, or another origin's row sharing the normalized DOI. One
+     * `@Transaction` so a concurrent FollowSync upsert can neither fork a `doi_norm` nor be clobbered by a
+     * thinner row arriving second. Returns the WINNING id — callers must use it, because reuse can re-key the
+     * paper onto an arXiv/other-origin row.
+     */
+    @Transaction
+    suspend fun insertPaperIfAbsentWithRelations(
+        paper: PaperEntity,
+        authors: List<String>,
+        categories: List<String>,
+    ): String {
+        paperById(paper.id)?.let { return it.id }
+        paper.doiNorm?.let { norm -> paperIdByDoi(norm)?.let { return it } }
+        upsertPaperWithRelations(paper, authors, categories)
+        return paper.id
+    }
+
+    /**
      * Upserts a paper together with its author and category relations.
      * Author rows are deduped by unique name (SPEC-DATA §2).
      */

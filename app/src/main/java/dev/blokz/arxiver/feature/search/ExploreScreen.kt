@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,8 +37,10 @@ import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RssFeed
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material3.AssistChip
@@ -47,6 +51,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -77,7 +82,9 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.tooling.preview.Preview
@@ -86,8 +93,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.model.ArxivCategory
 import dev.blokz.arxiver.core.model.ArxivTaxonomy
+import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PdfAccess
+import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.core.model.pdfAccess
+import dev.blokz.arxiver.core.network.FollowCategoryOption
+import dev.blokz.arxiver.core.network.PreprintSourceRegistry
 import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
+import dev.blokz.arxiver.core.network.openalex.OpenAlexClient
 import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.data.CategoryWithFollowState
 import dev.blokz.arxiver.feature.browse.BrowseViewModel
@@ -134,11 +148,26 @@ fun ExploreScreen(
     val selection = rememberSelectionState()
     val feedback = LocalFeedbackController.current
     var organizeIds by remember { mutableStateOf<List<String>?>(null) }
-    var showDispatch by remember { mutableStateOf(false) }
+    var dispatchIds by remember { mutableStateOf<List<String>?>(null) }
     var showSourceFollow by remember { mutableStateOf(false) }
     var showManageFollows by remember { mutableStateOf(false) }
+    // Hoisted above the Scaffold (PE.3): the selection top bar's actions must know whether the selected ids
+    // belong to un-persisted external search hits. Still rememberSaveable — survives config change.
+    var tab by rememberSaveable { mutableIntStateOf(0) }
 
     BackHandler(enabled = selection.isActive) { selection.clear() }
+
+    // A selection of external hits holds ids of rows that may not exist yet (persist-on-interaction) — hand any
+    // bulk action the WINNING ids from the atomic reuse-or-insert, never the raw selection (PE.3). The arXiv and
+    // Library scopes pass through untouched (their rows are already cached).
+    val persistThen: ((List<String>) -> Unit) -> Unit = { action ->
+        if (tab == 1 && state.onlineSource != Source.ARXIV) {
+            val chosen = state.results.filter { it.ref.storageId in selection.selected }
+            viewModel.persistHits(chosen) { ids -> action(ids) }
+        } else {
+            action(selection.selected.toList())
+        }
+    }
 
     val savedMessage = stringResource(R.string.today_snackbar_saved)
     val addToLabel = stringResource(R.string.action_add_to_collection)
@@ -156,25 +185,26 @@ fun ExploreScreen(
         topBar = {
             if (selection.isActive) {
                 SelectionTopBar(count = selection.count, onClear = { selection.clear() }) {
-                    IconButton(onClick = { organizeIds = selection.selected.toList() }) {
+                    IconButton(onClick = { persistThen { ids -> organizeIds = ids } }) {
                         Icon(Icons.Filled.CreateNewFolder, stringResource(R.string.cd_add_to_organize))
                     }
                     IconButton(
                         onClick = {
-                            val ids = selection.selected.toList()
-                            viewModel.saveAll(ids)
-                            feedback.show(
-                                FeedbackMessage(
-                                    text = savedMessage,
-                                    secondary = FeedbackAction(addToLabel) { organizeIds = ids },
-                                ),
-                            )
-                            selection.clear()
+                            persistThen { ids ->
+                                viewModel.saveAll(ids)
+                                feedback.show(
+                                    FeedbackMessage(
+                                        text = savedMessage,
+                                        secondary = FeedbackAction(addToLabel) { organizeIds = ids },
+                                    ),
+                                )
+                                selection.clear()
+                            }
                         },
                     ) {
                         Icon(Icons.Filled.BookmarkAdd, stringResource(R.string.cd_save_selected))
                     }
-                    IconButton(onClick = { showDispatch = true }) {
+                    IconButton(onClick = { persistThen { ids -> dispatchIds = ids } }) {
                         Icon(Icons.Filled.AutoAwesome, stringResource(R.string.cd_send_to_claude))
                     }
                 }
@@ -199,10 +229,6 @@ fun ExploreScreen(
                     .fillMaxSize()
                     .padding(padding),
         ) {
-            // Scope toggle state is hoisted ABOVE the field so the IME Search action can gate
-            // on it (PC.2): submit() builds an arXiv network query, so firing it on the Library
-            // scope would leak a network call the user never asked for.
-            var tab by rememberSaveable { mutableIntStateOf(0) }
             // The Today "no follows" CTA routes here to reach the taxonomy — force the Library
             // resting state (scope 0 + blank query) once so a stale query/scope can't hide it.
             LaunchedEffect(resetToLibrary) {
@@ -211,6 +237,9 @@ fun ExploreScreen(
                     viewModel.onQueryChange("")
                 }
             }
+            // A selection must never straddle scopes: ids from one source's results are meaningless
+            // (or un-persisted) in another's (PE.3).
+            LaunchedEffect(tab, state.onlineSource) { selection.clear() }
 
             // Pill search field (deliberately not M3 SearchBar — its
             // full-screen expansion fights the tabbed result layout).
@@ -221,7 +250,16 @@ fun ExploreScreen(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
-                placeholder = { Text(stringResource(R.string.search_hint), maxLines = 1) },
+                placeholder = {
+                    Text(
+                        if (tab == 0) {
+                            stringResource(R.string.search_hint_library)
+                        } else {
+                            stringResource(R.string.search_hint_source, state.onlineSource.displayName)
+                        },
+                        maxLines = 1,
+                    )
+                },
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
                 trailingIcon = {
                     if (state.query.isNotEmpty()) {
@@ -260,7 +298,7 @@ fun ExploreScreen(
                     selected = tab == 1,
                     onClick = { tab = 1 },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                ) { Text(stringResource(R.string.search_tab_arxiv)) }
+                ) { Text(stringResource(R.string.search_tab_online)) }
             }
 
             if (tab == 0) {
@@ -276,30 +314,88 @@ fun ExploreScreen(
                 )
             } else {
                 var showFilters by rememberSaveable { mutableStateOf(false) }
-                ArxivFilterBar(
-                    state = state,
-                    onScope = viewModel::setScope,
-                    onOpenFilters = { showFilters = true },
-                )
+                var showSourcePicker by rememberSaveable { mutableStateOf(false) }
+                val isArxiv = state.onlineSource == Source.ARXIV
+
+                if (isArxiv) {
+                    ArxivFilterBar(
+                        state = state,
+                        onScope = viewModel::setScope,
+                        onOpenFilters = { showFilters = true },
+                        onOpenSourcePicker = { showSourcePicker = true },
+                    )
+                } else {
+                    ExternalFilterBar(
+                        state = state,
+                        onField = viewModel::setOnlineField,
+                        onOpenSourcePicker = { showSourcePicker = true },
+                    )
+                }
+
+                // Per-source open/save: an external hit persists on first interaction and the WINNING id (the
+                // atomic reuse-or-insert can re-key onto an existing row) drives nav/save — never the hit's own.
+                val openRow: (dev.blokz.arxiver.core.model.Paper) -> Unit = { paper ->
+                    if (isArxiv) onPaperClick(paper.ref.storageId) else viewModel.openHit(paper) { onPaperClick(it) }
+                }
+                val saveRow: (dev.blokz.arxiver.core.model.Paper) -> Unit = { paper ->
+                    if (isArxiv) {
+                        saveOne(paper.ref.storageId)
+                    } else {
+                        viewModel.saveHit(paper)
+                        feedback.show(
+                            FeedbackMessage(text = savedMessage),
+                        )
+                    }
+                }
+
                 when {
-                    state.searching -> SearchingState()
+                    state.searching -> SearchingState(state.onlineSource)
                     state.error != null -> ErrorState(error = state.error, onRetry = viewModel::submit)
                     state.searched && state.results.isEmpty() ->
                         EmptyState(
-                            title = stringResource(R.string.search_no_results),
+                            title =
+                                if (isArxiv) {
+                                    stringResource(R.string.search_no_results)
+                                } else {
+                                    stringResource(
+                                        R.string.search_no_results_online,
+                                        state.onlineSource.displayName,
+                                    )
+                                },
                             body = stringResource(R.string.search_intro_body),
                             icon = Icons.Outlined.SearchOff,
                         )
                     !state.searched ->
                         EmptyState(
-                            title = stringResource(R.string.search_intro_title),
-                            body = stringResource(R.string.search_intro_body),
+                            title =
+                                if (isArxiv) {
+                                    stringResource(R.string.search_intro_title)
+                                } else {
+                                    stringResource(
+                                        R.string.search_intro_title_source,
+                                        state.onlineSource.displayName,
+                                    )
+                                },
+                            body =
+                                if (isArxiv) {
+                                    stringResource(R.string.search_intro_body)
+                                } else {
+                                    stringResource(R.string.search_intro_body_online)
+                                },
                             icon = Icons.Filled.Search,
                         )
-                    else -> ResultList(state, selection, onPaperClick, saveOne, viewModel::loadMore)
+                    else ->
+                        ResultList(
+                            state = state,
+                            selection = selection,
+                            external = !isArxiv,
+                            onOpen = openRow,
+                            onSave = saveRow,
+                            onLoadMore = viewModel::loadMore,
+                        )
                 }
 
-                if (showFilters) {
+                if (showFilters && isArxiv) {
                     SearchFilterSheet(
                         state = state,
                         onToggleCategory = viewModel::toggleCategory,
@@ -311,6 +407,18 @@ fun ExploreScreen(
                             viewModel.submit()
                         },
                         onDismiss = { showFilters = false },
+                    )
+                }
+
+                if (showSourcePicker) {
+                    SourceScopeSheet(
+                        current = state.onlineSource,
+                        followed = state.followedOrigins,
+                        onPick = {
+                            viewModel.setOnlineSource(it)
+                            showSourcePicker = false
+                        },
+                        onDismiss = { showSourcePicker = false },
                     )
                 }
             }
@@ -335,15 +443,15 @@ fun ExploreScreen(
         )
     }
 
-    if (showDispatch) {
+    dispatchIds?.let { ids ->
         dev.blokz.arxiver.feature.claude.DispatchSheet(
-            paperIds = selection.selected.toList(),
+            paperIds = ids,
             onDismiss = {
-                showDispatch = false
+                dispatchIds = null
                 selection.clear()
             },
             onGoToRoutines = {
-                showDispatch = false
+                dispatchIds = null
                 onOpenRoutines()
             },
         )
@@ -356,6 +464,7 @@ private fun ArxivFilterBar(
     state: SearchUiState,
     onScope: (SearchFilter.Field) -> Unit,
     onOpenFilters: () -> Unit,
+    onOpenSourcePicker: () -> Unit,
 ) {
     Row(
         modifier =
@@ -366,6 +475,7 @@ private fun ArxivFilterBar(
         horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        SourceChip(source = state.onlineSource, onClick = onOpenSourcePicker)
         SearchFilter.Field.entries.forEach { field ->
             FilterChip(
                 selected = state.scope == field,
@@ -380,6 +490,178 @@ private fun ArxivFilterBar(
                 Text(stringResource(R.string.search_filters) + if (state.filtersActive) " •" else "")
             },
         )
+    }
+}
+
+/**
+ * The source affordance on the Online scope (PE.3): leftmost chip in either filter bar, opening the radio
+ * bottom sheet. Leftmost — never a far-right strip item — so it's reachable and discoverable.
+ */
+@Composable
+private fun SourceChip(
+    source: Source,
+    onClick: () -> Unit,
+) {
+    val cd = stringResource(R.string.cd_search_source, source.displayName)
+    AssistChip(
+        onClick = onClick,
+        leadingIcon = { Icon(Icons.Filled.Public, contentDescription = null) },
+        label = { Text(source.displayName) },
+        modifier = Modifier.semantics { contentDescription = cd },
+    )
+}
+
+/**
+ * The non-arXiv source's filter bar (PE.3): the source chip, then the curated PE.1 Field chips (tap again to
+ * clear), then an honest one-line caption. The vocab is compile-time ([PreprintSourceRegistry]) — building this
+ * bar issues ZERO network requests. bio/med additionally carry the lag hint: their keyword search rides OpenAlex
+ * (their native API has none), which trails the native follow feed.
+ */
+@Composable
+private fun ExternalFilterBar(
+    state: SearchUiState,
+    onField: (FollowCategoryOption?) -> Unit,
+    onOpenSourcePicker: () -> Unit,
+) {
+    val vocab =
+        remember(state.onlineSource) {
+            PreprintSourceRegistry.infoFor(state.onlineSource)?.categories.orEmpty()
+        }
+    Column {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(Spacing.sm),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SourceChip(source = state.onlineSource, onClick = onOpenSourcePicker)
+            FilterChip(
+                selected = state.onlineField == null,
+                onClick = { onField(null) },
+                label = { Text(stringResource(R.string.search_field_all)) },
+            )
+            vocab.forEach { option ->
+                FilterChip(
+                    selected = state.onlineField == option,
+                    onClick = { onField(if (state.onlineField == option) null else option) },
+                    label = { Text(option.label) },
+                )
+            }
+        }
+        val caption =
+            buildString {
+                append(stringResource(R.string.search_via_openalex_caption, state.onlineSource.displayName))
+                if (state.onlineSource == Source.BIORXIV || state.onlineSource == Source.MEDRXIV) {
+                    append(" · ")
+                    append(stringResource(R.string.search_source_lag_hint))
+                }
+            }
+        Text(
+            caption,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+        )
+    }
+}
+
+/**
+ * Bottom-sheet radio picker for the Online scope's source (PE.3). Followed sources ★-sort to the top (after
+ * arXiv, the default). Radio semantics + 56dp rows for a11y; browser-only sources carry an honest caption. Pure
+ * compile-time content — opening the sheet fetches nothing.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SourceScopeSheet(
+    current: Source,
+    followed: Set<Source>,
+    onPick: (Source) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        SourceScopeSheetContent(current = current, followed = followed, onPick = onPick)
+    }
+}
+
+@Composable
+private fun SourceScopeSheetContent(
+    current: Source,
+    followed: Set<Source>,
+    onPick: (Source) -> Unit,
+) {
+    val sources =
+        remember(followed) {
+            listOf(Source.ARXIV) +
+                Source.entries
+                    .filter { OpenAlexClient.searchSidFor(it) != null }
+                    .sortedByDescending { it in followed }
+        }
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg)
+                .padding(bottom = Spacing.xl)
+                .selectableGroup(),
+    ) {
+        Text(
+            stringResource(R.string.search_source_picker_title),
+            style = MaterialTheme.typography.titleLarge,
+            modifier =
+                Modifier
+                    .padding(bottom = Spacing.sm)
+                    .semantics { heading() },
+        )
+        sources.forEach { source ->
+            val caption =
+                when {
+                    source == Source.BIORXIV || source == Source.MEDRXIV ->
+                        stringResource(R.string.search_source_lag_hint)
+                    source != Source.ARXIV && source.pdfAccess() == PdfAccess.BROWSER ->
+                        stringResource(R.string.search_source_opens_in_browser)
+                    else -> null
+                }
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .selectable(
+                            selected = source == current,
+                            role = Role.RadioButton,
+                            onClick = { onPick(source) },
+                        )
+                        .padding(vertical = Spacing.xs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = source == current, onClick = null)
+                Column(
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .padding(start = Spacing.sm),
+                ) {
+                    Text(source.displayName, style = MaterialTheme.typography.bodyLarge)
+                    if (caption != null) {
+                        Text(
+                            caption,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (source in followed) {
+                    Icon(
+                        Icons.Filled.Star,
+                        contentDescription = stringResource(R.string.cd_source_followed),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -575,15 +857,28 @@ private fun LibraryPane(
 private fun ResultList(
     state: SearchUiState,
     selection: dev.blokz.arxiver.ui.components.SelectionState,
-    onPaperClick: (String) -> Unit,
-    onSave: (String) -> Unit,
+    external: Boolean,
+    onOpen: (Paper) -> Unit,
+    onSave: (Paper) -> Unit,
     onLoadMore: () -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         state.totalResults?.let { total ->
             item {
+                // Count honesty (PE.3): an external search is un-paginated, so rendering OpenAlex's full
+                // meta.count ("12,805 results") beside 25 reachable rows would be a lie — show what's on screen.
+                val text =
+                    if (external) {
+                        pluralStringResource(
+                            R.plurals.search_result_count_online,
+                            state.results.size,
+                            state.results.size,
+                        )
+                    } else {
+                        pluralStringResource(R.plurals.search_result_count, total, total)
+                    }
                 Text(
-                    text = pluralStringResource(R.plurals.search_result_count, total, total),
+                    text = text,
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs),
@@ -594,9 +889,9 @@ private fun ResultList(
             val id = paper.ref.storageId
             SwipeablePaperRow(
                 paper = paper,
-                onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },
+                onClick = { if (selection.isActive) selection.toggle(id) else onOpen(paper) },
                 onLongClick = { selection.toggle(id) },
-                onSwipeSave = { onSave(id) },
+                onSwipeSave = { onSave(paper) },
                 selectionMode = selection.isActive,
                 selected = selection.contains(id),
                 showDivider = index != state.results.lastIndex,
@@ -612,11 +907,16 @@ private fun ResultList(
 }
 
 @Composable
-private fun SearchingState() {
+private fun SearchingState(source: Source) {
     // Content-shaped skeletons with the rate-limit-aware caption kept.
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
-            text = stringResource(R.string.search_querying_arxiv),
+            text =
+                if (source == Source.ARXIV) {
+                    stringResource(R.string.search_querying_arxiv)
+                } else {
+                    stringResource(R.string.search_querying_source, source.displayName)
+                },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
@@ -812,5 +1112,41 @@ private fun ExploreTaxonomyRestingPreview() {
             onCategoryClick = { _, _ -> },
             onFollowToggle = { _, _ -> },
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun SourceScopeSheetContentPreview() {
+    // bioRxiv followed (★-sorted up, lag caption); SSRN shows the browser-only caption; arXiv leads as default.
+    ArxiverTheme {
+        Surface {
+            SourceScopeSheetContent(
+                current = Source.BIORXIV,
+                followed = setOf(Source.BIORXIV, Source.CHEMRXIV),
+                onPick = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Preview(showBackground = true, uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ExternalFilterBarPreview() {
+    // chemRxiv scope with a Field narrowed — exercises the curated chips + the via-OpenAlex caption.
+    ArxiverTheme {
+        Surface {
+            ExternalFilterBar(
+                state =
+                    SearchUiState(
+                        onlineSource = Source.CHEMRXIV,
+                        onlineField = FollowCategoryOption(value = "fields/16", label = "Chemistry"),
+                    ),
+                onField = {},
+                onOpenSourcePicker = {},
+            )
+        }
     }
 }

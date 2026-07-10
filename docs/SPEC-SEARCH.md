@@ -1,5 +1,12 @@
 # SPEC-SEARCH — Hybrid Search Engine
 
+
+> **Multi-source online search (P-Explorer PE.3):** the Explore Online scope searches ONE source per submit —
+> arXiv natively (this spec's §2 pipeline, unchanged), any other source via a single OpenAlex `search()` call
+> (host `api.openalex.org`, ~1.2s self-spacing, metered → explicit-submit-only + un-paginated v1). The local
+> hybrid pipeline below is untouched by source choice. bio/medRxiv keyword search rides OpenAlex (their native
+> API has none) and may lag their native follow feed.
+
 **Status:** Approved · Implemented in `:core:search`
 
 ## 1. Search modes

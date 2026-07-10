@@ -5,7 +5,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.Source
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -125,5 +127,57 @@ class PaperDaoTest {
             seeder.seed()
             assertEquals(first, db.categoryDao().count())
             assertEquals("Machine Learning", db.categoryDao().byCode("cs.LG")?.name)
+        }
+    // --- P-Explorer PE.3: the atomic reuse-or-insert chokepoint ---
+
+    @Test
+    fun `insertPaperIfAbsent returns the existing id for a same-ref paper and does not clobber it`() =
+        runTest {
+            db.paperDao().upsertPaperWithRelations(paper.toEntity(), paper.authors, paper.categories)
+
+            val thin = paper.copy(title = "Thin search-hit metadata")
+            val winner = db.paperDao().insertPaperIfAbsentWithRelations(thin.toEntity(), thin.authors, thin.categories)
+
+            assertEquals("2403.01234", winner)
+            assertEquals(paper.title, assertNotNull(db.paperDao().paperById("2403.01234")).title, "not clobbered")
+        }
+
+    @Test
+    fun `insertPaperIfAbsent reuses another origin's row that shares the normalized doi`() =
+        runTest {
+            // Stored with a VERSIONED doi -- doi_norm strips the suffix, so an unversioned hit must still match.
+            val stored =
+                Paper(
+                    ref = ExternalRef(Source.BIORXIV, "10.1101/zed.v3"), latestVersion = 1, title = "Bio",
+                    abstract = "a", publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH, primaryCategory = "",
+                    categories = emptyList(), authors = listOf("A"), doi = "10.1101/zed.v3", pdfUrl = "",
+                )
+            db.paperDao().upsertPaperWithRelations(stored.toEntity(), stored.authors, stored.categories)
+
+            val hit =
+                Paper(
+                    ref = ExternalRef(Source.SSRN, "10.1101/zed"), latestVersion = 1, title = "SSRN edition",
+                    abstract = "a", publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH, primaryCategory = "",
+                    categories = emptyList(), authors = emptyList(), doi = "10.1101/zed", pdfUrl = "",
+                )
+            val winner = db.paperDao().insertPaperIfAbsentWithRelations(hit.toEntity(), hit.authors, hit.categories)
+
+            assertEquals("biorxiv:10.1101/zed.v3", winner, "the stored row wins across origins")
+            assertEquals(1, db.paperDao().count(), "no doi fork")
+        }
+
+    @Test
+    fun `insertPaperIfAbsent inserts a genuinely new paper with its relations`() =
+        runTest {
+            val winner =
+                db.paperDao().insertPaperIfAbsentWithRelations(
+                    paper.toEntity(),
+                    paper.authors,
+                    paper.categories,
+                )
+
+            assertEquals("2403.01234", winner)
+            val loaded = assertNotNull(db.paperDao().paperWithRelations("2403.01234")).toDomain()
+            assertEquals(paper.authors, loaded.authors)
         }
 }

@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.feature.search
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,11 +14,14 @@ import dev.blokz.arxiver.core.ml.EmbeddingService
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.ml.ModelState
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.core.network.FollowCategoryOption
 import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import dev.blokz.arxiver.core.search.HybridFusion
 import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.core.search.VectorIndex
+import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
 import kotlinx.coroutines.FlowPreview
@@ -46,7 +50,7 @@ data class SearchUiState(
     /** Local (library/cache) hybrid results — live as you type. */
     val localResults: List<LocalHit> = emptyList(),
     val semanticActive: Boolean = false,
-    /** Online arXiv results — explicit submit. */
+    /** Online results — explicit submit only (arXiv native, or one OpenAlex call for a non-arXiv source). */
     val results: List<Paper> = emptyList(),
     val searching: Boolean = false,
     val loadingMore: Boolean = false,
@@ -54,6 +58,12 @@ data class SearchUiState(
     val totalResults: Int? = null,
     val error: AppError? = null,
     val searched: Boolean = false,
+    /** The Online leg's source (P-Explorer PE.3). arXiv = the untouched native path; others ride OpenAlex. */
+    val onlineSource: Source = Source.ARXIV,
+    /** Optional server-side Field narrowing for a non-arXiv source (PE.1 curated vocab); null = all fields. */
+    val onlineField: FollowCategoryOption? = null,
+    /** Sources the user follows — ★-sorted to the top of the source picker. */
+    val followedOrigins: Set<Source> = emptySet(),
     // --- structured arXiv filters (arXiv tab) ---
     val scope: SearchFilter.Field = SearchFilter.Field.ALL,
     val categories: List<String> = emptyList(),
@@ -81,8 +91,20 @@ class SearchViewModel
         private val modelDownloader: ModelDownloader,
         private val searchDao: SearchDao,
         private val libraryRepository: LibraryRepository,
+        categoryRepository: CategoryRepository,
+        private val savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
-        private val _uiState = MutableStateFlow(SearchUiState())
+        private val _uiState =
+            MutableStateFlow(
+                SearchUiState(
+                    // The Online scope survives process death coherently with the rememberSaveable tab (PE.3):
+                    // a restored Filters/source sheet must agree with the restored source. A bad value → arXiv.
+                    onlineSource =
+                        savedStateHandle.get<String>(KEY_ONLINE_SOURCE)
+                            ?.let { saved -> runCatching { Source.valueOf(saved) }.getOrNull() }
+                            ?: Source.ARXIV,
+                ),
+            )
         val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
         private val queryFlow = MutableStateFlow("")
@@ -91,6 +113,14 @@ class SearchViewModel
 
         init {
             observeLocal()
+            // Followed sources ★-sort to the top of the picker. Pure DB → zero network on collection.
+            viewModelScope.launch {
+                categoryRepository.observeFollows().collect { follows ->
+                    val origins =
+                        follows.mapNotNull { f -> Source.entries.firstOrNull { it.wire == f.origin } }.toSet()
+                    _uiState.update { it.copy(followedOrigins = origins) }
+                }
+            }
         }
 
         @OptIn(FlowPreview::class)
@@ -185,15 +215,98 @@ class SearchViewModel
             )
         }
 
-        fun submit() {
-            val filter = currentFilter()
-            if (filter.isEmpty) return
-            submittedFilter = filter
+        /**
+         * Switch the Online scope's source (PE.3). Cancels any in-flight search (a slow response from the old
+         * source must not land in the new one's state), clears results, and deliberately does NOT re-search —
+         * every OpenAlex call is an explicit submit (the metering red line).
+         */
+        fun setOnlineSource(source: Source) {
+            if (source == _uiState.value.onlineSource) return
             searchJob?.cancel()
+            savedStateHandle[KEY_ONLINE_SOURCE] = source.name
+            submittedFilter = null
             _uiState.update {
-                it.copy(results = emptyList(), searching = true, error = null, searched = true, totalResults = null)
+                it.copy(
+                    onlineSource = source,
+                    onlineField = null,
+                    results = emptyList(),
+                    searching = false,
+                    loadingMore = false,
+                    nextStart = null,
+                    totalResults = null,
+                    error = null,
+                    searched = false,
+                )
             }
-            searchJob = viewModelScope.launch { runSearch(start = 0) }
+        }
+
+        /** Narrow (or clear, with null) the non-arXiv source's Field filter. Applies on the next explicit submit. */
+        fun setOnlineField(field: FollowCategoryOption?) = _uiState.update { it.copy(onlineField = field) }
+
+        fun submit() {
+            val state = _uiState.value
+            if (state.onlineSource == Source.ARXIV) {
+                val filter = currentFilter()
+                if (filter.isEmpty) return
+                submittedFilter = filter
+                searchJob?.cancel()
+                _uiState.update {
+                    it.copy(
+                        results = emptyList(),
+                        searching = true,
+                        error = null,
+                        searched = true,
+                        totalResults = null,
+                        nextStart = null,
+                        loadingMore = false,
+                    )
+                }
+                searchJob = viewModelScope.launch { runSearch(start = 0) }
+            } else {
+                val query = state.query.trim()
+                if (query.isEmpty()) return
+                // Null the arXiv pagination snapshot: loadMore() must have NOTHING to resume on this scope
+                // (belt to nextStart=null's braces — a stale filter could otherwise page arXiv mid-SSRN).
+                submittedFilter = null
+                searchJob?.cancel()
+                _uiState.update {
+                    it.copy(
+                        results = emptyList(),
+                        searching = true,
+                        error = null,
+                        searched = true,
+                        totalResults = null,
+                        nextStart = null,
+                        loadingMore = false,
+                    )
+                }
+                searchJob =
+                    viewModelScope.launch {
+                        runExternalSearch(state.onlineSource, query, state.onlineField?.value)
+                    }
+            }
+        }
+
+        /** One OpenAlex call per explicit submit — un-paginated v1, so a scroll can never bill a BYOK key. */
+        private suspend fun runExternalSearch(
+            source: Source,
+            query: String,
+            fieldToken: String?,
+        ) {
+            when (val result = paperRepository.searchExternal(source, query, fieldToken)) {
+                is AppResult.Success ->
+                    _uiState.update {
+                        it.copy(
+                            results = result.value.papers,
+                            totalResults = result.value.totalResults,
+                            nextStart = null,
+                            searching = false,
+                            loadingMore = false,
+                        )
+                    }
+                is AppResult.Failure ->
+                    _uiState.update { it.copy(searching = false, loadingMore = false, error = result.error) }
+            }
         }
 
         fun loadMore() {
@@ -231,8 +344,32 @@ class SearchViewModel
 
         fun saveAll(ids: Collection<String>) = viewModelScope.launch { ids.forEach { libraryRepository.save(it) } }
 
+        /**
+         * Open a search hit: persist-on-interaction, then navigate with the RETURNED storage id — the atomic
+         * reuse-or-insert can re-key the hit onto an existing arXiv/other-origin row (PE.3). An arXiv result is
+         * already cached by the search itself → harmless cache hit.
+         */
+        fun openHit(
+            paper: Paper,
+            onReady: (String) -> Unit,
+        ) = viewModelScope.launch { onReady(paperRepository.cacheSearchHit(paper).ref.storageId) }
+
+        /** Save a search hit: persist FIRST (the library row is FK'd to `papers`), then save under the winning id. */
+        fun saveHit(paper: Paper) =
+            viewModelScope.launch {
+                val stored = paperRepository.cacheSearchHit(paper)
+                libraryRepository.save(stored.ref.storageId)
+            }
+
+        /** Persist a multi-selection before handing its ids to save/Organize/Dispatch (same FK + re-key contract). */
+        fun persistHits(
+            papers: List<Paper>,
+            onReady: (List<String>) -> Unit,
+        ) = viewModelScope.launch { onReady(papers.map { paperRepository.cacheSearchHit(it).ref.storageId }) }
+
         companion object {
             private const val LOCAL_DEBOUNCE_MS = 350L
             private const val SEMANTIC_LEG_K = 30
+            private const val KEY_ONLINE_SOURCE = "online_source"
         }
     }

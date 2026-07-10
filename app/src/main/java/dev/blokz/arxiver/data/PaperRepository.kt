@@ -12,12 +12,14 @@ import dev.blokz.arxiver.core.model.ExternalPaperDraft
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.core.model.PaperSource
-import dev.blokz.arxiver.core.model.normalizeDoi
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.model.resolvePaperRef
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivFeed
 import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
+import dev.blokz.arxiver.core.network.openalex.OpenAlexClient
+import dev.blokz.arxiver.core.network.openalex.toPaper
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,7 +36,40 @@ class PaperRepository
     constructor(
         private val arxivApiClient: ArxivApiClient,
         private val paperDao: PaperDao,
+        private val openAlexClient: OpenAlexClient,
     ) {
+        /**
+         * Keyword search on a non-arXiv source (P-Explorer PE.3) — ONE OpenAlex call per explicit submit (the
+         * metering red line), optionally Field-narrowed server-side (still one call). **Un-paginated v1:**
+         * `nextStart = null` structurally no-ops the list's auto-load-more, so a scroll can never bill a BYOK
+         * key. Results are mapped, NOT cached — persistence happens on first interaction ([cacheSearchHit]).
+         */
+        suspend fun searchExternal(
+            source: Source,
+            query: String,
+            fieldToken: String? = null,
+        ): AppResult<PaperPage> {
+            val sid = requireNotNull(OpenAlexClient.searchSidFor(source)) { "not a searchable source: $source" }
+            return openAlexClient.search(query, EXTERNAL_PAGE_SIZE, sid, fieldToken).map { r ->
+                val papers = r.results.mapNotNull { it.toPaper(source) }.distinctBy { it.ref.storageId }
+                PaperPage(papers, totalResults = r.meta.count ?: papers.size, nextStart = null)
+            }
+        }
+
+        /**
+         * Persist an Explore search hit on first interaction (open/save/dispatch — never on render). An
+         * arXiv-collapsed cross-post delegates to the cache-first [paper] path so the FULL native record is
+         * stored (one rate-limited fetch on a rare explicit action; a thin OpenAlex row must never permanently
+         * shadow the native one) — offline falls back to the mapped row. Everything else goes through the atomic
+         * DAO reuse-or-insert, which can re-key onto an existing same-DOI row — **callers must use the RETURNED
+         * paper's storageId**, never the hit's own.
+         */
+        suspend fun cacheSearchHit(hit: Paper): Paper {
+            if (hit.ref is ArxivRef) paper(hit.ref)?.let { return it }
+            val id = paperDao.insertPaperIfAbsentWithRelations(hit.toEntity(), hit.authors, hit.categories)
+            return checkNotNull(paperDao.paperById(id)).toListDomain()
+        }
+
         /** Latest papers in a category, newest first. Results are cached locally. */
         suspend fun categoryLatest(
             code: String,
@@ -93,16 +128,10 @@ class PaperRepository
          * gate so the paper becomes semantically searchable like any other.
          */
         suspend fun saveExternalPaper(draft: ExternalPaperDraft): Paper {
-            // Cross-source de-dup at the IMPORT seam (P-Explorer PE.2). PFP.1 taught the *follow* path to reuse an
-            // already-stored row sharing a DOI (`FollowSyncWorker.canonicalRef`); this path never learned it, so
-            // importing a paper you already hold under another origin FORKED it. Reuse wins, and we deliberately
-            // do NOT overwrite the stored row — an import's metadata is thinner (no category/version), so
-            // clobbering a richer native row would be a regression (the PFP.1 degraded-metadata lesson).
-            normalizeDoi(draft.nativeId)?.let { normalized ->
-                paperDao.paperIdByDoi(normalized)?.let { existingId ->
-                    paperDao.paperById(existingId)?.let { return it.toListDomain() }
-                }
-            }
+            // Cross-source de-dup at the IMPORT seam (PE.2, routed through the atomic DAO chokepoint in PE.3):
+            // reuse an already-stored row sharing the normalized DOI instead of forking, and never overwrite it —
+            // an import's metadata is thinner (no category/version), so clobbering a richer native row would be a
+            // regression (the PFP.1 degraded-metadata lesson).
             val ref = resolvePaperRef(arxivId = null, origin = draft.origin, nativeId = draft.nativeId)
             val paper =
                 Paper(
@@ -119,8 +148,8 @@ class PaperRepository
                     pdfUrl = draft.pdfUrl,
                     source = PaperSource.MANUAL,
                 )
-            paperDao.upsertPaperWithRelations(paper.toEntity(), paper.authors, paper.categories)
-            return paper
+            val id = paperDao.insertPaperIfAbsentWithRelations(paper.toEntity(), paper.authors, paper.categories)
+            return checkNotNull(paperDao.paperById(id)).toListDomain()
         }
 
         private suspend fun fetchAndCache(
@@ -146,5 +175,6 @@ class PaperRepository
 
         companion object {
             private const val CACHED_PAGE = 50
+            private const val EXTERNAL_PAGE_SIZE = 25
         }
     }
