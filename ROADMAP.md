@@ -336,7 +336,7 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   forks); a `doi.org`/publisher-host OA URL stays **read-only → external-open** (partial in-app coverage, stated
   honestly, not overclaimed). Also folds in the **PS.1-deferred empty-dispatch guard** (`NothingToDispatch`).
   Rides PS.0's seam — **0 reader/DB/migration change**. Clusters C1–C5 each `./gradlew build` green.
-- [ ] **PS.3 — bioRxiv/medRxiv follows + feeds (DEMAND-GATED).** `FollowSyncWorker` per-source branch (arXiv→Atom;
+- [x] **PS.3 — ~~bioRxiv/medRxiv follows + feeds (DEMAND-GATED)~~ SUPERSEDED by P-Feeds PF.2 (2026-07-06).** Shipped there in generalized form (`follows.origin` v7→v8 + the native bio/med backend + the origin-dispatched worker) — this row predates that phase and was never separately built. Marked closed by PE.6's sweep, not silently. *(Original scope:)* `FollowSyncWorker` per-source branch (arXiv→Atom;
   bio→date/category feed via `api.biorxiv.org`); `follows.origin` column + `(type,value)`→`(origin,type,value)`
   index rebuild (additive, explicit SQL + `8.json`); a bioRxiv taxonomy (`paper_categories` has no FK to
   `categories`). bioRxiv has **no keyword search** (live-confirmed) — follows are category/date only; keyword
@@ -679,9 +679,13 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   chrome) and lists **only sources actually present** (never an SSRN chip with no SSRN paper). `presentSources`
   derives from the status-filtered list, so picking a chip can never erase its own row. Tap-again clears. No data
   change (`paper.ref.origin` was already there). `LibraryViewModelTest` pins the filter + presence rules.
-- [ ] **PE.6 — Docs & deferral sweep.** PRD §1/§3/§4 (arXiv-frozen while §1 claims "unifies discovery"); mark
-  ROADMAP PS.3 superseded-by-PF.2; **retire + replace the stale `assets.chemrxiv.org` HUMAN.md row**; VERIFICATION
-  device rows (bio/med in-app read; the Research Square shard check); P-Explorer deferrals block.
+- [x] **PE.6 — Docs & deferral sweep.** PRD gains a **Scope-evolution note** (v1.0 was arXiv-scoped by design; the
+  shipped product spans the preprint ecosystem, with arXiv the center of gravity and the generalization governed by
+  the SPECs) + the "Find" job now names the wider ecosystem; the **P-Sources PS.3 ghost is closed as
+  superseded-by-PF.2** (bio/med follows shipped there in generalized form — closed explicitly, not silently). The
+  other sweep items landed with their subphases per the loop's docs-travel rule: the stale `assets.chemrxiv.org`
+  HUMAN.md row was retired in PE.0, VERIFICATION rows B1a/B1e/B1f/B1g rode PE.0/PE.2h/PE.3/PE.4, and the deferrals
+  block + PE.3 refinements ledger are in place above.
 - [ ] **CHECKPOINT P-Explorer** — full build green; migration identity-hash-tested; red-line audit (egress unchanged
   except any Co-Founder-approved host; OpenAlex credits: explicit-submit + un-paginated v1; arXiv ≥3s limiter
   untouched; zero-network-on-open; no telemetry; `:core:* ∌ :app`); device checks in VERIFICATION.md.

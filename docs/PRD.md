@@ -4,9 +4,18 @@
 
 ## 1. Vision
 
-Researchers drown in arXiv volume and juggle disconnected tools: an RSS reader for new papers, a browser for search, a PDF app for reading, a notes app for thinking, and a chat assistant for digestion — none of which share state. Arxiver unifies discovery, indexing, reading, and digestion into one local-first Android app, and delegates open-ended intelligence to the user's own Claude via the Routines API trigger.
+Researchers drown in preprint volume and juggle disconnected tools: an RSS reader for new papers, a browser for search, a PDF app for reading, a notes app for thinking, and a chat assistant for digestion — none of which share state. Arxiver unifies discovery, indexing, reading, and digestion into one local-first Android app, and delegates open-ended intelligence to the user's own Claude via the Routines API trigger.
 
 **One-liner:** *Your personal arXiv engine, in your pocket, wired to your Claude.*
+
+> **Scope evolution (updated 2026-07-10, P-Explorer).** v1.0 was arXiv-scoped by design. The shipped product now
+> spans the **preprint ecosystem**: arXiv natively, bioRxiv/medRxiv natively (feeds + in-app PDFs), and
+> chemRxiv/Research Square/SSRN/Preprints.org/PsyArXiv via OpenAlex (follows + keyword search; PDFs per each
+> host's real access posture — honestly browser-open where gated). arXiv remains the center of gravity: its
+> native API is the only path with full field-prefix search, versioning, and in-app HTML reading. Discovery
+> (Explore) exposes source as a dimension of the query; identity, de-dup, and the Today feed are source-blind.
+> Feature rows below are v1.0-era wording — where they say "arXiv", the shipped generalization is governed by
+> `docs/SPEC-P-SOURCES.md`, `docs/SPEC-P-FEEDS.md`, and the P-Explorer ROADMAP phase.
 
 ## 2. Personas
 
@@ -21,7 +30,7 @@ All personas are power users comfortable sideloading an APK and pasting an API t
 ## 3. Jobs-to-be-done
 
 1. **Triage:** "Show me what's new in my fields today, ranked so I can clear it in 5 minutes."
-2. **Find:** "Find papers about X — by meaning, not just keywords — in my library and on arXiv."
+2. **Find:** "Find papers about X — by meaning, not just keywords — in my library, on arXiv, and across the preprint servers my field actually uses."
 3. **Keep:** "Save this paper with tags/notes into collections; have it fully indexed and available offline."
 4. **Connect:** "Show me what this paper cites, what cites it, and what's related in my library."
 5. **Digest:** "Send these papers to my Claude routine: digest, compare, deep-dive, or fold into my weekly review."
