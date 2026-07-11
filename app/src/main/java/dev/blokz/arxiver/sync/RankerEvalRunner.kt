@@ -10,6 +10,7 @@ import dev.blokz.arxiver.core.database.entity.RelevanceModelEntity
 import dev.blokz.arxiver.core.search.eval.EvalReport
 import dev.blokz.arxiver.core.search.eval.LabeledExample
 import dev.blokz.arxiver.core.search.eval.PlattCalibration
+import dev.blokz.arxiver.core.search.eval.PlattMap
 import dev.blokz.arxiver.core.search.eval.RankerEval
 import dev.blokz.arxiver.core.search.eval.ScoreDistribution
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,9 +46,10 @@ data class RankerHealth(
 )
 
 /**
- * The live tuning the scorer applies (P5.2). In-memory, default λ=0 — a process death falls back to
- * bit-identical-to-P4 scoring until the next worker pass re-selects (durable tuning arrives with P5.3's
- * `relevance_model` row). Selected ONLY by the harness; never a shipped constant.
+ * The live tuning the scorer applies (P5.2). In-memory, default λ=0 — safe because `InboxScorer` only runs
+ * inside the same worker pass, immediately AFTER the runner re-selects; a pass whose eval fails scores at λ=0
+ * (bit-identical-to-P4). The `relevance_model` row records the selected λ as an audit trail — it is never
+ * rehydrated from, and doesn't need to be. Selected ONLY by the harness; never a shipped constant.
  */
 @Singleton
 class RankerTuning
@@ -74,7 +76,7 @@ class RankerEvalRunner
         private val tuning: RankerTuning,
         private val relevanceModelDao: RelevanceModelDao,
     ) {
-        suspend fun run(relevantThreshold: Double) {
+        suspend fun run(legacyThreshold: Double) {
             val rows = paperFeedbackDao.labeledExamples(EmbeddingWorker.MODEL_NAME)
             val examples =
                 rows.map { row ->
@@ -107,6 +109,17 @@ class RankerEvalRunner
             // never applies to this one's scores.
             relevanceModelDao.deleteByModelMismatch(EmbeddingWorker.MODEL_NAME)
 
+            // The debug card's "above cut %" must describe the SAME cut Today drew (P5.3 QW). The distributions
+            // below are the PREVIOUS pass's inbox scores (this runner executes before scoreInbox), so the cut in
+            // force while they were on screen is the PREVIOUSLY persisted calibration — read it here, before this
+            // pass's upsert clobbers it. a>0 is the fitter's invariant (PlattCalibration), mirroring how
+            // TodayViewModel derives its live cut; absent/uncalibrated ⇒ the caller's legacy 0.55.
+            val previous = relevanceModelDao.current()
+            val effectiveCut =
+                previous?.calibrationA?.let { a ->
+                    previous.calibrationB?.let { b -> PlattMap(a, b).scoreFor(0.5) }
+                } ?: legacyThreshold
+
             // ONE set of fold builds yields the selected λ, the tuned report, and the held-out outputs the
             // Platt calibrator fits on (P5.3) — the ≤6-rebuild cost bound covers the whole pipeline.
             val tuned = RankerEval().tuneAndEvaluate(examples, seeds, Instant.now().toEpochMilli())
@@ -115,17 +128,22 @@ class RankerEvalRunner
             val report = tuned.report
 
             // Fit the calibration on HELD-OUT scores; below the floor it stays null and the UI keeps the
-            // legacy 0.55 exactly. Persisted durably so Today's threshold survives process death.
+            // legacy 0.55 exactly. Persisted durably so Today's threshold survives process death. Downgrade
+            // hysteresis (P5.5): a single failed refit KEEPS the previous a/b; only two consecutive null fits
+            // downgrade — so a boundary-hovering profile's "Likely relevant" section doesn't flip regimes on
+            // every pass. A fresh fit always applies immediately.
             val platt = PlattCalibration.fit(tuned.heldOutScores, tuned.heldOutLabels, tuned.heldOutWeights)
+            val write = resolveCalibrationWrite(previous, platt, Instant.now().toEpochMilli())
             relevanceModelDao.upsert(
                 RelevanceModelEntity(
                     embeddingModel = EmbeddingWorker.MODEL_NAME,
-                    calibrationA = platt?.a,
-                    calibrationB = platt?.b,
+                    calibrationA = write.a,
+                    calibrationB = write.b,
                     shrinkageLambda = lambda,
                     labelPositives = tuned.heldOutLabels.count { it },
                     labelNegatives = tuned.heldOutLabels.count { !it },
-                    fittedAt = Instant.now().toEpochMilli(),
+                    fittedAt = write.fittedAt,
+                    consecutiveNullFits = write.consecutiveNullFits,
                 ),
             )
 
@@ -138,10 +156,10 @@ class RankerEvalRunner
                     richDistribution =
                         distribution(
                             scores.filter { !it.titleOnly }.map { it.score },
-                            relevantThreshold,
+                            effectiveCut,
                         ),
                     titleOnlyDistribution =
-                        distribution(scores.filter { it.titleOnly }.map { it.score }, relevantThreshold),
+                        distribution(scores.filter { it.titleOnly }.map { it.score }, effectiveCut),
                     shrinkageLambda = lambda,
                 ),
             )
@@ -161,4 +179,35 @@ class RankerEvalRunner
                 aboveCut = sorted.count { it >= cut }.toDouble() / sorted.size,
             )
         }
+    }
+
+/** The calibration fields one eval pass persists — the hysteresis-resolved write (P5.5). */
+data class CalibrationWrite(
+    val a: Double?,
+    val b: Double?,
+    val consecutiveNullFits: Int,
+    /** On a KEEP this retains the a/b vintage; on a fresh fit or downgrade it is the pass time. */
+    val fittedAt: Long,
+)
+
+/**
+ * Downgrade hysteresis (P5.5), two-pass-confirm on the DOWNGRADE direction only:
+ * - a fresh fit ALWAYS applies immediately (including `null→fitted` and recovery from a kept pass);
+ * - a null fit with a usable previous calibration KEEPS it for exactly one pass (streak → 1);
+ * - a second consecutive null fit downgrades to the legacy regime (a/b → null);
+ * - a never-fitted profile stays null — the below-floor golden is untouched.
+ * "Two passes" means two COMPLETED eval passes: a crash between read and upsert skips the streak
+ * increment, so the downgrade can only be delayed, never taken early and never corrupted.
+ */
+fun resolveCalibrationWrite(
+    previous: RelevanceModelEntity?,
+    fresh: PlattMap?,
+    now: Long,
+): CalibrationWrite =
+    when {
+        fresh != null -> CalibrationWrite(fresh.a, fresh.b, 0, now)
+        previous != null && previous.calibrationA != null && previous.calibrationB != null &&
+            previous.consecutiveNullFits == 0 ->
+            CalibrationWrite(previous.calibrationA, previous.calibrationB, 1, previous.fittedAt)
+        else -> CalibrationWrite(null, null, 0, now)
     }

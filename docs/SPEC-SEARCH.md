@@ -17,7 +17,17 @@
 > `a > 0` enforced — monotone, so ordering NEVER reshuffles) is persisted in the single-row `relevance_model` table,
 > and Today translates the p = 0.5 point ONCE into a raw-score cut. Uncalibrated profiles keep EXACTLY the legacy
 > 0.55. **"Likely relevant" is top-k (10)** above that cut, not everything above it. `paper_feedback.score_at_label`
-> records the score the user saw at label time (exposure context for future eval; NULL pre-v14).
+> records the score the user saw at label time (exposure context for future eval; NULL pre-v14). The debug
+> Ranker-health card's per-segment "above cut %" diagnostic uses the SAME cut Today drew (the persisted calibrated
+> cut when fitted, else 0.55) — the runner reads the previous `relevance_model` row before its own upsert, since
+> the distribution it reports is the previous pass's inbox scores (P5.3 QW1).
+
+> **P5.5 downgrade hysteresis.** So a profile hovering at the calibration boundary doesn't flip regimes every pass,
+> the runner confirms a downgrade over TWO consecutive failed refits: a fresh fit always applies immediately; a
+> single null fit KEEPS the previous calibration (persisted `relevance_model.consecutive_null_fits` → 1, v14→v15);
+> only a second consecutive null downgrades to the legacy 0.55. The count is *completed eval passes* — a crashed
+> pass delays, never advances, the downgrade. A KEEP row is intentionally mixed-vintage: the retained a/b + fitted_at
+> describe the calibration in force, while λ + label counts are the latest pass's.
 
 > **Multi-source online search (P-Explorer PE.3):** the Explore Online scope searches ONE source per submit —
 > arXiv natively (this spec's §2 pipeline, unchanged), any other source via a single OpenAlex `search()` call
