@@ -137,7 +137,11 @@ class EmbeddingWorker
             const val UNIQUE_PERIODIC = "embedding_periodic"
             const val UNIQUE_ONESHOT = "embedding_now"
 
-            /** Mirrors TodayScreen's "Likely relevant" cut — the aboveCut diagnostic must describe the real UI. */
+            /**
+             * The LEGACY "Likely relevant" cut — the fallback the ranker-health card's `aboveCut` diagnostic uses
+             * only when no calibration is fitted. When a calibration exists the runner derives the live cut from
+             * the persisted `relevance_model` row (matching TodayScreen), so the card describes the real UI.
+             */
             const val RELEVANT_THRESHOLD = 0.55
 
             const val MODEL_NAME = "bge-small-en-v1.5-q8"

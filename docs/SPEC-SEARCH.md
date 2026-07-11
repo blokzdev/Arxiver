@@ -17,7 +17,10 @@
 > `a > 0` enforced — monotone, so ordering NEVER reshuffles) is persisted in the single-row `relevance_model` table,
 > and Today translates the p = 0.5 point ONCE into a raw-score cut. Uncalibrated profiles keep EXACTLY the legacy
 > 0.55. **"Likely relevant" is top-k (10)** above that cut, not everything above it. `paper_feedback.score_at_label`
-> records the score the user saw at label time (exposure context for future eval; NULL pre-v14).
+> records the score the user saw at label time (exposure context for future eval; NULL pre-v14). The debug
+> Ranker-health card's per-segment "above cut %" diagnostic uses the SAME cut Today drew (the persisted calibrated
+> cut when fitted, else 0.55) — the runner reads the previous `relevance_model` row before its own upsert, since
+> the distribution it reports is the previous pass's inbox scores (P5.3 QW1).
 
 > **Multi-source online search (P-Explorer PE.3):** the Explore Online scope searches ONE source per submit —
 > arXiv natively (this spec's §2 pipeline, unchanged), any other source via a single OpenAlex `search()` call

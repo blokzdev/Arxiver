@@ -10,6 +10,7 @@ import dev.blokz.arxiver.core.database.entity.RelevanceModelEntity
 import dev.blokz.arxiver.core.search.eval.EvalReport
 import dev.blokz.arxiver.core.search.eval.LabeledExample
 import dev.blokz.arxiver.core.search.eval.PlattCalibration
+import dev.blokz.arxiver.core.search.eval.PlattMap
 import dev.blokz.arxiver.core.search.eval.RankerEval
 import dev.blokz.arxiver.core.search.eval.ScoreDistribution
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -74,7 +75,7 @@ class RankerEvalRunner
         private val tuning: RankerTuning,
         private val relevanceModelDao: RelevanceModelDao,
     ) {
-        suspend fun run(relevantThreshold: Double) {
+        suspend fun run(legacyThreshold: Double) {
             val rows = paperFeedbackDao.labeledExamples(EmbeddingWorker.MODEL_NAME)
             val examples =
                 rows.map { row ->
@@ -107,6 +108,17 @@ class RankerEvalRunner
             // never applies to this one's scores.
             relevanceModelDao.deleteByModelMismatch(EmbeddingWorker.MODEL_NAME)
 
+            // The debug card's "above cut %" must describe the SAME cut Today drew (P5.3 QW). The distributions
+            // below are the PREVIOUS pass's inbox scores (this runner executes before scoreInbox), so the cut in
+            // force while they were on screen is the PREVIOUSLY persisted calibration — read it here, before this
+            // pass's upsert clobbers it. a>0 is the fitter's invariant (PlattCalibration), mirroring how
+            // TodayViewModel derives its live cut; absent/uncalibrated ⇒ the caller's legacy 0.55.
+            val previous = relevanceModelDao.current()
+            val effectiveCut =
+                previous?.calibrationA?.let { a ->
+                    previous.calibrationB?.let { b -> PlattMap(a, b).scoreFor(0.5) }
+                } ?: legacyThreshold
+
             // ONE set of fold builds yields the selected λ, the tuned report, and the held-out outputs the
             // Platt calibrator fits on (P5.3) — the ≤6-rebuild cost bound covers the whole pipeline.
             val tuned = RankerEval().tuneAndEvaluate(examples, seeds, Instant.now().toEpochMilli())
@@ -138,10 +150,10 @@ class RankerEvalRunner
                     richDistribution =
                         distribution(
                             scores.filter { !it.titleOnly }.map { it.score },
-                            relevantThreshold,
+                            effectiveCut,
                         ),
                     titleOnlyDistribution =
-                        distribution(scores.filter { it.titleOnly }.map { it.score }, relevantThreshold),
+                        distribution(scores.filter { it.titleOnly }.map { it.score }, effectiveCut),
                     shrinkageLambda = lambda,
                 ),
             )

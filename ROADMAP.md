@@ -622,20 +622,39 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
 - [!] **P5.4 — GATED learned logistic head** (~385 params, pure Kotlin; β auto-→0 whenever the blend fails to
   beat pure Rocchio per-segment on held-out data; gates on ≥8-10 REAL explicit negatives). **Ships only if P5.1
   proves Rocchio leaves precision on the table.** `[needs-user/device]` — the gate's evidence is the
-  **Co-Founder's real-profile harness numbers** (VERIFICATION B2b protocol). The 2026-07-10 emulator session
-  proved the *machinery* (fit → persist → live threshold → guards) but its deliberately-diffuse synthetic profile
-  (AUC 0.50) can neither prove nor disprove real headroom. Decision rule when the numbers arrive: healthy AUC +
-  P@10 near ceiling → close no-go (à la PH.8); sufficient data + mediocre precision → build it.
+  **Co-Founder's real-profile harness numbers** (VERIFICATION B2b protocol). **Adjudicated 2026-07-10 (Ultracode
+  workflow + personal adversarial validation):** the gate is *irreducibly* `[needs-user/device]` — the workflow's
+  two validity passes converged on the finding that **no emulator-synthetic profile can CLOSE this gate** (taxonomy-
+  proxy labels are a different label-generating process from organic preference, and are partly encoded in the very
+  bge geometry being ranked ⇒ a synthetic NO-GO is weak evidence, a synthetic GO only advisory). The full designed
+  experiment (an off-device counterfactual logistic-head + LDA + SVM + stacking + paired bootstrap) was **rejected
+  as gold-plating** — it would build ~P5.4 itself just to *decide* P5.4 and still couldn't close the gate. What was
+  taken instead (zero new production code): a **coherent MODERATE-difficulty emulator readout** replacing the
+  useless diffuse AUC-0.50 record — see VERIFICATION B2b. Decision rule unchanged for when the Co-Founder's real
+  numbers arrive: healthy AUC + P@10 near ceiling → close no-go (à la PH.8); sufficient data + mediocre precision →
+  build it. Synthetic readouts are **advisory only** and never flip this `[!]`.
+- [ ] **P5.5 — Calibration downgrade hysteresis (deferred quick-win, needs a migration).** A profile hovering at
+  the calibration-guard boundary (the `a≤0`/floor line) sees Today's "Likely relevant" section flip between the
+  calibrated cut and the legacy-0.55 regime across passes — designed honesty today, but jarring. Fix: **two-pass-
+  confirm on the DOWNGRADE direction only** (`null→fitted` applies immediately; `fitted→null` keeps the previous
+  a/b for one pass; two *consecutive* null fits downgrade). Correctness needs a persisted counter, so this is an
+  **additive v14→v15 migration** (`relevance_model.consecutive_null_fits INTEGER NOT NULL DEFAULT 0`) — it was
+  correctly disqualified as a same-PR quick-win (the only spare columns, `head_weights`/`head_bias`, are reserved
+  for P5.4; the runner touches no prefs; an in-memory flag resets on the process deaths Android inflicts between
+  periodic passes → could retain a stale calibration indefinitely). Shape: extract a pure
+  `resolveCalibrationWrite(previous, fresh)` in `RankerEvalRunner` pinned by a JVM unit test (immediate-up /
+  keep-once / downgrade-on-second-null / never-fitted-stays-null) + one Robolectric integration case across two
+  below-floor passes. Small, self-contained; schedule when P5.4 is dispositioned (they touch the same runner).
 - [ ] **CHECKPOINT P5** — full build green ✓; migration identity-hash-tested ✓ (+ a LIVE v3→v14 eleven-migration
   upgrade on the emulator, 2026-07-10); red-line audit: zero egress from ranking ✓ (airplane-mode ranked the full
   feed offline, 2026-07-10 emu; NoOkHttp structural scan), no new model/host ✓, weights never in backups ✓ (the
   serial-descriptor snapshot guard), no telemetry ✓, `:core:search ∌ :app` ✓ (structural); harness device row ✓
-  emulator (B2b) — **holds open pending only the P5.4 disposition** (Co-Founder real-profile numbers).
-  *P5 ledger (recorded, not shipped):* threshold **hysteresis** at the calibration-guard boundary (a profile near
-  the a≤0/floor line sees the section flip in/out across passes — designed honesty today; a two-pass-confirm
-  before switching regimes is the candidate fix, natural to fold into P5.4-era runner work) · the debug card's
-  "above cut %" still uses the static 0.55 while the live cut is calibrated (pass the persisted cut into
-  `RankerEvalRunner` — 5 lines, same fold-in) · B2a's undo-erases-influence + fresh-profile cold-start legs.
+  emulator (B2b, refreshed 2026-07-10 with the coherent-profile readout) — **holds open pending only the P5.4
+  disposition** (Co-Founder real-profile numbers) **and the P5.5 hysteresis quick-win**.
+  *P5 ledger (recorded):* **[SHIPPED 2026-07-10, QW1]** the debug card's "above cut %" now uses the live calibrated
+  cut (the runner reads the persisted `relevance_model` row before its own upsert, mirroring `TodayViewModel`) —
+  `RankerEvalRunnerTest` pins both branches · threshold **hysteresis** promoted to its own subphase **P5.5** above ·
+  B2a's undo-erases-influence + fresh-profile cold-start legs still open (VERIFICATION B2a).
 
 ## Phase P-Explorer — complete the multi-source discovery surface (plan approved 2026-07-10)
 
@@ -677,7 +696,7 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
 > PDF hosts now (done) · Research Square **authorized pending an on-device shard check** · chemRxiv in-app read
 > **revisited after P-Explorer**.
 
-- [~] **PE.0 — Foundation: provenance + honest fetchability + the crash-trap.** `distinctBy { it.ref.storageId }`
+- [x] **PE.0 — Foundation: provenance + honest fetchability + the crash-trap.** `distinctBy { it.ref.storageId }`
   (bug 1). New `PdfAccess` tier + `Source.pdfAccess()` in `:core:model` (evidence-backed, exhaustive `when`) →
   `Paper.isPdfFetchable()` stops being a tautology, **closing the recorded P-Dispatch `pdf_fetchable`
   host-reachability deferral** (bio/med now honestly `true`; arXiv payload byte-identity untouched — the arXiv
@@ -742,8 +761,10 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   idempotent, no-clobber winning-id), **`SearchViewModelTest` ×6 — the metering contract proven by counting real
   MockWebServer requests** (source-switch = 0 calls; submit = exactly 1; loadMore = 0; typing = 0; SavedStateHandle
   restore; saveHit FK-safety).
-- [ ] **PE.4 — Unified Browse-&-Follow directory** (Co-Founder-approved IA). arXiv a peer row with its native
+- [x] **PE.4 — Unified Browse-&-Follow directory** (Co-Founder-approved IA). arXiv a peer row with its native
   taxonomy at full-screen real estate; both write seams already exist (`setFollowed`/`setCategoryFollowed`).
+  Shipped PR #132 (the split picker is subsumed); emulator-verified 2026-07-10 (VERIFICATION B1a). *(Box healed
+  2026-07-10 — PE.0/PE.4 were left `[~]`/`[ ]` when the phase checkpointed; the Decision log had the record.)*
 - [x] **PE.5 — Library source dimension.** `LibraryUiState.sourceFilter: Source?` + a second chip row in the
   papers tab that renders **only when the library genuinely spans >1 source** (an all-arXiv library sees zero added
   chrome) and lists **only sources actually present** (never an SSRN chip with no SSRN paper). `presentSources`
