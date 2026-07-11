@@ -70,3 +70,15 @@ data class EvalReport(
     val labelCount: Int,
     val evaluatedAtMs: Long,
 )
+
+/**
+ * The production bundle (P5.3): the tuned report + the selected shrinkage + the pooled HELD-OUT fold outputs
+ * (parallel lists) that downstream calibration fits on.
+ */
+data class TunedEval(
+    val report: EvalReport,
+    val lambda: Double,
+    val heldOutScores: List<Double>,
+    val heldOutLabels: List<Boolean>,
+    val heldOutWeights: List<Double>,
+)

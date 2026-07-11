@@ -602,10 +602,23 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   tuning arrives with P5.3's `relevance_model`); the worker runs the eval BEFORE scoring so a fresh selection
   applies same-run. Tests: λ=0 instance-identity; shrink-toward-mean + unit-norm; below-floor→0; grid membership;
   the confirmation invariant (a returned λ never tanks the pooled AUC).
-- [ ] **P5.3 — Per-user calibrated threshold + top-k section** (migration v13→v14: single-row `relevance_model`
-  designed to also hold P5.4's weights + `paper_feedback.score_at_label` — the D14 exposure-context call). The
-  RAW blend persists in `inbox_items.score`; the monotone Platt map translates the probability floor once in the
-  ViewModel (ordering never reshuffles; "exactly 0.55 below floor" stays a trivial golden).
+- [x] **P5.3 — Per-user calibrated threshold + top-k section.** Additive **v13→v14**: single-row `relevance_model`
+  (calibration a/b + shrinkage λ + label counts + NULLABLE head-weights blob — P5.4 needs no second migration;
+  single-row invariant in the DAO, **never seeded**: absent ≡ below-floor ≡ exactly 0.55, so fresh and migrated
+  installs behave identically) + `paper_feedback.score_at_label` (the D14 exposure-context call — captured at
+  label time on dismiss/thumb, NULL for pre-v14 labels, never invented). **`PlattCalibration`** fits σ(a·s+b) by
+  deterministic weighted Newton on the harness's **held-out** outputs (train-side scores would inherit their
+  optimism), with Platt's smoothed targets (a separable set can't push a→∞), a ≥50-label + ≥10-negative-ESS floor
+  (below it: null → the legacy 0.55 EXACTLY), and an **anti-predictive rejection** (a≤0 would invert the section).
+  **`tuneAndEvaluate`** = the single production entry: ONE set of fold builds yields λ + the tuned report + the
+  calibration inputs (the ≤6-rebuild bound covers the whole pipeline). The RAW score stays what
+  `inbox_items.score` persists; Platt is monotone, so Today translates the p=0.5 point ONCE into a raw-score cut
+  (live via `relevance_model` observe-flow) — ordering never reshuffles. **"Likely relevant" is now TOP-K (10)**
+  above the calibrated floor (the Co-Founder's stable-count decision). Stale-embedder discard on the model row
+  mirrors the vector-tag guard. Backup wall extended (calibration/shrinkage/head_weights in the descriptor
+  blocklist). Tests: `PlattCalibrationTest` ×5, `Migration13To14Test` (identity hash + sqlite_master DDL equality
+  + never-seeded + NULL exposure for old labels), `TodayViewModelTest` +2 (absent row ⇒ exactly 0.55; a=10,b=−4 ⇒
+  cut 0.4), `InboxTriageUndoTest` +1 (dismiss stamps the seen score), `BackupManagerTest` blocklist.
 - [ ] **P5.4 — GATED learned logistic head** (~385 params, pure Kotlin; β auto-→0 whenever the blend fails to
   beat pure Rocchio per-segment on held-out data; gates on ≥8-10 REAL explicit negatives). **Ships only if P5.1
   proves Rocchio leaves precision on the table.**

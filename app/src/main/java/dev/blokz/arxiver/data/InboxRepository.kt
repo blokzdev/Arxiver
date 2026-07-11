@@ -52,6 +52,8 @@ class InboxRepository
          * the two-sided ranker to demote similar papers.
          */
         suspend fun dismiss(paperId: String) {
+            // Exposure context captured BEFORE the state flip (P5.3): the score the user saw when dismissing.
+            val scoreAtLabel = inboxDao.scoreFor(paperId)
             inboxDao.setState(paperId, InboxItemEntity.STATE_DISMISSED)
             paperFeedbackDao.upsert(
                 PaperFeedbackEntity(
@@ -59,6 +61,7 @@ class InboxRepository
                     signal = PaperFeedbackEntity.SIGNAL_NEGATIVE,
                     source = PaperFeedbackEntity.SOURCE_DISMISS,
                     createdAt = Instant.now().toEpochMilli(),
+                    scoreAtLabel = scoreAtLabel,
                 ),
             )
         }
@@ -98,6 +101,7 @@ class InboxRepository
                         paperId = paperId,
                         signal = desired,
                         source = PaperFeedbackEntity.SOURCE_THUMB,
+                        scoreAtLabel = inboxDao.scoreFor(paperId),
                         createdAt = Instant.now().toEpochMilli(),
                     ),
                 )

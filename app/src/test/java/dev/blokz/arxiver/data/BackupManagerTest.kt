@@ -442,6 +442,9 @@ class BackupManagerTest {
             listOf(
                 "chat", "session", "message", "conversation", "tool", "invocation", "query", "activity",
                 "feedback", "vote", "signal", "relevance",
+                // P5.3: the fitted per-user model (calibration + future head weights) is local tuning state —
+                // like the labels it derives from, it must never enter an export/backup.
+                "calibration", "shrinkage", "head_weights", "headweights",
             )
         for (root in listOf(ArxiverBackup.serializer(), LibraryExport.serializer())) {
             val names = mutableSetOf<String>()

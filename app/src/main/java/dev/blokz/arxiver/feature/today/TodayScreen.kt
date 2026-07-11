@@ -137,6 +137,7 @@ fun TodayScreen(
                 else ->
                     InboxList(
                         items = state.items,
+                        threshold = state.relevantThreshold,
                         onPaperClick = onPaperClick,
                         onSave = viewModel::save,
                         onDismiss = viewModel::dismiss,
@@ -175,13 +176,23 @@ private fun TodayDispatchHost(
 @Composable
 private fun InboxList(
     items: List<InboxPaper>,
+    threshold: Double,
     onPaperClick: (String) -> Unit,
     onSave: (InboxPaper) -> Unit,
     onDismiss: (InboxPaper) -> Unit,
     onVote: (InboxPaper, Boolean) -> Unit,
 ) {
     // SPEC-SEARCH §5: scored items lead under "Likely relevant"; rest follow.
-    val (scored, unscored) = items.partition { (it.score ?: 0.0) >= RELEVANT_THRESHOLD }
+    // Top-k by score above the calibrated floor (P5.3, Co-Founder decision): a stable, capped section — never
+    // a flood on a generous day, never junk-padded on a quiet one. Items arrive score-ordered from the DAO.
+    val scoredIds =
+        items.asSequence()
+            .filter { (it.score ?: 0.0) >= threshold }
+            .sortedByDescending { it.score ?: 0.0 }
+            .take(RELEVANT_TOP_K)
+            .map { it.paper.ref.storageId }
+            .toSet()
+    val (scored, unscored) = items.partition { it.paper.ref.storageId in scoredIds }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         if (scored.isNotEmpty()) {
             item(key = "header-relevant") { SectionHeader(stringResource(R.string.today_likely_relevant)) }
@@ -223,7 +234,7 @@ private fun InboxList(
     }
 }
 
-private const val RELEVANT_THRESHOLD = 0.55
+private const val RELEVANT_TOP_K = 10
 
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
@@ -232,6 +243,7 @@ private fun InboxListPreview() {
     ArxiverTheme {
         InboxList(
             items = PreviewFixtures.inboxPapers,
+            threshold = LEGACY_RELEVANT_THRESHOLD,
             onPaperClick = {},
             onSave = {},
             onDismiss = {},

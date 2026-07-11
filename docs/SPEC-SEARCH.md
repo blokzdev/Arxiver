@@ -10,6 +10,15 @@
 > tested); results surface only in a debug Settings card. Every later P5 promotion (shrinkage λ, calibration,
 > the gated head's β) must clear this harness per-segment.
 
+> **P5.2 shrinkage + P5.3 calibrated threshold.** The positive centroids are nearest-shrunken toward their mean by
+> a per-user λ the harness selects on a pre-registered grid (k-fold select, time-split confirm; 0 below the floor —
+> bit-identical to the unshrunk scorer). `inbox_items.score` stays the RAW Rocchio value; a per-user **Platt map**
+> `p = σ(a·s + b)` fitted on the harness's held-out outputs (≥50 labels + ≥10 effective negatives, else null;
+> `a > 0` enforced — monotone, so ordering NEVER reshuffles) is persisted in the single-row `relevance_model` table,
+> and Today translates the p = 0.5 point ONCE into a raw-score cut. Uncalibrated profiles keep EXACTLY the legacy
+> 0.55. **"Likely relevant" is top-k (10)** above that cut, not everything above it. `paper_feedback.score_at_label`
+> records the score the user saw at label time (exposure context for future eval; NULL pre-v14).
+
 > **Multi-source online search (P-Explorer PE.3):** the Explore Online scope searches ONE source per submit —
 > arXiv natively (this spec's §2 pipeline, unchanged), any other source via a single OpenAlex `search()` call
 > (host `api.openalex.org`, ~1.2s self-spacing, metered → explicit-submit-only + un-paginated v1). The local

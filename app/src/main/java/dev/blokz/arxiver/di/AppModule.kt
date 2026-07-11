@@ -79,6 +79,10 @@ object AppModule {
     fun inboxDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.InboxDao = db.inboxDao()
 
     @Provides
+    fun relevanceModelDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.RelevanceModelDao =
+        db.relevanceModelDao()
+
+    @Provides
     fun paperFeedbackDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.PaperFeedbackDao =
         db.paperFeedbackDao()
 
