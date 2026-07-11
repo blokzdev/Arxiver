@@ -22,7 +22,11 @@ data class RelevanceModelEntity(
     /** Platt slope; null = no calibration fitted (below floor). Monotone by the fitter's contract (a > 0). */
     @ColumnInfo(name = "calibration_a") val calibrationA: Double?,
     @ColumnInfo(name = "calibration_b") val calibrationB: Double?,
-    /** The harness-selected shrinkage λ this model was tuned with. */
+    /**
+     * The latest eval pass's harness-selected shrinkage λ. On a P5.5 KEEP row this is the FRESH pass's λ while
+     * `calibration_a`/`_b` are the retained (previous-pass) fit — the row means "the calibration in force" plus
+     * "the latest eval", deliberately mixed; see [consecutiveNullFits].
+     */
     @ColumnInfo(name = "shrinkage_lambda") val shrinkageLambda: Double,
     /** Raw label counts behind the fit — the floor audit trail. */
     @ColumnInfo(name = "label_positives") val labelPositives: Int,
@@ -31,6 +35,14 @@ data class RelevanceModelEntity(
     /** P5.4's future weight vector (little-endian float blob) + bias — nullable until the head is earned. */
     @ColumnInfo(name = "head_weights", typeAffinity = ColumnInfo.BLOB) val headWeights: ByteArray? = null,
     @ColumnInfo(name = "head_bias") val headBias: Double? = null,
+    /**
+     * Downgrade hysteresis (P5.5): how many consecutive eval passes have failed to fit a calibration while
+     * the row still carries one. A single null fit KEEPS the previous a/b (streak → 1); a second consecutive
+     * null downgrades to the legacy 0.55 (a/b → null, streak → 0). A fresh fit always applies immediately and
+     * resets the streak. On a kept pass [fittedAt] retains the a/b vintage while λ/label counts are the fresh
+     * pass's — the row describes "the calibration in force" plus "the latest eval", deliberately.
+     */
+    @ColumnInfo(name = "consecutive_null_fits", defaultValue = "0") val consecutiveNullFits: Int = 0,
 ) {
     override fun equals(other: Any?): Boolean = other is RelevanceModelEntity && other.id == id
 

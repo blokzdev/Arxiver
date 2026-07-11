@@ -46,9 +46,10 @@ data class RankerHealth(
 )
 
 /**
- * The live tuning the scorer applies (P5.2). In-memory, default λ=0 — a process death falls back to
- * bit-identical-to-P4 scoring until the next worker pass re-selects (durable tuning arrives with P5.3's
- * `relevance_model` row). Selected ONLY by the harness; never a shipped constant.
+ * The live tuning the scorer applies (P5.2). In-memory, default λ=0 — safe because `InboxScorer` only runs
+ * inside the same worker pass, immediately AFTER the runner re-selects; a pass whose eval fails scores at λ=0
+ * (bit-identical-to-P4). The `relevance_model` row records the selected λ as an audit trail — it is never
+ * rehydrated from, and doesn't need to be. Selected ONLY by the harness; never a shipped constant.
  */
 @Singleton
 class RankerTuning
@@ -127,17 +128,22 @@ class RankerEvalRunner
             val report = tuned.report
 
             // Fit the calibration on HELD-OUT scores; below the floor it stays null and the UI keeps the
-            // legacy 0.55 exactly. Persisted durably so Today's threshold survives process death.
+            // legacy 0.55 exactly. Persisted durably so Today's threshold survives process death. Downgrade
+            // hysteresis (P5.5): a single failed refit KEEPS the previous a/b; only two consecutive null fits
+            // downgrade — so a boundary-hovering profile's "Likely relevant" section doesn't flip regimes on
+            // every pass. A fresh fit always applies immediately.
             val platt = PlattCalibration.fit(tuned.heldOutScores, tuned.heldOutLabels, tuned.heldOutWeights)
+            val write = resolveCalibrationWrite(previous, platt, Instant.now().toEpochMilli())
             relevanceModelDao.upsert(
                 RelevanceModelEntity(
                     embeddingModel = EmbeddingWorker.MODEL_NAME,
-                    calibrationA = platt?.a,
-                    calibrationB = platt?.b,
+                    calibrationA = write.a,
+                    calibrationB = write.b,
                     shrinkageLambda = lambda,
                     labelPositives = tuned.heldOutLabels.count { it },
                     labelNegatives = tuned.heldOutLabels.count { !it },
-                    fittedAt = Instant.now().toEpochMilli(),
+                    fittedAt = write.fittedAt,
+                    consecutiveNullFits = write.consecutiveNullFits,
                 ),
             )
 
@@ -173,4 +179,35 @@ class RankerEvalRunner
                 aboveCut = sorted.count { it >= cut }.toDouble() / sorted.size,
             )
         }
+    }
+
+/** The calibration fields one eval pass persists — the hysteresis-resolved write (P5.5). */
+data class CalibrationWrite(
+    val a: Double?,
+    val b: Double?,
+    val consecutiveNullFits: Int,
+    /** On a KEEP this retains the a/b vintage; on a fresh fit or downgrade it is the pass time. */
+    val fittedAt: Long,
+)
+
+/**
+ * Downgrade hysteresis (P5.5), two-pass-confirm on the DOWNGRADE direction only:
+ * - a fresh fit ALWAYS applies immediately (including `null→fitted` and recovery from a kept pass);
+ * - a null fit with a usable previous calibration KEEPS it for exactly one pass (streak → 1);
+ * - a second consecutive null fit downgrades to the legacy regime (a/b → null);
+ * - a never-fitted profile stays null — the below-floor golden is untouched.
+ * "Two passes" means two COMPLETED eval passes: a crash between read and upsert skips the streak
+ * increment, so the downgrade can only be delayed, never taken early and never corrupted.
+ */
+fun resolveCalibrationWrite(
+    previous: RelevanceModelEntity?,
+    fresh: PlattMap?,
+    now: Long,
+): CalibrationWrite =
+    when {
+        fresh != null -> CalibrationWrite(fresh.a, fresh.b, 0, now)
+        previous != null && previous.calibrationA != null && previous.calibrationB != null &&
+            previous.consecutiveNullFits == 0 ->
+            CalibrationWrite(previous.calibrationA, previous.calibrationB, 1, previous.fittedAt)
+        else -> CalibrationWrite(null, null, 0, now)
     }

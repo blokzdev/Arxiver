@@ -15,6 +15,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 /**
  * The ranker-health card's `aboveCut` diagnostic must describe the SAME cut Today draws (P5.3 QW1). When a
@@ -108,5 +109,43 @@ class RankerEvalRunnerTest {
             val rich = assertNotNull(state.latest.value?.richDistribution)
             assertEquals(2, rich.count)
             assertEquals(0.0, rich.aboveCut, 1e-9) // 0.45 & 0.50 both fall under the legacy 0.55 cut
+        }
+
+    @Test
+    fun `a below-floor pass KEEPS the previous calibration once, with the mixed-vintage row contract`() =
+        runBlocking {
+            // Seed a fitted row from a "previous pass": a/b + fittedAt are its vintage.
+            db.relevanceModelDao().upsert(
+                RelevanceModelEntity(
+                    embeddingModel = EmbeddingWorker.MODEL_NAME,
+                    calibrationA = 48.7,
+                    calibrationB = -20.2,
+                    shrinkageLambda = 0.3,
+                    labelPositives = 45,
+                    labelNegatives = 40,
+                    fittedAt = 777L,
+                    consecutiveNullFits = 0,
+                ),
+            )
+            seedStraddlingInbox()
+
+            // Zero labels ⇒ Platt can't fit ⇒ this is a below-floor pass. Hysteresis KEEPS the a/b.
+            runner.run(EmbeddingWorker.RELEVANT_THRESHOLD)
+
+            val kept = assertNotNull(db.relevanceModelDao().current())
+            assertEquals(48.7, kept.calibrationA, "a is KEPT, not nulled on the first failed refit")
+            assertEquals(-20.2, kept.calibrationB)
+            assertEquals(1, kept.consecutiveNullFits, "streak advanced to 1")
+            assertEquals(777L, kept.fittedAt, "fittedAt retains the KEPT a/b vintage")
+            // Mixed vintage: λ + label counts are THIS (empty) pass's, not the kept row's.
+            assertEquals(0.0, kept.shrinkageLambda, "λ is the fresh pass's selection (0 below the k-fold floor)")
+            assertEquals(0, kept.labelPositives, "label counts are the fresh pass's held-out counts")
+            assertEquals(0, kept.labelNegatives)
+
+            // A SECOND consecutive below-floor pass downgrades to the legacy regime.
+            runner.run(EmbeddingWorker.RELEVANT_THRESHOLD)
+            val downgraded = assertNotNull(db.relevanceModelDao().current())
+            assertNull(downgraded.calibrationA, "second consecutive null fit downgrades")
+            assertEquals(0, downgraded.consecutiveNullFits)
         }
 }

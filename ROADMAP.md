@@ -633,27 +633,30 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   useless diffuse AUC-0.50 record — see VERIFICATION B2b. Decision rule unchanged for when the Co-Founder's real
   numbers arrive: healthy AUC + P@10 near ceiling → close no-go (à la PH.8); sufficient data + mediocre precision →
   build it. Synthetic readouts are **advisory only** and never flip this `[!]`.
-- [ ] **P5.5 — Calibration downgrade hysteresis (deferred quick-win, needs a migration).** A profile hovering at
-  the calibration-guard boundary (the `a≤0`/floor line) sees Today's "Likely relevant" section flip between the
-  calibrated cut and the legacy-0.55 regime across passes — designed honesty today, but jarring. Fix: **two-pass-
-  confirm on the DOWNGRADE direction only** (`null→fitted` applies immediately; `fitted→null` keeps the previous
-  a/b for one pass; two *consecutive* null fits downgrade). Correctness needs a persisted counter, so this is an
-  **additive v14→v15 migration** (`relevance_model.consecutive_null_fits INTEGER NOT NULL DEFAULT 0`) — it was
-  correctly disqualified as a same-PR quick-win (the only spare columns, `head_weights`/`head_bias`, are reserved
-  for P5.4; the runner touches no prefs; an in-memory flag resets on the process deaths Android inflicts between
-  periodic passes → could retain a stale calibration indefinitely). Shape: extract a pure
-  `resolveCalibrationWrite(previous, fresh)` in `RankerEvalRunner` pinned by a JVM unit test (immediate-up /
-  keep-once / downgrade-on-second-null / never-fitted-stays-null) + one Robolectric integration case across two
-  below-floor passes. Small, self-contained; schedule when P5.4 is dispositioned (they touch the same runner).
-- [ ] **CHECKPOINT P5** — full build green ✓; migration identity-hash-tested ✓ (+ a LIVE v3→v14 eleven-migration
-  upgrade on the emulator, 2026-07-10); red-line audit: zero egress from ranking ✓ (airplane-mode ranked the full
-  feed offline, 2026-07-10 emu; NoOkHttp structural scan), no new model/host ✓, weights never in backups ✓ (the
-  serial-descriptor snapshot guard), no telemetry ✓, `:core:search ∌ :app` ✓ (structural); harness device row ✓
-  emulator (B2b, refreshed 2026-07-10 with the coherent-profile readout) — **holds open pending only the P5.4
-  disposition** (Co-Founder real-profile numbers) **and the P5.5 hysteresis quick-win**.
-  *P5 ledger (recorded):* **[SHIPPED 2026-07-10, QW1]** the debug card's "above cut %" now uses the live calibrated
-  cut (the runner reads the persisted `relevance_model` row before its own upsert, mirroring `TodayViewModel`) —
-  `RankerEvalRunnerTest` pins both branches · threshold **hysteresis** promoted to its own subphase **P5.5** above ·
+- [x] **P5.5 — Calibration downgrade hysteresis.** A profile hovering at the calibration-guard boundary (the
+  `a≤0`/floor line) used to see Today's "Likely relevant" section flip between the calibrated cut and the legacy-
+  0.55 regime across passes. Fixed with **two-pass-confirm on the DOWNGRADE direction only** (`null→fitted` applies
+  immediately; `fitted→null` keeps the previous a/b for one pass; two *consecutive* null fits downgrade). Correctness
+  needs a persisted counter → **additive v14→v15 migration** (`relevance_model.consecutive_null_fits INTEGER NOT NULL
+  DEFAULT 0`, `MIGRATION_14_15`, `15.json`, `Migration14To15Test` — backfill 0 ≡ "current fit is fresh" ≡ pre-P5.5
+  semantics). The logic is a pure `resolveCalibrationWrite(previous, fresh, now)` in `RankerEvalRunner`
+  (`ResolveCalibrationWriteTest` exhausts the state machine incl. the unreachable half-populated row) + a
+  `RankerEvalRunnerTest` integration case pinning the **mixed-vintage row contract** (kept a/b + fittedAt from the
+  previous pass; λ + label counts from the fresh pass) across two below-floor passes → downgrade. Backup wall
+  extended (`null_fits`/`nullfits` in the descriptor blocklist); the two-pass count is **completed eval passes**, so a
+  crash between read and upsert only delays a downgrade, never takes it early or corrupts the streak. Adversarially
+  validated (workflow + personal pass): zero fatal, all fixable items folded in. *(Ships stacked on the QW1 PR #141;
+  the same-runner coupling is why they land together.)*
+- [ ] **CHECKPOINT P5** — full build green ✓ (now through v15); migration identity-hash-tested ✓ (+ a LIVE v3→v14
+  eleven-migration upgrade on the emulator, 2026-07-10; v14→v15 identity-hash + DDL tested); red-line audit: zero
+  egress from ranking ✓ (airplane-mode ranked the full feed offline, 2026-07-10 emu; NoOkHttp structural scan), no
+  new model/host ✓, weights **and the hysteresis streak** never in backups ✓ (the serial-descriptor snapshot guard,
+  `null_fits` pinned), no telemetry ✓, `:core:search ∌ :app` ✓ (structural); harness device row ✓ emulator (B2b,
+  refreshed 2026-07-10 with the coherent-profile readout) — **holds open pending only the P5.4 disposition**
+  (Co-Founder real-profile numbers). *P5.5 device leg (hysteresis persists one pass then downgrades) tracked in
+  VERIFICATION B2c — device-only, doesn't block `[x]`.*
+  *P5 ledger (recorded):* **[SHIPPED 2026-07-10, QW1]** the debug card's "above cut %" uses the live calibrated cut
+  (`RankerEvalRunnerTest` pins both branches) · **[SHIPPED 2026-07-11, P5.5]** the downgrade hysteresis above ·
   B2a's undo-erases-influence + fresh-profile cold-start legs still open (VERIFICATION B2a).
 
 ## Phase P-Explorer — complete the multi-source discovery surface (plan approved 2026-07-10)
