@@ -619,12 +619,23 @@ Dependency-ordered. The standout pillar is **AI understanding** (multi-provider 
   blocklist). Tests: `PlattCalibrationTest` ×5, `Migration13To14Test` (identity hash + sqlite_master DDL equality
   + never-seeded + NULL exposure for old labels), `TodayViewModelTest` +2 (absent row ⇒ exactly 0.55; a=10,b=−4 ⇒
   cut 0.4), `InboxTriageUndoTest` +1 (dismiss stamps the seen score), `BackupManagerTest` blocklist.
-- [ ] **P5.4 — GATED learned logistic head** (~385 params, pure Kotlin; β auto-→0 whenever the blend fails to
+- [!] **P5.4 — GATED learned logistic head** (~385 params, pure Kotlin; β auto-→0 whenever the blend fails to
   beat pure Rocchio per-segment on held-out data; gates on ≥8-10 REAL explicit negatives). **Ships only if P5.1
-  proves Rocchio leaves precision on the table.**
-- [ ] **CHECKPOINT P5** — full build green; migration identity-hash-tested; red-line audit (zero egress from
-  ranking — airplane-mode ranks; no new model/host; weights never in backups incl. the serial-descriptor snapshot
-  guard; no telemetry; `:core:search ∌ :app`); the harness's device row verified.
+  proves Rocchio leaves precision on the table.** `[needs-user/device]` — the gate's evidence is the
+  **Co-Founder's real-profile harness numbers** (VERIFICATION B2b protocol). The 2026-07-10 emulator session
+  proved the *machinery* (fit → persist → live threshold → guards) but its deliberately-diffuse synthetic profile
+  (AUC 0.50) can neither prove nor disprove real headroom. Decision rule when the numbers arrive: healthy AUC +
+  P@10 near ceiling → close no-go (à la PH.8); sufficient data + mediocre precision → build it.
+- [ ] **CHECKPOINT P5** — full build green ✓; migration identity-hash-tested ✓ (+ a LIVE v3→v14 eleven-migration
+  upgrade on the emulator, 2026-07-10); red-line audit: zero egress from ranking ✓ (airplane-mode ranked the full
+  feed offline, 2026-07-10 emu; NoOkHttp structural scan), no new model/host ✓, weights never in backups ✓ (the
+  serial-descriptor snapshot guard), no telemetry ✓, `:core:search ∌ :app` ✓ (structural); harness device row ✓
+  emulator (B2b) — **holds open pending only the P5.4 disposition** (Co-Founder real-profile numbers).
+  *P5 ledger (recorded, not shipped):* threshold **hysteresis** at the calibration-guard boundary (a profile near
+  the a≤0/floor line sees the section flip in/out across passes — designed honesty today; a two-pass-confirm
+  before switching regimes is the candidate fix, natural to fold into P5.4-era runner work) · the debug card's
+  "above cut %" still uses the static 0.55 while the live cut is calibrated (pass the persisted cut into
+  `RankerEvalRunner` — 5 lines, same fold-in) · B2a's undo-erases-influence + fresh-profile cold-start legs.
 
 ## Phase P-Explorer — complete the multi-source discovery surface (plan approved 2026-07-10)
 
