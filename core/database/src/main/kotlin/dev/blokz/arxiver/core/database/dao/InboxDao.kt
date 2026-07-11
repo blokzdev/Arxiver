@@ -56,6 +56,10 @@ interface InboxDao {
     )
     suspend fun activeIdsFromEnabledFollows(): List<String>
 
+    /** The paper's current inbox score — captured into `paper_feedback.score_at_label` at label time (P5.3). */
+    @Query("SELECT score FROM inbox_items WHERE paper_id = :paperId")
+    suspend fun scoreFor(paperId: String): Double?
+
     @Query("UPDATE inbox_items SET score = :score WHERE paper_id = :paperId")
     suspend fun setScore(
         paperId: String,

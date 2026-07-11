@@ -61,7 +61,7 @@ class TodayViewModelTest {
         library = LibraryRepository(db.libraryDao(), db.inboxDao())
         inbox = InboxRepository(db.inboxDao(), library, db.paperFeedbackDao())
         categories = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao())
-        vm = TodayViewModel(inbox, SyncScheduler(context), library, categories)
+        vm = TodayViewModel(inbox, SyncScheduler(context), library, categories, db.relevanceModelDao())
     }
 
     @After
@@ -204,6 +204,40 @@ class TodayViewModelTest {
                 val selection = vm.weeklyReviewSelection()
                 assertTrue("2401.00001" in selection)
                 assertTrue("2402.00002" in selection)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    // --- P5.3: the calibrated threshold ---
+
+    @Test
+    fun `no relevance model means EXACTLY the legacy 0_55 threshold`() =
+        runTest {
+            vm.uiState.test {
+                val state = awaitItem()
+                assertEquals(LEGACY_RELEVANT_THRESHOLD, state.relevantThreshold, 1e-12)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a fitted calibration moves the threshold to its p=0_5 point`() =
+        runTest {
+            // a=10, b=-4  =>  scoreFor(0.5) = 4/10 = 0.4
+            db.relevanceModelDao().upsert(
+                dev.blokz.arxiver.core.database.entity.RelevanceModelEntity(
+                    embeddingModel = "bge-test",
+                    calibrationA = 10.0,
+                    calibrationB = -4.0,
+                    shrinkageLambda = 0.0,
+                    labelPositives = 40,
+                    labelNegatives = 20,
+                    fittedAt = 1L,
+                ),
+            )
+            vm.uiState.test {
+                val calibrated = awaitGreedy { kotlin.math.abs(it.relevantThreshold - 0.4) < 1e-9 }
+                assertEquals(0.4, calibrated.relevantThreshold, 1e-9)
                 cancelAndIgnoreRemainingEvents()
             }
         }

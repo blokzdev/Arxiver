@@ -111,4 +111,22 @@ class InboxTriageUndoTest {
             assertEquals(listOf("2401.00002"), activeIds())
             assertNull(db.paperFeedbackDao().voteFor("2401.00002"), "undo clears the label the dismiss wrote")
         }
+
+    @Test
+    fun `dismiss captures the score the user saw into score_at_label`() =
+        kotlinx.coroutines.runBlocking {
+            seedInboxPaper("2401.00042")
+            db.inboxDao().setScore("2401.00042", 0.72)
+
+            inboxRepository.dismiss("2401.00042")
+
+            val stored =
+                db.openHelper.readableDatabase
+                    .query("SELECT score_at_label FROM paper_feedback WHERE paper_id = '2401.00042'")
+            stored.use { c ->
+                kotlin.test.assertTrue(c.moveToFirst())
+                // Exposure context (P5.3): captured at label time — unrecoverable any later.
+                kotlin.test.assertEquals(0.72, c.getDouble(0), 1e-9)
+            }
+        }
 }

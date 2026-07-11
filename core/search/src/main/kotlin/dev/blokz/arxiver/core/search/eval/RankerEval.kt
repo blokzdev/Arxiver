@@ -148,7 +148,13 @@ class RankerEval(
     ): Double {
         val capped = cap(examples)
         if (!meetsKFoldFloor(capped)) return 0.0
-        val folds = builtFolds(capped, seedVectors)
+        return selectShrinkageOn(builtFolds(capped, seedVectors), grid)
+    }
+
+    private fun selectShrinkageOn(
+        folds: List<Fold>,
+        grid: List<Double>,
+    ): Double {
         val kFolds = folds.filter { !it.isTimeSplit }
         val timeFold = folds.firstOrNull { it.isTimeSplit } ?: return 0.0
         if (kFolds.isEmpty()) return 0.0
@@ -164,6 +170,40 @@ class RankerEval(
         val winner = grid.maxBy { auc(kFolds, it) }
         if (winner <= 0.0) return 0.0
         return if (auc(listOf(timeFold), winner) >= auc(listOf(timeFold), 0.0)) winner else 0.0
+    }
+
+    /**
+     * The production entry (P5.3): one set of fold builds yields the selected λ, the report evaluated AT that
+     * λ, and the pooled held-out outputs the Platt calibrator fits on (held-out — calibrating on train-side
+     * scores would inherit their optimism). Keeps the ≤[KFOLDS]+1 rebuild bound for the whole pipeline.
+     */
+    fun tuneAndEvaluate(
+        examples: List<LabeledExample>,
+        seedVectors: Map<String, FloatArray>,
+        evaluatedAtMs: Long,
+    ): TunedEval {
+        val capped = cap(examples)
+        val folds = builtFolds(capped, seedVectors)
+        val lambda = if (meetsKFoldFloor(capped)) selectShrinkageOn(folds, SHRINKAGE_GRID) else 0.0
+        val outputs = folds.flatMap { score(it, lambda) }
+        val report =
+            EvalReport(
+                overall = segmentResult(outputs),
+                rich = segmentResult(outputs.filter { !it.titleOnly }),
+                titleOnly = segmentResult(outputs.filter { it.titleOnly }),
+                regimeContaminated =
+                    buildModel(capped, seedVectors)?.regime
+                        ?.let { prod -> folds.any { it.regime != prod } } ?: false,
+                labelCount = capped.size,
+                evaluatedAtMs = evaluatedAtMs,
+            )
+        return TunedEval(
+            report = report,
+            lambda = lambda,
+            heldOutScores = outputs.map { it.score },
+            heldOutLabels = outputs.map { it.positive },
+            heldOutWeights = outputs.map { it.weight },
+        )
     }
 
     // --- folds ---

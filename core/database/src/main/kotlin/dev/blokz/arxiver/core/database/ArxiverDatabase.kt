@@ -14,6 +14,7 @@ import dev.blokz.arxiver.core.database.dao.InboxDao
 import dev.blokz.arxiver.core.database.dao.LibraryDao
 import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.dao.PaperFeedbackDao
+import dev.blokz.arxiver.core.database.dao.RelevanceModelDao
 import dev.blokz.arxiver.core.database.dao.RoutineDao
 import dev.blokz.arxiver.core.database.dao.SearchDao
 import dev.blokz.arxiver.core.database.entity.AuthorEntity
@@ -38,6 +39,7 @@ import dev.blokz.arxiver.core.database.entity.PaperFeedbackEntity
 import dev.blokz.arxiver.core.database.entity.PaperFtsEntity
 import dev.blokz.arxiver.core.database.entity.PaperTagCrossRef
 import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
+import dev.blokz.arxiver.core.database.entity.RelevanceModelEntity
 import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
 import dev.blokz.arxiver.core.database.entity.RoutineDispatchEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
@@ -45,6 +47,7 @@ import dev.blokz.arxiver.core.database.entity.ToolInvocationEntity
 import dev.blokz.arxiver.core.database.migration.MIGRATION_10_11
 import dev.blokz.arxiver.core.database.migration.MIGRATION_11_12
 import dev.blokz.arxiver.core.database.migration.MIGRATION_12_13
+import dev.blokz.arxiver.core.database.migration.MIGRATION_13_14
 import dev.blokz.arxiver.core.database.migration.MIGRATION_1_2
 import dev.blokz.arxiver.core.database.migration.MIGRATION_2_3
 import dev.blokz.arxiver.core.database.migration.MIGRATION_3_4
@@ -80,6 +83,7 @@ import dev.blokz.arxiver.core.database.migration.MIGRATION_9_10
         ChunkEmbeddingEntity::class,
         ChunkFtsEntity::class,
         RelatedPaperEntity::class,
+        RelevanceModelEntity::class,
         CitationEdgeEntity::class,
         RoutineConfigEntity::class,
         RoutineDispatchEntity::class,
@@ -104,6 +108,8 @@ abstract class ArxiverDatabase : RoomDatabase() {
 
     abstract fun paperFeedbackDao(): PaperFeedbackDao
 
+    abstract fun relevanceModelDao(): RelevanceModelDao
+
     abstract fun chunkEmbeddingDao(): ChunkEmbeddingDao
 
     abstract fun chatDao(): ChatDao
@@ -116,7 +122,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
         const val NAME = "arxiver.db"
 
         /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
-        const val VERSION = 13
+        const val VERSION = 14
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema
@@ -137,6 +143,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
                     MIGRATION_10_11,
                     MIGRATION_11_12,
                     MIGRATION_12_13,
+                    MIGRATION_13_14,
                 )
                 .build()
     }

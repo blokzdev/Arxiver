@@ -3,10 +3,13 @@ package dev.blokz.arxiver.sync
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.database.dao.InboxDao
 import dev.blokz.arxiver.core.database.dao.PaperFeedbackDao
+import dev.blokz.arxiver.core.database.dao.RelevanceModelDao
 import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import dev.blokz.arxiver.core.database.entity.PaperFeedbackEntity
+import dev.blokz.arxiver.core.database.entity.RelevanceModelEntity
 import dev.blokz.arxiver.core.search.eval.EvalReport
 import dev.blokz.arxiver.core.search.eval.LabeledExample
+import dev.blokz.arxiver.core.search.eval.PlattCalibration
 import dev.blokz.arxiver.core.search.eval.RankerEval
 import dev.blokz.arxiver.core.search.eval.ScoreDistribution
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -69,6 +72,7 @@ class RankerEvalRunner
         private val inboxDao: InboxDao,
         private val state: RankerEvalState,
         private val tuning: RankerTuning,
+        private val relevanceModelDao: RelevanceModelDao,
     ) {
         suspend fun run(relevantThreshold: Double) {
             val rows = paperFeedbackDao.labeledExamples(EmbeddingWorker.MODEL_NAME)
@@ -99,11 +103,31 @@ class RankerEvalRunner
                     }
                     .toMap()
 
-            val eval = RankerEval()
-            // Selection + confirmation on disjoint splits (P5.2); the report describes the ranker AS TUNED.
-            val lambda = eval.selectShrinkage(examples, seeds)
+            // Stale-embedder discard first (mirrors the vector-tag guard): a model fit under another embedding
+            // never applies to this one's scores.
+            relevanceModelDao.deleteByModelMismatch(EmbeddingWorker.MODEL_NAME)
+
+            // ONE set of fold builds yields the selected λ, the tuned report, and the held-out outputs the
+            // Platt calibrator fits on (P5.3) — the ≤6-rebuild cost bound covers the whole pipeline.
+            val tuned = RankerEval().tuneAndEvaluate(examples, seeds, Instant.now().toEpochMilli())
+            val lambda = tuned.lambda
             tuning.shrinkageLambda = lambda
-            val report = eval.evaluate(examples, seeds, Instant.now().toEpochMilli(), lambda)
+            val report = tuned.report
+
+            // Fit the calibration on HELD-OUT scores; below the floor it stays null and the UI keeps the
+            // legacy 0.55 exactly. Persisted durably so Today's threshold survives process death.
+            val platt = PlattCalibration.fit(tuned.heldOutScores, tuned.heldOutLabels, tuned.heldOutWeights)
+            relevanceModelDao.upsert(
+                RelevanceModelEntity(
+                    embeddingModel = EmbeddingWorker.MODEL_NAME,
+                    calibrationA = platt?.a,
+                    calibrationB = platt?.b,
+                    shrinkageLambda = lambda,
+                    labelPositives = tuned.heldOutLabels.count { it },
+                    labelNegatives = tuned.heldOutLabels.count { !it },
+                    fittedAt = Instant.now().toEpochMilli(),
+                ),
+            )
 
             // NOTE: these distributions describe the PREVIOUS pass's scores — the runner executes before
             // scoreInbox so a freshly selected λ applies in the same worker run.

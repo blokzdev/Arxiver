@@ -33,6 +33,12 @@ data class PaperFeedbackEntity(
     @ColumnInfo(name = "signal") val signal: Int,
     @ColumnInfo(name = "source") val source: String,
     @ColumnInfo(name = "created_at") val createdAt: Long,
+    /**
+     * The paper's inbox score at the moment this label was created (P5.3; null for pre-v14 labels — the
+     * exposure context is unrecoverable retroactively). Future analyses condition on it: top-k changes which
+     * papers get SEEN, so dismiss economics differ by rendered section.
+     */
+    @ColumnInfo(name = "score_at_label") val scoreAtLabel: Double? = null,
 ) {
     companion object {
         const val SIGNAL_POSITIVE = 1
