@@ -447,6 +447,12 @@ class BackupManagerTest {
                 "calibration", "shrinkage", "head_weights", "headweights",
                 // P5.5: the hysteresis streak is derived model state on the same never-exported row.
                 "null_fits", "nullfits",
+                // Complete the relevance_model row + the P5.3 exposure column (a red-line audit found the above
+                // list left these uncaught — no leak today, but a future export DTO carrying one would slip the
+                // guard). Kotlinx serial names are the CAMEL property names, so pin both variants like the rest.
+                "head_bias", "headbias", "score_at_label", "scoreatlabel",
+                "label_positives", "labelpositives", "label_negatives", "labelnegatives",
+                "embedding_model", "embeddingmodel",
             )
         for (root in listOf(ArxiverBackup.serializer(), LibraryExport.serializer())) {
             val names = mutableSetOf<String>()
