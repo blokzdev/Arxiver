@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -87,6 +88,9 @@ fun TodayScreen(
     }
 
     Scaffold(
+        // Stable UiAutomator handle for the PP.3 startup/frame benchmarks (paired with
+        // testTagsAsResourceId=true at the app root so By.res("today_screen") resolves on device).
+        modifier = Modifier.testTag("today_screen"),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.nav_today)) },

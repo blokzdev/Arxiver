@@ -29,6 +29,12 @@ robolectric = "4.14.1"
 turbine = "1.2.0"
 androidxTestCore = "1.6.1"
 ktlintPlugin = "12.1.1"
+# P-Prove perf harness. benchmark + baselineprofile MUST share a version; all stable, min AGP 8.0 (< our 8.10.1).
+androidxBenchmark = "1.4.1"
+androidxProfileinstaller = "1.4.1"
+androidxUiautomator = "2.4.0"
+androidxTestRunner = "1.7.0"
+androidxTestExtJunit = "1.3.0"
 
 [libraries]
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
@@ -89,6 +95,13 @@ androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-
 hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
 androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version = "3.6.1" }
 
+# P-Prove perf harness (used by :macrobenchmark + :app baseline-profile consumer).
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "androidxBenchmark" }
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "androidxProfileinstaller" }
+androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "androidxUiautomator" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-library = { id = "com.android.library", version.ref = "agp" }
@@ -100,3 +113,6 @@ ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 room = { id = "androidx.room", version.ref = "room" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintPlugin" }
+# P-Prove: com.android.test shares the AGP version; androidx.baselineprofile MUST match the benchmark version.
+android-test = { id = "com.android.test", version.ref = "agp" }
+androidx-baselineprofile = { id = "androidx.baselineprofile", version.ref = "androidxBenchmark" }

@@ -962,13 +962,21 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   unit-test *compile* classpath but present at runtime; silently skips, never gates, on a non-HotSpot JVM). KDoc pins
   the guard as a COMPLEXITY/ALLOCATION tripwire, explicitly **not** the <300ms PRD proof (device-only, measured as D2).
   `./gradlew build` green.
-- [ ] **PP.2 — `:macrobenchmark` module + Baseline Profile plumbing + `testTag`.** New `com.android.test` module
-  (UiAutomator + `androidx.benchmark:benchmark-macro-junit4`) targeting `:app`; the `androidx.baselineprofile` plugin
-  (producer on `:macrobenchmark`, consumer on `:app`) + `ProfileInstaller`; a **profileable `benchmark` build type**
-  (`matchingFallbacks += "release"` if hand-rolled — the trap that silently zeroes trace sections on device); a
-  `Modifier.testTag("today_screen")` anchor on the Today `Scaffold`. CI-safe: `automaticGenerationDuringBuild=false`
-  + `androidx.baselineprofile.skipgeneration=true` in `gradle.properties` so `assemble` never launches a GMD/needs
-  KVM; ktlint-clean from day one (root `subprojects` applies it to the new module). Compiles in CI; runs on device.
+- [x] **PP.2 — `:macrobenchmark` module + Baseline Profile plumbing + `testTag`.** New `com.android.test` module
+  (UiAutomator + `androidx.benchmark:benchmark-macro-junit4` **1.4.1** stable, UiAutomator **2.4.0**) targeting `:app`;
+  the `androidx.baselineprofile` plugin (producer on `:macrobenchmark`, consumer on `:app`, both pinned to the
+  benchmark version) + `ProfileInstaller` **1.4.1**. Versions confirmed via an Ultracode research workflow (min AGP
+  8.0 < our 8.10.1; all stable, not the sample's alpha/compileSdk-36 pins). All AGP plugins pinned `apply false` in the
+  root build so `com.android.test` shares AGP's classpath version (else "already on the classpath with an unknown
+  version" fails config). **The profileable measurement variant is the baselineprofile plugin's auto-created
+  `benchmarkRelease`** — I *deferred the hand-rolled `benchmark` build type (and its `matchingFallbacks += "release"`
+  trap) to PP.3**, where the consuming test-module build type + `ENABLE_TEST_CORPUS` seeding live (splitting them was
+  asymmetric). `ENABLE_TEST_CORPUS` `buildConfigField` defined (default false; debug true; release never seeds), read
+  by nothing yet (PP.3 adds the hook). UI anchor: `Modifier.testTag("today_screen")` on the Today `Scaffold` + the
+  paired `testTagsAsResourceId = true` at the app-root `Scaffold` (so `By.res(...)` resolves on device). CI-safe:
+  `automaticGenerationDuringBuild=false` + `androidx.baselineprofile.skipgeneration=true` (PP.5 device generation must
+  override with `-Pandroidx.baselineprofile.skipgeneration=false` — noted at the `gradle.properties` line). No `.kt` in
+  the module yet (suites are PP.3). Compiles in CI (device-free); benchmarks run on device.
 - [ ] **PP.3 — Tracing + Macrobenchmark suites + `BaselineProfileGenerator` + seeding hook.** `androidx.tracing`
   async section `hybrid_search` spanning the whole suspending `SearchViewModel.runLocalSearch` (the true end-to-end
   D2 number — it *includes* the ~100–200ms `embedQuery` JNI the sync slices exclude) + sync `hybrid_fuse` /
