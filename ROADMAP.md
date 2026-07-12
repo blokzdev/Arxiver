@@ -1006,7 +1006,7 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
     suspend `chunk()`); **GAP-A** search UI tags (`search_screen`/`search_field`/`semantic_active`, the last so a
     non-model-ready run fails loudly); `:macrobenchmark → :core:search` dep + `StartupBenchmark`/`FrameTimingBenchmark`/
     the mandatory `SearchTraceBenchmark`/`BaselineProfileGenerator`. Compiles in CI; numbers on device.
-- [ ] **PP.4 — Startup critical-path deferral** *(the real cold-start WIN a profile can't give; independently
+- [x] **PP.4 — Startup critical-path deferral** *(the real cold-start WIN a profile can't give; independently
   shippable).* Replace `runBlocking { onboarded.first() }` (`MainActivity`) with a held splash + async read (the
   `NavHost` holds a loading `startDestination` and still honors the deep-link fork), and defer the sync
   `CrashReporter.pendingCrash` `filesDir` read to a post-composition `LaunchedEffect`. Robolectric tests cover the

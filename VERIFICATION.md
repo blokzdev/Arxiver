@@ -76,7 +76,10 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 > the `benchmarkRelease`/`nonMinifiedRelease` variants (`ENABLE_TEST_CORPUS`); benchmarks gate on the "Seeded Paper"
 > content anchor, not just `today_screen` (Finding #2). Record the exact device in every row.
 - [ ] **D1 Cold start < 2s.** `:macrobenchmark` `StartupBenchmark` cold→Today, `CompilationMode.None()` **and**
-  `Partial(baseline)` — record TTID + TTFD both ways (the profile delta is the shipped win; re-run after PP.4).
+  `Partial(baseline)` — record TTID + TTFD both ways (the profile delta is one shipped win). **PP.4 landed a second,
+  profile-independent win:** the `onboarded` read + `CrashReporter.pendingCrash` are no longer on the first-frame
+  main thread (splash-held async read + deferred crash effect), so the main thread is unblocked — expect the TTFD
+  improvement here (TTID may barely move since the splash is simply held). Confirm both on the S20.
 - [ ] **D2 Hybrid search < 300ms** — `SearchTraceBenchmark` reads the async `hybrid_search` section (INCLUDES the
   `embedQuery` JNI). PRD #2 says a 1,000-paper library; F5.4 says 5K — capture BOTH corpora and note which. Requires
   the BGE model provisioned (above).
