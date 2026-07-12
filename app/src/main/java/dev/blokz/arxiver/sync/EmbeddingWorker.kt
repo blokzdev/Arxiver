@@ -39,6 +39,7 @@ class EmbeddingWorker
         private val chunkEmbeddingDao: ChunkEmbeddingDao,
         private val ragIndexer: RagIndexer,
         private val rankerEvalRunner: RankerEvalRunner,
+        private val digestRunner: DigestRunner,
     ) : CoroutineWorker(context, params) {
         override suspend fun doWork(): Result {
             // Model download is bound to this worker's unmetered-network constraint.
@@ -61,6 +62,11 @@ class EmbeddingWorker
             // previous pass — documented on the runner). Diagnostic + tuning only: it must never fail the worker.
             if (!isStopped) runCatching { rankerEvalRunner.run(RELEVANT_THRESHOLD) }
             inboxScorer.scoreInbox { isStopped }
+            // Ambient digest (P-Ambient PA.1b): fire AFTER scoring so the count/cut are this pass's products.
+            // A side-effect must never fail the worker; user-initiated passes suppress it (they're already looking).
+            if (!isStopped) {
+                runCatching { digestRunner.maybePost(suppressed = inputData.getBoolean(SUPPRESS_DIGEST, false)) }
+            }
             return Result.success()
         }
 
@@ -136,6 +142,12 @@ class EmbeddingWorker
         companion object {
             const val UNIQUE_PERIODIC = "embedding_periodic"
             const val UNIQUE_ONESHOT = "embedding_now"
+
+            /**
+             * Input-data flag stamped `true` by USER-initiated passes (manual sync / embed-now) so they don't
+             * fire the ambient digest — only the background periodic pass digests (PA.1b). Default false.
+             */
+            const val SUPPRESS_DIGEST = "suppress_digest"
 
             /**
              * The LEGACY "Likely relevant" cut — the fallback the ranker-health card's `aboveCut` diagnostic uses

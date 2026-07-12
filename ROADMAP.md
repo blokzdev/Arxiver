@@ -889,7 +889,7 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
 > streak would reward *the app running*, not the user showing up — the exact dark pattern the backlog guards against
 > (a real one needs a net-new `daily_activity` store → backlog + HUMAN.md, never faked).
 
-- [~] **PA.1 — On-sync digest notification** *(the core ambient surface; first shippable PR).* An opt-in local
+- [x] **PA.1 — On-sync digest notification** *(the core ambient surface).* An opt-in local
   notification "N new likely-relevant papers" fired inside `EmbeddingWorker.doWork()` after `scoreInbox` (:63),
   before `Result.success()`, wrapped `if (!isStopped) runCatching {}` (an ambient side-effect must never fail the
   worker). **Exactly-once "new" accounting via an additive `inbox_items.digested_at INTEGER?` column (migration
@@ -909,7 +909,14 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   fixes `reschedulePeriodicSync` to reschedule `EmbeddingWorker` too (not just FollowSync). Tests: `RelevanceThreshold`
   unit, Robolectric DAO (eligible-count + exactly-once `markDigested`), fire-logic (count-0/suppressed/denied/stopped
   → no post/no stamp), red-line (no token/PII in the notification). *(Migration is **v15→v16** — validated against
-  `ArxiverDatabase.VERSION=15`, correcting the plan's stale note.)*
+  `ArxiverDatabase.VERSION=15`, correcting the plan's stale note.)* **Shipped across PA.1a (#144, the shared
+  `RelevanceThreshold` helper) + PA.1b (the digest engine: migration v15→v16, `DigestNotifier`/`DigestRunner`,
+  worker wiring, Settings toggle; `DigestRunnerTest` proves exactly-once + every gate).** Two deliberate scope-downs
+  recorded: **(a)** the deep-link is the simple "open to Today" launch intent — the paper-specific target rides
+  PA.2; **(b)** foreground-suppression (skip a digest while the app is open) was **dropped from the first cut** to
+  avoid a `lifecycle-process` dep — the daily cap + `SUPPRESS_DIGEST`-on-user-syncs cover the main cases; a cheap
+  follow-on. **Device verification is an explicit next step (not an `[E]` IOU):** post on API 33+ grant/deny,
+  tap-through, lockscreen-privacy, daily-cap across real passes.
 - [ ] **PA.2 — Home-screen Glance widget** *(HARD-GATED on the Glance-dep nod, HUMAN.md).* Today's top-k
   best-by-score rows (via the shared `RelevanceThreshold.cut` + a new `activeInboxTopK` query), deep-linking into
   Today/paper, refreshed beside the PA.1 post in the worker (zero extra wakeups) + a debounced foreground freshener.

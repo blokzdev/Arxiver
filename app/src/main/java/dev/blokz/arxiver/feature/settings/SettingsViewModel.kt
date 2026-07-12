@@ -26,6 +26,7 @@ data class SettingsUiState(
     val modelState: ModelState = ModelState.NotDownloaded,
     val embeddedCount: Int = 0,
     val pdfCacheMb: Long = 0,
+    val digestEnabled: Boolean = false,
 )
 
 @HiltViewModel
@@ -59,14 +60,24 @@ class SettingsViewModel
                 modelDownloader.state,
                 embeddingDao.observeCount(),
                 pdfCacheMb,
-            ) { interval, model, embedded, pdfMb ->
+                settingsRepository.digestEnabled,
+            ) { interval, model, embedded, pdfMb, digest ->
                 SettingsUiState(
                     syncIntervalHours = interval,
                     modelState = model,
                     embeddedCount = embedded,
                     pdfCacheMb = pdfMb,
+                    digestEnabled = digest,
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
+
+        /**
+         * Ambient-digest opt-in (PA.1b). Persist the flag; the runtime POST_NOTIFICATIONS request is the
+         * screen's job (it needs an Activity). Turning OFF just clears the flag — no permission change.
+         */
+        fun setDigestEnabled(enabled: Boolean) {
+            viewModelScope.launch { settingsRepository.setDigestEnabled(enabled) }
+        }
 
         init {
             refreshPdfCacheSize()

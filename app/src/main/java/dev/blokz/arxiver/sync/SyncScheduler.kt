@@ -10,6 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -75,6 +76,8 @@ class SyncScheduler
             ).then(
                 OneTimeWorkRequestBuilder<EmbeddingWorker>()
                     .setConstraints(unmetered)
+                    // User-initiated → never digest (the user is already here).
+                    .setInputData(workDataOf(EmbeddingWorker.SUPPRESS_DIGEST to true))
                     .build(),
             ).enqueue()
         }
@@ -86,6 +89,16 @@ class SyncScheduler
                 ExistingPeriodicWorkPolicy.UPDATE,
                 PeriodicWorkRequestBuilder<FollowSyncWorker>(intervalHours, TimeUnit.HOURS)
                     .setConstraints(networked)
+                    .build(),
+            )
+            // Also reschedule the embedding/scoring pass — the digest + Today ranking ride its cadence, so a
+            // user who tightens the interval should get them on the new cadence too (PA.1b fix).
+            workManager.enqueueUniquePeriodicWork(
+                EmbeddingWorker.UNIQUE_PERIODIC,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                PeriodicWorkRequestBuilder<EmbeddingWorker>(intervalHours, TimeUnit.HOURS)
+                    .setConstraints(unmetered)
+                    .setInitialDelay(15, TimeUnit.MINUTES)
                     .build(),
             )
         }
@@ -108,6 +121,8 @@ class SyncScheduler
                 ExistingWorkPolicy.KEEP,
                 OneTimeWorkRequestBuilder<EmbeddingWorker>()
                     .setConstraints(unmetered)
+                    // User-initiated → never digest.
+                    .setInputData(workDataOf(EmbeddingWorker.SUPPRESS_DIGEST to true))
                     .build(),
             )
         }

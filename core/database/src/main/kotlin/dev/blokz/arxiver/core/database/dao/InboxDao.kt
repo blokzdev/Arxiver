@@ -95,10 +95,47 @@ interface InboxDao {
      */
     @Query("DELETE FROM inbox_items WHERE follow_id = :followId")
     suspend fun deleteByFollowId(followId: Long)
+
+    /**
+     * Rows eligible for an ambient digest (P-Ambient PA.1b): active + scored + at/above the calibrated cut +
+     * NOT yet digested + a recent arrival (so a weeks-old row that only now crosses a shifted cut isn't
+     * announced as "new"). Ordered best-first so the notifier can take the top-N titles. `score IS NOT NULL`
+     * excludes cold-start/recency rows (never "N likely-relevant" from unscored papers).
+     */
+    @Query(
+        """
+        SELECT i.paper_id AS paperId, p.title AS title FROM inbox_items i
+        JOIN papers p ON p.id = i.paper_id
+        WHERE i.state IN ('new', 'seen') AND i.score IS NOT NULL AND i.score >= :cut
+              AND i.digested_at IS NULL AND i.arrived_at > :recencyFloor
+        ORDER BY i.score DESC
+        """,
+    )
+    suspend fun eligibleDigest(
+        cut: Double,
+        recencyFloor: Long,
+    ): List<DigestRow>
+
+    /**
+     * Stamp `digested_at` on exactly the counted rows, in one statement, BEFORE the notification posts
+     * (crash-safe: at worst one digest is lost, never double-fired). `digested_at IS NULL` keeps it idempotent
+     * even if the id set overlaps a concurrent write.
+     */
+    @Query("UPDATE inbox_items SET digested_at = :now WHERE paper_id IN (:paperIds) AND digested_at IS NULL")
+    suspend fun markDigested(
+        paperIds: List<String>,
+        now: Long,
+    )
 }
 
 /** One active-inbox score + its embedding-quality segment (P5.1 tripwire). */
 data class ScoredSegmentRow(
     val score: Double,
     val titleOnly: Boolean,
+)
+
+/** A paper eligible for the ambient digest — id (for the deep-link) + title (for the body). PA.1b. */
+data class DigestRow(
+    val paperId: String,
+    val title: String,
 )
