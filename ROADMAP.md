@@ -1012,12 +1012,23 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   `CrashReporter.pendingCrash` `filesDir` read to a post-composition `LaunchedEffect`. Robolectric tests cover the
   splash-release routing for `onboarded ∈ {true,false}`, the deep-link-with-unresolved-onboarded race, and the crash
   dialog still firing. The TTFD win is measured on device; if any routing regression surfaces, PP.4 bounces, not merges.
-- [ ] **PP.5 — Golden relevance fixture + device runbook + CHECKPOINT closure.** Author the ~20-query golden
-  relevance set over ~100 real arXiv abstracts (the set deferred at `SPEC-SEARCH.md:99`) as a JSON fixture with a
-  **pure-JVM structural CI test** (schema/uniqueness/no-PII); a `ENABLE_TEST_CORPUS`-gated device harness that runs
-  them through **real BGE ONNX** for the C3 ≥80% top-5 number (never a JVM-faked embedding — that would break the
-  ONNX-free-CI red line); the `VERIFICATION.md` device runbook (§below) closing C3/D1–D4/E1–E3/A1 and flagging
-  G1/G2/H3 `[needs-user]`. Harvest breadcrumbs recorded, not absorbed: `blobToFloats` per-row alloc → ROADMAP backlog.
+- **PP.5 — Golden relevance fixture + device runbook + CHECKPOINT closure.** Split by what CI can verify vs what needs
+  the device:
+  - [x] **PP.5a — Golden relevance fixture + structural CI gate + harvest.** A **30-query / 36-paper golden relevance
+    set** over REAL landmark arXiv abstracts (the set deferred at `SPEC-SEARCH.md:99`), curated via an Ultracode
+    workflow (6 subfield agents fetched + transcribed real abstracts from `arxiv.org/abs/…`; I personally spot-verified
+    every id against known papers) and committed as `core/search/src/test/resources/golden_relevance.json` (ids sorted,
+    deterministic; 6 deliberate distractor papers keep the hit-rate honest). A **pure-JVM `GoldenRelevanceStructuralTest`**
+    gates it in CI: ≥25 papers / ≥20 queries, unique ids, every expected id resolves, arXiv-shaped ids + real non-empty
+    abstracts, and the redaction red line (no email/token). Harvest breadcrumb routed to the v2 backlog. VERIFICATION C3
+    + HUMAN.md carry the device-session handoff.
+  - [ ] **PP.5b — C3 device eval harness + the perf/a11y/routine numbers `[needs-user/device]`.** The
+    `ENABLE_TEST_CORPUS`-gated harness that runs the golden queries through **real BGE ONNX** on the device for the C3
+    ≥80% top-5 number is **deliberately deferred to the device session** rather than shipped blind — it's a bespoke
+    instrumented path (real ONNX, app search infra) that CI can only compile, never verify, so building it with the
+    device in hand avoids shipping unverified device wiring. The fixture is ready; VERIFICATION C3 specs the harness.
+    Also here: D1–D4 perf, E1–E3 a11y, A1 install, C3, and **G1/G2/H3 `[needs-user]`** (guided setup + ≥2 live routines
+    + useful-payload check with a real TokenVault token — the human-only long pole).
 - [ ] **CHECKPOINT P-Prove** — full build green; the CI perf guard is invariant-based (no wall-clock gate); the
   `:macrobenchmark` module compiles in CI without a GMD/KVM; `:core:* ∌ :app` intact; red lines intact (no telemetry,
   the seeding hook is `release`-gated OFF and never writes the production Room file in release, no token/PII in any
@@ -1070,6 +1081,15 @@ refactor is additive-columns-no-re-key, governed by `docs/SPEC-P-SOURCES.md`).
 **P-HTML PH.7 deferrals (harvested 2026-07-04):** **Fork-new-session Ask affordance** (no API exists; sessionId=null resume is the recorded default) **✓ RESOLVED (P-Chat PC.1, 2026-07-04):** sealed `SessionStart{Resume|MostRecentFor|New}` + a "New conversation" TopAppBar action on the full-screen route. · **Jump-to-match-ordinal-N after a reload** (needs findNext stepping + flicker cost; activate only if the device ledger finds re-highlight-only objectionable) · **Find/Ask toolbar overflow-collapse** if the 4-action bar reads as icon-soup on a small phone (do not pre-build) · **Strip inline markdown image/link syntax from excerpts at quote time** (closes the conversation-export tracking-pixel residual; shipped as a documented accepted residual in SPEC §13) · **Persist user-edited Ask input across process death** (pre-existing gap, not a PH.7 regression) · **Blink find-marker colors vs the dark reader palette** (only lever is the reader's own dark CSS; pending the device check).
 
 **P-Feeds deferrals (harvested 2026-07-06 from the PF.2 research + adversarial pass):** **On-device inbox relevance ranking** — **✓ PROMOTED → active Phase P4** (plan approved 2026-07-06). *Correction: the premise here ("the `score` column is currently unused for cross-source ranking") was stale — the positive-only ranker already ships & runs live; Phase P4 deepens it to two-sided (dismiss-negatives + follows-cold-start + thumbs).* · **Cross-source de-dup crosswalk at feed-ingest** — **✓ RESOLVED (P-FeedPolish PFP.1, 2026-07-07):** `FollowSyncWorker` now resolves a canonical `PaperRef` per hit (OpenAlex `locations[]` arXiv cross-id via `resolvePaperRef`, then origin-blind normalized-DOI reuse), so a cross-posted paper no longer forks. *(The original note undersold it — the fork is reachable even for a chemRxiv-primary work; DOI-only would have been a no-op.)* · **chemRxiv `/vN`-suffixed DOI normalization** — **✓ RESOLVED (P-FeedPolish PFP.1):** `normalizeDoi` strips the scoped `.vN` suffix (both chemRxiv DOI shapes) for the de-dup key. · **Robolectric InvalidationTracker close-race — the residual fix.** The PS.2 synchronous query/txn executors *reduce* but do **not** fully eliminate the `Illegal connection pointer` background-refresh leak (recurred on the PF.2 full-suite run 2026-07-06, green on re-kick): **✓ RESOLVED (PF.3, 2026-07-06) via `sqliteMode=NATIVE`.** The `Illegal connection pointer` was a Robolectric **LEGACY** SQLite-shadow artifact (the shadow's per-thread connection-pointer bookkeeping races Room 2.7's post-close invalidation refresh coroutine). Switching to Robolectric's **NATIVE** SQLite (a `robolectric.properties` in each Room-testing module) removes the shadow pointers, so the race can't manifest — the `:app` suite went **3/3 green after ~5 consecutive flakes**. Dead-ends ruled out first (don't retry): `InstantTaskExecutorRule` (refresh isn't on the ArchTaskExecutor path), and `forkEvery(1)` was already set (leak is intra-class). The PS.2 sync executors stay (harmless). Detail in memory `robolectric-room-sync-executors`.
+
+**P-Prove deferrals (harvested 2026-07-12 from the PP.1–PP.5 adversarial passes):** **`blobToFloats` per-row
+`FloatArray(384)` allocation** — `VectorIndex.topK` decodes every stored embedding into a fresh `FloatArray` per row
+(`core/search/.../VectorIndex.kt`); a reusable/decode-in-place buffer would cut the per-scan allocation the PP.1
+`VectorScanPerfGuardTest` bounds. Small + self-contained, but the **sqlite-vec** switch (already backlogged) rewrites
+the storage/scan path wholesale and would subsume it — do the buffer reuse only if sqlite-vec slips. · **PP.5b C3
+device eval harness** — the real-BGE golden-relevance measurement, deferred to the device session (spec in
+VERIFICATION C3, fixture committed); the only reason it's here and not built is that CI can compile but never verify
+it, so it rides the device.
 
 **P-Feeds PF.3 deferrals (harvested 2026-07-06 from the PF.3 adversarial pass):** **Composite inbox PK `(paper_id, follow_id)` for per-follow provenance** — PF.3 keeps `paper_id` as the sole PK (one row per paper) + cleans inbox on unfollow; a "why is this here / which follow surfaced it" UI would justify the composite PK + a migration + a Today `GROUP BY paper_id` de-dup. Track. · **Multi-source follow badges on the arXiv grid** — generalize `CategoryWithFollowState.followed` → `Set<Source> followedOn` so the grid shows which sources a category is followed on (PF.3 keeps the grid an arXiv Boolean for minimal blast radius). · **A "Following" management surface** — one screen listing ALL non-arXiv follows grouped by source with origin-scoped unfollow (PF.3 ships only the picker; the toggle state inside it already shows what's followed per source). · **"This follow returned 0 papers recently" health hint** — a mis-mapped OpenAlex Field fails silently (HTTP 200 count=0), so a lightweight in-app signal when a follow delivers nothing over N syncs would surface misconfiguration. · **OpenAlex Subfield granularity (~250 vs 26 Fields)** — Fields keep the picker small/un-metered but may be coarse for a focused chemRxiv follow; a product decision on offering Subfield refinement. · **Per-source PDF-host allowlisting** (researchsquare.com / ssrn.com / preprints.org / osf.io) — a per-source Co-Founder decision (each needs a cookie-wall/redirect check like chemRxiv's Atypon path) to enable in-app PDF read; read-only external-open until then (`HUMAN.md` §3). · **Per-source whole-source first-sync cap** — a tighter page/window bound for SSRN-scale firehoses if the OpenAlex credit budget is ever pressured (the page-1 short-circuit already bounds the common case).
 
