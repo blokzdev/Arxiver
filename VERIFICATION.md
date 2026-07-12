@@ -65,7 +65,16 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 ## C. On-device ML
 - [~] **C1 Model download** — pinned bge-small-en-v1.5 ONNX (~34 MB) downloads on unmetered with progress UI; checksum verified; survives delete/re-index in Settings. _v2.0.2 (emu 2026-06-23): the model auto-downloaded over the emulator network and loaded ("Model ready — hybrid search active"), implicitly checksum-passing. The progress UI + explicit delete/re-index round-trip were not driven this session (V2-followup)._
 - [E] **C2 Embedding inference** — WordPiece tokenizer + ONNX session produce embeddings on device (unit-tested against reference tokenizations; on-device inference not yet run). _v2.0.2 (emu 2026-06-23): bge ONNX inference runs on the x86_64 emulator (28 papers embedded; chat retrieval returns relevant chunks). The "not yet run on device" gap is closed for x86_64; arm64 throughput still rides the S20._
-- [ ] **C3 Hybrid search relevance (golden set)** — ≥80% top-5 hit over the ~20-case fixture (SPEC-SEARCH §"Golden relevance set"); needs on-device inference, so it lives here not in CI.
+- [ ] **C3 Hybrid search relevance (golden set)** — ≥80% top-5 hit over the golden fixture; needs on-device
+  inference, so it lives here not in CI. **The fixture is ready (PP.5a):** `core/search/src/test/resources/golden_relevance.json`
+  — **30 queries / 36 real landmark arXiv papers** (incl. 6 distractors), CI-gated for structure by
+  `GoldenRelevanceStructuralTest`. **The C3 eval harness is device-session work (PP.5b, deliberately not shipped
+  blind):** build an `ENABLE_TEST_CORPUS`-gated instrumented path (an `:app` androidTest or a debug entry) that
+  (1) inserts the 36 papers + embeds each abstract via the REAL BGE `EmbeddingService` (never a JVM-faked embedding —
+  that breaks the ONNX-free-CI red line), (2) FTS-indexes them, (3) runs each query through the full hybrid path
+  (`LocalKeywordSearch` + `VectorIndex.topK` + `HybridFusion.fuse`), (4) counts a hit when the query's `expectedIds`
+  land in the top-5, (5) asserts hit-rate ≥ 0.80. Prereq: the BGE model provisioned on the device (see §D). Record the
+  measured hit-rate + per-query misses.
 
 ## D. Performance _(ROADMAP 5.4 / PRD F5.4 · Phase P-Prove)_
 > The P-Prove Macrobenchmark harness (PP.1–PP.3b) is the instrument for D1–D4. **Run on the physical Samsung S20, NOT
