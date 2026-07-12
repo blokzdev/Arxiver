@@ -977,14 +977,35 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   `automaticGenerationDuringBuild=false` + `androidx.baselineprofile.skipgeneration=true` (PP.5 device generation must
   override with `-Pandroidx.baselineprofile.skipgeneration=false` — noted at the `gradle.properties` line). No `.kt` in
   the module yet (suites are PP.3). Compiles in CI (device-free); benchmarks run on device.
-- [ ] **PP.3 — Tracing + Macrobenchmark suites + `BaselineProfileGenerator` + seeding hook.** `androidx.tracing`
-  async section `hybrid_search` spanning the whole suspending `SearchViewModel.runLocalSearch` (the true end-to-end
-  D2 number — it *includes* the ~100–200ms `embedQuery` JNI the sync slices exclude) + sync `hybrid_fuse` /
-  `vector_topk_scan` slices (never wrap a suspension in a sync slice); `StartupBenchmark` (cold→Today, `None` vs
-  `Partial(baseline)`, TTID+TTFD), `FrameTimingBenchmark` (Today scroll), the mandatory `SearchTraceBenchmark` (fires
-  the trace sections — without it D2 is never captured), `BaselineProfileGenerator`; a **`BuildConfig.ENABLE_TEST_CORPUS`**
-  -gated (`debug`+`benchmark` true, `release` false — NOT `BuildConfig.DEBUG`) `:app` seeding hook loading the PP.1
-  corpus + follows + inbox rows (so FrameTiming measures scroll, not `EmptyState`). Compiles in CI; numbers on device.
+- **PP.3 — Tracing + Macrobenchmark suites + `BaselineProfileGenerator` + seeding hook.** Planned via an Ultracode
+  workflow (Opus map → adversarial design/stress → synthesis) **+ personal file:line validation** (which caught a
+  real compile bug the plan missed: `PaperEntity` needs the non-defaulted `citationsSyncedAt`). Split into PP.3a
+  (substrate, red-line-critical, fully CI-provable) → PP.3b (trace seam + suites, device-oriented). Two adversarial
+  findings shape the device runbook: **(#1)** on a fresh benchmark install the BGE model isn't provisioned, so
+  `modelReady==false` → the semantic leg + `vector_topk_scan` never fire and `hybrid_search` silently measures
+  keyword-only — SearchTraceBenchmark/BaselineProfileGenerator require the model on-device (a PP.5 precondition, not
+  a code fix); **(#2)** a seed↔benchmark race — the async seeder can still be running when FrameTiming starts, so
+  benchmarks gate on a content anchor (`By.textContains("Seeded Paper")`), not just `today_screen`, and the seed is
+  one bulk transaction.
+  - [x] **PP.3a — Seed substrate + `SeededCorpus` visibility + benchmark-variant flag.** `SeededCorpus`
+    `internal`→`public` (the `:app` hook can't read `:core:search` test sources); a `TestCorpusSeeder` (`:app`,
+    Hilt-provided with a `transaction` lambda à la `ChatRepository`) that idempotently (sentinel `p000000`) seeds N
+    papers + PP.1 embeddings + one enabled follow + N inbox rows (descending score ramp across the 0.55 cut, "Seeded
+    Paper" titles) in ONE transaction; a `BuildConfig.ENABLE_TEST_CORPUS`-gated fire in `ArxiverApplication`.
+    **Variant wiring via Option B** — `androidComponents` flips `ENABLE_TEST_CORPUS` true on the plugin's
+    `benchmarkRelease`+`nonMinifiedRelease` only (verified in the generated `BuildConfig`), so **`release` AND `debug`
+    stay false**. *Refinement over the plan: I flipped `debug` to NOT seed* — the benchmarks run on the non-debuggable
+    `benchmarkRelease`, so debug-seeding served nothing and would pollute the developer's real `arxiver.db` (the plan's
+    Finding #3). This also makes the red-line test a plain runtime `assertFalse(BuildConfig.ENABLE_TEST_CORPUS)` that
+    CI runs under BOTH debug and release variants — stronger + simpler than a build-file parse. Tests: `SeedingRedLineTest`
+    + a Robolectric+Room `TestCorpusSeederTest` (idempotency, FK order, follow-dedup, score ramp). CI-green, zero device.
+  - [ ] **PP.3b — Trace seam + the four suites + benchmark UI anchors.** `androidx.tracing` on `:app`+`:core:search`;
+    a shared `object SearchTrace` (`const val` → compile-time-only coupling for `:macrobenchmark`) + a JVM
+    `SearchTraceContractTest` name-pin; async `hybrid_search` (try/finally, cookie) over `runLocalSearch`, sync
+    `hybrid_fuse` (`:161`) + `vector_topk_scan` (VectorIndex inner `for`, after the chunk-empty break — never over the
+    suspend `chunk()`); **GAP-A** search UI tags (`search_screen`/`search_field`/`semantic_active`, the last so a
+    non-model-ready run fails loudly); `:macrobenchmark → :core:search` dep + `StartupBenchmark`/`FrameTimingBenchmark`/
+    the mandatory `SearchTraceBenchmark`/`BaselineProfileGenerator`. Compiles in CI; numbers on device.
 - [ ] **PP.4 — Startup critical-path deferral** *(the real cold-start WIN a profile can't give; independently
   shippable).* Replace `runBlocking { onboarded.first() }` (`MainActivity`) with a held splash + async read (the
   `NavHost` holds a loading `startDestination` and still honors the deep-link fork), and defer the sync

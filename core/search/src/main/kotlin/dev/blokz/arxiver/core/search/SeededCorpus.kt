@@ -4,12 +4,15 @@ import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import java.util.Random
 
 /**
- * A deterministic synthetic embedding corpus for the perf-regression guards (P-Prove PP.1) and — later — the
- * on-device Macrobenchmark seeding (PP.3). ONE generator so the CI complexity/allocation tripwire and the device
- * benchmark exercise byte-identical inputs. Pure + fixed-seed ⇒ reproducible. `internal`: test/benchmark support
- * only; it is never on a production call path (the release seeding hook is `BuildConfig`-gated off).
+ * A deterministic synthetic embedding corpus for the perf-regression guards (P-Prove PP.1) and the on-device
+ * Macrobenchmark seeding (PP.3). ONE generator so the CI complexity/allocation tripwire and the device benchmark
+ * exercise byte-identical inputs. Pure + fixed-seed ⇒ reproducible.
+ *
+ * Public (not `internal`) so the PP.3 `:app` benchmark-seeding hook (`TestCorpusSeeder`) reuses this ONE generator —
+ * a `:app`/`com.android.test` consumer can't read another module's test sources. It is kept off the production path
+ * by RELEASE-GATING (`BuildConfig.ENABLE_TEST_CORPUS`, false in release/debug), not by visibility.
  */
-internal object SeededCorpus {
+object SeededCorpus {
     /** bge-small-en-v1.5 embedding width (the shipped model). */
     const val DIM = 384
     const val MODEL = "bge-small-en-v1.5-q8"
