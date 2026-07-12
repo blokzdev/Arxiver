@@ -51,4 +51,6 @@ dependencies {
     implementation(libs.androidx.test.ext.junit)
     implementation(libs.androidx.test.runner)
     implementation(libs.androidx.test.uiautomator)
+    // For the pinned SearchTrace section-name constants only (compile-time `const` inline — no runtime coupling).
+    implementation(project(":core:search"))
 }

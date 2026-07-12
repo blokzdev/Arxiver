@@ -31,6 +31,8 @@ dependencies {
     implementation(project(":core:ml"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    // P-Prove PP.3b: the vector_topk_scan atrace slice in VectorIndex (markers only during an active capture).
+    implementation(libs.androidx.tracing.ktx)
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)

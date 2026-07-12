@@ -80,6 +80,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -185,6 +186,8 @@ fun ExploreScreen(
     }
 
     Scaffold(
+        // UiAutomator handle for the PP.3b SearchTraceBenchmark (paired with the app-root testTagsAsResourceId=true).
+        modifier = Modifier.testTag("search_screen"),
         topBar = {
             if (selection.isActive) {
                 SelectionTopBar(count = selection.count, onClear = { selection.clear() }) {
@@ -259,6 +262,7 @@ fun ExploreScreen(
                 modifier =
                     Modifier
                         .fillMaxWidth()
+                        .testTag("search_field") // PP.3b: the benchmark types a query here
                         .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
                 placeholder = {
                     Text(
@@ -825,7 +829,14 @@ private fun LibraryPane(
                 icon = Icons.Outlined.SearchOff,
             )
         else ->
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                // PP.3b: surface "semantic_active" ONLY when the BGE model is ready, so SearchTraceBenchmark can wait
+                // on it and FAIL LOUDLY on a mis-provisioned device rather than silently measuring keyword-only.
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .then(if (state.semanticActive) Modifier.testTag("semantic_active") else Modifier),
+            ) {
                 if (!state.semanticActive) {
                     item {
                         Surface(
