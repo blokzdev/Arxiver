@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,35 +29,57 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import dagger.hilt.android.AndroidEntryPoint
+import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.ui.ArxiverApp
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsRepository: dev.blokz.arxiver.data.SettingsRepository
 
+    @Inject lateinit var dispatchers: DispatcherProvider
+
     private var deepLinkPaperId by mutableStateOf<ArxivId?>(null)
+
+    // null = not yet read. Formerly a runBlocking DataStore read that blocked the first frame (P-Prove PP.4); now
+    // resolved off the main thread with the system splash held until it lands.
+    private var onboarded by mutableStateOf<Boolean?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must precede super.onCreate — hands the system splash to Compose.
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         deepLinkPaperId = intent?.extractArxivId()
-        val onboarded = runBlocking { settingsRepository.onboarded.first() }
-        val pendingCrash = CrashReporter.pendingCrash(this)
+        // Hold the splash while `onboarded` resolves off the main thread. TTID barely moves (the splash is simply
+        // held ~as long as the read took to block before), but the main thread is now free to do the rest of
+        // startup in parallel — the real TTFD / unblocked-main win a Baseline Profile can't give (P-Prove PP.4).
+        splashScreen.setKeepOnScreenCondition { onboarded == null }
+        lifecycleScope.launch { onboarded = settingsRepository.onboarded.first() }
         setContent {
             ArxiverTheme {
-                var crashTrace by remember { mutableStateOf(pendingCrash) }
-                ArxiverApp(
-                    deepLinkPaperId = deepLinkPaperId,
-                    startOnboarding = !onboarded && deepLinkPaperId == null,
-                )
+                // NavHost's startDestination is fixed at first composition, so the app must not compose under a
+                // not-yet-known `onboarded` — the splash covers this brief gap. `deepLinkPaperId` is set
+                // synchronously above, so the fork is correct the moment `onboarded` lands.
+                onboarded?.let { resolved ->
+                    ArxiverApp(
+                        deepLinkPaperId = deepLinkPaperId,
+                        startOnboarding = shouldStartOnboarding(resolved, deepLinkPaperId),
+                    )
+                }
+                // CrashReporter.pendingCrash reads filesDir — deferred off the first-frame path to a post-composition
+                // effect (was a synchronous onCreate read). Still shows after a real crash (P-Prove PP.4).
+                var crashTrace by remember { mutableStateOf<String?>(null) }
+                LaunchedEffect(Unit) {
+                    crashTrace = withContext(dispatchers.io) { CrashReporter.pendingCrash(this@MainActivity) }
+                }
                 crashTrace?.let { trace ->
                     CrashDialog(
                         trace = trace,
