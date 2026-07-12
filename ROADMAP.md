@@ -917,7 +917,7 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   avoid a `lifecycle-process` dep — the daily cap + `SUPPRESS_DIGEST`-on-user-syncs cover the main cases; a cheap
   follow-on. **Device verification is an explicit next step (not an `[E]` IOU):** post on API 33+ grant/deny,
   tap-through, lockscreen-privacy, daily-cap across real passes.
-- [ ] **PA.2 — Home-screen Glance widget** *(HARD-GATED on the Glance-dep nod, HUMAN.md).* Today's top-k
+- [ ] **PA.2 — Home-screen Glance widget** *(Glance dep APPROVED 2026-07-12 — unblocked).* Today's top-k
   best-by-score rows (via the shared `RelevanceThreshold.cut` + a new `activeInboxTopK` query), deep-linking into
   Today/paper, refreshed beside the PA.1 post in the worker (zero extra wakeups) + a debounced foreground freshener.
   Glance is **absent from the build** → adopting `androidx.glance.appwidget` is a Co-Founder-visible dependency
@@ -935,13 +935,69 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   worker stop, lockscreen-privacy, the metered-only "requires Wi-Fi" reality). **Accepted, disclosed:** both ambient
   surfaces ride the UNMETERED-gated scoring pass, so a cellular-only user sees an empty digest until Wi-Fi — a
   "requires Wi-Fi sync" hint on the opt-in toggle (HUMAN.md).
-- [ ] **P-Prove — turn "green build" into "verified"** *(queued; harness autonomous, gold numbers device-gated).*
-  All of PRD §7's success criteria are unverified and CHECKPOINT 5/6 have sat open since 2026-06-11; there is **no
-  Macrobenchmark module and no deterministic seeded corpus** — the instrument to prove perf (<300ms hybrid search
-  @5K, cold-start <2s), a11y (TalkBack, 1.3× font), install-from-scratch, and ≥2 live routine E2E has never existed.
-  Scope: Macrobenchmark + seeded 1K/5K corpus + a CI JVM/Robolectric fusion-latency regression guard (all
-  autonomous) + a VERIFICATION-linked device runbook. **Strategic unlock: one device session then closes CHECKPOINT
-  5, 6, AND P5 (+ decides P5.4) together.** Size **M–L**.
+
+### Phase P-Prove — turn "green build" into "verified" *(ACTIVE 2026-07-12; harness autonomous, gold numbers device-gated)*
+
+> Planned via an Ultracode workflow (Opus map → 3 design stances → adversarial stress → synthesis) **+ a personal
+> file:line validation** (confirmed the `dotSimilarity`/`VectorIndex.topK` signatures, the `RankerEval` injected
+> cost-counter precedent, `VectorMath.l2Normalized`, `PaperEmbeddingEntity.floatsToBlob`, and that `./gradlew build`
+> never runs `connectedCheck` — so a `com.android.test` module compiles but its benchmarks don't run in CI).
+> **Thesis:** every PRD §7 success criterion is unverified and CHECKPOINT 5/6 have sat open since 2026-06-11 — build
+> the *instrument* to prove them. **Honest scope boundary (binding):** the autonomous PR half builds the harness + CI
+> guards + device runbook and closes **ZERO** checkpoint rows — the perf gold numbers need real hardware (the Samsung
+> S20, not the x86_64 emulator) and CHECKPOINT 6 is 100% human-gated (≥2 live routines with a real TokenVault token,
+> never faked). **Anti-flake stance:** the CI latency guard gates on **complexity/allocation INVARIANTS, never
+> wall-clock** — a ms ceiling on a shared CI runner is either flaky or meaningless. Size **M–L**.
+
+- [x] **PP.1 — Seeded corpus + deterministic JVM regression guard** *(the first shippable increment — pure CI, zero
+  device, zero new deps).* A deterministic synthetic embedding corpus (`SeededCorpus`, `internal` in `:core:search`
+  **main** so PP.3's on-device benchmark seeding can reuse the SAME generator — a `com.android.test`/`:app` consumer
+  can't read another module's test sources; `seed=42`, N∈{5K,20K} i.i.d. L2-normalized `FloatArray(384)` wrapped as
+  `PaperEmbeddingEntity`) + a `VectorScanPerfGuardTest` asserting INVARIANTS on the brute-force scan
+  (`VectorIndex.topK`): **exactly N dot products — O(n), never N²** (via a new defaulted
+  `VectorIndex(embeddingDao, similarity = ::dotSimilarity)` seam mirroring `RankerEval`'s injected cost-counter — a
+  zero-call-site-change refactor that also improves testability); **top-k equals a brute-force full sort** (proves
+  heap correctness + strict tie-free ordering off distinct random similarities); and a **per-scan allocation ceiling**
+  via HotSpot `getThreadAllocatedBytes` (reached wholly by reflection — `java.lang.management` is off the Android-lib
+  unit-test *compile* classpath but present at runtime; silently skips, never gates, on a non-HotSpot JVM). KDoc pins
+  the guard as a COMPLEXITY/ALLOCATION tripwire, explicitly **not** the <300ms PRD proof (device-only, measured as D2).
+  `./gradlew build` green.
+- [ ] **PP.2 — `:macrobenchmark` module + Baseline Profile plumbing + `testTag`.** New `com.android.test` module
+  (UiAutomator + `androidx.benchmark:benchmark-macro-junit4`) targeting `:app`; the `androidx.baselineprofile` plugin
+  (producer on `:macrobenchmark`, consumer on `:app`) + `ProfileInstaller`; a **profileable `benchmark` build type**
+  (`matchingFallbacks += "release"` if hand-rolled — the trap that silently zeroes trace sections on device); a
+  `Modifier.testTag("today_screen")` anchor on the Today `Scaffold`. CI-safe: `automaticGenerationDuringBuild=false`
+  + `androidx.baselineprofile.skipgeneration=true` in `gradle.properties` so `assemble` never launches a GMD/needs
+  KVM; ktlint-clean from day one (root `subprojects` applies it to the new module). Compiles in CI; runs on device.
+- [ ] **PP.3 — Tracing + Macrobenchmark suites + `BaselineProfileGenerator` + seeding hook.** `androidx.tracing`
+  async section `hybrid_search` spanning the whole suspending `SearchViewModel.runLocalSearch` (the true end-to-end
+  D2 number — it *includes* the ~100–200ms `embedQuery` JNI the sync slices exclude) + sync `hybrid_fuse` /
+  `vector_topk_scan` slices (never wrap a suspension in a sync slice); `StartupBenchmark` (cold→Today, `None` vs
+  `Partial(baseline)`, TTID+TTFD), `FrameTimingBenchmark` (Today scroll), the mandatory `SearchTraceBenchmark` (fires
+  the trace sections — without it D2 is never captured), `BaselineProfileGenerator`; a **`BuildConfig.ENABLE_TEST_CORPUS`**
+  -gated (`debug`+`benchmark` true, `release` false — NOT `BuildConfig.DEBUG`) `:app` seeding hook loading the PP.1
+  corpus + follows + inbox rows (so FrameTiming measures scroll, not `EmptyState`). Compiles in CI; numbers on device.
+- [ ] **PP.4 — Startup critical-path deferral** *(the real cold-start WIN a profile can't give; independently
+  shippable).* Replace `runBlocking { onboarded.first() }` (`MainActivity`) with a held splash + async read (the
+  `NavHost` holds a loading `startDestination` and still honors the deep-link fork), and defer the sync
+  `CrashReporter.pendingCrash` `filesDir` read to a post-composition `LaunchedEffect`. Robolectric tests cover the
+  splash-release routing for `onboarded ∈ {true,false}`, the deep-link-with-unresolved-onboarded race, and the crash
+  dialog still firing. The TTFD win is measured on device; if any routing regression surfaces, PP.4 bounces, not merges.
+- [ ] **PP.5 — Golden relevance fixture + device runbook + CHECKPOINT closure.** Author the ~20-query golden
+  relevance set over ~100 real arXiv abstracts (the set deferred at `SPEC-SEARCH.md:99`) as a JSON fixture with a
+  **pure-JVM structural CI test** (schema/uniqueness/no-PII); a `ENABLE_TEST_CORPUS`-gated device harness that runs
+  them through **real BGE ONNX** for the C3 ≥80% top-5 number (never a JVM-faked embedding — that would break the
+  ONNX-free-CI red line); the `VERIFICATION.md` device runbook (§below) closing C3/D1–D4/E1–E3/A1 and flagging
+  G1/G2/H3 `[needs-user]`. Harvest breadcrumbs recorded, not absorbed: `blobToFloats` per-row alloc → ROADMAP backlog.
+- [ ] **CHECKPOINT P-Prove** — full build green; the CI perf guard is invariant-based (no wall-clock gate); the
+  `:macrobenchmark` module compiles in CI without a GMD/KVM; `:core:* ∌ :app` intact; red lines intact (no telemetry,
+  the seeding hook is `release`-gated OFF and never writes the production Room file in release, no token/PII in any
+  fixture). **Device rows (VERIFICATION.md, ONE owner session on the S20):** A1 install-from-scratch · D1 cold-start
+  <2s (None vs baseline) · D2 <300ms search (record BOTH the 1K PRD and 5K F5.4 corpora) · D3 60fps scroll · D4 ship
+  `baseline-prof.txt` · C3 golden ≥80% · E1–E3 a11y · **G1/G2/H3 `[needs-user]`** (guided setup + ≥2 live routines +
+  useful-payload check — the human-only long pole). Only when 0–9 are green (G2 included) do CHECKPOINT 5 (PRD §7) +
+  CHECKPOINT 6 get checked, in a docs-only commit.
+
 - [ ] **P-Discover2 — active discovery from the paid-for label/embedding infra** *(queued; needs plan-mode
   go-ahead).* P4/P5 shipped only the *reactive* Rocchio re-ranker; the deferred *active* tier stays unbuilt:
   **"more like this"** (per-paper neighbors over the existing VectorIndex), **author-following** (one additive
