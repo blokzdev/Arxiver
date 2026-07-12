@@ -860,6 +860,101 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   badges) decision resolved in HUMAN.md** (the audit caught it was only in the backlog — added the product-call row);
   device checks in VERIFICATION.md (B1c PFP.2, B1d PFP.3). Docs-only checkpoint commit.
 
+## Post-P5 phase queue (proposed 2026-07-12)
+
+> Proposed via an Ultracode workflow (5-reader survey → 4 Opus ideation lenses → Opus judge → Opus synthesis) **+ a
+> personal file:line validation** that materially corrected the slate. **Sequencing (Co-Founder-approved 2026-07-12):
+> P-Ambient first (autonomous), P-Prove's harness staged in parallel, then ONE device session closes CHECKPOINT
+> 5/6/P5 + decides P5.4, then P-Discover2 as a plan-mode phase.** Each phase still gets the full planning ritual +
+> its own `[x]` record when built. **Validation corrections folded in:** (1) the proposed "P-Sovereign" phase was
+> **dropped** — its two headline "defects" were debunked at file:line (the "ungated BYOK egress hole" is the
+> no-active-exposure defense-in-depth gap already tracked in HUMAN.md §3 — the clients hit *allowlisted* pinned
+> hosts; the "BackupManager.import duplicates follows / data-corruption bug" is **false**: `FollowDao.insert` is
+> `OnConflictStrategy.IGNORE` against the unique `(type,value,origin)` index, so re-import is idempotent by
+> construction), leaving only the already-recorded egress-test + reset-personalization follow-ons; (2) **P-FullText
+> was added** — the workflow's code-survey agent errored, missing the explicit PRD v2 gap "full-text search of PDF
+> bodies" (`RagIndexer.kt:34` chunks only title+abstract+notes, never the downloaded PDF body).
+
+### Phase P-Ambient — surface the calibrated ranker BEFORE app-open *(plan approved 2026-07-12; ACTIVE)*
+
+> Planned via an Ultracode workflow (4-reader map → 3 Opus design stances → 3 Opus adversarial stress passes → Opus
+> synthesis) **+ a personal file:line validation** that caught the plan's stale DB-version note (**it's v15→v16, not
+> the plan's guessed v11→v12** — P5.5 shipped v15 this session). **Thesis:** the P5 per-user Platt-calibrated top-k
+> "Likely relevant" set is computed every `EmbeddingWorker` pass but is invisible until app-open — surface it
+> **calmly, locally, honestly**. **Ethos guardrails (binding):** opt-in default-OFF · silence-over-noise (cold-start
+> null scores → count 0 → post nothing) · honest labels only · zero new egress, no telemetry, the count never leaves
+> the device · battery-neutral (piggyback the existing scoring pass, no extra wakeups). **The "streak" is DROPPED,
+> not deferred** — there is no honest per-user engagement signal in the schema (`added_at` is save-only;
+> `arrived_at`/`last_synced_at` are worker artifacts written with no user present; `markSeen` has zero callers), so a
+> streak would reward *the app running*, not the user showing up — the exact dark pattern the backlog guards against
+> (a real one needs a net-new `daily_activity` store → backlog + HUMAN.md, never faked).
+
+- [~] **PA.1 — On-sync digest notification** *(the core ambient surface; first shippable PR).* An opt-in local
+  notification "N new likely-relevant papers" fired inside `EmbeddingWorker.doWork()` after `scoreInbox` (:63),
+  before `Result.success()`, wrapped `if (!isStopped) runCatching {}` (an ambient side-effect must never fail the
+  worker). **Exactly-once "new" accounting via an additive `inbox_items.digested_at INTEGER?` column (migration
+  v15→v16), NOT a DataStore watermark** — per-row, order-independent, and resilient to partial/stopped passes (a
+  row a stopped pass left `score=null` rolls into a later complete pass; a watermark silently misses it). Eligible
+  = `state IN ('new','seen') AND score IS NOT NULL AND score >= :cut AND digested_at IS NULL AND arrived_at >
+  :recencyFloor`; stamp `digested_at` on exactly the counted rows in one txn **before** `notify()` (crash → lose one
+  digest, never double-fire). **Threshold via a new shared `core.search.eval.RelevanceThreshold.cut(a,b)`** (both-null
+  → legacy 0.55; else `PlattMap(a,b).scoreFor(0.5)`) extracted from `TodayViewModel.kt:68-79` so Today + digest +
+  widget can't drift. **Four decoupled fatigue throttles:** count>0 · a separate DataStore `lastDigestPostedAt`
+  daily cap · `SUPPRESS_DIGEST` inputData on the user-initiated `syncNow`/`embedNow` call sites · foreground
+  suppression (`ProcessLifecycleOwner` RESUMED). **Opt-in:** `digestEnabled` DataStore key (default false) + a
+  Settings toggle that fires the app's **first-ever** `POST_NOTIFICATIONS` runtime request (reusing the
+  `RequestPermission()` launcher from `AiProviderSettingsScreen.kt:85-97`); dedicated `arxiver_digest` channel
+  (`IMPORTANCE_DEFAULT`, `VISIBILITY_PRIVATE` — no titles on the lockscreen); `BigTextStyle` top-3 titles + "N more"
+  via `<plurals>`. Tap deep-links into Today (paper-specific target reuses the tested `extractArxivId` path). Also
+  fixes `reschedulePeriodicSync` to reschedule `EmbeddingWorker` too (not just FollowSync). Tests: `RelevanceThreshold`
+  unit, Robolectric DAO (eligible-count + exactly-once `markDigested`), fire-logic (count-0/suppressed/denied/stopped
+  → no post/no stamp), red-line (no token/PII in the notification). *(Migration is **v15→v16** — validated against
+  `ArxiverDatabase.VERSION=15`, correcting the plan's stale note.)*
+- [ ] **PA.2 — Home-screen Glance widget** *(HARD-GATED on the Glance-dep nod, HUMAN.md).* Today's top-k
+  best-by-score rows (via the shared `RelevanceThreshold.cut` + a new `activeInboxTopK` query), deep-linking into
+  Today/paper, refreshed beside the PA.1 post in the worker (zero extra wakeups) + a debounced foreground freshener.
+  Glance is **absent from the build** → adopting `androidx.glance.appwidget` is a Co-Founder-visible dependency
+  decision (local-only, no egress, but a standing gate). Read-only (no migration); `EntryPointAccessors` for the
+  non-Hilt receiver; from-scratch `GlanceTheme` day/night from the static tokens.
+- [ ] **PA.3 — [RECOMMENDED CUT] "Recently saved" shelf.** A `status='to_read'` shelf **cannot** honestly be called
+  an "unread/waiting queue" (`to_read` is the save-time default; nothing auto-advances it; opening a paper never
+  touches it) and largely duplicates the Library tab. **Recommendation: cut PA.3 from P-Ambient and fold honest
+  "Continue reading" into the queued P-Read phase** (which owns the `reading_positions` substrate that makes
+  "unread" knowable). Ship a capped honest "Recently saved" Today section only on the Co-Founder's explicit nod.
+- [ ] **CHECKPOINT P-Ambient** — full build green; migration v15→v16 identity-hash-tested + `16.json` committed (no
+  destructive); red-line audit (no new egress — the count never leaves the device; no telemetry-shaped engagement
+  signal; no token/PII in any notification/PendingIntent; payload redaction goldens untouched); `:core:* ∌ :app`;
+  device checks in VERIFICATION.md (real post on API 33+ grant/deny, deep-link cold+warm, no double-fire across
+  worker stop, lockscreen-privacy, the metered-only "requires Wi-Fi" reality). **Accepted, disclosed:** both ambient
+  surfaces ride the UNMETERED-gated scoring pass, so a cellular-only user sees an empty digest until Wi-Fi — a
+  "requires Wi-Fi sync" hint on the opt-in toggle (HUMAN.md).
+- [ ] **P-Prove — turn "green build" into "verified"** *(queued; harness autonomous, gold numbers device-gated).*
+  All of PRD §7's success criteria are unverified and CHECKPOINT 5/6 have sat open since 2026-06-11; there is **no
+  Macrobenchmark module and no deterministic seeded corpus** — the instrument to prove perf (<300ms hybrid search
+  @5K, cold-start <2s), a11y (TalkBack, 1.3× font), install-from-scratch, and ≥2 live routine E2E has never existed.
+  Scope: Macrobenchmark + seeded 1K/5K corpus + a CI JVM/Robolectric fusion-latency regression guard (all
+  autonomous) + a VERIFICATION-linked device runbook. **Strategic unlock: one device session then closes CHECKPOINT
+  5, 6, AND P5 (+ decides P5.4) together.** Size **M–L**.
+- [ ] **P-Discover2 — active discovery from the paid-for label/embedding infra** *(queued; needs plan-mode
+  go-ahead).* P4/P5 shipped only the *reactive* Rocchio re-ranker; the deferred *active* tier stays unbuilt:
+  **"more like this"** (per-paper neighbors over the existing VectorIndex), **author-following** (one additive
+  migration + the existing follow directory), **trending-within-follows** (on-device velocity signal). The gated
+  learned head stays carved out as the user-blocked **P5.4**. Size **M**, highest vision-fit; approved-in-principle
+  (Decision log 2026-07-07), wants a plan-mode go-ahead.
+- [ ] **P-FullText — full-text PDF body search** *(queued; my validation add).* The explicit PRD v2 gap ("full-text
+  search of PDF bodies is v2 candidate", PRD.md:83). The chunk/FTS/vector infra already exists (`RagIndexer` →
+  `chunk_embeddings` + `chunk_fts` + `HybridFusion`) but indexes only title+abstract+notes; the new work is
+  **on-device PDF text extraction** feeding that infra + surfacing it in hybrid search. Deepens the core "Find"
+  JTBD. Size **M–L**, on-ethos (fully on-device).
+- [ ] **P-Read — reading continuity + queue** *(queued).* No cross-surface reading-progress store (HTML position is
+  a per-file `.position` sidecar; a claimed PDF rotation position/night-mode loss is **unverified — not yet checked
+  at file:line**). Scope: a Room `reading_positions` table (additive migration, shared HTML+PDF) + a "Continue
+  reading" shelf on Today; lays the anchor substrate a future annotations phase would need. Size **M**.
+
+*Not a phase (tracked in HUMAN.md §3, not the roadmap):* the **egress structural host-gate test** (defense-in-depth,
+no active exposure) and a **Settings "reset personalization"** control — both cheap follow-ons awaiting a steer, not
+phase-sized.
+
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
 > Strategic steer from the Co-Founder session of 2026-07-04, sequenced one-phase-at-a-time after

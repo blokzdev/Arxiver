@@ -3,6 +3,7 @@ package dev.blokz.arxiver.feature.today
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.blokz.arxiver.core.search.eval.RelevanceThreshold
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.data.InboxRepository
 import dev.blokz.arxiver.sync.SyncScheduler
@@ -30,8 +31,11 @@ data class TodayUiState(
     val loading: Boolean get() = syncing && items.isEmpty() && hasFollows
 }
 
-/** The pre-P5.3 hardcoded cut — what an uncalibrated (below-floor) profile keeps, exactly. */
-const val LEGACY_RELEVANT_THRESHOLD = 0.55
+/**
+ * The pre-P5.3 hardcoded cut — what an uncalibrated (below-floor) profile keeps, exactly. Aliases the canonical
+ * [RelevanceThreshold.LEGACY_CUT] (single source of truth) so previews/tests reading it stay in lockstep.
+ */
+const val LEGACY_RELEVANT_THRESHOLD = RelevanceThreshold.LEGACY_CUT
 
 enum class TriageKind { SAVED, DISMISSED }
 
@@ -65,18 +69,9 @@ class TodayViewModel
                     items = items,
                     syncing = syncing,
                     hasFollows = followCount > 0,
-                    relevantThreshold =
-                        run {
-                            val a = model?.calibrationA
-                            val b = model?.calibrationB
-                            if (a != null && b != null) {
-                                // The calibrated p=0.5 point ("more likely relevant than not"), translated ONCE
-                                // to a raw-score cut — Platt is monotone, so ordering is untouched (P5.3).
-                                dev.blokz.arxiver.core.search.eval.PlattMap(a, b).scoreFor(0.5)
-                            } else {
-                                LEGACY_RELEVANT_THRESHOLD
-                            }
-                        },
+                    // The calibrated p=0.5 point translated ONCE to a raw-score cut, else the legacy 0.55 —
+                    // resolved via the shared helper so Today, the debug card, and the ambient digest agree.
+                    relevantThreshold = RelevanceThreshold.cut(model?.calibrationA, model?.calibrationB),
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState())
 
