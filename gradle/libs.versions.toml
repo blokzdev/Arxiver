@@ -32,6 +32,7 @@ ktlintPlugin = "12.1.1"
 # P-Prove perf harness. benchmark + baselineprofile MUST share a version; all stable, min AGP 8.0 (< our 8.10.1).
 androidxBenchmark = "1.4.1"
 androidxProfileinstaller = "1.4.1"
+androidxTracing = "1.2.0" # matches the version already resolved transitively via Compose/benchmark
 androidxUiautomator = "2.4.0"
 androidxTestRunner = "1.7.0"
 androidxTestExtJunit = "1.3.0"
@@ -98,6 +99,7 @@ androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espres
 # P-Prove perf harness (used by :macrobenchmark + :app baseline-profile consumer).
 androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "androidxBenchmark" }
 androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "androidxProfileinstaller" }
+androidx-tracing-ktx = { group = "androidx.tracing", name = "tracing-ktx", version.ref = "androidxTracing" }
 androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "androidxUiautomator" }
 androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "androidxTestRunner" }
 androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }

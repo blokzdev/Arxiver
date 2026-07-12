@@ -67,11 +67,24 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [E] **C2 Embedding inference** — WordPiece tokenizer + ONNX session produce embeddings on device (unit-tested against reference tokenizations; on-device inference not yet run). _v2.0.2 (emu 2026-06-23): bge ONNX inference runs on the x86_64 emulator (28 papers embedded; chat retrieval returns relevant chunks). The "not yet run on device" gap is closed for x86_64; arm64 throughput still rides the S20._
 - [ ] **C3 Hybrid search relevance (golden set)** — ≥80% top-5 hit over the ~20-case fixture (SPEC-SEARCH §"Golden relevance set"); needs on-device inference, so it lives here not in CI.
 
-## D. Performance _(ROADMAP 5.4 / PRD F5.4)_
-- [ ] **D1 Cold start < 2s.**
-- [ ] **D2 Hybrid search < 300ms** — PRD success criterion #2 says a 1,000-paper library; F5.4 says 5K. Measure both; note which corpus.
-- [ ] **D3 List scrolling at 60fps** on the inbox/feed.
-- [ ] **D4 Baseline profile** generated for release (startup optimization).
+## D. Performance _(ROADMAP 5.4 / PRD F5.4 · Phase P-Prove)_
+> The P-Prove Macrobenchmark harness (PP.1–PP.3b) is the instrument for D1–D4. **Run on the physical Samsung S20, NOT
+> the x86_64 emulator** — startup/frame absolute numbers are host-CPU/thermal-dependent (the emulator is legitimate
+> only for D4 profile *generation* + the CI compile). **Precondition (Finding #1):** the BGE ONNX model must be
+> downloaded on the device before D2/D4, or the semantic leg is skipped and `SearchTraceBenchmark` fails its
+> `semantic_active` assertion (by design — never a silent keyword-only number). The corpus is seeded automatically on
+> the `benchmarkRelease`/`nonMinifiedRelease` variants (`ENABLE_TEST_CORPUS`); benchmarks gate on the "Seeded Paper"
+> content anchor, not just `today_screen` (Finding #2). Record the exact device in every row.
+- [ ] **D1 Cold start < 2s.** `:macrobenchmark` `StartupBenchmark` cold→Today, `CompilationMode.None()` **and**
+  `Partial(baseline)` — record TTID + TTFD both ways (the profile delta is the shipped win; re-run after PP.4).
+- [ ] **D2 Hybrid search < 300ms** — `SearchTraceBenchmark` reads the async `hybrid_search` section (INCLUDES the
+  `embedQuery` JNI). PRD #2 says a 1,000-paper library; F5.4 says 5K — capture BOTH corpora and note which. Requires
+  the BGE model provisioned (above).
+- [ ] **D3 List scrolling at 60fps** on the Today feed — `FrameTimingBenchmark` (corpus seeded; gated on "Seeded
+  Paper"). Record frame P50/P90/P99. If fling doesn't register, move the `today_screen` tag to the `LazyColumn`.
+- [ ] **D4 Baseline profile** — `BaselineProfileGenerator` on `nonMinifiedRelease`; generate with
+  `./gradlew :app:generateBaselineProfile -Pandroidx.baselineprofile.skipgeneration=false` (the repo pins
+  `skipgeneration=true` for CI); commit `app/src/main/baseline-prof.txt`; confirm `profileinstaller` applies it AOT.
 
 ## E. Accessibility _(ROADMAP 5.5)_
 - [ ] **E1 TalkBack walkthrough** — every screen's actionables are labeled and operable; swipe actions have custom-action equivalents (labels shipped during feature work; walkthrough not done).

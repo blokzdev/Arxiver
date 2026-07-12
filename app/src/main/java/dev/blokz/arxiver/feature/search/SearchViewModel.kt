@@ -3,6 +3,8 @@ package dev.blokz.arxiver.feature.search
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.tracing.Trace
+import androidx.tracing.trace
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
@@ -20,6 +22,7 @@ import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
 import dev.blokz.arxiver.core.search.HybridFusion
 import dev.blokz.arxiver.core.search.Provenance
+import dev.blokz.arxiver.core.search.SearchTrace
 import dev.blokz.arxiver.core.search.VectorIndex
 import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
@@ -139,39 +142,58 @@ class SearchViewModel
             }
         }
 
+        // Monotonic cookie pairing begin/endAsyncSection for the hybrid_search trace. Access is sequential (a single
+        // observeLocal collector drives runLocalSearch), so a plain counter can't produce overlapping cookies.
+        private val hybridSearchCookie = java.util.concurrent.atomic.AtomicInteger(0)
+
         /**
          * Hybrid local search (SPEC-SEARCH §3): keyword + semantic legs fused when
          * the model is ready; silent keyword-only degradation otherwise.
          */
         private suspend fun runLocalSearch(query: String) {
-            val keywordHits = localKeywordSearch.search(query)
-            val keywordLeg = keywordHits.map { it.paper.id to it.score }
-            val papersById = keywordHits.associate { it.paper.id to it.paper }.toMutableMap()
+            // Async section spanning the whole suspending path — the true end-to-end D2 the PP.3b SearchTraceBenchmark
+            // reads (it INCLUDES embedQuery's JNI cost, which the sync slices below exclude). Async (name+cookie,
+            // thread-independent) is the only correct primitive across the suspension points; try/finally is mandatory
+            // because embedQuery can fail and viewModelScope can cancel — the section must always close. Calls are
+            // sequential (single observeLocal collector) so the monotonic cookie can't collide.
+            val cookie = hybridSearchCookie.incrementAndGet()
+            Trace.beginAsyncSection(SearchTrace.HYBRID_SEARCH, cookie)
+            try {
+                val keywordHits = localKeywordSearch.search(query)
+                val keywordLeg = keywordHits.map { it.paper.id to it.score }
+                val papersById = keywordHits.associate { it.paper.id to it.paper }.toMutableMap()
 
-            val modelReady = modelDownloader.state.value is ModelState.Ready
-            val semanticLeg =
-                if (modelReady) {
-                    embeddingService.embedQuery(query).getOrNull()?.let { queryVector ->
-                        vectorIndex.topK(queryVector, k = SEMANTIC_LEG_K).map { it.paperId to it.similarity }
-                    }.orEmpty()
-                } else {
-                    emptyList()
-                }
-
-            val fused = HybridFusion.fuse(keyword = keywordLeg, semantic = semanticLeg)
-
-            val missing = fused.map { it.paperId }.filter { it !in papersById }
-            if (missing.isNotEmpty()) {
-                searchDao.papersByIds(missing).forEach { papersById[it.id] = it }
-            }
-
-            val hits =
-                fused.mapNotNull { hit ->
-                    papersById[hit.paperId]?.let {
-                        LocalHit(paper = it.toListDomain(), score = hit.score, provenance = hit.provenance)
+                val modelReady = modelDownloader.state.value is ModelState.Ready
+                val semanticLeg =
+                    if (modelReady) {
+                        embeddingService.embedQuery(query).getOrNull()?.let { queryVector ->
+                            vectorIndex.topK(queryVector, k = SEMANTIC_LEG_K).map { it.paperId to it.similarity }
+                        }.orEmpty()
+                    } else {
+                        emptyList()
                     }
+
+                // Sync slice — no suspension inside (HybridFusion.fuse is a pure non-suspending object method).
+                val fused =
+                    trace(SearchTrace.HYBRID_FUSE) {
+                        HybridFusion.fuse(keyword = keywordLeg, semantic = semanticLeg)
+                    }
+
+                val missing = fused.map { it.paperId }.filter { it !in papersById }
+                if (missing.isNotEmpty()) {
+                    searchDao.papersByIds(missing).forEach { papersById[it.id] = it }
                 }
-            _uiState.update { it.copy(localResults = hits, semanticActive = modelReady) }
+
+                val hits =
+                    fused.mapNotNull { hit ->
+                        papersById[hit.paperId]?.let {
+                            LocalHit(paper = it.toListDomain(), score = hit.score, provenance = hit.provenance)
+                        }
+                    }
+                _uiState.update { it.copy(localResults = hits, semanticActive = modelReady) }
+            } finally {
+                Trace.endAsyncSection(SearchTrace.HYBRID_SEARCH, cookie)
+            }
         }
 
         fun onQueryChange(query: String) {

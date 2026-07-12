@@ -164,6 +164,8 @@ dependencies {
     // P-Prove: applies the committed baseline profile AOT at install (from the :macrobenchmark producer).
     implementation(libs.androidx.profileinstaller)
     baselineProfile(project(":macrobenchmark"))
+    // P-Prove PP.3b: the hybrid_search async section + hybrid_fuse slice in SearchViewModel.
+    implementation(libs.androidx.tracing.ktx)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 

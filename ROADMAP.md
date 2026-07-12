@@ -999,7 +999,7 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
     Finding #3). This also makes the red-line test a plain runtime `assertFalse(BuildConfig.ENABLE_TEST_CORPUS)` that
     CI runs under BOTH debug and release variants — stronger + simpler than a build-file parse. Tests: `SeedingRedLineTest`
     + a Robolectric+Room `TestCorpusSeederTest` (idempotency, FK order, follow-dedup, score ramp). CI-green, zero device.
-  - [ ] **PP.3b — Trace seam + the four suites + benchmark UI anchors.** `androidx.tracing` on `:app`+`:core:search`;
+  - [x] **PP.3b — Trace seam + the four suites + benchmark UI anchors.** `androidx.tracing` on `:app`+`:core:search`;
     a shared `object SearchTrace` (`const val` → compile-time-only coupling for `:macrobenchmark`) + a JVM
     `SearchTraceContractTest` name-pin; async `hybrid_search` (try/finally, cookie) over `runLocalSearch`, sync
     `hybrid_fuse` (`:161`) + `vector_topk_scan` (VectorIndex inner `for`, after the chunk-empty break — never over the

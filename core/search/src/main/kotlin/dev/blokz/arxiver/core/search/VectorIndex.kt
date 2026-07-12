@@ -1,5 +1,6 @@
 package dev.blokz.arxiver.core.search
 
+import androidx.tracing.trace
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 
@@ -30,16 +31,21 @@ class VectorIndex(
         while (true) {
             val chunk = embeddingDao.chunk(limit = CHUNK_SIZE, offset = offset)
             if (chunk.isEmpty()) break
-            for (row in chunk) {
-                if (row.paperId == excludeId) continue
-                val vector = PaperEmbeddingEntity.blobToFloats(row.vector)
-                if (vector.size != query.size) continue // stale model dims — skip
-                val sim = similarity(query, vector)
-                if (heap.size < k) {
-                    heap.add(VectorHit(row.paperId, sim))
-                } else if (heap.peek()!!.similarity < sim) {
-                    heap.poll()
-                    heap.add(VectorHit(row.paperId, sim))
+            // Sync slice around the pure scoring loop ONLY — never the enclosing while or the suspend chunk() above
+            // (a sync section spanning a suspension would begin/end on different threads → unbalanced). Fires once
+            // per chunk, so the PP.3b benchmark reads it with Mode.Sum.
+            trace(SearchTrace.VECTOR_TOPK_SCAN) {
+                for (row in chunk) {
+                    if (row.paperId == excludeId) continue
+                    val vector = PaperEmbeddingEntity.blobToFloats(row.vector)
+                    if (vector.size != query.size) continue // stale model dims — skip
+                    val sim = similarity(query, vector)
+                    if (heap.size < k) {
+                        heap.add(VectorHit(row.paperId, sim))
+                    } else if (heap.peek()!!.similarity < sim) {
+                        heap.poll()
+                        heap.add(VectorHit(row.paperId, sim))
+                    }
                 }
             }
             offset += chunk.size

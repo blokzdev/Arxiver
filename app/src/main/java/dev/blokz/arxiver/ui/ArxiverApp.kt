@@ -22,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -488,6 +489,8 @@ private fun ArxiverBottomBar(navController: NavHostController) {
                 currentDestination?.hierarchy
                     ?.any { it.route?.substringBefore("?") == destination.route } == true
             NavigationBarItem(
+                // PP.3b: stable per-tab handle (e.g. "nav_explore") so the SearchTraceBenchmark can navigate.
+                modifier = Modifier.testTag("nav_${destination.route}"),
                 selected = selected,
                 onClick = {
                     navController.navigate(destination.route) {
