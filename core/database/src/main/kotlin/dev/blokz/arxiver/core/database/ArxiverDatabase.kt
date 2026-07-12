@@ -49,6 +49,7 @@ import dev.blokz.arxiver.core.database.migration.MIGRATION_11_12
 import dev.blokz.arxiver.core.database.migration.MIGRATION_12_13
 import dev.blokz.arxiver.core.database.migration.MIGRATION_13_14
 import dev.blokz.arxiver.core.database.migration.MIGRATION_14_15
+import dev.blokz.arxiver.core.database.migration.MIGRATION_15_16
 import dev.blokz.arxiver.core.database.migration.MIGRATION_1_2
 import dev.blokz.arxiver.core.database.migration.MIGRATION_2_3
 import dev.blokz.arxiver.core.database.migration.MIGRATION_3_4
@@ -123,7 +124,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
         const val NAME = "arxiver.db"
 
         /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
-        const val VERSION = 15
+        const val VERSION = 16
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema
@@ -146,6 +147,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
                     MIGRATION_12_13,
                     MIGRATION_13_14,
                     MIGRATION_14_15,
+                    MIGRATION_15_16,
                 )
                 .build()
     }

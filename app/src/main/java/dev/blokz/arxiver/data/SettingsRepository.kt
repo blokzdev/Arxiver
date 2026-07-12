@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,6 +28,8 @@ class SettingsRepository
         private val selectedAiProviderKey = stringPreferencesKey("selected_ai_provider")
         private val preferredOnDeviceTierKey = stringPreferencesKey("preferred_ondevice_tier")
         private val preferOnDeviceWhenReadyKey = booleanPreferencesKey("prefer_ondevice_when_ready")
+        private val digestEnabledKey = booleanPreferencesKey("digest_enabled")
+        private val lastDigestPostedAtKey = longPreferencesKey("last_digest_posted_at")
 
         val syncIntervalHours: Flow<Int> =
             context.dataStore.data.map { it[syncIntervalKey] ?: DEFAULT_SYNC_HOURS }
@@ -80,8 +83,31 @@ class SettingsRepository
             context.dataStore.edit { it[preferOnDeviceWhenReadyKey] = prefer }
         }
 
+        /** Ambient digest opt-in (P-Ambient PA.1b); default OFF — the digest never fires until the user flips it. */
+        val digestEnabled: Flow<Boolean> =
+            context.dataStore.data.map { it[digestEnabledKey] ?: false }
+
+        suspend fun setDigestEnabled(enabled: Boolean) {
+            context.dataStore.edit { it[digestEnabledKey] = enabled }
+        }
+
+        /** When the last digest was actually posted (the daily-cap cursor); 0 = never. Kept distinct from the
+         * per-row `digested_at` so a lost cursor write can't also defeat the fatigue cap. */
+        val lastDigestPostedAt: Flow<Long> =
+            context.dataStore.data.map { it[lastDigestPostedAtKey] ?: 0L }
+
+        suspend fun setLastDigestPostedAt(atMillis: Long) {
+            context.dataStore.edit { it[lastDigestPostedAtKey] = atMillis }
+        }
+
         companion object {
             const val DEFAULT_SYNC_HOURS = 6
             val SYNC_INTERVAL_CHOICES = listOf(3, 6, 12, 24)
+
+            /** Fatigue cap: at most one digest per this window even at a 3h sync cadence (P-Ambient PA.1b). */
+            const val DIGEST_MIN_INTERVAL_MS = 20L * 60 * 60 * 1000 // 20h ⇒ effectively once/day
+
+            /** Only recently-arrived rows can be announced as "new" (a weeks-old row crossing a shifted cut isn't). */
+            const val DIGEST_RECENCY_WINDOW_MS = 14L * 24 * 60 * 60 * 1000
         }
     }

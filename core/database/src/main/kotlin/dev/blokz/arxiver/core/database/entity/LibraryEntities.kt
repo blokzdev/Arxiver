@@ -139,6 +139,13 @@ data class InboxItemEntity(
     @ColumnInfo(name = "arrived_at") val arrivedAt: Long,
     @ColumnInfo(name = "state") val state: String = STATE_NEW,
     @ColumnInfo(name = "score") val score: Double? = null,
+    /**
+     * When this row was counted into an ambient digest (P-Ambient PA.1b), else null. The exactly-once cursor:
+     * a row is eligible for a digest only while `digested_at IS NULL`, and is stamped on exactly the counted
+     * rows before the notification posts — per-row and order-independent, so a stopped/partial scoring pass
+     * can't lose a paper from a later digest (a DataStore watermark would). Never exported (local triage state).
+     */
+    @ColumnInfo(name = "digested_at") val digestedAt: Long? = null,
 ) {
     companion object {
         const val STATE_NEW = "new"

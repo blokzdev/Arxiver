@@ -357,6 +357,10 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun digestNotifier(impl: dev.blokz.arxiver.sync.AndroidDigestNotifier): dev.blokz.arxiver.sync.DigestNotifier = impl
+
+    @Provides
+    @Singleton
     fun applicationScope(
         dispatchers: dev.blokz.arxiver.core.common.DispatcherProvider,
     ): kotlinx.coroutines.CoroutineScope =

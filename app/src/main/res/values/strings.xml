@@ -266,6 +266,20 @@
     <string name="settings_background_activity">Background activity</string>
     <string name="bg_notification_channel_name">Background activity</string>
     <string name="bg_notification_channel_desc">Progress for model downloads and indexing. Stays on your device.</string>
+    <!-- P-Ambient PA.1b: the ambient "new likely-relevant papers" digest. Local-only, opt-in. -->
+    <string name="digest_channel_name">New relevant papers</string>
+    <string name="digest_channel_desc">A quiet daily heads-up when new papers match what you read. Computed on your device.</string>
+    <plurals name="digest_title">
+        <item quantity="one">%d new likely-relevant paper</item>
+        <item quantity="other">%d new likely-relevant papers</item>
+    </plurals>
+    <plurals name="digest_more">
+        <item quantity="one">…and %d more</item>
+        <item quantity="other">…and %d more</item>
+    </plurals>
+    <string name="settings_digest_title">Notify me about new relevant papers</string>
+    <string name="settings_digest_desc">A quiet daily notification when new papers match what you read. Requires Wi-Fi sync; nothing leaves your device.</string>
+    <string name="settings_digest_permission_denied">Notifications are off for Arxiver. Enable them in system settings to get the digest.</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
     <string name="cd_delete_routine">Delete routine %1$s</string>

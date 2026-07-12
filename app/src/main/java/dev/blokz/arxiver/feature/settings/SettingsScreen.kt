@@ -1,6 +1,8 @@
 package dev.blokz.arxiver.feature.settings
 
+import android.Manifest
 import android.content.res.Configuration
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -121,6 +123,26 @@ fun SettingsScreen(
             }
         }
 
+    // Ambient digest opt-in (PA.1b): enabling on Android 13+ requests POST_NOTIFICATIONS (the app's first-ever
+    // ask). Persist only on grant; a denial keeps it off and hints at system settings. Disabling just clears it.
+    val digestDeniedMessage = stringResource(R.string.settings_digest_permission_denied)
+    val digestNotifPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                viewModel.setDigestEnabled(true)
+            } else {
+                scope.launch { snackbar.showSnackbar(digestDeniedMessage) }
+            }
+        }
+    val onSetDigestEnabled: (Boolean) -> Unit = { enabled ->
+        when {
+            !enabled -> viewModel.setDigestEnabled(false)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ->
+                digestNotifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else -> viewModel.setDigestEnabled(true)
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
@@ -142,6 +164,7 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .padding(padding),
             onSyncInterval = viewModel::setSyncInterval,
+            onSetDigestEnabled = onSetDigestEnabled,
             onDownloadModel = viewModel::downloadModel,
             onReindex = viewModel::reindex,
             onDeleteModel = viewModel::deleteModel,
@@ -169,6 +192,7 @@ private fun SettingsContent(
     rankerHealth: dev.blokz.arxiver.sync.RankerHealth?,
     modifier: Modifier = Modifier,
     onSyncInterval: (Int) -> Unit,
+    onSetDigestEnabled: (Boolean) -> Unit,
     onDownloadModel: () -> Unit,
     onReindex: () -> Unit,
     onDeleteModel: () -> Unit,
@@ -202,6 +226,28 @@ private fun SettingsContent(
                     label = { Text(stringResource(R.string.settings_hours, hours)) },
                 )
             }
+        }
+
+        // Ambient digest opt-in (PA.1b).
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.settings_digest_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    stringResource(R.string.settings_digest_desc),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(
+                checked = state.digestEnabled,
+                onCheckedChange = onSetDigestEnabled,
+            )
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -367,6 +413,7 @@ private fun SettingsContentPreview() {
                 ),
             rankerHealth = null,
             onSyncInterval = {},
+            onSetDigestEnabled = {},
             onDownloadModel = {},
             onReindex = {},
             onDeleteModel = {},
