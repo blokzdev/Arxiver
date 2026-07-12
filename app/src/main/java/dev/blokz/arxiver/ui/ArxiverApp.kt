@@ -20,8 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -141,6 +144,7 @@ object Routes {
     fun routineSetup(templateId: String?) = templateId?.let { "claude/setup?templateId=$it" } ?: "claude/setup"
 }
 
+@OptIn(ExperimentalComposeUiApi::class) // testTagsAsResourceId — exposes Compose testTags to UiAutomator (PP.2).
 @Composable
 fun ArxiverApp(
     deepLinkPaperId: ArxivId? = null,
@@ -162,6 +166,9 @@ fun ArxiverApp(
 
     CompositionLocalProvider(LocalFeedbackController provides feedbackController) {
         Scaffold(
+            // Expose Compose testTags (e.g. "today_screen") as resource-ids so the PP.3 Macrobenchmark
+            // suites can find them via UiAutomator's By.res(...). Set once at the app root.
+            modifier = Modifier.semantics { testTagsAsResourceId = true },
             bottomBar = { if (showBottomBar) ArxiverBottomBar(navController) },
             snackbarHost = { FeedbackHost(feedbackController) },
         ) { innerPadding ->

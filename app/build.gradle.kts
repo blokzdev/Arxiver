@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 android {
@@ -17,6 +18,11 @@ android {
         targetSdk = 35
         versionCode = 7
         versionName = "2.0.2"
+
+        // P-Prove: the benchmark/debug seeding hook (PP.3) reads BuildConfig.ENABLE_TEST_CORPUS —
+        // NOT BuildConfig.DEBUG (false in the non-debuggable benchmark variant the suites run on).
+        // Default OFF; release must NEVER seed the production Room DB. buildConfig is already enabled.
+        buildConfigField("boolean", "ENABLE_TEST_CORPUS", "false")
     }
 
     // CI release signing: keystore + credentials arrive via environment
@@ -34,6 +40,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Local/dev builds may seed the deterministic perf corpus (read by the PP.3 hook).
+            buildConfigField("boolean", "ENABLE_TEST_CORPUS", "true")
+        }
         release {
             // Code/resource shrinking is intentionally OFF for sideload (see
             // Decision log 2026-06-14): R8 obfuscation broke two reflection-based
@@ -87,6 +97,13 @@ kotlin {
     }
 }
 
+// Consumer side of androidx.baselineprofile. Generation stays OFF during ordinary builds so
+// `./gradlew build` never needs a device/GMD (belt-and-suspenders with `skipgeneration=true` in
+// gradle.properties). The PP.5 device session generates + commits app/src/main/baseline-prof.txt.
+baselineProfile {
+    automaticGenerationDuringBuild = false
+}
+
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:common"))
@@ -124,6 +141,10 @@ dependencies {
     // Markdown parsing for rich AI output (P-Rich): pure-JVM, offline, no Android/Compose coupling.
     implementation(libs.commonmark)
     implementation(libs.commonmark.gfm.tables)
+
+    // P-Prove: applies the committed baseline profile AOT at install (from the :macrobenchmark producer).
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":macrobenchmark"))
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
