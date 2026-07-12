@@ -11,7 +11,15 @@ data class VectorHit(val paperId: String, val similarity: Double)
  * cosine reduces to a dot product; chunked reads bound memory at any corpus
  * size. ~10K papers × 384 dims scans in tens of milliseconds on-device.
  */
-class VectorIndex(private val embeddingDao: EmbeddingDao) {
+class VectorIndex(
+    private val embeddingDao: EmbeddingDao,
+    /**
+     * The similarity metric; defaults to the cosine-via-dot [dotSimilarity]. Injectable ONLY so a perf-guard
+     * test can count invocations (P-Prove PP.1) — production never overrides it. Mirrors `RankerEval`'s
+     * injected cost-counter seam.
+     */
+    private val similarity: (FloatArray, FloatArray) -> Double = ::dotSimilarity,
+) {
     suspend fun topK(
         query: FloatArray,
         k: Int,
@@ -26,12 +34,12 @@ class VectorIndex(private val embeddingDao: EmbeddingDao) {
                 if (row.paperId == excludeId) continue
                 val vector = PaperEmbeddingEntity.blobToFloats(row.vector)
                 if (vector.size != query.size) continue // stale model dims — skip
-                val similarity = dotSimilarity(query, vector)
+                val sim = similarity(query, vector)
                 if (heap.size < k) {
-                    heap.add(VectorHit(row.paperId, similarity))
-                } else if (heap.peek().similarity < similarity) {
+                    heap.add(VectorHit(row.paperId, sim))
+                } else if (heap.peek()!!.similarity < sim) {
                     heap.poll()
-                    heap.add(VectorHit(row.paperId, similarity))
+                    heap.add(VectorHit(row.paperId, sim))
                 }
             }
             offset += chunk.size
