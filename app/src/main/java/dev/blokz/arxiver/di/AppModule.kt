@@ -102,6 +102,23 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun testCorpusSeeder(
+        db: ArxiverDatabase,
+        paperDao: PaperDao,
+        embeddingDao: dev.blokz.arxiver.core.database.dao.EmbeddingDao,
+        followDao: FollowDao,
+        inboxDao: dev.blokz.arxiver.core.database.dao.InboxDao,
+    ): dev.blokz.arxiver.bench.TestCorpusSeeder =
+        dev.blokz.arxiver.bench.TestCorpusSeeder(
+            paperDao = paperDao,
+            embeddingDao = embeddingDao,
+            followDao = followDao,
+            inboxDao = inboxDao,
+            transaction = { block -> db.withTransaction { block() } },
+        )
+
+    @Provides
+    @Singleton
     fun okHttpClient(): OkHttpClient =
         OkHttpClient.Builder()
             .connectTimeout(20, TimeUnit.SECONDS)

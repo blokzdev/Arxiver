@@ -1,3 +1,5 @@
+import com.android.build.api.variant.BuildConfigField
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -19,9 +21,10 @@ android {
         versionCode = 7
         versionName = "2.0.2"
 
-        // P-Prove: the benchmark/debug seeding hook (PP.3) reads BuildConfig.ENABLE_TEST_CORPUS —
-        // NOT BuildConfig.DEBUG (false in the non-debuggable benchmark variant the suites run on).
-        // Default OFF; release must NEVER seed the production Room DB. buildConfig is already enabled.
+        // P-Prove: the seeding hook (ArxiverApplication) reads BuildConfig.ENABLE_TEST_CORPUS. Default OFF here,
+        // flipped ON ONLY for the ephemeral non-debuggable benchmark variants via androidComponents below — so
+        // release AND debug stay false (release must never seed the production DB; debug shouldn't pollute the
+        // developer's real library). buildConfig is already enabled.
         buildConfigField("boolean", "ENABLE_TEST_CORPUS", "false")
     }
 
@@ -40,10 +43,6 @@ android {
     }
 
     buildTypes {
-        debug {
-            // Local/dev builds may seed the deterministic perf corpus (read by the PP.3 hook).
-            buildConfigField("boolean", "ENABLE_TEST_CORPUS", "true")
-        }
         release {
             // Code/resource shrinking is intentionally OFF for sideload (see
             // Decision log 2026-06-14): R8 obfuscation broke two reflection-based
@@ -94,6 +93,26 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
+// P-Prove PP.3: flip ENABLE_TEST_CORPUS ON for ONLY the two profileable measurement variants the baselineprofile
+// plugin auto-creates (they aren't visible in the buildTypes{} DSL, so the override goes through the variant API,
+// which runs after the plugin creates them). benchmarkRelease runs Startup/Frame/SearchTrace; nonMinifiedRelease
+// runs BaselineProfileGenerator (if left false the generated profile would capture EmptyState, not the seeded feed).
+// defaultConfig/release/debug stay false — release must never seed the production DB.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        if (variant.buildType in setOf("benchmarkRelease", "nonMinifiedRelease")) {
+            variant.buildConfigFields?.put(
+                "ENABLE_TEST_CORPUS",
+                BuildConfigField(
+                    "boolean",
+                    true,
+                    "Benchmark measurement variants seed the deterministic corpus (PP.3).",
+                ),
+            )
+        }
     }
 }
 
