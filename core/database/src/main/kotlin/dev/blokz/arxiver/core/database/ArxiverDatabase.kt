@@ -14,6 +14,7 @@ import dev.blokz.arxiver.core.database.dao.InboxDao
 import dev.blokz.arxiver.core.database.dao.LibraryDao
 import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.dao.PaperFeedbackDao
+import dev.blokz.arxiver.core.database.dao.ReadingPositionDao
 import dev.blokz.arxiver.core.database.dao.RelevanceModelDao
 import dev.blokz.arxiver.core.database.dao.RoutineDao
 import dev.blokz.arxiver.core.database.dao.SearchDao
@@ -38,6 +39,7 @@ import dev.blokz.arxiver.core.database.entity.PaperEntity
 import dev.blokz.arxiver.core.database.entity.PaperFeedbackEntity
 import dev.blokz.arxiver.core.database.entity.PaperFtsEntity
 import dev.blokz.arxiver.core.database.entity.PaperTagCrossRef
+import dev.blokz.arxiver.core.database.entity.ReadingPositionEntity
 import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
 import dev.blokz.arxiver.core.database.entity.RelevanceModelEntity
 import dev.blokz.arxiver.core.database.entity.RoutineConfigEntity
@@ -50,6 +52,7 @@ import dev.blokz.arxiver.core.database.migration.MIGRATION_12_13
 import dev.blokz.arxiver.core.database.migration.MIGRATION_13_14
 import dev.blokz.arxiver.core.database.migration.MIGRATION_14_15
 import dev.blokz.arxiver.core.database.migration.MIGRATION_15_16
+import dev.blokz.arxiver.core.database.migration.MIGRATION_16_17
 import dev.blokz.arxiver.core.database.migration.MIGRATION_1_2
 import dev.blokz.arxiver.core.database.migration.MIGRATION_2_3
 import dev.blokz.arxiver.core.database.migration.MIGRATION_3_4
@@ -89,6 +92,7 @@ import dev.blokz.arxiver.core.database.migration.MIGRATION_9_10
         CitationEdgeEntity::class,
         RoutineConfigEntity::class,
         RoutineDispatchEntity::class,
+        ReadingPositionEntity::class,
     ],
     version = ArxiverDatabase.VERSION,
     exportSchema = true,
@@ -120,11 +124,13 @@ abstract class ArxiverDatabase : RoomDatabase() {
 
     abstract fun routineDao(): RoutineDao
 
+    abstract fun readingPositionDao(): ReadingPositionDao
+
     companion object {
         const val NAME = "arxiver.db"
 
         /** Single source of truth for the schema version (also read by MigrationHarnessTest). */
-        const val VERSION = 16
+        const val VERSION = 17
 
         /**
          * Destructive migrations are forbidden (CLAUDE.md): every future schema
@@ -148,6 +154,7 @@ abstract class ArxiverDatabase : RoomDatabase() {
                     MIGRATION_13_14,
                     MIGRATION_14_15,
                     MIGRATION_15_16,
+                    MIGRATION_16_17,
                 )
                 .build()
     }
