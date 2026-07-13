@@ -22,6 +22,7 @@ import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.rag.BodyIndexTrigger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -84,6 +85,7 @@ class HtmlReaderViewModel
         private val libraryRepository: dev.blokz.arxiver.data.LibraryRepository,
         private val dispatchers: DispatcherProvider,
         private val applicationScope: CoroutineScope,
+        private val bodyIndexTrigger: BodyIndexTrigger,
     ) : ViewModel() {
         internal val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
 
@@ -163,6 +165,18 @@ class HtmlReaderViewModel
                 )
         }
 
+        /**
+         * Fire-and-forget nudge (PFT.2): index this paper's body for full-text search on the **application**
+         * scope (so a near-done embed still completes if the user navigates away) + IO. A cheap no-op when
+         * already current — [BodyIndexTrigger] short-circuits on the `.bodyindex` sidecar. Keyed on the version
+         * actually served (mirrors the position sidecar).
+         */
+        private fun scheduleBodyIndex() {
+            val id = paperId
+            val version = servedVersion
+            applicationScope.launch(dispatchers.io) { bodyIndexTrigger.indexOnOpen(id, version) }
+        }
+
         private fun persistLoop() {
             viewModelScope.launch {
                 // collectLatest = debounce: a newer position cancels the pending write.
@@ -214,6 +228,7 @@ class HtmlReaderViewModel
                     }
                 if (cached != null) {
                     _uiState.update { it.copy(loading = false, doc = cached) }
+                    scheduleBodyIndex()
                     return@launch
                 }
 
@@ -239,6 +254,8 @@ class HtmlReaderViewModel
             _uiState.update {
                 it.copy(loading = false, doc = doc.copy(bodyHtml = placeholderBody, images = emptyList()))
             }
+            // Body text is final at phase 1 (phase 2 only swaps figure placeholders → images), so index now.
+            scheduleBodyIndex()
             if (doc.images.isEmpty()) return
 
             // Phase 2 — fetch the figures (serial, rate-limited), deadline-bounded so a survey paper can't

@@ -58,6 +58,44 @@ class RagIndexer(
     }
 
     /**
+     * Index a paper's full-body text as `source_kind = body` chunks (P-FullText PFT.2). Source-scoped
+     * (never touches abstract/note chunks), model-guarded, and idempotent via [replacePaperSources]. Empty
+     * body text clears any stale body chunks and still succeeds — an all-math/figure body is honestly "no
+     * indexable text" (it just earns no full-text coverage), never an error.
+     */
+    suspend fun indexPaperBody(
+        paperId: String,
+        bodyText: String,
+    ): AppResult<Unit> {
+        // A cached reader body can outlive its paper row (the HTML cache is filesystem, not FK-coupled), so a
+        // gone paper is an indexed no-op — never FK-fail the chunk insert (which, in a backfill loop, would
+        // abort the whole batch on one orphan).
+        if (paperDao.paperById(paperId) == null) return AppResult.Success(Unit)
+        val chunks = chunker.chunkBody(bodyText)
+        if (chunks.isEmpty()) {
+            chunkDao.deleteForPaperSources(paperId, BODY)
+            return AppResult.Success(Unit)
+        }
+        return embed(chunks.map { it.text }).map { vectors ->
+            val now = clock()
+            val rows =
+                chunks.zip(vectors).map { (chunk, vector) ->
+                    ChunkEmbeddingEntity(
+                        paperId = paperId,
+                        chunkText = chunk.text,
+                        vector = PaperEmbeddingEntity.floatsToBlob(vector),
+                        model = modelName,
+                        dim = vector.size,
+                        sourceKind = chunk.sourceKind,
+                        ordinal = chunk.ordinal,
+                        embeddedAt = now,
+                    )
+                }
+            chunkDao.replacePaperSources(paperId, BODY, rows)
+        }
+    }
+
+    /**
      * Ensure a collection's papers are chunk-embedded for KB chat (P2.4): indexes
      * only papers missing current-model chunks (already-indexed papers — e.g. from
      * the library backfill — are skipped, so this is cheap on a warm collection).
@@ -86,5 +124,8 @@ class RagIndexer(
          */
         private val ABSTRACT_NOTE =
             listOf(ChunkEmbeddingEntity.SOURCE_ABSTRACT, ChunkEmbeddingEntity.SOURCE_NOTE)
+
+        /** [indexPaperBody] owns exactly the body source — its scoped delete/replace never touches abstract/note. */
+        private val BODY = listOf(ChunkEmbeddingEntity.SOURCE_BODY)
     }
 }

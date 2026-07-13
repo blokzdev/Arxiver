@@ -124,6 +124,7 @@ class HtmlReaderViewModelTest {
         libraryRepository = dev.blokz.arxiver.data.LibraryRepository(db.libraryDao(), db.inboxDao()),
         dispatchers = dispatchers,
         applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO),
+        bodyIndexTrigger = dev.blokz.arxiver.rag.BodyIndexTrigger { _, _ -> },
     )
 
     private fun doc(source: HtmlSource) =

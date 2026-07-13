@@ -21,6 +21,17 @@ data class CachedHtml(
 )
 
 /**
+ * A completed cached reader body (`.complete` present) + the model that has body-indexed it, or null when
+ * never indexed / stale (P-FullText PFT.2). The `.bodyindex` sidecar carries the model, so a `MODEL_NAME`
+ * bump (which wipes the body chunks) leaves a stale model here → the filesystem-driven backfill re-indexes.
+ */
+data class CachedBodyRef(
+    val id: ArxivId,
+    val version: Int,
+    val indexedModel: String?,
+)
+
+/**
  * Filesystem-only cache for sanitized+transformed reader bodies (Phase P-HTML PH.3, SPEC-P-HTML §10),
  * mirroring `PdfStorage` discipline. One directory per paper version (so PH.5 images can co-reside):
  * `filesDir/html/<id_>v<ver>/index.html`. A **`.complete` sentinel written last** (whose content is the
@@ -113,6 +124,55 @@ class HtmlStorage(
             )
         }.getOrNull()
 
+    /**
+     * Stamp the `.bodyindex` sidecar (content = the [model] that indexed this version's body) — P-FullText
+     * PFT.2. Atomic tmp→move like [store]; best-effort. Written only AFTER a successful body index, so a
+     * failed/absent index leaves no sidecar and is retried. Invisible to the [read] gates.
+     */
+    suspend fun storeBodyIndex(
+        id: ArxivId,
+        version: Int,
+        model: String,
+    ): Unit =
+        withContext(dispatchers.io) {
+            runCatching {
+                val vdir = versionDir(id, version).apply { mkdirs() }
+                val tmp = File(vdir, "$BODY_INDEX.part")
+                tmp.writeText(model)
+                Files.move(tmp.toPath(), File(vdir, BODY_INDEX).toPath(), StandardCopyOption.REPLACE_EXISTING)
+            }
+            Unit
+        }
+
+    /** The model that body-indexed this exact version, or null (never indexed / unreadable). PFT.2. */
+    fun readBodyIndex(
+        id: ArxivId,
+        version: Int,
+    ): String? =
+        runCatching {
+            File(versionDir(id, version), BODY_INDEX).readText().trim().ifEmpty { null }
+        }.getOrNull()
+
+    /**
+     * Every completed cached body with its current body-index model (P-FullText PFT.2 backfill). Enumerates
+     * the html cache dirs — NEVER the paper table — so a paper with no cached HTML is simply not a candidate
+     * (no newest-N starvation), and a `MODEL_NAME` bump self-heals (the wiped body chunks leave a stale
+     * sidecar model here → re-indexed). The dir name is `<id with '/'→'_'>v<ver>`; arXiv ids never contain a
+     * literal 'v', so the last 'v' is the version separator and '_'→'/' recovers the id (the reader is
+     * arXiv-only — a non-arXiv id never reaches this cache).
+     */
+    fun cachedBodies(): List<CachedBodyRef> =
+        dir().listFiles { f -> f.isDirectory }
+            ?.mapNotNull { vdir ->
+                if (!File(vdir, "index.html").exists() || !File(vdir, COMPLETE).exists()) return@mapNotNull null
+                val name = vdir.name
+                val vAt = name.lastIndexOf('v')
+                if (vAt <= 0) return@mapNotNull null
+                val version = name.substring(vAt + 1).toIntOrNull() ?: return@mapNotNull null
+                val id = ArxivId(name.substring(0, vAt).replace('_', '/'))
+                CachedBodyRef(id, version, readBodyIndex(id, version))
+            }.orEmpty()
+
     private fun read(
         vdir: File,
         version: Int,
@@ -127,5 +187,6 @@ class HtmlStorage(
     private companion object {
         const val COMPLETE = ".complete"
         const val POSITION = ".position"
+        const val BODY_INDEX = ".bodyindex"
     }
 }
