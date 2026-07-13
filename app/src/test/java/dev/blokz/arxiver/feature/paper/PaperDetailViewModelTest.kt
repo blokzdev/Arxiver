@@ -16,6 +16,7 @@ import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
 import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.data.SemanticNeighborsRepository
 import dev.blokz.arxiver.data.testOpenAlexClient
 import dev.blokz.arxiver.sync.SyncScheduler
 import kotlinx.coroutines.CoroutineDispatcher
@@ -94,6 +95,7 @@ class PaperDetailViewModelTest {
             categoryRepository = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao()),
             // Constructed lazily (WorkManager is only touched on syncNow(), which these tests don't call).
             syncScheduler = SyncScheduler(ApplicationProvider.getApplicationContext()),
+            neighborsRepository = SemanticNeighborsRepository(db.paperDao(), db.embeddingDao(), dispatchers),
             embeddingDao = db.embeddingDao(),
         )
 

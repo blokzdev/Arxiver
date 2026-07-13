@@ -1058,11 +1058,17 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   byline (not a chip wall — papers carry 50–100+ authors). Sync/management already live (`ManageFollowsSheet:146`).
   Tests: `ArxivQueryTest.author`, `CategoryRepositoryTest` (author follow always `origin=arxiv` + unfollow cleanup),
   `PaperDetailViewModelTest.followedAuthors`. **No migration** (corrects the ROADMAP premise above).
-- [ ] **PD.2 — "More like this" for any paper.** Today `PaperDetailViewModel.related` reads precomputed
-  `related_papers` only, so it's silently empty on any search/browse-opened paper. A new `SemanticNeighborsRepository`
-  mirrors the proven `RelationGraphRepository` fallback (precomputed → live `VectorIndex.topK` → typed empty) but
-  returns a flat list; promote the related section to universal + honest empty states (`NotEmbedded`/`NoRelations`).
-  Zero migration; pure on-device cosine; never touches the learned head.
+- [x] **PD.2 — "More like this" for any paper.** `PaperDetailViewModel.related` read precomputed `related_papers`
+  only, so it was silently empty on any search/browse-opened paper (hidden by an `isNotEmpty()` gate). New
+  `SemanticNeighborsRepository` (`:app/data`) mirrors the proven `RelationGraphRepository` fallback — precomputed →
+  live `VectorIndex.topK(vector, MAX_NEIGHBORS=6, excludeId) ≥ SIMILARITY_FLOOR=0.3` → typed cause — but returns a flat
+  `List<RelatedPaper>`; `RelatedPaper` moved to the data layer. VM: observe the precomputed flow, and on empty fall
+  back once to the repo's live scan; `related` is now a sealed `NeighborsResult{Loading,Ready,NotEmbedded,NoRelations}`.
+  Screen renders each state — `RelatedSection` for `Ready`, a calm `RelatedNeighborsPlaceholder` ("not indexed yet" /
+  "no similar papers on device yet" / "finding…") instead of a silent hide. Tests: `SemanticNeighborsRepositoryTest`
+  (floor exclusion + self-exclusion, `NotEmbedded`, `NoRelations`). Zero migration; pure on-device cosine; never
+  touches `RelevanceModelEntity`; stays within the `VectorScanPerfGuardTest` budget (no `blobToFloats` fix — that's the
+  sqlite-vec backlog item).
 - [ ] **PD.3 — "Emerging in your areas" (honest trending)** *(the only net-new build; **HUMAN.md-gated**).* On-device
   publication-velocity within your enabled follows (a read-only `InboxDao` aggregation over `primary_category` +
   `published_at` — *note: `published_at` is un-indexed, `PaperEntity.kt:11-17`; the inbox is small so a scan is fine,

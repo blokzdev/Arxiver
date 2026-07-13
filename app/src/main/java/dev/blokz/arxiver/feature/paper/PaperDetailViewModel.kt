@@ -13,12 +13,17 @@ import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
+import dev.blokz.arxiver.data.NeighborsResult
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.data.RelatedPaper
+import dev.blokz.arxiver.data.SemanticNeighborsRepository
 import dev.blokz.arxiver.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -31,8 +36,6 @@ data class PaperDetailUiState(
     val notFound: Boolean = false,
 )
 
-data class RelatedPaper(val paper: Paper, val similarity: Double)
-
 @HiltViewModel
 class PaperDetailViewModel
     @Inject
@@ -42,6 +45,7 @@ class PaperDetailViewModel
         private val libraryRepository: LibraryRepository,
         private val categoryRepository: CategoryRepository,
         private val syncScheduler: SyncScheduler,
+        private val neighborsRepository: SemanticNeighborsRepository,
         embeddingDao: dev.blokz.arxiver.core.database.dao.EmbeddingDao,
     ) : ViewModel() {
         // The route arg is the opaque storageId (nav Uri.encode-d) — fromStorageId dispatches arXiv vs. non-arXiv.
@@ -71,12 +75,25 @@ class PaperDetailViewModel
                 .map { it.toSet() }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
-        val related: StateFlow<List<RelatedPaper>> =
-            embeddingDao.observeRelated(paperRef.storageId)
-                .map { rows ->
-                    rows.map { RelatedPaper(paper = it.paper.toListDomain(), similarity = it.similarity) }
+        /**
+         * "More like this" (P-Discover2 PD.2). The precomputed `related_papers` fast path exists only for
+         * worker-processed library papers, so a search/browse-opened paper would silently show nothing; when the
+         * precomputed set is empty we fall back once to a live cosine scan (via [neighborsRepository]) that works for
+         * any embedded paper, and surface a typed empty cause otherwise. One-shot on open (the precompute rarely
+         * changes mid-view); the scan is off the main thread inside the repo.
+         */
+        val related: StateFlow<NeighborsResult> =
+            flow {
+                emit(NeighborsResult.Loading)
+                val precomputed = embeddingDao.observeRelated(paperRef.storageId).first()
+                if (precomputed.isNotEmpty()) {
+                    emit(
+                        NeighborsResult.Ready(precomputed.map { RelatedPaper(it.paper.toListDomain(), it.similarity) }),
+                    )
+                } else {
+                    emit(neighborsRepository.liveNeighborsFor(paperRef.storageId))
                 }
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NeighborsResult.Loading)
 
         /** The set of this paper's authors the user currently follows (P-Discover2 PD.1). */
         val followedAuthors: StateFlow<Set<String>> =
