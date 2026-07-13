@@ -1232,10 +1232,18 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   `Migration16To17Test` (identity-hash + round-trip), `ReadingPositionDaoTest` (each honesty filter proven
   load-bearing + cross-surface furthest-progress), `ReadingPositionExportExclusionTest` (reading positions stay out
   of every data-layer export/backup/dispatch sink), `MigrationHarnessTest` green at v17. SPEC-DATA §2 updated.
-- [ ] **P-Read.2 — PDF durable cross-session resume.** Inject `ReadingProgressRepository` into `PdfViewerViewModel`;
-  persist the list position on a genuine scroll (continuous `fraction = (page + intra-page ratio)/pageCount` — honest
-  about first-page reads; a merely-opened PDF writes no row), restore via a one-shot `scrollToItem` (version-skew
-  soft-miss; page-count-change clamp); PDF `finished` NOT inferred from the last page. No schema change.
+- [x] **P-Read.2 — PDF durable cross-session resume.** `PdfViewerViewModel` injects `ReadingProgressRepository` +
+  `applicationScope`; a debounced `probe` (mirrors the HTML persist loop) upserts on `onPositionChanged`, `onCleared`
+  does a `NonCancellable` flush. **The honest write trigger lives in `PdfViewerScreen`:** persist ONLY after a genuine
+  user drag settles (`snapshotFlow{ isScrollInProgress }` false *after* it was true) — never on open, never on the
+  programmatic restore `scrollToItem` (both leave `isScrollInProgress` false), so a merely-opened PDF writes no row and
+  reopening never inflates recency. Continuous `fraction = (firstVisibleItemIndex + intra-page ratio)/pageCount`
+  (first-page reads count; a fresh open reads ~0). Restore = a one-shot `LaunchedEffect` (`pageCount>0` +
+  `initialPosition!=null`) → `scrollToItem(page.coerceIn, offset)`; version-skew soft-misses to top but keeps the row.
+  PDF `finished` is never inferred (always written `false`). No schema change. Tests: opening writes no row; a genuine
+  scroll persists page/offset/continuous-fraction/`finished=false`; a matching version restores `initialPosition`; a
+  version skew doesn't restore but keeps the row. (The actual `scrollToItem` restore + cold-kill durability → device,
+  VERIFICATION.md §M.)
 - [ ] **P-Read.3 — HTML shelf-heartbeat (PH.6 sidecar untouched).** One dual-write into the table fed **only by
   `onPositionProbed`** — the PH.6 funnel (target flow, sidecar persist/restore, jump-settle, `onCleared` flush) is
   NOT modified (its tests are the regression gate). Sustained-dwell `finished` (two consecutive high probes; resets
