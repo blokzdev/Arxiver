@@ -1069,12 +1069,34 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   (floor exclusion + self-exclusion, `NotEmbedded`, `NoRelations`). Zero migration; pure on-device cosine; never
   touches `RelevanceModelEntity`; stays within the `VectorScanPerfGuardTest` budget (no `blobToFloats` fix — that's the
   sqlite-vec backlog item).
-- [ ] **PD.3 — "Emerging in your areas" (honest trending)** *(the only net-new build; **HUMAN.md-gated**).* On-device
-  publication-velocity within your enabled follows (a read-only `InboxDao` aggregation over `primary_category` +
-  `published_at` — *note: `published_at` is un-indexed, `PaperEntity.kt:11-17`; the inbox is small so a scan is fine,
-  else rank on the indexed `updated_at` — never add an index*) + a pure `TrendingRanker` in `:core:search` (min-volume
-  floor + first-sync warmup guard). One calm collapsible Today section, opt-in default-OFF, no new nav tab/notification.
-  Zero migration, zero new arXiv calls. **Do not build until the Co-Founder signs off ship/cut in HUMAN.md.**
+- **PD.3 — "Emerging in your areas" (honest area-velocity)** *(Co-Founder-decided 2026-07-12 after a planning workflow
+  + two clarifying rounds).* **Decision journey:** the Co-Founder first asked for *enhanced topic emergence* (fine
+  sub-topics like "state space models"); a dedicated Ultracode workflow + my validation found that **honest free-text
+  topic extraction is infeasible on-device** — without a background IDF corpus (which we lack, and can't get without a
+  backend) n-grams surface boilerplate ("experimental results") or *over-claim* (calling boilerplate "emerging" — the
+  exact algorithmic lie the streak was dropped for); embedding-clustering is worse (non-deterministic churn + still
+  needs the extractor to label). The one honest path to fine topics is a *bundled curated vocabulary*, whose
+  maintenance/staleness tail misfits this zero-backend app. So the Co-Founder chose **improved category-velocity**:
+  honest-by-construction (a category label can't lie), zero-maintenance, all-arXiv. *Curated-vocab + free-text topic
+  emergence → v2 backlog.* **Improvement over the coarse version (de-thinned):** emergence over a paper's FULL arXiv
+  category set (primary **+ cross-lists** via `paper_categories`), so a rising cross-list area ("Robotics picking up in
+  your ML feed") surfaces — finer + discovery-shaped, not "cs.LG is busy"; human names via `ArxivTaxonomy`; the driving
+  papers are the payload. **Honest-clock decision:** rank on `published_at` ONLY — the plan's `updated_at` fallback
+  hedge is **rejected** (a v2/v3 resubmission bump would masquerade as emergence). Split PD.3a → PD.3b:
+  - [x] **PD.3a — the pure emergence engine** (`:core:search/emerging`, CI-provable). `TrendingRanker` + `TrendingConfig`
+    + `TrendingWindowPaper` (honest-clock invariant compile-enforced — **no `arrivedAt`/`updatedAt` field**) +
+    `EmergingArea`. Cross-list category velocity: recent (14d) vs a trailing baseline (56d before), **relative across
+    the user's own categories** (a global conference-deadline surge lifts all → self-cancels), per-follow warmup
+    (kills the first-sync backfill spike), author-diversity floor (one lab can't mint a trend), min-volume floors,
+    ≥3-followed-categories frame gate, 2-day hysteresis. Pure + deterministic (mirrors `KMeans`). `TrendingRankerTest`
+    pins every guard (self-cancel, warmup, author floor, frame/volume gates, hysteresis, determinism). Zero migration;
+    never imports the learned head.
+  - [ ] **PD.3b — Today section + opt-in toggle + wiring.** A read-only `InboxDao` window query (join `paper_categories`
+    for cross-lists; `origin='arxiv'`; `published_at` window — un-indexed but scanned once/day in a worker, never
+    per-compose) → a `TrendingRepository` that computes-daily-and-caches (DataStore, mirrors the digest pattern) →
+    a 5th flow into `TodayViewModel` → one calm collapsible "Emerging in your areas" section (human area names + the
+    driving papers) + an opt-in default-OFF `trendingEnabled` toggle (mirrors `digestEnabled`). No new nav tab, no
+    notification/badge/count. Zero migration, zero new arXiv calls.
 - [ ] **CHECKPOINT P-Discover2** — `./gradlew build` green; **assert `ArxiverDatabase.VERSION == 16`**; red-line audit
   (no new egress host; author rides the shared 3s limiter; trending issues zero arXiv calls + never leaves device; no
   new engagement notification; learned head untouched); author follows structurally always `origin=arxiv`;
