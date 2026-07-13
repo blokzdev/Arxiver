@@ -90,7 +90,9 @@ import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.model.Citation
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.data.NeighborsResult
 import dev.blokz.arxiver.data.PdfStorage
+import dev.blokz.arxiver.data.RelatedPaper
 import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
@@ -387,7 +389,7 @@ private fun PaperDetailContent(
     tags: List<TagEntity>,
     collections: List<dev.blokz.arxiver.core.database.entity.CollectionEntity>,
     memberCollectionIds: Set<Long>,
-    related: List<RelatedPaper>,
+    related: NeighborsResult,
     followedAuthors: Set<String>,
     onToggleAuthorFollow: (String) -> Unit,
     scrollState: androidx.compose.foundation.ScrollState,
@@ -527,8 +529,14 @@ private fun PaperDetailContent(
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
 
-        if (related.isNotEmpty()) {
-            RelatedSection(related, onPaperClick)
+        when (related) {
+            is NeighborsResult.Ready -> RelatedSection(related.neighbors, onPaperClick)
+            NeighborsResult.Loading ->
+                RelatedNeighborsPlaceholder(stringResource(R.string.paper_related_loading))
+            NeighborsResult.NotEmbedded ->
+                RelatedNeighborsPlaceholder(stringResource(R.string.paper_related_not_indexed))
+            NeighborsResult.NoRelations ->
+                RelatedNeighborsPlaceholder(stringResource(R.string.paper_related_none))
         }
 
         MetadataSection(paper)
@@ -825,6 +833,22 @@ private fun NotesSection(
     }
 }
 
+/**
+ * The calm "more like this" loading/empty states (P-Discover2 PD.2). Unlike the old silent-hide, the section keeps
+ * its heading and states the honest reason (indexing / none on device), so the absence is explained, not mysterious.
+ */
+@Composable
+private fun RelatedNeighborsPlaceholder(message: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(Spacing.sm)) {
+        DetailHeading(stringResource(R.string.paper_related_heading))
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 private fun RelatedSection(
     related: List<RelatedPaper>,
@@ -964,7 +988,7 @@ private fun PaperDetailContentPreview() {
             tags = emptyList(),
             collections = emptyList(),
             memberCollectionIds = emptySet(),
-            related = emptyList(),
+            related = NeighborsResult.NoRelations,
             followedAuthors = emptySet(),
             onToggleAuthorFollow = {},
             scrollState = rememberScrollState(),
@@ -1004,7 +1028,7 @@ private fun PaperDetailContentChemRxivPreview() {
             tags = emptyList(),
             collections = emptyList(),
             memberCollectionIds = emptySet(),
-            related = emptyList(),
+            related = NeighborsResult.NoRelations,
             followedAuthors = emptySet(),
             onToggleAuthorFollow = {},
             scrollState = rememberScrollState(),

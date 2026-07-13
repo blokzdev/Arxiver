@@ -226,6 +226,10 @@
     <string name="library_collection_deleted">Collection “%1$s” deleted</string>
 
     <string name="paper_related_heading">Related papers</string>
+    <!-- P-Discover2 PD.2: honest "more like this" empty/loading states. -->
+    <string name="paper_related_loading">Finding similar papers on your device…</string>
+    <string name="paper_related_not_indexed">This paper isn\'t indexed yet — similar papers appear once it\'s embedded.</string>
+    <string name="paper_related_none">No similar papers on your device yet.</string>
     <string name="paper_collections_heading">Collections</string>
     <string name="paper_new_collection">New collection</string>
     <string name="paper_tags_heading">Tags</string>
