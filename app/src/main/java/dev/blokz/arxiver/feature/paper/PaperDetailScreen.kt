@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Share
@@ -151,6 +152,7 @@ fun PaperDetailScreen(
     val collections by viewModel.collections.collectAsState()
     val memberCollectionIds by viewModel.memberCollectionIds.collectAsState()
     val related by viewModel.related.collectAsState()
+    val followedAuthors by viewModel.followedAuthors.collectAsState()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
 
@@ -299,6 +301,8 @@ fun PaperDetailScreen(
                             collections = collections,
                             memberCollectionIds = memberCollectionIds,
                             related = related,
+                            followedAuthors = followedAuthors,
+                            onToggleAuthorFollow = viewModel::toggleAuthorFollow,
                             scrollState = scrollState,
                             onOpenPdf = onOpenPdf,
                             onOpenHtml = onOpenHtml,
@@ -384,6 +388,8 @@ private fun PaperDetailContent(
     collections: List<dev.blokz.arxiver.core.database.entity.CollectionEntity>,
     memberCollectionIds: Set<Long>,
     related: List<RelatedPaper>,
+    followedAuthors: Set<String>,
+    onToggleAuthorFollow: (String) -> Unit,
     scrollState: androidx.compose.foundation.ScrollState,
     onOpenPdf: (String) -> Unit,
     onOpenHtml: (String) -> Unit,
@@ -408,10 +414,10 @@ private fun PaperDetailContent(
         verticalArrangement = Arrangement.spacedBy(Spacing.md),
     ) {
         Text(text = paper.title, style = MaterialTheme.typography.headlineSmall)
-        Text(
-            text = paper.authors.joinToString(", "),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary,
+        AuthorLine(
+            authors = paper.authors,
+            followedAuthors = followedAuthors,
+            onToggleAuthorFollow = onToggleAuthorFollow,
         )
         // Provenance badge for a non-arXiv paper (chemRxiv, PS.1). arXiv is the default identity and shows
         // no badge — the chip marks the exception, keeping the arXiv case visually byte-identical.
@@ -526,6 +532,58 @@ private fun PaperDetailContent(
         }
 
         MetadataSection(paper)
+    }
+}
+
+/**
+ * The author byline as individually tappable names (P-Discover2 PD.1): tap an author → a menu to follow/unfollow.
+ * A follow is a free-text arXiv `au:"name"` match — namesakes can collide, so the copy stays honest.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AuthorLine(
+    authors: List<String>,
+    followedAuthors: Set<String>,
+    onToggleAuthorFollow: (String) -> Unit,
+) {
+    var menuAuthor by remember { mutableStateOf<String?>(null) }
+    val followLabel = stringResource(R.string.action_follow_author)
+    val followingLabel = stringResource(R.string.action_following_author)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(Spacing.xs)) {
+        authors.forEachIndexed { index, author ->
+            val following = author in followedAuthors
+            val cd =
+                stringResource(
+                    if (following) R.string.cd_author_following else R.string.cd_author_follow,
+                    author,
+                )
+            Box {
+                Text(
+                    text = if (index < authors.lastIndex) "$author," else author,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier =
+                        Modifier
+                            .clickable { menuAuthor = author }
+                            .semantics { contentDescription = cd },
+                )
+                DropdownMenu(expanded = menuAuthor == author, onDismissRequest = { menuAuthor = null }) {
+                    DropdownMenuItem(
+                        text = { Text(if (following) followingLabel else followLabel) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (following) Icons.Filled.Check else Icons.Filled.PersonAdd,
+                                contentDescription = null,
+                            )
+                        },
+                        onClick = {
+                            onToggleAuthorFollow(author)
+                            menuAuthor = null
+                        },
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -907,6 +965,8 @@ private fun PaperDetailContentPreview() {
             collections = emptyList(),
             memberCollectionIds = emptySet(),
             related = emptyList(),
+            followedAuthors = emptySet(),
+            onToggleAuthorFollow = {},
             scrollState = rememberScrollState(),
             onOpenPdf = {},
             onOpenHtml = {},
@@ -945,6 +1005,8 @@ private fun PaperDetailContentChemRxivPreview() {
             collections = emptyList(),
             memberCollectionIds = emptySet(),
             related = emptyList(),
+            followedAuthors = emptySet(),
+            onToggleAuthorFollow = {},
             scrollState = rememberScrollState(),
             onOpenPdf = {},
             onOpenHtml = {},

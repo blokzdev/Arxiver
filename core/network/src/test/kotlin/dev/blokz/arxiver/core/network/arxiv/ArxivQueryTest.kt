@@ -13,6 +13,14 @@ class ArxivQueryTest {
     }
 
     @Test
+    fun `author query renders a quoted au prefix`() {
+        val params = ArxivQuery.author("Yann LeCun").toQueryParameters()
+        assertEquals("au:\"Yann LeCun\"", params["search_query"])
+        assertEquals("submittedDate", params["sortBy"])
+        assertEquals("descending", params["sortOrder"])
+    }
+
+    @Test
     fun `bare text search wraps in all field`() {
         val params = ArxivQuery.search("attention").toQueryParameters()
         assertEquals("all:attention", params["search_query"])

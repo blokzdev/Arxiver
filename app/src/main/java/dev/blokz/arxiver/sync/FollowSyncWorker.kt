@@ -100,7 +100,7 @@ class FollowSyncWorker
             val query =
                 when (follow.type) {
                     FollowEntity.TYPE_CATEGORY -> ArxivQuery.category(follow.value, maxResults = PAGE_SIZE)
-                    FollowEntity.TYPE_AUTHOR -> ArxivQuery.raw("au:\"${follow.value}\"", maxResults = PAGE_SIZE)
+                    FollowEntity.TYPE_AUTHOR -> ArxivQuery.author(follow.value, maxResults = PAGE_SIZE)
                     else -> ArxivQuery.raw(follow.value, maxResults = PAGE_SIZE)
                 }
             return when (val result = arxivApiClient.fetch(query, PaperSource.FOLLOW)) {
