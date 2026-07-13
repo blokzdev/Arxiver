@@ -209,6 +209,11 @@
     <string name="search_semantic_pending">Keyword results only — semantic search activates after the model downloads on Wi-Fi.</string>
     <string name="search_badge_semantic">semantic</string>
     <string name="search_badge_both">keyword+semantic</string>
+    <string name="search_fulltext_section">Also found in full text</string>
+    <plurals name="search_fulltext_coverage">
+        <item quantity="one">Full text covers the %1$d paper you\'ve opened</item>
+        <item quantity="other">Full text covers the %1$d papers you\'ve opened</item>
+    </plurals>
 
     <string name="library_tab_papers">Papers</string>
     <string name="library_tab_collections">Collections</string>

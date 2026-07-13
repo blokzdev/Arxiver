@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.getOrNull
+import dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao
 import dev.blokz.arxiver.core.database.dao.SearchDao
 import dev.blokz.arxiver.core.database.fts.LocalKeywordSearch
 import dev.blokz.arxiver.core.database.toListDomain
@@ -20,6 +21,7 @@ import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.network.FollowCategoryOption
 import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
+import dev.blokz.arxiver.core.search.CorpusBodyRetriever
 import dev.blokz.arxiver.core.search.HybridFusion
 import dev.blokz.arxiver.core.search.Provenance
 import dev.blokz.arxiver.core.search.SearchTrace
@@ -27,6 +29,7 @@ import dev.blokz.arxiver.core.search.VectorIndex
 import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.sync.EmbeddingWorker
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +56,13 @@ data class SearchUiState(
     /** Local (library/cache) hybrid results — live as you type. */
     val localResults: List<LocalHit> = emptyList(),
     val semanticActive: Boolean = false,
+    /**
+     * Papers whose PDF/HTML **body** text matches the query but whose title/abstract does not (P-FullText
+     * PFT.3) — surfaced as a distinct "Also found in full text" section, computed off the main-search path.
+     */
+    val bodyOnlyResults: List<LocalHit> = emptyList(),
+    /** How many papers are full-text (body) indexed — a query-independent honest coverage count (PFT.3). */
+    val fullTextIndexedCount: Int = 0,
     /** Online results — explicit submit only (arXiv native, or one OpenAlex call for a non-arXiv source). */
     val results: List<Paper> = emptyList(),
     val searching: Boolean = false,
@@ -93,6 +103,8 @@ class SearchViewModel
         private val embeddingService: EmbeddingService,
         private val modelDownloader: ModelDownloader,
         private val searchDao: SearchDao,
+        private val corpusBodyRetriever: CorpusBodyRetriever,
+        private val chunkEmbeddingDao: ChunkEmbeddingDao,
         private val libraryRepository: LibraryRepository,
         categoryRepository: CategoryRepository,
         private val savedStateHandle: SavedStateHandle,
@@ -116,6 +128,12 @@ class SearchViewModel
 
         init {
             observeLocal()
+            // Query-independent full-text coverage count (PFT.3) — updates as body indexing progresses.
+            viewModelScope.launch {
+                chunkEmbeddingDao.observeBodyIndexedPaperCount(EmbeddingWorker.MODEL_NAME).collect { count ->
+                    _uiState.update { it.copy(fullTextIndexedCount = count) }
+                }
+            }
             // Followed sources ★-sort to the top of the picker. Pure DB → zero network on collection.
             viewModelScope.launch {
                 categoryRepository.observeFollows().collect { follows ->
@@ -134,7 +152,8 @@ class SearchViewModel
                     .distinctUntilChanged()
                     .collect { query ->
                         if (query.isBlank()) {
-                            _uiState.update { it.copy(localResults = emptyList()) }
+                            bodyLegJob?.cancel()
+                            _uiState.update { it.copy(localResults = emptyList(), bodyOnlyResults = emptyList()) }
                         } else {
                             runLocalSearch(query)
                         }
@@ -146,16 +165,32 @@ class SearchViewModel
         // observeLocal collector drives runLocalSearch), so a plain counter can't produce overlapping cookies.
         private val hybridSearchCookie = java.util.concurrent.atomic.AtomicInteger(0)
 
+        /** The off-critical-path full-text body leg (PFT.3); cancelled + relaunched per query. */
+        private var bodyLegJob: Job? = null
+
         /**
          * Hybrid local search (SPEC-SEARCH §3): keyword + semantic legs fused when
          * the model is ready; silent keyword-only degradation otherwise.
          */
         private suspend fun runLocalSearch(query: String) {
-            // Async section spanning the whole suspending path — the true end-to-end D2 the PP.3b SearchTraceBenchmark
-            // reads (it INCLUDES embedQuery's JNI cost, which the sync slices below exclude). Async (name+cookie,
-            // thread-independent) is the only correct primitive across the suspension points; try/finally is mandatory
-            // because embedQuery can fail and viewModelScope can cancel — the section must always close. Calls are
-            // sequential (single observeLocal collector) so the monotonic cookie can't collide.
+            // Cancel the previous body leg BEFORE the new main results clear the section, so a stale body
+            // emit can never briefly pair with the new query's main results.
+            bodyLegJob?.cancel()
+            val metadataIds = runMainHybridSearch(query)
+            // The full-text body leg runs OFF the traced main-search path in its own cancellable job, so it
+            // neither inflates the D2 latency budget nor blocks the next query's main results (PFT.3).
+            bodyLegJob = viewModelScope.launch { runBodyFullTextLeg(query, exclude = metadataIds) }
+        }
+
+        /**
+         * The paper-level keyword + semantic hybrid search (SPEC-SEARCH §3), traced as `hybrid_search` — the true
+         * end-to-end D2 the PP.3b SearchTraceBenchmark reads (INCLUDES embedQuery's JNI cost; the sync slice excludes
+         * it). Async (name+cookie, thread-independent) is the only correct primitive across the suspension points;
+         * try/finally is mandatory because embedQuery can fail and viewModelScope can cancel — the section must always
+         * close. Calls are sequential (single observeLocal collector) so the monotonic cookie can't collide. Returns
+         * the metadata-leg paper ids so the body leg can exclude papers already matched by title/abstract.
+         */
+        private suspend fun runMainHybridSearch(query: String): Set<String> {
             val cookie = hybridSearchCookie.incrementAndGet()
             Trace.beginAsyncSection(SearchTrace.HYBRID_SEARCH, cookie)
             try {
@@ -190,10 +225,37 @@ class SearchViewModel
                             LocalHit(paper = it.toListDomain(), score = hit.score, provenance = hit.provenance)
                         }
                     }
-                _uiState.update { it.copy(localResults = hits, semanticActive = modelReady) }
+                // Clear the previous query's body section as the new main results appear; the body job refills it.
+                _uiState.update {
+                    it.copy(localResults = hits, semanticActive = modelReady, bodyOnlyResults = emptyList())
+                }
+                return (keywordLeg.map { it.first } + semanticLeg.map { it.first }).toSet()
             } finally {
                 Trace.endAsyncSection(SearchTrace.HYBRID_SEARCH, cookie)
             }
+        }
+
+        /**
+         * The "Also found in full text" leg (PFT.3): papers whose BODY text matches [query] but whose title/abstract
+         * (the [exclude] metadata ids) does not — MAX-BM25-ranked by [CorpusBodyRetriever], resolved to rows, capped.
+         * Deliberately off the traced D2 path and flood-safe (never merged into the main list).
+         */
+        private suspend fun runBodyFullTextLeg(
+            query: String,
+            exclude: Set<String>,
+        ) {
+            val bodyOnlyIds = corpusBodyRetriever.retrieve(query).filter { it !in exclude }
+            if (bodyOnlyIds.isEmpty()) {
+                _uiState.update { it.copy(bodyOnlyResults = emptyList()) }
+                return
+            }
+            val byId = searchDao.papersByIds(bodyOnlyIds).associateBy { it.id }
+            val hits =
+                bodyOnlyIds.mapNotNull { id ->
+                    // Provenance is unused here — the section header conveys full-text; rows carry no per-row badge.
+                    byId[id]?.let { LocalHit(paper = it.toListDomain(), score = 0.0, provenance = Provenance.KEYWORD) }
+                }
+            _uiState.update { it.copy(bodyOnlyResults = hits) }
         }
 
         fun onQueryChange(query: String) {

@@ -11,6 +11,7 @@ import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Before
@@ -256,5 +257,50 @@ class ChunkEmbeddingDaoTest {
                 dao.collectionPapersMissingChunks(collectionId, model, limit = 10),
                 "a body-only collection paper still needs abstract indexing",
             )
+        }
+
+    // --- P-FullText PFT.3: the corpus-wide body FTS leg + coverage count -----------------------------
+
+    @Test
+    fun `matchBodyChunks matches only body chunks corpus-wide`() =
+        runTest {
+            seedPaper("p1")
+            seedPaper("p2")
+            val dao = db.chunkEmbeddingDao()
+            dao.insert(
+                listOf(
+                    chunk("p1", "transformers use attention mechanisms", 0, ChunkEmbeddingEntity.SOURCE_BODY),
+                    // Same term in an ABSTRACT chunk — must NOT be a full-text (body) hit.
+                    chunk("p1", "attention in the abstract", 0, ChunkEmbeddingEntity.SOURCE_ABSTRACT),
+                    chunk("p2", "attention across tokens", 0, ChunkEmbeddingEntity.SOURCE_BODY),
+                ),
+            )
+
+            val hits = dao.matchBodyChunks("attention")
+
+            assertEquals(
+                setOf("p1", "p2"),
+                hits.map { it.paperId }.toSet(),
+                "both papers match via their BODY chunks; the abstract chunk is not a body hit",
+            )
+        }
+
+    @Test
+    fun `observeBodyIndexedPaperCount counts distinct body-indexed papers for the model`() =
+        runTest {
+            seedPaper("p1")
+            seedPaper("p2")
+            val dao = db.chunkEmbeddingDao()
+            dao.insert(
+                listOf(
+                    chunk("p1", "body a", 0, ChunkEmbeddingEntity.SOURCE_BODY),
+                    // A second body chunk for the same paper → still counts once (DISTINCT paper_id).
+                    chunk("p1", "body b", 1, ChunkEmbeddingEntity.SOURCE_BODY),
+                    // An abstract chunk is not a body chunk → not counted.
+                    chunk("p2", "abstract only", 0, ChunkEmbeddingEntity.SOURCE_ABSTRACT),
+                ),
+            )
+
+            assertEquals(1, dao.observeBodyIndexedPaperCount(model).first())
         }
 }

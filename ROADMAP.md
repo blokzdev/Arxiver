@@ -1158,16 +1158,23 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   Tests: extractor math-strip golden + real-fixture; `HtmlStorage` sidecar round-trip + `cachedBodies` (completed-only,
   legacy slash-id reverse-parse); `chunkBody` cap/ordinals; `indexPaperBody` (source-scoped, orphan no-op); `BodyIndexer`
   (write+stamp, re-open short-circuit, backfill, model-bump self-heal).
-- [ ] **PFT.3 — Corpus body-FTS Find leg + anti-flood fusion + honest N-of-M coverage UX.** `ChunkEmbeddingDao.matchBodyChunks(match)`
-  (unscoped `chunk_fts MATCH WHERE source_kind='body'`) → a new `CorpusBodyRetriever` (`:core:search`) that MAX-rolls
-  chunk BM25 up to paper level (never SUM — many weak body mentions can't outrank a precise title match) and
-  normalizes the body leg **independently**; folded into `HybridFusion.fuse` as an optional third leg (default
-  `emptyList` → the ~20 golden relevance cases stay byte-identical) at `SearchTuning.bodyWeight≈0.15`, computed inside
-  the existing `HYBRID_SEARCH` async span (**no `SearchTrace` const change** → `SearchTraceContractTest` + P-Prove
-  guard stay green). Honest UX: a query-independent "N of M papers full-text indexed" coverage line, a "Full text"
-  provenance badge, and body-only hits below the 0.70 gate surfaced in a distinct "Also found in full text" group
-  (never silently dropped, so the badge can't over-claim). A query-shape skip-gate protects short/exact-title queries.
-  **Zero migration.** **VERIFICATION.md D2 device re-measure is a hard pre-merge gate.**
+- [x] **PFT.3 — Corpus body full-text in Find: an honest "Also found in full text" section + coverage caption.**
+  `ChunkEmbeddingDao.matchBodyChunks(match)` (unscoped `chunk_fts MATCH WHERE source_kind='body'`) →
+  `CorpusBodyRetriever` (`:core:search`, pure) that MAX-rolls chunk BM25 up to paper level (never SUM — one strong
+  hit beats many weak mentions). **Adopted a better design than the planned fusion-third-leg** (validated at
+  file:line — see HUMAN.md): the body leg is kept **OUT of `HybridFusion` and OFF the traced `HYBRID_SEARCH` path**,
+  running in a **separate cancellable job** in `SearchViewModel` after the main results emit. Consequences: (a)
+  `HybridFusion` + the ~20 relevance goldens are **byte-identical** (untouched); (b) **D2 is unchanged — no device
+  re-baseline** (the phase's headline risk, neutralized — the body query never enters the latency budget); (c) the
+  main list can never be flooded by body hits (body never merges into it); (d) the "Full text" badge idea is dropped
+  as noise (a title term is ~always in the body too). Body-only matches (term in the body but NOT title/abstract) are
+  a distinct **"Also found in full text"** section (`ExploreScreen`), MAX-BM25-ranked, full row parity (open/save/
+  select). Honest **query-independent coverage caption** — "Full text covers the N papers you've opened" — from
+  `observeBodyIndexedPaperCount`. `SearchTrace` unchanged → `SearchTraceContractTest` + the P-Prove guard stay green
+  by construction. **Zero migration (VERSION=16).** Tests: `CorpusBodyRetriever` MAX-vs-SUM rollup + cap; DAO
+  `matchBodyChunks` (body-scoped, corpus-wide) + `observeBodyIndexedPaperCount`; `SearchViewModelTest` construction;
+  light/dark preview with the section + caption. *Deferred (tunable, HUMAN.md): interleaving strong body-only hits
+  into the main list + a body-depth ranking boost — both were dropped for the cleaner off-path design.*
 - [ ] **PFT.4 — [device-D2-gated] candidate-gated semantic body leg.** Cosine over the body chunks of ONLY the PFT.3
   FTS-hit papers (reusing the query vector already computed at `SearchViewModel:169`), bounded by `MAX_BODY_CHUNKS` +
   a total-candidate-chunk cap, guarded by a sibling `BodyScanPerfGuardTest` mirroring `VectorScanPerfGuardTest`'s
@@ -1184,9 +1191,10 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   `source_kind`, no schema element touched); red-line audit (no new egress host — extraction is local over
   already-downloaded HTML; jsoup network API structurally forbidden; no telemetry; body chunks excluded from
   `ArxiverBackup`; arXiv ≥3s limiter untouched; learned head untouched); `:core:* ∌ :app`; light/dark previews +
-  TalkBack on the coverage line / badge / "Also found in full text" group. Device rows (VERIFICATION.md): body
+  TalkBack on the coverage line / the "Also found in full text" section. Device rows (VERIFICATION.md): body
   indexing populates on HTML-reader-open; the corpus body leg surfaces a body-only match in Find + the honest
-  coverage line; **D2 re-measured at 3–5K scale stays within the 300ms budget**.
+  coverage caption; **the body FTS is fast enough at 3–5K scale** (a soft check — body runs OFF the traced main
+  path, so the P-Prove D2 budget is structurally unaffected; candidate-gating is the required fix before large growth).
   *Cut/deferred (breadcrumbs, never dropped): PDF body layer → PFT.5 (Co-Founder pdfbox gate); semantic body leg →
   PFT.4/backlog; candidate-gating for the corpus body FTS at SCALE → required precondition before coverage growth
   (SPEC-SEARCH note + PFT.5); structured `.ltx_*`-aware body chunking → backlog; body-chunk storage cap/LRU →

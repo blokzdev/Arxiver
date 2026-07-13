@@ -14,6 +14,12 @@ data class ChunkFtsMatch(
     val matchinfo: ByteArray,
 )
 
+/** A corpus-wide body-chunk FTS hit: the owning paper + its `matchinfo` blob for BM25 (P-FullText PFT.3). */
+data class ChunkFtsBodyMatch(
+    val paperId: String,
+    val matchinfo: ByteArray,
+)
+
 /**
  * Chunk-embedding store for on-device RAG retrieval (SPEC-SEARCH §8). Vector
  * reads are scoped to a single paper or a collection's papers and paginated so
@@ -64,6 +70,10 @@ interface ChunkEmbeddingDao {
     /** Distinct papers with at least one current-model chunk — drives the progress count. */
     @Query("SELECT COUNT(DISTINCT paper_id) FROM chunk_embeddings WHERE model = :model")
     fun observeIndexedPaperCount(model: String): Flow<Int>
+
+    /** Distinct papers with at least one current-model **body** chunk — the full-text coverage count (PFT.3). */
+    @Query("SELECT COUNT(DISTINCT paper_id) FROM chunk_embeddings WHERE model = :model AND source_kind = 'body'")
+    fun observeBodyIndexedPaperCount(model: String): Flow<Int>
 
     // --- backfill (eager library indexing) ---
 
@@ -167,4 +177,26 @@ interface ChunkEmbeddingDao {
         collectionId: Long,
         limit: Int = 200,
     ): List<ChunkFtsMatch>
+
+    /**
+     * Corpus-wide body-chunk FTS match (P-FullText PFT.3) — the "Also found in full text" leg. Unscoped
+     * `chunk_fts MATCH` restricted to `source_kind='body'`, returning one row per matching body chunk with its
+     * owning paper. The caller (`CorpusBodyRetriever`) MAX-rolls-up BM25 per paper. `LIMIT` is a DoS backstop,
+     * NOT relevance truncation: v1's reader-opened subset is small, so all matches are scored; at large
+     * coverage this must be candidate-gated first (SPEC-SEARCH note + PFT.5). Runs OFF the traced main-search
+     * path, so it never inflates the D2 latency budget.
+     */
+    @Query(
+        """
+        SELECT ce.paper_id AS paperId, matchinfo(chunk_fts, 'pcnalx') AS matchinfo
+        FROM chunk_fts
+        JOIN chunk_embeddings ce ON ce.id = chunk_fts.rowid
+        WHERE chunk_fts MATCH :match AND ce.source_kind = 'body'
+        LIMIT :limit
+        """,
+    )
+    suspend fun matchBodyChunks(
+        match: String,
+        limit: Int = 2000,
+    ): List<ChunkFtsBodyMatch>
 }

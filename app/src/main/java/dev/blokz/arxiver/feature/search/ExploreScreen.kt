@@ -822,7 +822,7 @@ private fun LibraryPane(
                 onFollowToggle = onFollowToggle,
                 onSourceFollowToggle = onSourceFollowToggle,
             )
-        state.localResults.isEmpty() ->
+        state.localResults.isEmpty() && state.bodyOnlyResults.isEmpty() ->
             EmptyState(
                 title = stringResource(R.string.search_local_no_results),
                 body = stringResource(R.string.search_local_intro),
@@ -875,6 +875,57 @@ private fun LibraryPane(
                                 Provenance.KEYWORD -> null
                             },
                     )
+                }
+                // "Also found in full text" (PFT.3): papers matched only in the PDF/HTML body — a distinct,
+                // clearly-labelled section so a body-only match is never silently promoted into the main list.
+                if (state.bodyOnlyResults.isNotEmpty()) {
+                    item(key = "fulltext_header") {
+                        Text(
+                            text = stringResource(R.string.search_fulltext_section),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm)
+                                    .testTag("fulltext_section"),
+                        )
+                    }
+                    itemsIndexed(
+                        state.bodyOnlyResults,
+                        key = { _, hit -> "ft_" + hit.paper.ref.storageId },
+                    ) { index, hit ->
+                        val id = hit.paper.ref.storageId
+                        SwipeablePaperRow(
+                            paper = hit.paper,
+                            onClick = { if (selection.isActive) selection.toggle(id) else onPaperClick(id) },
+                            onLongClick = { selection.toggle(id) },
+                            onSwipeSave = { onSave(id) },
+                            selectionMode = selection.isActive,
+                            selected = selection.contains(id),
+                            showDivider = index != state.bodyOnlyResults.lastIndex,
+                            badge = null,
+                        )
+                    }
+                }
+                // Honest, query-independent coverage: full-text search covers only the papers you've opened.
+                if (state.fullTextIndexedCount > 0) {
+                    item(key = "fulltext_coverage") {
+                        Text(
+                            text =
+                                pluralStringResource(
+                                    R.plurals.search_fulltext_coverage,
+                                    state.fullTextIndexedCount,
+                                    state.fullTextIndexedCount,
+                                ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+                        )
+                    }
                 }
             }
     }
@@ -1258,6 +1309,12 @@ private fun LocalResultsPreview() {
                                 provenance = if (i == 0) Provenance.BOTH else Provenance.KEYWORD,
                             )
                         },
+                    // PFT.3: the "Also found in full text" section + the honest coverage caption.
+                    bodyOnlyResults =
+                        PreviewFixtures.papers.takeLast(1).map {
+                            LocalHit(paper = it, score = 0.0, provenance = Provenance.KEYWORD)
+                        },
+                    fullTextIndexedCount = 7,
                 ),
             selection = dev.blokz.arxiver.ui.components.SelectionState(),
             onPaperClick = {},

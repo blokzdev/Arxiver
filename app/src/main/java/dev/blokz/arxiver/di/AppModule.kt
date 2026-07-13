@@ -556,6 +556,16 @@ object AppModule {
     @Singleton
     fun bodyIndexTrigger(indexer: dev.blokz.arxiver.rag.BodyIndexer): dev.blokz.arxiver.rag.BodyIndexTrigger = indexer
 
+    /** The corpus-wide "Also found in full text" leg (PFT.3), over the shared body `chunk_fts`. */
+    @Provides
+    @Singleton
+    fun corpusBodyRetriever(
+        chunkEmbeddingDao: dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao,
+    ): dev.blokz.arxiver.core.search.CorpusBodyRetriever =
+        dev.blokz.arxiver.core.search.CorpusBodyRetriever(
+            dev.blokz.arxiver.core.search.DaoCorpusBodySource(chunkEmbeddingDao),
+        )
+
     @Provides
     fun chatDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.ChatDao = db.chatDao()
 
