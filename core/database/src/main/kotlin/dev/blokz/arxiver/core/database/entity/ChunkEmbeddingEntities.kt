@@ -56,6 +56,9 @@ data class ChunkEmbeddingEntity(
         /** `abstract` (title+abstract) and `note` (note body) chunk provenance. */
         const val SOURCE_ABSTRACT = "abstract"
         const val SOURCE_NOTE = "note"
+
+        /** Full paper-body text extracted from the reader HTML (P-FullText PFT.2) — the third indexed source. */
+        const val SOURCE_BODY = "body"
     }
 }
 

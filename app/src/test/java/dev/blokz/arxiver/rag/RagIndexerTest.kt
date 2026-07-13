@@ -5,9 +5,11 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
 import dev.blokz.arxiver.core.database.entity.CollectionEntity
 import dev.blokz.arxiver.core.database.entity.CollectionPaperCrossRef
 import dev.blokz.arxiver.core.database.entity.NoteEntity
+import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
@@ -93,6 +95,39 @@ class RagIndexerTest {
             assertTrue(rows.any { it.sourceKind == "abstract" })
             assertTrue(rows.any { it.sourceKind == "note" })
             assertTrue(rows.all { it.model == model })
+        }
+
+    @Test
+    fun `re-indexing a paper preserves its body chunks (PFT-1 no clobber)`() =
+        runTest {
+            seedPaper("p1")
+            // A pre-existing body chunk, as PFT.2 will write it — the source RagIndexer must never touch.
+            db.chunkEmbeddingDao().insert(
+                listOf(
+                    ChunkEmbeddingEntity(
+                        paperId = "p1",
+                        chunkText = "the full paper body text",
+                        vector = PaperEmbeddingEntity.floatsToBlob(floatArrayOf(1f, 0f, 0f, 0f)),
+                        model = model,
+                        dim = 4,
+                        sourceKind = ChunkEmbeddingEntity.SOURCE_BODY,
+                        ordinal = 0,
+                        embeddedAt = 0L,
+                    ),
+                ),
+            )
+
+            indexer().indexPaper("p1")
+
+            val rows = db.chunkEmbeddingDao().chunksForPaper("p1", 100, 0)
+            assertTrue(
+                rows.any { it.sourceKind == ChunkEmbeddingEntity.SOURCE_BODY },
+                "body survives an abstract re-index",
+            )
+            assertTrue(
+                rows.any { it.sourceKind == ChunkEmbeddingEntity.SOURCE_ABSTRACT },
+                "abstract is (re)written",
+            )
         }
 
     @Test

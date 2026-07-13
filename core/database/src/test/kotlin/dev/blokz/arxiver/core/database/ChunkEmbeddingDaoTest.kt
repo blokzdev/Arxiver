@@ -174,4 +174,87 @@ class ChunkEmbeddingDaoTest {
             val missing = db.chunkEmbeddingDao().libraryPapersMissingChunks(model, limit = 10)
             assertEquals(listOf("p2"), missing)
         }
+
+    // --- P-FullText PFT.1: source-scoped chunk maintenance ---
+
+    @Test
+    fun `deleteForPaperSources deletes only the named source kinds`() =
+        runTest {
+            seedPaper("p1")
+            val dao = db.chunkEmbeddingDao()
+            dao.insert(
+                listOf(
+                    chunk("p1", "abstract chunk", 0, ChunkEmbeddingEntity.SOURCE_ABSTRACT),
+                    chunk("p1", "note chunk", 0, ChunkEmbeddingEntity.SOURCE_NOTE),
+                    chunk("p1", "body chunk", 0, ChunkEmbeddingEntity.SOURCE_BODY),
+                ),
+            )
+
+            dao.deleteForPaperSources(
+                "p1",
+                listOf(ChunkEmbeddingEntity.SOURCE_ABSTRACT, ChunkEmbeddingEntity.SOURCE_NOTE),
+            )
+
+            assertEquals(
+                listOf(ChunkEmbeddingEntity.SOURCE_BODY),
+                dao.chunksForPaper("p1", 100, 0).map { it.sourceKind },
+                "only abstract+note are deleted; the body chunk survives",
+            )
+        }
+
+    @Test
+    fun `replacePaperSources swaps only the named sources and preserves the others`() =
+        runTest {
+            seedPaper("p1")
+            val dao = db.chunkEmbeddingDao()
+            dao.insert(
+                listOf(
+                    chunk("p1", "old abstract", 0, ChunkEmbeddingEntity.SOURCE_ABSTRACT),
+                    chunk("p1", "body stays", 0, ChunkEmbeddingEntity.SOURCE_BODY),
+                ),
+            )
+
+            dao.replacePaperSources(
+                "p1",
+                listOf(ChunkEmbeddingEntity.SOURCE_ABSTRACT, ChunkEmbeddingEntity.SOURCE_NOTE),
+                listOf(chunk("p1", "new abstract", 0, ChunkEmbeddingEntity.SOURCE_ABSTRACT)),
+            )
+
+            assertEquals(
+                setOf("new abstract", "body stays"),
+                dao.chunksForPaper("p1", 100, 0).map { it.chunkText }.toSet(),
+                "the abstract is swapped in one txn; the body chunk is untouched",
+            )
+        }
+
+    @Test
+    fun `libraryPapersMissingChunks selects a body-only paper (abstract-scoped, no starvation)`() =
+        runTest {
+            seedPaper("p1")
+            db.libraryDao().upsertEntry(LibraryEntryEntity(paperId = "p1", addedAt = 1))
+            // p1 has a current-model BODY chunk but no abstract chunk (the PFT.2 body-first ordering).
+            db.chunkEmbeddingDao().insert(listOf(chunk("p1", "body only", 0, ChunkEmbeddingEntity.SOURCE_BODY)))
+
+            assertEquals(
+                listOf("p1"),
+                db.chunkEmbeddingDao().libraryPapersMissingChunks(model, limit = 10),
+                "a body-only paper still needs abstract indexing — must not be starved",
+            )
+        }
+
+    @Test
+    fun `collectionPapersMissingChunks selects a body-only paper (abstract-scoped, no starvation)`() =
+        runTest {
+            seedPaper("p1")
+            val dao = db.chunkEmbeddingDao()
+            val collectionId = db.libraryDao().createCollection(CollectionEntity(name = "KB", createdAt = 0))
+            db.libraryDao().addToCollection(CollectionPaperCrossRef(collectionId, "p1", 0))
+            dao.insert(listOf(chunk("p1", "body only", 0, ChunkEmbeddingEntity.SOURCE_BODY)))
+
+            assertEquals(
+                listOf("p1"),
+                dao.collectionPapersMissingChunks(collectionId, model, limit = 10),
+                "a body-only collection paper still needs abstract indexing",
+            )
+        }
 }

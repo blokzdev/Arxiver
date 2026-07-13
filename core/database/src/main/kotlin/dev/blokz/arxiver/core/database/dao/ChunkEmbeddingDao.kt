@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -24,8 +25,31 @@ interface ChunkEmbeddingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(chunks: List<ChunkEmbeddingEntity>)
 
-    @Query("DELETE FROM chunk_embeddings WHERE paper_id = :paperId")
-    suspend fun deleteForPaper(paperId: String)
+    /**
+     * Delete only the named [sourceKinds] for a paper (P-FullText PFT.1). The chunk store is multi-source
+     * (`abstract`/`note`/`body`); a paper-wide delete would let one source's re-index clobber another's rows,
+     * so every delete is source-scoped. Paper deletion itself cascades via the `paper_id` FK, not this.
+     */
+    @Query("DELETE FROM chunk_embeddings WHERE paper_id = :paperId AND source_kind IN (:sourceKinds)")
+    suspend fun deleteForPaperSources(
+        paperId: String,
+        sourceKinds: List<String>,
+    )
+
+    /**
+     * Atomically replace exactly the named [sourceKinds] for [paperId] (P-FullText PFT.1): a source-scoped
+     * delete + insert in ONE transaction, so a concurrent reader never sees the paper mid-reindex with zero
+     * rows, and a body re-index can never tear an abstract/note re-index (or vice-versa).
+     */
+    @Transaction
+    suspend fun replacePaperSources(
+        paperId: String,
+        sourceKinds: List<String>,
+        rows: List<ChunkEmbeddingEntity>,
+    ) {
+        deleteForPaperSources(paperId, sourceKinds)
+        insert(rows)
+    }
 
     /** Model-guard wipe: drop chunks embedded by any other model (SPEC-SEARCH §6). */
     @Query("DELETE FROM chunk_embeddings WHERE model != :model")
@@ -43,13 +67,19 @@ interface ChunkEmbeddingDao {
 
     // --- backfill (eager library indexing) ---
 
-    /** Library papers with no current-model chunk row yet, most-recently-added first. */
+    /**
+     * Library papers with no current-model **abstract** chunk yet, most-recently-added first (the eager
+     * abstract/note RAG backfill). Scoped to `source_kind='abstract'` (P-FullText PFT.1): a paper that
+     * already has a `body` chunk must STILL be abstract-indexed — an unscoped `EXISTS` would let a body-only
+     * paper masquerade as fully indexed and silently starve it of abstract/note chunks. Body backfill is a
+     * separate, filesystem-driven pass (PFT.2).
+     */
     @Query(
         """
         SELECT le.paper_id FROM library_entries le
         WHERE NOT EXISTS (
             SELECT 1 FROM chunk_embeddings ce
-            WHERE ce.paper_id = le.paper_id AND ce.model = :model
+            WHERE ce.paper_id = le.paper_id AND ce.model = :model AND ce.source_kind = 'abstract'
         )
         ORDER BY le.added_at DESC
         LIMIT :limit
@@ -60,13 +90,17 @@ interface ChunkEmbeddingDao {
         limit: Int,
     ): List<String>
 
-    /** A collection's papers with no current-model chunk row yet (ensure-embedded on chat open). */
+    /**
+     * A collection's papers with no current-model **abstract** chunk yet (ensure-embedded on chat open).
+     * Scoped to `source_kind='abstract'` (P-FullText PFT.1) for the same anti-starvation reason as
+     * [libraryPapersMissingChunks] — a body-indexed paper still needs its abstract/note chunks.
+     */
     @Query(
         """
         SELECT cp.paper_id FROM collection_papers cp
         WHERE cp.collection_id = :collectionId AND NOT EXISTS (
             SELECT 1 FROM chunk_embeddings ce
-            WHERE ce.paper_id = cp.paper_id AND ce.model = :model
+            WHERE ce.paper_id = cp.paper_id AND ce.model = :model AND ce.source_kind = 'abstract'
         )
         ORDER BY cp.added_at DESC
         LIMIT :limit

@@ -14,9 +14,11 @@ import java.time.Instant
  * Indexes a paper's text into the chunk-embedding store for RAG retrieval
  * (SPEC-SEARCH §8). Chunks `title + abstract + notes` via [TextChunker], embeds
  * each chunk with the injected [embed] seam (bound to `EmbeddingService::embedPassages`
- * in DI; faked in tests so no ONNX is needed), and replaces the paper's chunk rows
- * (delete-then-insert keeps `(paper_id, source_kind, ordinal)` unique and re-index
- * idempotent). Embedding is the only expensive step and stays fully on-device.
+ * in DI; faked in tests so no ONNX is needed), and replaces the paper's **abstract+note**
+ * chunk rows (source-scoped delete-then-insert in one transaction — keeps
+ * `(paper_id, source_kind, ordinal)` unique, re-index idempotent, and never clobbers a
+ * paper's `body` chunks (P-FullText PFT.1)). Embedding is the only expensive step and
+ * stays fully on-device.
  */
 class RagIndexer(
     private val paperDao: PaperDao,
@@ -33,7 +35,7 @@ class RagIndexer(
         val notes = libraryDao.notesFor(paperId).map { it.content }
         val chunks = chunker.chunk(paper.title, paper.abstract, notes)
         if (chunks.isEmpty()) {
-            chunkDao.deleteForPaper(paperId)
+            chunkDao.deleteForPaperSources(paperId, ABSTRACT_NOTE)
             return AppResult.Success(Unit)
         }
         return embed(chunks.map { it.text }).map { vectors ->
@@ -51,8 +53,7 @@ class RagIndexer(
                         embeddedAt = now,
                     )
                 }
-            chunkDao.deleteForPaper(paperId)
-            chunkDao.insert(rows)
+            chunkDao.replacePaperSources(paperId, ABSTRACT_NOTE, rows)
         }
     }
 
@@ -78,5 +79,12 @@ class RagIndexer(
 
     companion object {
         private const val COLLECTION_BATCH = 100
+
+        /**
+         * [indexPaper] owns the abstract+note sources only; body chunks (PFT.2) are maintained by a separate
+         * pass, so its scoped delete/replace targets exactly these and leaves any `body` rows untouched.
+         */
+        private val ABSTRACT_NOTE =
+            listOf(ChunkEmbeddingEntity.SOURCE_ABSTRACT, ChunkEmbeddingEntity.SOURCE_NOTE)
     }
 }

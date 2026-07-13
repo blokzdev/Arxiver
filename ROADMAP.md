@@ -1108,11 +1108,83 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   *Cut/deferred (breadcrumbs): arXiv-reaching "discover more like this" (biggest upside, but net-new egress +
   P5.4-adjacent → HUMAN.md future phase); author disambiguation; a "Discover" nav tab; embedding-clustering trending;
   library-centroid arXiv feed → v2 backlog.*
-- [ ] **P-FullText — full-text PDF body search** *(queued; my validation add).* The explicit PRD v2 gap ("full-text
-  search of PDF bodies is v2 candidate", PRD.md:83). The chunk/FTS/vector infra already exists (`RagIndexer` →
-  `chunk_embeddings` + `chunk_fts` + `HybridFusion`) but indexes only title+abstract+notes; the new work is
-  **on-device PDF text extraction** feeding that infra + surfacing it in hybrid search. Deepens the core "Find"
-  JTBD. Size **M–L**, on-ethos (fully on-device).
+### Phase P-FullText — full-text paper-body search *(plan approved 2026-07-13; ACTIVE — HTML-first v1)*
+
+> Planned via an Ultracode workflow (3-reader map → 3 diverse designs → 3 adversarial stress passes → Opus
+> synthesis) **+ a personal file:line validation** that confirmed every load-bearing claim: the paper-wide chunk
+> **delete clobber** (`ChunkEmbeddingDao.deleteForPaper` wipes all source_kinds), the **abstract-backfill starvation**
+> (`libraryPapersMissingChunks` treats a body-only paper as done), `<math>` **kept verbatim** in `ReaderDocument.bodyHtml`
+> (a flat `.text()` would poison FTS+embeddings on arXiv's math-heavy core), the **blanket model-mismatch wipe**
+> (`deleteByModelMismatch WHERE model!=:model` covers body chunks), the **default-empty third fusion leg = byte-identical
+> goldens**, and **additive `source_kind='body'` = zero migration** (VERSION=16). **Thesis:** deliver full-text body
+> search **HTML-first** — extract clean text from the already-persisted P-HTML reader body (`ReaderDocument.bodyHtml`,
+> `HtmlStorage`) via the already-present **jsoup** (zero new dependency), chunk it as an additive `source_kind='body'`
+> into the existing `chunk_embeddings`/`chunk_fts`, and surface it corpus-wide in Find as an **FTS-only third fusion
+> leg** — honestly (coverage is the reader-opened subset, shown as "N of M full-text indexed", never implied as
+> full-corpus) and within the 300ms budget. **PDF extraction is DEFERRED behind a Co-Founder dependency gate (PFT.5).**
+> **Ethos (binding):** honest coverage; no body-keyword flood (MAX-chunk-per-paper BM25 rollup, `bodyWeight≈0.15`,
+> independent leg normalization, the retained 0.70 gate); no new egress/telemetry (extraction is local; a structural
+> test forbids jsoup's network API); body chunks stay OUT of backups (rebuildable local-only, per SPEC-P-HTML §10);
+> the P-Prove SearchTrace perf guard stays green (no trace-const churn). **Approved shape: HTML-first v1 = PFT.1–PFT.3
+> (Co-Founder, 2026-07-13).** Biggest risk (stated, not papered over): the corpus-wide body `MATCH` cost scales with
+> term corpus-frequency and is cheap in v1 ONLY because coverage = the small reader-opened subset — a **VERIFICATION.md
+> device gate** on a 3–5K re-measure, and candidate-gating is a required precondition before any large coverage growth.
+
+- [x] **PFT.1 — Source-scoped chunk maintenance (de-clobber + de-starve substrate).** No user-visible change; the safe
+  prerequisite before any body write exists. `ChunkEmbeddingDao`: replaced the paper-wide `deleteForPaper` with a
+  source-scoped `deleteForPaperSources(paperId, sourceKinds)` + a `@Transaction replacePaperSources` (atomic scoped
+  delete+insert — a reader never sees the paper mid-reindex with zero rows), and narrowed
+  `libraryPapersMissingChunks`/`collectionPapersMissingChunks` to `source_kind='abstract'` (else a body-only paper
+  masquerades as indexed and starves its own abstract/RAG chunks). `RagIndexer` now scoped-replaces `{abstract,note}`
+  only, so a re-index can never clobber a paper's `body` chunks. Added `ChunkEmbeddingEntity.SOURCE_BODY`. Tests:
+  source-scoped delete leaves body intact; transactional replace preserves other sources; a body-only paper is still
+  selected by both (now abstract-scoped) backfill predicates; a `RagIndexer` re-index preserves pre-existing body
+  chunks (the clobber-regression guard). **Zero migration** (VERSION=16; no schema element touched —
+  `copyRoomSchemas NO-SOURCE`).
+- [ ] **PFT.2 — HTML body extraction + self-healing indexing write path.** A layered `BodyTextExtractor` seam in
+  `:core:ai` (HTML impl now; PDF stub for PFT.5). **Math-safe extraction:** strip `<math>` subtrees (+ figure
+  placeholders) before `jsoup .text()`, locked by a math-dense golden asserting no cross-`<math>` token merge. New
+  `TextChunker.chunkBody(text)` with a `MAX_BODY_CHUNKS` cap → `RagIndexer.indexPaperBody` = chunk→`embedPassages`→
+  `replacePaperSources(paperId, [body], rows)`, per-paper serialized. Triggered on HTML-reader-open (fire-and-forget,
+  injected IO dispatcher, cheap COUNT short-circuit so an already-indexed paper is never re-embedded) **plus** a
+  **filesystem-driven** bounded worker catch-all (enumerate `HtmlStorage.dir()` ∩ missing/stale body chunks — never
+  the newest-N DB rows that have no HTML, so no starvation; and self-heals a `MODEL_NAME` bump instead of silently
+  collapsing coverage to ~0). A `.bodyindex` filesystem sidecar tracks the indexed body version (no stale-version
+  over-claim). No Find surfacing yet. **Zero migration.**
+- [ ] **PFT.3 — Corpus body-FTS Find leg + anti-flood fusion + honest N-of-M coverage UX.** `ChunkEmbeddingDao.matchBodyChunks(match)`
+  (unscoped `chunk_fts MATCH WHERE source_kind='body'`) → a new `CorpusBodyRetriever` (`:core:search`) that MAX-rolls
+  chunk BM25 up to paper level (never SUM — many weak body mentions can't outrank a precise title match) and
+  normalizes the body leg **independently**; folded into `HybridFusion.fuse` as an optional third leg (default
+  `emptyList` → the ~20 golden relevance cases stay byte-identical) at `SearchTuning.bodyWeight≈0.15`, computed inside
+  the existing `HYBRID_SEARCH` async span (**no `SearchTrace` const change** → `SearchTraceContractTest` + P-Prove
+  guard stay green). Honest UX: a query-independent "N of M papers full-text indexed" coverage line, a "Full text"
+  provenance badge, and body-only hits below the 0.70 gate surfaced in a distinct "Also found in full text" group
+  (never silently dropped, so the badge can't over-claim). A query-shape skip-gate protects short/exact-title queries.
+  **Zero migration.** **VERIFICATION.md D2 device re-measure is a hard pre-merge gate.**
+- [ ] **PFT.4 — [device-D2-gated] candidate-gated semantic body leg.** Cosine over the body chunks of ONLY the PFT.3
+  FTS-hit papers (reusing the query vector already computed at `SearchViewModel:169`), bounded by `MAX_BODY_CHUNKS` +
+  a total-candidate-chunk cap, guarded by a sibling `BodyScanPerfGuardTest` mirroring `VectorScanPerfGuardTest`'s
+  allocation invariant. **Ships only if an on-device D2 measurement shows headroom; else → backlog** (the fusion seam
+  already supports it). Zero migration.
+- [ ] **PFT.5 — [DEFERRED · Co-Founder pdfbox dependency gate] PDF body layer.** `pdfbox-android` (Apache-2.0, offline,
+  ~7–7.5MB → trim to ~1MB via asset exclusion) behind the same `BodyTextExtractor` seam, completing the HTML→PDF
+  fallback for universal coverage. **Not started without an explicit HUMAN.md GO.** Requires: a committed
+  dependency-graph/no-egress structural test (zero sockets, zero new `AllowedHosts` entries) BEFORE adoption; a
+  DEGRADED garbage-text quality gate (dictionary-word/whitespace/column-order heuristics on noisy-PDF fixtures) that
+  rejects scrambled text before it embeds AND before it counts toward coverage; bounded model-bump re-embed. Zero
+  migration (another `source_kind='body'` producer). HTML stays preferred-per-paper; PDF is the fallback.
+- [ ] **CHECKPOINT P-FullText** — `./gradlew build` green; **assert `ArxiverDatabase.VERSION == 16`** (additive
+  `source_kind`, no schema element touched); red-line audit (no new egress host — extraction is local over
+  already-downloaded HTML; jsoup network API structurally forbidden; no telemetry; body chunks excluded from
+  `ArxiverBackup`; arXiv ≥3s limiter untouched; learned head untouched); `:core:* ∌ :app`; light/dark previews +
+  TalkBack on the coverage line / badge / "Also found in full text" group. Device rows (VERIFICATION.md): body
+  indexing populates on HTML-reader-open; the corpus body leg surfaces a body-only match in Find + the honest
+  coverage line; **D2 re-measured at 3–5K scale stays within the 300ms budget**.
+  *Cut/deferred (breadcrumbs, never dropped): PDF body layer → PFT.5 (Co-Founder pdfbox gate); semantic body leg →
+  PFT.4/backlog; candidate-gating for the corpus body FTS at SCALE → required precondition before coverage growth
+  (SPEC-SEARCH note + PFT.5); structured `.ltx_*`-aware body chunking → backlog; body-chunk storage cap/LRU →
+  backlog (v1 is bounded to the reader-opened subset); per-`source_kind` BM25 IDF drift → characterization golden in
+  PFT.3, escalate only if material.*
 - [ ] **P-Read — reading continuity + queue** *(queued).* No cross-surface reading-progress store (HTML position is
   a per-file `.position` sidecar; a claimed PDF rotation position/night-mode loss is **unverified — not yet checked
   at file:line**). Scope: a Room `reading_positions` table (additive migration, shared HTML+PDF) + a "Continue
