@@ -122,6 +122,11 @@ class SearchViewModelTest {
                 ),
             modelDownloader = ModelDownloader(OkHttpClient(), dispatchers, File("build/tmp/never-used")),
             searchDao = db.searchDao(),
+            corpusBodyRetriever =
+                dev.blokz.arxiver.core.search.CorpusBodyRetriever(
+                    dev.blokz.arxiver.core.search.DaoCorpusBodySource(db.chunkEmbeddingDao()),
+                ),
+            chunkEmbeddingDao = db.chunkEmbeddingDao(),
             libraryRepository = libraryRepository,
             categoryRepository = categoryRepository,
             savedStateHandle = handle,
