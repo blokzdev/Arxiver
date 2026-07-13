@@ -145,4 +145,44 @@ class HtmlStorageTest {
             assertEquals(2, newest.version)
             assertEquals("<p>legacy v2</p>", newest.file.readText())
         }
+
+    // --- P-FullText PFT.2: the .bodyindex sidecar + cachedBodies enumerator --------------------------
+
+    @Test
+    fun `body index sidecar round-trips and is absent by default`() =
+        runTest {
+            assertNull(storage.readBodyIndex(id, 1))
+            storage.store(id, 1, HtmlSource.NATIVE, "<p>body</p>")
+            storage.storeBodyIndex(id, 1, "bge-A")
+            assertEquals("bge-A", storage.readBodyIndex(id, 1))
+            storage.storeBodyIndex(id, 1, "bge-B")
+            assertEquals("bge-B", storage.readBodyIndex(id, 1), "re-stamp overwrites")
+        }
+
+    @Test
+    fun `cachedBodies lists completed bodies with their index model and skips incompletes`() =
+        runTest {
+            val id2 = ArxivId("2401.00002")
+            storage.store(id, 1, HtmlSource.NATIVE, "<p>indexed</p>")
+            storage.storeBodyIndex(id, 1, "bge-A")
+            storage.store(id2, 2, HtmlSource.AR5IV, "<p>not yet indexed</p>")
+            // A process-killed partial (index.html present, .complete removed) must be excluded.
+            storage.store(ArxivId("2401.00003"), 1, HtmlSource.NATIVE, "<p>partial</p>")
+            assertTrue(File(File(storage.dir(), "2401.00003v1"), ".complete").delete())
+
+            val bodies = storage.cachedBodies().associateBy { it.id.value to it.version }
+            assertEquals("bge-A", bodies["2412.19437" to 1]?.indexedModel)
+            assertNotNull(bodies["2401.00002" to 2], "an un-indexed completed body is still a candidate")
+            assertNull(bodies["2401.00002" to 2]!!.indexedModel)
+            assertTrue(bodies.keys.none { it.first == "2401.00003" }, "the incomplete body is excluded")
+        }
+
+    @Test
+    fun `cachedBodies reverse-parses legacy slash ids (the 'v' in the archive name is not the version)`() =
+        runTest {
+            val legacy = ArxivId("solv-int/9701001")
+            storage.store(legacy, 2, HtmlSource.AR5IV, "<p>legacy</p>")
+            val ref = storage.cachedBodies().single { it.id.value == "solv-int/9701001" }
+            assertEquals(2, ref.version)
+        }
 }

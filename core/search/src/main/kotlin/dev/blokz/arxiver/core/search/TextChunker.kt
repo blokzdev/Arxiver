@@ -53,6 +53,17 @@ class TextChunker(
         return out
     }
 
+    /**
+     * Chunk full paper-body text (P-FullText PFT.2) into `source_kind = body` chunks, capped at
+     * [MAX_BODY_CHUNKS] so a very long paper can't blow per-paper embed cost / storage. Ordinals are
+     * continuous from 0, unique within `(paperId, body)`. A body past the cap is truncated (the tail is
+     * unindexed) — [MAX_BODY_CHUNKS] is sized to cover the vast majority of papers whole.
+     */
+    fun chunkBody(body: String): List<TextChunk> =
+        splitText(body)
+            .take(MAX_BODY_CHUNKS)
+            .mapIndexed { i, text -> TextChunk(ChunkEmbeddingEntity.SOURCE_BODY, i, text) }
+
     /** Sentence-greedy packing under [maxChars] with [overlapChars] carry-over. */
     private fun splitText(raw: String): List<String> {
         val text = raw.trim()
@@ -101,6 +112,13 @@ class TextChunker(
     companion object {
         const val DEFAULT_MAX_CHARS = 1200
         const val DEFAULT_OVERLAP_CHARS = 150
+
+        /**
+         * Per-paper body-chunk cap (P-FullText PFT.2). At ~1200 chars/chunk this covers ~24k words — the
+         * vast majority of papers whole; a longer body truncates its tail. PROVISIONAL — a balance of
+         * coverage vs per-paper embed/storage cost; device-ratifiable (VERIFICATION.md).
+         */
+        const val MAX_BODY_CHUNKS = 120
         private val SENTENCE_BOUNDARY = Regex("(?<=[.!?])\\s+|\\n+")
     }
 }

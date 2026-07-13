@@ -15,6 +15,7 @@ import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
 import dev.blokz.arxiver.core.ml.EmbeddingService
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.search.VectorIndex
+import dev.blokz.arxiver.rag.BodyIndexer
 import dev.blokz.arxiver.rag.RagIndexer
 import timber.log.Timber
 import java.time.Instant
@@ -38,6 +39,7 @@ class EmbeddingWorker
         private val vectorIndex: VectorIndex,
         private val chunkEmbeddingDao: ChunkEmbeddingDao,
         private val ragIndexer: RagIndexer,
+        private val bodyIndexer: BodyIndexer,
         private val rankerEvalRunner: RankerEvalRunner,
         private val digestRunner: DigestRunner,
     ) : CoroutineWorker(context, params) {
@@ -56,6 +58,7 @@ class EmbeddingWorker
 
             embedPending()
             indexLibraryChunks()
+            indexBodyChunks()
             refreshRelatedPapers()
             // The offline ranker eval runs BEFORE scoring (P5.2): it selects this pass's shrinkage λ, so a
             // fresh selection applies immediately (its inbox-distribution snapshot therefore describes the
@@ -88,6 +91,18 @@ class EmbeddingWorker
                     is AppResult.Success -> Unit
                 }
             }
+        }
+
+        /**
+         * Body-text backfill (P-FullText PFT.2): filesystem-driven (enumerates the html cache, never the
+         * paper table — so a paper with no reader HTML is never a candidate) + bounded per run (body chunks
+         * are ~50x heavier than an abstract). The model-mismatch wipe in [indexLibraryChunks] already dropped
+         * stale body chunks, so a `MODEL_NAME` bump self-heals here. A background nicety — never fails the worker.
+         */
+        private suspend fun indexBodyChunks() {
+            if (isStopped) return
+            runCatching { bodyIndexer.backfill(BODY_BACKFILL_PER_RUN) { isStopped } }
+                .onFailure { Timber.w("Body chunk backfill failed: $it") }
         }
 
         private suspend fun embedPending() {
@@ -159,6 +174,10 @@ class EmbeddingWorker
             const val MODEL_NAME = "bge-small-en-v1.5-q8"
             private const val BATCH_SIZE = 8
             private const val CHUNK_BACKFILL_PER_RUN = 50
+
+            /** Body backfill is far heavier per paper (a whole body → up to `TextChunker.MAX_BODY_CHUNKS`
+             *  embeds) than abstract backfill, so only a few papers per background run (PFT.2). */
+            private const val BODY_BACKFILL_PER_RUN = 4
             private const val RELATED_COUNT = 8
         }
     }

@@ -56,4 +56,27 @@ class TextChunkerTest {
         assertTrue(chunks.size > 1)
         assertTrue(chunks.all { it.text.length <= 60 })
     }
+
+    // --- P-FullText PFT.2: body chunking ---
+
+    @Test
+    fun `chunkBody tags the body source with continuous ordinals`() {
+        val chunks = chunker.chunkBody("First body sentence. Second body sentence. Third one here.")
+        assertTrue(chunks.isNotEmpty())
+        assertTrue(chunks.all { it.sourceKind == ChunkEmbeddingEntity.SOURCE_BODY })
+        assertEquals(chunks.indices.toList(), chunks.map { it.ordinal })
+    }
+
+    @Test
+    fun `chunkBody caps a very long body at MAX_BODY_CHUNKS`() {
+        val huge = (1..400).joinToString(" ") { "Sentence number $it about the topic here." }
+        val chunks = chunker.chunkBody(huge)
+        assertEquals(TextChunker.MAX_BODY_CHUNKS, chunks.size, "a very long body is truncated to the cap")
+        assertEquals(chunks.indices.toList(), chunks.map { it.ordinal })
+    }
+
+    @Test
+    fun `chunkBody of blank text is empty`() {
+        assertEquals(emptyList(), chunker.chunkBody("   "))
+    }
 }

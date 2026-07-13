@@ -531,6 +531,32 @@ object AppModule {
         )
 
     @Provides
+    @Singleton
+    fun bodyTextExtractor(): dev.blokz.arxiver.core.ai.BodyTextExtractor =
+        dev.blokz.arxiver.core.ai.HtmlBodyTextExtractor
+
+    @Provides
+    @Singleton
+    fun bodyIndexer(
+        htmlStorage: dev.blokz.arxiver.core.ai.HtmlStorage,
+        extractor: dev.blokz.arxiver.core.ai.BodyTextExtractor,
+        ragIndexer: dev.blokz.arxiver.rag.RagIndexer,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.rag.BodyIndexer =
+        dev.blokz.arxiver.rag.BodyIndexer(
+            htmlStorage = htmlStorage,
+            extractor = extractor,
+            ragIndexer = ragIndexer,
+            dispatchers = dispatchers,
+            modelName = dev.blokz.arxiver.sync.EmbeddingWorker.MODEL_NAME,
+        )
+
+    /** The reader-open nudge seam (PFT.2) bound to the singleton [BodyIndexer]. */
+    @Provides
+    @Singleton
+    fun bodyIndexTrigger(indexer: dev.blokz.arxiver.rag.BodyIndexer): dev.blokz.arxiver.rag.BodyIndexTrigger = indexer
+
+    @Provides
     fun chatDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.ChatDao = db.chatDao()
 
     @Provides

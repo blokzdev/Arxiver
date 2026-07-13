@@ -1141,16 +1141,23 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   selected by both (now abstract-scoped) backfill predicates; a `RagIndexer` re-index preserves pre-existing body
   chunks (the clobber-regression guard). **Zero migration** (VERSION=16; no schema element touched —
   `copyRoomSchemas NO-SOURCE`).
-- [ ] **PFT.2 — HTML body extraction + self-healing indexing write path.** A layered `BodyTextExtractor` seam in
-  `:core:ai` (HTML impl now; PDF stub for PFT.5). **Math-safe extraction:** strip `<math>` subtrees (+ figure
-  placeholders) before `jsoup .text()`, locked by a math-dense golden asserting no cross-`<math>` token merge. New
-  `TextChunker.chunkBody(text)` with a `MAX_BODY_CHUNKS` cap → `RagIndexer.indexPaperBody` = chunk→`embedPassages`→
-  `replacePaperSources(paperId, [body], rows)`, per-paper serialized. Triggered on HTML-reader-open (fire-and-forget,
-  injected IO dispatcher, cheap COUNT short-circuit so an already-indexed paper is never re-embedded) **plus** a
-  **filesystem-driven** bounded worker catch-all (enumerate `HtmlStorage.dir()` ∩ missing/stale body chunks — never
-  the newest-N DB rows that have no HTML, so no starvation; and self-heals a `MODEL_NAME` bump instead of silently
-  collapsing coverage to ~0). A `.bodyindex` filesystem sidecar tracks the indexed body version (no stale-version
-  over-claim). No Find surfacing yet. **Zero migration.**
+- [x] **PFT.2 — HTML body extraction + self-healing indexing write path.** A layered `BodyTextExtractor` `fun interface`
+  in `:core:ai` (`HtmlBodyTextExtractor` now; PDF impl stubbed for PFT.5). **Math-safe extraction:** `doc.select("math").remove()`
+  before jsoup `.text()` — drops MathML glyph-soup while keeping surrounding prose AND figure captions (searchable);
+  golden-tested (no cross-`<math>` token merge; real ar5iv fixture yields clean prose). New `TextChunker.chunkBody(text)`
+  (`MAX_BODY_CHUNKS = 120`, provisional) → `RagIndexer.indexPaperBody` = chunk→`embedPassages`→`replacePaperSources(paperId,
+  [body], rows)` (source-scoped; **orphan-paper no-op guard** — a cached body can outlive its paper row, so a gone paper
+  never FK-fails the insert). A new `BodyIndexer` (+ a minimal `BodyIndexTrigger` seam the reader depends on) owns two
+  entry points: `indexOnOpen` (per-paper `Mutex` + re-check, `.bodyindex`-sidecar short-circuit so an already-current
+  version+model body is never re-embedded) and `backfill`. Triggered on HTML-reader-open (`HtmlReaderViewModel`,
+  fire-and-forget on `applicationScope`+IO, both cache-hit + fresh paths) **plus** a **filesystem-driven** bounded worker
+  catch-all (`EmbeddingWorker.indexBodyChunks`, `BODY_BACKFILL_PER_RUN = 4`) that enumerates `HtmlStorage.cachedBodies()`
+  (never the paper table — no newest-N starvation) and self-heals a `MODEL_NAME` bump (the model-mismatch wipe drops stale
+  body chunks; the stale sidecar model re-qualifies the body). A `.bodyindex` sidecar keyed on the served version tracks
+  the indexed (version, model) — no stale-version over-claim. No Find surfacing yet. **Zero migration (VERSION=16).**
+  Tests: extractor math-strip golden + real-fixture; `HtmlStorage` sidecar round-trip + `cachedBodies` (completed-only,
+  legacy slash-id reverse-parse); `chunkBody` cap/ordinals; `indexPaperBody` (source-scoped, orphan no-op); `BodyIndexer`
+  (write+stamp, re-open short-circuit, backfill, model-bump self-heal).
 - [ ] **PFT.3 — Corpus body-FTS Find leg + anti-flood fusion + honest N-of-M coverage UX.** `ChunkEmbeddingDao.matchBodyChunks(match)`
   (unscoped `chunk_fts MATCH WHERE source_kind='body'`) → a new `CorpusBodyRetriever` (`:core:search`) that MAX-rolls
   chunk BM25 up to paper level (never SUM — many weak body mentions can't outrank a precise title match) and

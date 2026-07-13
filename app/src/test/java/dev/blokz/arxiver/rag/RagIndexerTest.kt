@@ -157,9 +157,59 @@ class RagIndexerTest {
         }
 
     @Test
+    fun `indexPaperBody writes body chunks without touching abstract or note chunks`() =
+        runTest {
+            seedPaper("p1")
+            indexer().indexPaper("p1") // abstract chunks
+            val abstractCount =
+                db.chunkEmbeddingDao().chunksForPaper("p1", 100, 0)
+                    .count { it.sourceKind == ChunkEmbeddingEntity.SOURCE_ABSTRACT }
+            assertTrue(abstractCount > 0)
+
+            indexer().indexPaperBody("p1", "The full body text of the paper. It has several sentences.")
+
+            val rows = db.chunkEmbeddingDao().chunksForPaper("p1", 100, 0)
+            assertTrue(rows.any { it.sourceKind == ChunkEmbeddingEntity.SOURCE_BODY }, "body chunks written")
+            assertEquals(
+                abstractCount,
+                rows.count { it.sourceKind == ChunkEmbeddingEntity.SOURCE_ABSTRACT },
+                "abstract chunks untouched by a body index",
+            )
+        }
+
+    @Test
+    fun `indexPaperBody with empty text clears prior body chunks and succeeds`() =
+        runTest {
+            seedPaper("p1")
+            indexer().indexPaperBody("p1", "A real body sentence here.")
+            assertTrue(
+                db.chunkEmbeddingDao().chunksForPaper("p1", 100, 0)
+                    .any { it.sourceKind == ChunkEmbeddingEntity.SOURCE_BODY },
+            )
+
+            val result = indexer().indexPaperBody("p1", "   ")
+
+            assertTrue(result is AppResult.Success)
+            assertTrue(
+                db.chunkEmbeddingDao().chunksForPaper("p1", 100, 0)
+                    .none { it.sourceKind == ChunkEmbeddingEntity.SOURCE_BODY },
+                "an empty body clears any prior body chunks",
+            )
+        }
+
+    @Test
     fun `unknown paper is a no-op success`() =
         runTest {
             val result = indexer().indexPaper("missing")
+            assertTrue(result is AppResult.Success)
+            assertEquals(0, db.chunkEmbeddingDao().count())
+        }
+
+    @Test
+    fun `indexPaperBody for an orphan body (no paper row) is a no-op success`() =
+        runTest {
+            // A cached reader body can outlive its paper row; body indexing must not FK-fail on it.
+            val result = indexer().indexPaperBody("missing", "Some body text that would otherwise be chunked.")
             assertTrue(result is AppResult.Success)
             assertEquals(0, db.chunkEmbeddingDao().count())
         }
