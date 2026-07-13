@@ -1202,10 +1202,60 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   (SPEC-SEARCH note + PFT.5); structured `.ltx_*`-aware body chunking → backlog; body-chunk storage cap/LRU →
   backlog (v1 is bounded to the reader-opened subset); per-`source_kind` BM25 IDF drift → characterization golden in
   PFT.3, escalate only if material.*
-- [ ] **P-Read — reading continuity + queue** *(queued).* No cross-surface reading-progress store (HTML position is
-  a per-file `.position` sidecar; a claimed PDF rotation position/night-mode loss is **unverified — not yet checked
-  at file:line**). Scope: a Room `reading_positions` table (additive migration, shared HTML+PDF) + a "Continue
-  reading" shelf on Today; lays the anchor substrate a future annotations phase would need. Size **M**.
+### Phase P-Read — reading continuity + an honest "Continue reading" shelf *(plan approved 2026-07-13; ACTIVE)*
+
+> Planned via an Ultracode workflow (3-reader map → 3 diverse designs → adversarial stress → Opus synthesis) **+ a
+> personal file:line validation**. **The ROADMAP premise was partly wrong (verified):** `PdfViewerScreen` uses
+> `rememberLazyListState` (saved-instance-state), so PDF scroll position *already survives rotation* — the real gaps
+> are (1) no **durable cross-session** PDF position, (2) no **cross-surface store** for a shelf, (3) night-mode isn't
+> persisted. HTML already has a durable `.position` sidecar (PH.6). **Thesis:** a minimal-blast-radius additive
+> substrate — keep the proven PH.6 sidecar as the HTML restore source-of-truth (untouched), add an additive
+> `reading_positions` Room table (v16→v17) as a **pure shelf projection + the PDF viewer's missing durable resume**,
+> and a calm, honest **"Continue reading"** Today shelf. **The honesty invariant (the whole ethos):** a paper shows
+> ONLY when genuinely opened + really scrolled + not finished — the shelf row is bumped **only by `onPositionProbed`
+> scroll samples**, never the reopen-seed, never a TOC/citation jump (fraction 0). This is the anti-thesis of the cut
+> PA.3 "saved = to-read" shelf. **Binding guardrails:** no count badge / notification / streak / completion
+> celebration / goal meter; silence-over-noise (absent when empty); `finished` is exclusion-only (never a checkmark);
+> position language not "percent read" (visual + TalkBack equal); zero egress/telemetry; **reading positions EXCLUDED
+> from backup/export/dispatch** (personal behavioural data, structurally enforced). **Approved shape: top-of-Today,
+> always-on (Co-Founder, 2026-07-13).** Two personal-validation refinements folded in: the cross-surface query uses
+> `GROUP BY`+`MAX(fraction)` (**no window functions** — SQLite 3.19 on the API-26 floor), and finished/read exclusion
+> is **paper-level** (a paper finished in HTML isn't resurfaced by a PDF glance).
+
+- [x] **P-Read.1 — `reading_positions` substrate (table + migration + DAO + repo + egress guard).** Additive v16→v17:
+  new `ReadingPositionEntity` (composite PK `(paper_id, surface)`, anchor-capable typed columns, **no FK** — an
+  FK-cascade insert would fail on the verified paperless-HTML-open path; the shelf INNER-JOINs papers so orphans
+  self-filter), `ReadingPositionDao` (`@Upsert` update-in-place — never REPLACE-churn, so a future annotations table
+  can child-FK it; `observeContinueReading` with the honest furthest-progress query), the `Migration16To17`
+  (DDL transcribed from the generated `17.json` with the `${TABLE_NAME}` macro substituted), `17.json` committed,
+  `ReadingProgressRepository` + `ContinueReadingUi` (`:app`), + DI. **Zero UI wiring** (substrate only). Tests:
+  `Migration16To17Test` (identity-hash + round-trip), `ReadingPositionDaoTest` (each honesty filter proven
+  load-bearing + cross-surface furthest-progress), `ReadingPositionExportExclusionTest` (reading positions stay out
+  of every data-layer export/backup/dispatch sink), `MigrationHarnessTest` green at v17. SPEC-DATA §2 updated.
+- [ ] **P-Read.2 — PDF durable cross-session resume.** Inject `ReadingProgressRepository` into `PdfViewerViewModel`;
+  persist the list position on a genuine scroll (continuous `fraction = (page + intra-page ratio)/pageCount` — honest
+  about first-page reads; a merely-opened PDF writes no row), restore via a one-shot `scrollToItem` (version-skew
+  soft-miss; page-count-change clamp); PDF `finished` NOT inferred from the last page. No schema change.
+- [ ] **P-Read.3 — HTML shelf-heartbeat (PH.6 sidecar untouched).** One dual-write into the table fed **only by
+  `onPositionProbed`** — the PH.6 funnel (target flow, sidecar persist/restore, jump-settle, `onCleared` flush) is
+  NOT modified (its tests are the regression gate). Sustained-dwell `finished` (two consecutive high probes; resets
+  below the floor). No schema change.
+- [ ] **P-Read.4 — Today "Continue reading" shelf + deep-link nav.** A calm section at the TOP of Today (a nested
+  2-arg combine wrapping the untouched 5-arg one), plain clickable rows, furthest-progress cross-surface collapse,
+  position language + TalkBack parity, renders only when non-empty (no guilt-CTA), deep-links to the right surface.
+  SPEC-UI updated. No schema change.
+- [ ] **CHECKPOINT P-Read** — `./gradlew build` green; **`ArxiverDatabase.VERSION == 17`**, `17.json` committed,
+  `Migration16To17Test` identity-hash green, no destructive migration; red-line audit (zero egress/telemetry; reading
+  positions excluded from OS backup + the backup DTO + library export + BibTeX + the Claude dispatch payload —
+  structurally enforced); `:core:* ∌ :app`; the PH.6 sidecar funnel untouched (its tests green as the regression
+  gate); light/dark previews + TalkBack (position language) on the shelf. Device rows (VERIFICATION.md §M): cold-kill
+  PDF restore, cross-surface deep-link, and the provisional thresholds (progress floor, sustained-dwell, recency
+  window, shelf cap).
+  *Cut/deferred (breadcrumbs): PDF night-mode persistence → HUMAN.md (a preference, not a position; must be scoped
+  honestly); the "retire the sidecar, unified anchor store" (Option B) → future annotations phase (needs anchor
+  re-validation on restore first); the annotations ranges table → backlog (this phase's anchor-capable columns are
+  its substrate); auto-advance `status='read'` at ~100% → recommend NO (over-claim); per-version shelf fidelity →
+  deliberate "latest-touched" decision (the sidecar keeps both).*
 
 *Not a phase (tracked in HUMAN.md §3, not the roadmap):* the **egress structural host-gate test** (defense-in-depth,
 no active exposure) and a **Settings "reset personalization"** control — both cheap follow-ons awaiting a steer, not

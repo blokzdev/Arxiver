@@ -79,6 +79,16 @@ object AppModule {
     fun inboxDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.InboxDao = db.inboxDao()
 
     @Provides
+    fun readingPositionDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.ReadingPositionDao =
+        db.readingPositionDao()
+
+    @Provides
+    @Singleton
+    fun readingProgressRepository(
+        dao: dev.blokz.arxiver.core.database.dao.ReadingPositionDao,
+    ): dev.blokz.arxiver.data.ReadingProgressRepository = dev.blokz.arxiver.data.ReadingProgressRepository(dao)
+
+    @Provides
     fun relevanceModelDao(db: ArxiverDatabase): dev.blokz.arxiver.core.database.dao.RelevanceModelDao =
         db.relevanceModelDao()
 

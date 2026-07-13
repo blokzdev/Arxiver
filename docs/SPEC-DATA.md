@@ -50,6 +50,32 @@
 | rating | INTEGER? | 1–5 |
 | pdf_path | TEXT? | local file if downloaded |
 
+### reading_positions (P-Read)
+Durable per-(paper, surface) reading position — powers cross-session resume + the honest "Continue reading"
+shelf. **A row means "opened + last-known position", NOT proof of progress** — every consumer re-applies the
+honesty gate (`fraction ≥ floor`, `finished = 0`, library `status != 'read'`, recency). Anchor-capable (a
+future annotations phase reuses these columns). **No FK to `papers`** (the HTML reader tolerates a paperless
+open, so an FK-cascade insert would fail; the shelf INNER JOINs `papers`, so an orphan self-filters).
+**Personal on-device data — never exported / dispatched / backed up** (structurally enforced).
+
+| column | type | notes |
+|---|---|---|
+| paper_id | TEXT | `PaperRef.storageId`; part of PK |
+| surface | TEXT | `html` / `pdf` — different coordinate systems, one row each; part of PK |
+| version | INTEGER | the SERVED version (HTML `servedVersion`, PDF latestVersion); non-key → one row per surface |
+| anchor_id | TEXT? | HTML nearest-anchor; null for PDF |
+| offset_px | INTEGER | HTML `offsetCssPx` / PDF intra-page scroll offset |
+| fraction | REAL | universal 0..1 progress — shelf marker + honesty floor |
+| page_index | INTEGER? | PDF page; null for HTML |
+| finished | INTEGER | HTML-only sustained-dwell flag; **EXCLUSION-ONLY** (drops the paper, never a "completed" badge) |
+| updated_at | INTEGER | local scroll-probe timestamp; recency signal + shelf sort; indexed |
+
+**Shelf semantics:** each paper is represented by its **furthest-progress** row (`GROUP BY paper_id` +
+`MAX(fraction)` — no window functions; SQLite 3.19 on the API-26 floor), so an 80%-HTML read is never buried
+under a 3%-PDF glance; finished/read exclusion is **paper-level** (a paper finished in HTML is not resurfaced
+by a later PDF glance). The shelf row is bumped **only by a genuine scroll sample** — never the reopen-seed,
+never a TOC/citation jump (which writes fraction 0). Migration v16→v17 (additive `CREATE TABLE`).
+
 ### collections / collection_papers / tags / paper_tags
 - `collections(id PK, name UNIQUE, created_at)`; `collection_papers(collection_id, paper_id, added_at)` PK(both).
 - `tags(id PK, name UNIQUE COLLATE NOCASE)`; `paper_tags(paper_id, tag_id)` PK(both).
