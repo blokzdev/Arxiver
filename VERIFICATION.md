@@ -246,6 +246,30 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [ ] **Q-PS8 arbitrary-host / doi.org OA hit stays read-only (PS.2)** — an S2 bio/medRxiv (or any) hit whose `openAccessPdf.url` host is **not** allowlisted (e.g. `doi.org`, a publisher host) comes back `importable:false`; the model cites the DOI/URL for external-open and `import_to_library` on it errors cleanly — the paper **never renders in-app** and no `papers` row is created. Confirms the host-gate fails closed on device (the interceptor backstop + the search-time gate agree).
 - [ ] **Q-PS9 bio/med PDF fetch spacing + host-gate (PS.2)** — a bioRxiv/medRxiv PDF fetch reaches its host through the `@ArxivClient` interceptor and self-spaces on the **~1.2s polite** slot; a **concurrent arXiv PDF/Atom fetch still spaces ≥3s** (the per-host reversal holds — arXiv is never sped up, bio/med never eat arXiv's 3s slot). Mirrors Q-PS3 for the two new hosts.
 
+## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
+
+> HTML-first v1 (PFT.1–PFT.3): body text is extracted from the already-persisted reader HTML, chunk-indexed as
+> `source_kind='body'`, and surfaced in local Find as a distinct "Also found in full text" section. The engine +
+> DAO + indexing logic are CI-proven (Robolectric); these rows are the on-device confirmations CI can't run.
+
+- [ ] **R-FT1 body indexing populates on reader-open** — open a paper in the **HTML reader** (native or ar5iv). A
+  background body-index job runs once (fire-and-forget; no UI jank while reading). Then in **Explore → Library**,
+  search for a **distinctive phrase that appears only in that paper's body** (not its title/abstract) → the paper
+  surfaces under **"Also found in full text."** Re-opening the same paper does **not** re-embed (the `.bodyindex`
+  sidecar short-circuit).
+- [ ] **R-FT2 honest section + coverage caption** — the "Also found in full text" rows have full parity (tap opens,
+  swipe saves, long-press multi-selects); the main results are unaffected (no "Full text" badge noise); a
+  query-independent caption reads **"Full text covers the N papers you've opened"** with N = the count of
+  body-indexed papers (grows as you open more papers in the reader).
+- [ ] **R-FT3 model-bump self-heal (optional)** — after an embedding-model change (or a forced re-index), the
+  worker's model-mismatch wipe drops stale body chunks and the filesystem-driven backfill re-indexes the
+  reader-opened papers over subsequent unmetered runs — full-text coverage recovers rather than collapsing to 0.
+- [ ] **R-FT4 body FTS is fast enough at scale (soft)** — with a few hundred reader-opened papers indexed, typing a
+  common term keeps the **main results** instant (the body leg is off the traced path) and the "Also found in full
+  text" section fills within a beat. (If it ever lags, candidate-gating is the tracked fix before large growth.)
+- [ ] **R-FT5 TalkBack** — the "Also found in full text" section header and the coverage caption are announced;
+  section rows read like any paper row.
+
 ## P-PC5. Pinned sections + rename (P-Chat PC.5) _(ROADMAP P-Chat)_
 
 - [ ] **P-PC5-1 Pin/unpin** — pinning a chat floats it into a **Pinned** section header above **Recent**; the row **animates** across the boundary (not a teleport); unpin returns it to Recent; an all-recent list shows no section header.
