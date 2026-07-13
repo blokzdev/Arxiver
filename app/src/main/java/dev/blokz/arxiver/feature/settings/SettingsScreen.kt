@@ -75,6 +75,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val trendingEnabled by viewModel.trendingEnabled.collectAsState()
     val rankerHealth by viewModel.rankerHealth.collectAsState()
     val backupJson by viewModel.backupJson.collectAsState()
     val importResult by viewModel.importResult.collectAsState()
@@ -165,6 +166,8 @@ fun SettingsScreen(
                     .padding(padding),
             onSyncInterval = viewModel::setSyncInterval,
             onSetDigestEnabled = onSetDigestEnabled,
+            trendingEnabled = trendingEnabled,
+            onSetTrendingEnabled = viewModel::setTrendingEnabled,
             onDownloadModel = viewModel::downloadModel,
             onReindex = viewModel::reindex,
             onDeleteModel = viewModel::deleteModel,
@@ -193,6 +196,8 @@ private fun SettingsContent(
     modifier: Modifier = Modifier,
     onSyncInterval: (Int) -> Unit,
     onSetDigestEnabled: (Boolean) -> Unit,
+    trendingEnabled: Boolean,
+    onSetTrendingEnabled: (Boolean) -> Unit,
     onDownloadModel: () -> Unit,
     onReindex: () -> Unit,
     onDeleteModel: () -> Unit,
@@ -247,6 +252,28 @@ private fun SettingsContent(
             androidx.compose.material3.Switch(
                 checked = state.digestEnabled,
                 onCheckedChange = onSetDigestEnabled,
+            )
+        }
+
+        // "Emerging in your areas" opt-in (P-Discover2 PD.3b) — plain toggle, no permission (posts nothing).
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.settings_trending_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    stringResource(R.string.settings_trending_desc),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(
+                checked = trendingEnabled,
+                onCheckedChange = onSetTrendingEnabled,
             )
         }
 
@@ -414,6 +441,8 @@ private fun SettingsContentPreview() {
             rankerHealth = null,
             onSyncInterval = {},
             onSetDigestEnabled = {},
+            trendingEnabled = false,
+            onSetTrendingEnabled = {},
             onDownloadModel = {},
             onReindex = {},
             onDeleteModel = {},

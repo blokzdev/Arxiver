@@ -79,6 +79,15 @@ class SettingsViewModel
             viewModelScope.launch { settingsRepository.setDigestEnabled(enabled) }
         }
 
+        /** "Emerging in your areas" opt-in (P-Discover2 PD.3b) — a plain toggle; the shelf posts nothing, so no
+         *  permission is involved. Separate flow (the main uiState combine is already at kotlinx's typed 5-arg max). */
+        val trendingEnabled: StateFlow<Boolean> =
+            settingsRepository.trendingEnabled.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+        fun setTrendingEnabled(enabled: Boolean) {
+            viewModelScope.launch { settingsRepository.setTrendingEnabled(enabled) }
+        }
+
         init {
             refreshPdfCacheSize()
         }

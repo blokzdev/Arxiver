@@ -126,7 +126,37 @@ interface InboxDao {
         paperIds: List<String>,
         now: Long,
     )
+
+    /**
+     * The active-inbox window feeding the "Emerging in your areas" engine (P-Discover2 PD.3b). One row per
+     * (paper, arXiv category) — the [PaperCategoryCrossRef] join is what lets a rising CROSS-LIST area surface, not
+     * just the coarse primary. Scoped to enabled follows + `origin='arxiv'` (a non-arXiv `published_at` is a re-harvest
+     * artifact) + a `published_at` window (never `arrived_at`/`updated_at` — the honest clock). Read once/day off-main.
+     */
+    @Query(
+        """
+        SELECT p.id AS paperId, pc.category_code AS categoryCode, p.published_at AS publishedAt,
+               p.authors_line AS authorsLine, i.follow_id AS followId, f.created_at AS followCreatedAt
+        FROM inbox_items i
+        JOIN follows f ON f.id = i.follow_id
+        JOIN papers p ON p.id = i.paper_id
+        JOIN paper_categories pc ON pc.paper_id = p.id
+        WHERE i.state IN ('new', 'seen') AND f.enabled = 1 AND p.origin = 'arxiv'
+              AND p.published_at >= :baselineFrom
+        """,
+    )
+    suspend fun trendingWindowRows(baselineFrom: Long): List<TrendingWindowRow>
 }
+
+/** One (paper, arXiv category) row in the emergence window (PD.3b) — grouped into a `TrendingWindowPaper` by the repo. */
+data class TrendingWindowRow(
+    val paperId: String,
+    val categoryCode: String,
+    val publishedAt: Long,
+    val authorsLine: String,
+    val followId: Long,
+    val followCreatedAt: Long,
+)
 
 /** One active-inbox score + its embedding-quality segment (P5.1 tripwire). */
 data class ScoredSegmentRow(

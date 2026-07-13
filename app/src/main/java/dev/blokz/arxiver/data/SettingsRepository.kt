@@ -30,6 +30,8 @@ class SettingsRepository
         private val preferOnDeviceWhenReadyKey = booleanPreferencesKey("prefer_ondevice_when_ready")
         private val digestEnabledKey = booleanPreferencesKey("digest_enabled")
         private val lastDigestPostedAtKey = longPreferencesKey("last_digest_posted_at")
+        private val trendingEnabledKey = booleanPreferencesKey("trending_enabled")
+        private val trendingCacheKey = stringPreferencesKey("trending_cache")
 
         val syncIntervalHours: Flow<Int> =
             context.dataStore.data.map { it[syncIntervalKey] ?: DEFAULT_SYNC_HOURS }
@@ -89,6 +91,22 @@ class SettingsRepository
 
         suspend fun setDigestEnabled(enabled: Boolean) {
             context.dataStore.edit { it[digestEnabledKey] = enabled }
+        }
+
+        /** "Emerging in your areas" opt-in (P-Discover2 PD.3b); default OFF — the shelf is absent until flipped on. */
+        val trendingEnabled: Flow<Boolean> =
+            context.dataStore.data.map { it[trendingEnabledKey] ?: false }
+
+        suspend fun setTrendingEnabled(enabled: Boolean) {
+            context.dataStore.edit { it[trendingEnabledKey] = enabled }
+        }
+
+        /** The daily-computed emergence result (JSON, PD.3b) — the worker writes it, the UI reads it. Null = never computed. */
+        val trendingCache: Flow<String?> =
+            context.dataStore.data.map { it[trendingCacheKey] }
+
+        suspend fun setTrendingCache(json: String) {
+            context.dataStore.edit { it[trendingCacheKey] = json }
         }
 
         /** When the last digest was actually posted (the daily-cap cursor); 0 = never. Kept distinct from the

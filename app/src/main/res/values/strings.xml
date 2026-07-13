@@ -197,6 +197,9 @@
     <string name="today_go_browse">Explore categories</string>
     <string name="today_likely_relevant">Likely relevant</string>
     <string name="today_more_from_follows">More from your follows</string>
+    <!-- P-Discover2 PD.3b: the honest "Emerging in your areas" shelf. -->
+    <string name="today_emerging_heading">Emerging in your areas</string>
+    <string name="today_emerging_area">%1$s — more active than usual in your recent feed</string>
     <string name="today_inbox_zero_title">You\'re all caught up</string>
     <string name="today_inbox_zero_body">You\'ve triaged today\'s papers. New ones from your follows arrive with the next sync.</string>
 
@@ -288,6 +291,8 @@
     </plurals>
     <string name="settings_digest_title">Notify me about new relevant papers</string>
     <string name="settings_digest_desc">A quiet daily notification when new papers match what you read. Requires Wi-Fi sync; nothing leaves your device.</string>
+    <string name="settings_trending_title">Show emerging areas</string>
+    <string name="settings_trending_desc">A calm Today shelf when one of your followed arXiv areas is more active than usual. Computed on-device from publication dates; never leaves your device.</string>
     <string name="settings_digest_permission_denied">Notifications are off for Arxiver. Enable them in system settings to get the digest.</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>

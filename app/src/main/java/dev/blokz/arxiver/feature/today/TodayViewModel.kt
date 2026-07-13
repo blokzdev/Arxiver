@@ -4,8 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.search.eval.RelevanceThreshold
+import dev.blokz.arxiver.data.EmergingAreaUi
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.data.InboxRepository
+import dev.blokz.arxiver.data.TrendingRepository
 import dev.blokz.arxiver.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,6 +28,8 @@ data class TodayUiState(
      * fitted, else EXACTLY the legacy 0.55. Calibration is monotone, so this only moves the cut — never the order.
      */
     val relevantThreshold: Double = LEGACY_RELEVANT_THRESHOLD,
+    /** "Emerging in your areas" (P-Discover2 PD.3b) — empty unless the opt-in is on and an area cleared the bar. */
+    val emergingAreas: List<EmergingAreaUi> = emptyList(),
 ) {
     /** First load: a sync is running and nothing's arrived yet — show skeletons, not "inbox zero". */
     val loading: Boolean get() = syncing && items.isEmpty() && hasFollows
@@ -55,6 +59,7 @@ class TodayViewModel
         private val libraryRepository: dev.blokz.arxiver.data.LibraryRepository,
         followsRepository: dev.blokz.arxiver.data.CategoryRepository,
         relevanceModelDao: dev.blokz.arxiver.core.database.dao.RelevanceModelDao,
+        trendingRepository: TrendingRepository,
     ) : ViewModel() {
         val uiState: StateFlow<TodayUiState> =
             combine(
@@ -64,7 +69,9 @@ class TodayViewModel
                 // shows first-sync skeletons + a filling inbox instead of the "you follow nothing" empty state.
                 followsRepository.observeEnabledFollowCount(),
                 relevanceModelDao.observe(),
-            ) { items, syncing, followCount, model ->
+                // Read-only cache (PD.3b); empty when the opt-in is off — the worker computes, the UI only reads.
+                trendingRepository.observeAreas(),
+            ) { items, syncing, followCount, model, areas ->
                 TodayUiState(
                     items = items,
                     syncing = syncing,
@@ -72,6 +79,7 @@ class TodayViewModel
                     // The calibrated p=0.5 point translated ONCE to a raw-score cut, else the legacy 0.55 —
                     // resolved via the shared helper so Today, the debug card, and the ambient digest agree.
                     relevantThreshold = RelevanceThreshold.cut(model?.calibrationA, model?.calibrationB),
+                    emergingAreas = areas,
                 )
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState())
 

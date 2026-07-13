@@ -120,6 +120,15 @@ class FollowSyncWorkerTest {
                         db.inboxDao(),
                         client,
                         backends,
+                        dev.blokz.arxiver.data.TrendingRepository(
+                            db.inboxDao(),
+                            dev.blokz.arxiver.data.SettingsRepository(appContext),
+                            object : dev.blokz.arxiver.core.common.DispatcherProvider {
+                                override val io = kotlinx.coroutines.Dispatchers.Unconfined
+                                override val default = kotlinx.coroutines.Dispatchers.Unconfined
+                                override val main = kotlinx.coroutines.Dispatchers.Unconfined
+                            },
+                        ),
                     )
             }
         return TestListenableWorkerBuilder<FollowSyncWorker>(context)

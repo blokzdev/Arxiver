@@ -1091,12 +1091,15 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
     ≥3-followed-categories frame gate, 2-day hysteresis. Pure + deterministic (mirrors `KMeans`). `TrendingRankerTest`
     pins every guard (self-cancel, warmup, author floor, frame/volume gates, hysteresis, determinism). Zero migration;
     never imports the learned head.
-  - [ ] **PD.3b — Today section + opt-in toggle + wiring.** A read-only `InboxDao` window query (join `paper_categories`
-    for cross-lists; `origin='arxiv'`; `published_at` window — un-indexed but scanned once/day in a worker, never
-    per-compose) → a `TrendingRepository` that computes-daily-and-caches (DataStore, mirrors the digest pattern) →
-    a 5th flow into `TodayViewModel` → one calm collapsible "Emerging in your areas" section (human area names + the
-    driving papers) + an opt-in default-OFF `trendingEnabled` toggle (mirrors `digestEnabled`). No new nav tab, no
-    notification/badge/count. Zero migration, zero new arXiv calls.
+  - [x] **PD.3b — Today section + opt-in toggle + wiring.** A read-only `InboxDao.trendingWindowRows` (joins
+    `paper_categories` for cross-lists; `origin='arxiv'`; `published_at` window — un-indexed but scanned once/day in
+    the `FollowSyncWorker` tail, never per-compose) → a `TrendingRepository` that computes-daily-and-caches (DataStore
+    JSON, mirrors the digest worker→UI pattern; the UI only READS) → a 5th flow into `TodayViewModel` → one calm
+    "Emerging in your areas" section (human area names via `ArxivTaxonomy.byCode`, honest "more active than usual"
+    copy, the driving papers resolved from the already-observed inbox) + an opt-in default-OFF `trendingEnabled`
+    toggle (mirrors `digestEnabled`, no permission — posts nothing). No new nav tab, no notification/badge/count.
+    Tests: `TrendingRepositoryTest` (the cross-list/origin/window query, the toggle gate, once-per-day cache
+    staleness) + `TodayViewModel`/`FollowSyncWorker` updated. **Zero migration** (DB stays v16), zero new arXiv calls.
 - [ ] **CHECKPOINT P-Discover2** — `./gradlew build` green; **assert `ArxiverDatabase.VERSION == 16`**; red-line audit
   (no new egress host; author rides the shared 3s limiter; trending issues zero arXiv calls + never leaves device; no
   new engagement notification; learned head untouched); author follows structurally always `origin=arxiv`;
