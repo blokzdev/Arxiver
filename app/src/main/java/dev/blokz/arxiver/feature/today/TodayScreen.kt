@@ -1,7 +1,10 @@
 package dev.blokz.arxiver.feature.today
 
 import android.content.res.Configuration
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -14,6 +17,7 @@ import androidx.compose.material.icons.outlined.TaskAlt
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -34,6 +38,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.claude.RoutineAction
+import dev.blokz.arxiver.core.model.ArxivTaxonomy
+import dev.blokz.arxiver.data.EmergingAreaUi
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.feature.organize.OrganizeSheet
@@ -46,6 +52,7 @@ import dev.blokz.arxiver.ui.feedback.FeedbackMessage
 import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
+import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -142,6 +149,7 @@ fun TodayScreen(
                     InboxList(
                         items = state.items,
                         threshold = state.relevantThreshold,
+                        emergingAreas = state.emergingAreas,
                         onPaperClick = onPaperClick,
                         onSave = viewModel::save,
                         onDismiss = viewModel::dismiss,
@@ -181,11 +189,13 @@ private fun TodayDispatchHost(
 private fun InboxList(
     items: List<InboxPaper>,
     threshold: Double,
+    emergingAreas: List<EmergingAreaUi>,
     onPaperClick: (String) -> Unit,
     onSave: (InboxPaper) -> Unit,
     onDismiss: (InboxPaper) -> Unit,
     onVote: (InboxPaper, Boolean) -> Unit,
 ) {
+    val itemsById = remember(items) { items.associateBy { it.paper.ref.storageId } }
     // SPEC-SEARCH §5: scored items lead under "Likely relevant"; rest follow.
     // Top-k by score above the calibrated floor (P5.3, Co-Founder decision): a stable, capped section — never
     // a flood on a generous day, never junk-padded on a quiet one. Items arrive score-ordered from the DAO.
@@ -198,6 +208,16 @@ private fun InboxList(
             .toSet()
     val (scored, unscored) = items.partition { it.paper.ref.storageId in scoredIds }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        // "Emerging in your areas" (P-Discover2 PD.3b) — a calm, opt-in, collapsible-by-absence shelf at the top.
+        // Empty is the common, honest state (shown only when the opt-in is on AND an area cleared the emergence bar).
+        if (emergingAreas.isNotEmpty()) {
+            item(key = "header-emerging") { SectionHeader(stringResource(R.string.today_emerging_heading)) }
+            emergingAreas.forEach { area ->
+                item(key = "emerging-${area.category}") {
+                    EmergingAreaRow(area = area, itemsById = itemsById, onPaperClick = onPaperClick)
+                }
+            }
+        }
         if (scored.isNotEmpty()) {
             item(key = "header-relevant") { SectionHeader(stringResource(R.string.today_likely_relevant)) }
         }
@@ -240,6 +260,44 @@ private fun InboxList(
 
 private const val RELEVANT_TOP_K = 10
 
+/**
+ * One "Emerging in your areas" row (P-Discover2 PD.3b): a human area name + honest "more active than usual" copy +
+ * a few of the driving papers (resolved from the already-observed inbox — no extra query). Never "hot"/"trending"/a
+ * count badge, never implies global popularity.
+ */
+@Composable
+private fun EmergingAreaRow(
+    area: EmergingAreaUi,
+    itemsById: Map<String, InboxPaper>,
+    onPaperClick: (String) -> Unit,
+) {
+    val name = ArxivTaxonomy.byCode(area.category)?.name ?: area.category
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.today_emerging_area, name),
+            style = MaterialTheme.typography.titleSmall,
+        )
+        area.drivingPaperIds.mapNotNull { itemsById[it] }.forEach { paper ->
+            Text(
+                text = paper.paper.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 2,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { onPaperClick(paper.paper.ref.storageId) }
+                        .padding(top = Spacing.xs),
+            )
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
@@ -248,6 +306,7 @@ private fun InboxListPreview() {
         InboxList(
             items = PreviewFixtures.inboxPapers,
             threshold = LEGACY_RELEVANT_THRESHOLD,
+            emergingAreas = emptyList(),
             onPaperClick = {},
             onSave = {},
             onDismiss = {},

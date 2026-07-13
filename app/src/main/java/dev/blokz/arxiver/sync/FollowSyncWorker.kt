@@ -46,6 +46,7 @@ class FollowSyncWorker
         private val inboxDao: InboxDao,
         private val arxivApiClient: ArxivApiClient,
         private val preprintBackends: PreprintBackendRegistry,
+        private val trendingRepository: dev.blokz.arxiver.data.TrendingRepository,
     ) : CoroutineWorker(context, params) {
         /**
          * The outcome of syncing one follow (PFP.3). [Fetched] carries the delivered count so a zero-delivery sync
@@ -76,6 +77,10 @@ class FollowSyncWorker
                 }
             }
             inboxDao.pruneDismissed(cutoff = Instant.now().minusSeconds(DISMISSED_RETENTION_S).toEpochMilli())
+
+            // "Emerging in your areas" (P-Discover2 PD.3b): recompute at most once/day if the opt-in is on (the repo
+            // self-gates on both). Wrapped so a shelf failure can never fail the sync — it's a calm side effect.
+            runCatching { trendingRepository.recomputeIfStale(Instant.now()) }
 
             // Per-follow cursors make retry cheap: only failed follows refetch. But bound
             // the retries — a persistently failing follow (rate limit, dead category) must

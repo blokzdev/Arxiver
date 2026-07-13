@@ -61,7 +61,19 @@ class TodayViewModelTest {
         library = LibraryRepository(db.libraryDao(), db.inboxDao())
         inbox = InboxRepository(db.inboxDao(), library, db.paperFeedbackDao())
         categories = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao())
-        vm = TodayViewModel(inbox, SyncScheduler(context), library, categories, db.relevanceModelDao())
+        val dispatchers =
+            object : dev.blokz.arxiver.core.common.DispatcherProvider {
+                override val io = kotlinx.coroutines.Dispatchers.Unconfined
+                override val default = kotlinx.coroutines.Dispatchers.Unconfined
+                override val main = kotlinx.coroutines.Dispatchers.Unconfined
+            }
+        val trending =
+            dev.blokz.arxiver.data.TrendingRepository(
+                db.inboxDao(),
+                dev.blokz.arxiver.data.SettingsRepository(context),
+                dispatchers,
+            )
+        vm = TodayViewModel(inbox, SyncScheduler(context), library, categories, db.relevanceModelDao(), trending)
     }
 
     @After
