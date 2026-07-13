@@ -1038,12 +1038,45 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   useful-payload check — the human-only long pole). Only when 0–9 are green (G2 included) do CHECKPOINT 5 (PRD §7) +
   CHECKPOINT 6 get checked, in a docs-only commit.
 
-- [ ] **P-Discover2 — active discovery from the paid-for label/embedding infra** *(queued; needs plan-mode
-  go-ahead).* P4/P5 shipped only the *reactive* Rocchio re-ranker; the deferred *active* tier stays unbuilt:
-  **"more like this"** (per-paper neighbors over the existing VectorIndex), **author-following** (one additive
-  migration + the existing follow directory), **trending-within-follows** (on-device velocity signal). The gated
-  learned head stays carved out as the user-blocked **P5.4**. Size **M**, highest vision-fit; approved-in-principle
-  (Decision log 2026-07-07), wants a plan-mode go-ahead.
+### Phase P-Discover2 — active discovery from the paid-for embedding/label infra *(plan approved 2026-07-12; ACTIVE)*
+
+> Planned via an Ultracode workflow (3 map → 3 design/adversarial → synthesis) **+ a personal file:line validation
+> that corrected the ROADMAP premise:** author-following needs **NO migration** — `FollowEntity.TYPE_AUTHOR` + the
+> `(type,value,origin)` unique index already exist and author *sync is already fully wired* (`FollowSyncWorker.kt:103`
+> queries `au:"<name>"`), so the old "one additive migration" note was stale. **All three features are zero-migration**
+> (DB stays v16); two are last-mile UI over shipped substrate, only trending is a real build. **Ethos (binding):**
+> trending is the streak's cousin — opt-in default-OFF, "Emerging in your areas" (no hot/🔥/badge/notification),
+> honest publication-date velocity within your own follows (never `arrived_at`, never implied global popularity),
+> **cut like the streak if it can't be made calm**. Nothing trains/persists a learned head — **P5.4 stays carved out**.
+> Full plan: session scratchpad `pdiscover2_plan.md`. Size **M**.
+
+- [x] **PD.1 — Follow an author** *(the one missing write-path; zero migration).* `CategoryRepository.setAuthorFollowed`
+  (clones `setCategoryFollowed` but `TYPE_AUTHOR` + **`origin=arxiv` pinned** — else sync mis-routes to the
+  whole-source browse) + a shared `ArxivQuery.author(name)` factory (de-inlines `FollowSyncWorker:103`) +
+  `PaperDetailViewModel.followedAuthors`/`toggleAuthorFollow` (fires the expedited `SyncScheduler.syncNow()` so a
+  just-followed author isn't an empty inbox) + a **tap-author → "Follow author"/"Following ✓" menu** on the paper
+  byline (not a chip wall — papers carry 50–100+ authors). Sync/management already live (`ManageFollowsSheet:146`).
+  Tests: `ArxivQueryTest.author`, `CategoryRepositoryTest` (author follow always `origin=arxiv` + unfollow cleanup),
+  `PaperDetailViewModelTest.followedAuthors`. **No migration** (corrects the ROADMAP premise above).
+- [ ] **PD.2 — "More like this" for any paper.** Today `PaperDetailViewModel.related` reads precomputed
+  `related_papers` only, so it's silently empty on any search/browse-opened paper. A new `SemanticNeighborsRepository`
+  mirrors the proven `RelationGraphRepository` fallback (precomputed → live `VectorIndex.topK` → typed empty) but
+  returns a flat list; promote the related section to universal + honest empty states (`NotEmbedded`/`NoRelations`).
+  Zero migration; pure on-device cosine; never touches the learned head.
+- [ ] **PD.3 — "Emerging in your areas" (honest trending)** *(the only net-new build; **HUMAN.md-gated**).* On-device
+  publication-velocity within your enabled follows (a read-only `InboxDao` aggregation over `primary_category` +
+  `published_at` — *note: `published_at` is un-indexed, `PaperEntity.kt:11-17`; the inbox is small so a scan is fine,
+  else rank on the indexed `updated_at` — never add an index*) + a pure `TrendingRanker` in `:core:search` (min-volume
+  floor + first-sync warmup guard). One calm collapsible Today section, opt-in default-OFF, no new nav tab/notification.
+  Zero migration, zero new arXiv calls. **Do not build until the Co-Founder signs off ship/cut in HUMAN.md.**
+- [ ] **CHECKPOINT P-Discover2** — `./gradlew build` green; **assert `ArxiverDatabase.VERSION == 16`**; red-line audit
+  (no new egress host; author rides the shared 3s limiter; trending issues zero arXiv calls + never leaves device; no
+  new engagement notification; learned head untouched); author follows structurally always `origin=arxiv`;
+  `:core:* ∌ :app`; light/dark previews + TalkBack. Device rows (VERIFICATION.md): follow-author→inbox after expedited
+  sync; MLT live-scan on a non-library paper; trending shelf + low-volume hidden state.
+  *Cut/deferred (breadcrumbs): arXiv-reaching "discover more like this" (biggest upside, but net-new egress +
+  P5.4-adjacent → HUMAN.md future phase); author disambiguation; a "Discover" nav tab; embedding-clustering trending;
+  library-centroid arXiv feed → v2 backlog.*
 - [ ] **P-FullText — full-text PDF body search** *(queued; my validation add).* The explicit PRD v2 gap ("full-text
   search of PDF bodies is v2 candidate", PRD.md:83). The chunk/FTS/vector infra already exists (`RagIndexer` →
   `chunk_embeddings` + `chunk_fts` + `HybridFusion`) but indexes only title+abstract+notes; the new work is

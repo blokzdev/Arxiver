@@ -112,6 +112,28 @@ class CategoryRepositoryTest {
             assertTrue(db.inboxDao().activePaperIds().isEmpty(), "its inbox row is cleaned in the same operation")
         }
 
+    @Test
+    fun `setAuthorFollowed writes a TYPE_AUTHOR follow pinned to origin=arxiv, and unfollow cleans its inbox`() =
+        runBlocking {
+            repo.setAuthorFollowed("Yann LeCun", followed = true)
+            val follow = db.followDao().observeAll().first().single()
+            assertEquals(FollowEntity.TYPE_AUTHOR, follow.type)
+            assertEquals("Yann LeCun", follow.value)
+            // Red line: author follows are ALWAYS origin=arxiv, else sync mis-routes to the whole-source browse.
+            assertEquals("arxiv", follow.origin)
+            assertTrue(follow.enabled)
+
+            db.paperDao().upsertPaper(paper("arxiv:2401.00001"))
+            db.inboxDao().insertAll(
+                listOf(InboxItemEntity(paperId = "arxiv:2401.00001", followId = follow.id, arrivedAt = 0)),
+            )
+            assertEquals(1, db.inboxDao().activePaperIds().size)
+
+            repo.setAuthorFollowed("Yann LeCun", followed = false)
+            assertTrue(db.followDao().observeAll().first().isEmpty(), "the author follow is removed")
+            assertTrue(db.inboxDao().activePaperIds().isEmpty(), "its inbox rows are cleaned on unfollow")
+        }
+
     private fun paper(id: String) =
         PaperEntity(
             id = id, latestVersion = 1, title = id, abstract = "", publishedAt = 0, updatedAt = 0,

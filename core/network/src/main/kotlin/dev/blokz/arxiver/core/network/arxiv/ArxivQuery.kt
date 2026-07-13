@@ -47,6 +47,16 @@ data class ArxivQuery(
         ) = ArxivQuery(searchQuery = "cat:$code", start = start, maxResults = maxResults)
 
         /**
+         * Latest papers by an author — a quoted `au:` phrase match. Free-text (arXiv has no canonical author id),
+         * so namesakes can collide; the follow UI says so. One shared seam for the author-follow sync (P-Discover2).
+         */
+        fun author(
+            name: String,
+            start: Int = 0,
+            maxResults: Int = DEFAULT_PAGE_SIZE,
+        ) = ArxivQuery(searchQuery = "au:\"$name\"", start = start, maxResults = maxResults)
+
+        /**
          * Free-text search. Field prefixes (`ti:`, `au:`, `abs:`, `cat:`) and
          * boolean operators are passed through verbatim; bare terms search all fields.
          */

@@ -96,6 +96,36 @@ class CategoryRepository
         }
 
         /**
+         * Follow/unfollow an author by name (P-Discover2 PD.1). Author follows are ALWAYS `origin=arxiv`: sync
+         * dispatches on origin (`FollowSyncWorker` — a non-arXiv author would mis-route to the whole-source backend
+         * browse), and arXiv's `au:"name"` is the only author feed. It's a free-text match (arXiv has no canonical
+         * author id), so namesakes can collide — the follow UI says so. Unfollow cleans the inbox rows this follow
+         * surfaced, exactly like [setCategoryFollowed].
+         */
+        suspend fun setAuthorFollowed(
+            name: String,
+            followed: Boolean,
+        ) {
+            val origin = Source.ARXIV.wire
+            if (followed) {
+                followDao.insert(
+                    FollowEntity(
+                        type = FollowEntity.TYPE_AUTHOR,
+                        value = name,
+                        label = name,
+                        origin = origin,
+                        createdAt = Instant.now().toEpochMilli(),
+                    ),
+                )
+            } else {
+                followDao.find(FollowEntity.TYPE_AUTHOR, name, origin)?.let {
+                    inboxDao.deleteByFollowId(it.id)
+                }
+                followDao.delete(FollowEntity.TYPE_AUTHOR, name, origin)
+            }
+        }
+
+        /**
          * Remove any follow (P-FeedPolish PFP.2 manage screen) — type- and origin-aware, unlike
          * [setCategoryFollowed], which only ever deletes `category` follows. This is the only path that can drop an
          * author/query follow. Cleans the follow's inbox rows in the same operation (the unfollow contract), keyed

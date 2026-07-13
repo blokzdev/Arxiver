@@ -6,15 +6,18 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.entity.FollowEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
+import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
 import dev.blokz.arxiver.data.testOpenAlexClient
+import dev.blokz.arxiver.sync.SyncScheduler
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -88,6 +91,9 @@ class PaperDetailViewModelTest {
             savedStateHandle = SavedStateHandle(mapOf("id" to id)),
             paperRepository = paperRepo,
             libraryRepository = library,
+            categoryRepository = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao()),
+            // Constructed lazily (WorkManager is only touched on syncNow(), which these tests don't call).
+            syncScheduler = SyncScheduler(ApplicationProvider.getApplicationContext()),
             embeddingDao = db.embeddingDao(),
         )
 
@@ -128,6 +134,24 @@ class PaperDetailViewModelTest {
 
             assertTrue(state.notFound)
             assertEquals(null, state.paper)
+        }
+
+    @Test
+    fun `followedAuthors reflects a currently-followed author`() =
+        runBlocking {
+            db.followDao().insert(
+                FollowEntity(
+                    type = FollowEntity.TYPE_AUTHOR,
+                    value = "Ada Lovelace",
+                    label = "Ada Lovelace",
+                    createdAt = 0,
+                ),
+            )
+            cachePaper("2403.00001")
+            val vm = vmFor("2403.00001")
+            vm.uiState.first { !it.loading }
+
+            assertTrue("Ada Lovelace" in vm.followedAuthors.first { it.isNotEmpty() })
         }
 
     @Test

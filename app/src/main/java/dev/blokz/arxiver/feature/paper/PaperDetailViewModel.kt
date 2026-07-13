@@ -4,14 +4,17 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.blokz.arxiver.core.database.entity.FollowEntity
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.database.toListDomain
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperRef
+import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +40,8 @@ class PaperDetailViewModel
         savedStateHandle: SavedStateHandle,
         private val paperRepository: PaperRepository,
         private val libraryRepository: LibraryRepository,
+        private val categoryRepository: CategoryRepository,
+        private val syncScheduler: SyncScheduler,
         embeddingDao: dev.blokz.arxiver.core.database.dao.EmbeddingDao,
     ) : ViewModel() {
         // The route arg is the opaque storageId (nav Uri.encode-d) — fromStorageId dispatches arXiv vs. non-arXiv.
@@ -73,6 +78,14 @@ class PaperDetailViewModel
                 }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+        /** The set of this paper's authors the user currently follows (P-Discover2 PD.1). */
+        val followedAuthors: StateFlow<Set<String>> =
+            categoryRepository.observeFollows()
+                .map { follows ->
+                    follows.filter { it.type == FollowEntity.TYPE_AUTHOR }.map { it.value }.toSet()
+                }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
         init {
             viewModelScope.launch {
                 val paper = paperRepository.paper(paperRef)
@@ -89,6 +102,18 @@ class PaperDetailViewModel
                 } else {
                     libraryRepository.unsave(paperRef.storageId)
                 }
+            }
+        }
+
+        /**
+         * Follow/unfollow one of this paper's authors (P-Discover2 PD.1). A just-followed author starts with an empty
+         * inbox, so kick the expedited one-shot sync to fetch their recent papers (unfollow needs no sync).
+         */
+        fun toggleAuthorFollow(name: String) {
+            viewModelScope.launch {
+                val nowFollowed = name !in followedAuthors.value
+                categoryRepository.setAuthorFollowed(name, nowFollowed)
+                if (nowFollowed) syncScheduler.syncNow()
             }
         }
 

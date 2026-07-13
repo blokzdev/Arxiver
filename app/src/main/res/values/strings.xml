@@ -25,6 +25,11 @@
     <string name="cd_unfollow">Unfollow %1$s</string>
     <string name="follow_type_author">Author</string>
     <string name="follow_type_query">Saved search</string>
+    <!-- P-Discover2 PD.1: follow an author from the paper detail byline. -->
+    <string name="action_follow_author">Follow author</string>
+    <string name="action_following_author">Following</string>
+    <string name="cd_author_follow">%1$s, tap to follow this author</string>
+    <string name="cd_author_following">%1$s, following. Tap to unfollow</string>
     <string name="library_filter_all_sources">All sources</string>
 
     <!-- P5.1 debug-only ranker-health card (BuildConfig.DEBUG call site; stripped from release) -->
