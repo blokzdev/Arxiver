@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +42,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ColorFilter
@@ -127,7 +129,13 @@ fun PdfViewerScreen(
                 }
                 else ->
                     state.file?.let {
-                        PdfPages(file = it, nightMode = state.nightMode, ioDispatcher = viewModel.ioDispatcher)
+                        PdfPages(
+                            file = it,
+                            nightMode = state.nightMode,
+                            ioDispatcher = viewModel.ioDispatcher,
+                            initialPosition = state.initialPosition,
+                            onPositionChanged = viewModel::onPositionChanged,
+                        )
                     }
             }
         }
@@ -154,6 +162,8 @@ private fun PdfPages(
     file: File,
     nightMode: Boolean,
     ioDispatcher: CoroutineDispatcher,
+    initialPosition: PdfResumeTarget?,
+    onPositionChanged: (Int, Int, Float) -> Unit,
 ) {
     val rendererState = remember(file, ioDispatcher) { PdfRendererHolder(file, ioDispatcher) }
     DisposableEffect(rendererState) {
@@ -161,6 +171,34 @@ private fun PdfPages(
     }
 
     val listState = rememberLazyListState()
+
+    // Restore the durable position once, after the pages exist (P-Read). scrollToItem is an instant jump — no
+    // drag — so it does NOT trip the genuine-scroll persist below (reopening never re-writes or inflates recency).
+    var restored by remember(rendererState) { mutableStateOf(false) }
+    LaunchedEffect(rendererState.pageCount, initialPosition) {
+        val target = initialPosition
+        if (!restored && rendererState.pageCount > 0 && target != null) {
+            listState.scrollToItem(target.pageIndex.coerceIn(0, rendererState.pageCount - 1), target.offsetPx)
+            restored = true
+        }
+    }
+
+    // Persist ONLY after a genuine user drag settles — never on open, never on the restore jump (both leave
+    // isScrollInProgress false), so a merely-opened PDF creates no shelf row.
+    var userScrolled by remember(rendererState) { mutableStateOf(false) }
+    LaunchedEffect(listState, rendererState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) {
+                userScrolled = true
+            } else if (userScrolled) {
+                onPositionChanged(
+                    listState.firstVisibleItemIndex,
+                    listState.firstVisibleItemScrollOffset,
+                    scrollFraction(listState, rendererState.pageCount),
+                )
+            }
+        }
+    }
     val currentPage by remember {
         derivedStateOf { listState.firstVisibleItemIndex + 1 }
     }
@@ -205,6 +243,20 @@ private fun PdfPages(
 }
 
 private const val PILL_LINGER_MS = 1_500L
+
+/**
+ * Continuous read progress in [0,1] — `(page + intra-page ratio)/pageCount` (P-Read), so a first-page read
+ * still counts (unlike `page/pageCount`) and a just-opened first page reads ~0 (unlike `(page+1)/pageCount`).
+ */
+private fun scrollFraction(
+    listState: LazyListState,
+    pageCount: Int,
+): Float {
+    if (pageCount <= 0) return 0f
+    val itemHeight = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 0
+    val intra = if (itemHeight > 0) listState.firstVisibleItemScrollOffset.toFloat() / itemHeight else 0f
+    return ((listState.firstVisibleItemIndex + intra) / pageCount).coerceIn(0f, 1f)
+}
 
 @Composable
 private fun PdfPage(

@@ -7,20 +7,30 @@ import androidx.test.core.app.ApplicationProvider
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.entity.ReadingPositionEntity
+import dev.blokz.arxiver.core.database.toEntity
+import dev.blokz.arxiver.core.model.ArxivId
+import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
 import dev.blokz.arxiver.core.network.pdf.PdfDownloader
 import dev.blokz.arxiver.core.network.pdf.PdfHostPolicy
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.data.ReadingProgressRepository
 import dev.blokz.arxiver.data.testOpenAlexClient
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -29,7 +39,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -38,6 +51,7 @@ class PdfViewerViewModelTest {
     private lateinit var server: MockWebServer
     private lateinit var db: ArxiverDatabase
     private lateinit var paperRepo: PaperRepository
+    private lateinit var readingRepo: ReadingProgressRepository
     private lateinit var context: Context
 
     private val dispatchers =
@@ -54,9 +68,6 @@ class PdfViewerViewModelTest {
         context = ApplicationProvider.getApplicationContext()
         db =
             Room.inMemoryDatabaseBuilder(context, ArxiverDatabase::class.java)
-                // Synchronous executors so the InvalidationTracker refresh can't race db.close() and
-                // leak an "Illegal connection pointer" into the next test (memory
-                // robolectric-room-sync-executors).
                 .setQueryExecutor { it.run() }
                 .setTransactionExecutor { it.run() }
                 .build()
@@ -69,6 +80,7 @@ class PdfViewerViewModelTest {
                 retryDelaysMs = emptyList(),
             )
         paperRepo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server))
+        readingRepo = ReadingProgressRepository(db.readingPositionDao())
     }
 
     @After
@@ -78,27 +90,134 @@ class PdfViewerViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private fun vmFor(id: String): PdfViewerViewModel =
+        PdfViewerViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("id" to id)),
+            context = context,
+            pdfDownloader =
+                PdfDownloader(
+                    OkHttpClient(),
+                    PdfHostPolicy(ArxivRateLimiter(minSpacingMs = 0), ArxivRateLimiter(minSpacingMs = 0)),
+                    dispatchers,
+                ),
+            paperRepository = paperRepo,
+            readingProgressRepository = readingRepo,
+            applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            dispatchers = dispatchers,
+        ).apply { positionSaveDebounceMs = 0L }
+
+    /** Seed a paper whose PDF downloads from the mock server (so load() reaches the success branch). */
+    private suspend fun seedPaperWithLocalPdf(
+        id: String,
+        version: Int = 1,
+    ) {
+        server.enqueue(MockResponse().setResponseCode(200).setBody("%PDF-1.4 fake body"))
+        val paper =
+            Paper(
+                ref = ArxivRef(ArxivId(id)),
+                latestVersion = version,
+                title = "T",
+                abstract = "A",
+                publishedAt = Instant.EPOCH,
+                updatedAt = Instant.EPOCH,
+                primaryCategory = "cs.LG",
+                categories = listOf("cs.LG"),
+                authors = listOf("A"),
+                fetchedAt = Instant.EPOCH,
+            )
+        val entity = paper.toEntity().copy(pdfUrl = server.url("/$id.pdf").toString())
+        db.paperDao().upsertPaperWithRelations(entity, listOf("A"), listOf("cs.LG"))
+    }
+
+    private suspend fun seedPosition(
+        id: String,
+        version: Int,
+        page: Int,
+        offset: Int,
+        fraction: Float,
+    ) = readingRepo.upsert(
+        ReadingPositionEntity(
+            paperId = id,
+            surface = ReadingPositionEntity.SURFACE_PDF,
+            version = version,
+            anchorId = null,
+            offsetPx = offset,
+            fraction = fraction,
+            pageIndex = page,
+            finished = false,
+            updatedAt = 100,
+        ),
+    )
+
     @Test
     fun `unknown paper resolves to a storage error, not a download`() =
         runBlocking {
-            server.enqueue(MockResponse().setResponseCode(404)) // paper lookup misses upstream too
-
-            val vm =
-                PdfViewerViewModel(
-                    savedStateHandle = SavedStateHandle(mapOf("id" to "9999.99999")),
-                    context = context,
-                    pdfDownloader =
-                        PdfDownloader(
-                            OkHttpClient(),
-                            PdfHostPolicy(ArxivRateLimiter(minSpacingMs = 0), ArxivRateLimiter(minSpacingMs = 0)),
-                            dispatchers,
-                        ),
-                    paperRepository = paperRepo,
-                    dispatchers = dispatchers,
-                )
-
+            server.enqueue(MockResponse().setResponseCode(404))
+            val vm = vmFor("9999.99999")
             val state = vm.uiState.first { !it.downloading }
             assertTrue(state.error is AppError.Storage)
-            assertEquals(null, state.file)
+            assertNull(state.file)
+        }
+
+    @Test
+    fun `merely opening a PDF writes no reading-position row`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            val vm = vmFor("9999.99999")
+            vm.uiState.first { !it.downloading }
+            assertNull(db.readingPositionDao().get("9999.99999", ReadingPositionEntity.SURFACE_PDF))
+        }
+
+    @Test
+    fun `a genuine scroll sample persists a durable pdf row (continuous fraction, never finished)`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            val vm = vmFor("2401.00001")
+            vm.uiState.first { !it.downloading }
+
+            vm.onPositionChanged(page = 2, offset = 50, fraction = 0.3f)
+
+            val row =
+                withTimeout(2_000) {
+                    var r = db.readingPositionDao().get("2401.00001", ReadingPositionEntity.SURFACE_PDF)
+                    while (r == null) {
+                        delay(10)
+                        r = db.readingPositionDao().get("2401.00001", ReadingPositionEntity.SURFACE_PDF)
+                    }
+                    r
+                }
+            assertEquals(2, row.pageIndex)
+            assertEquals(50, row.offsetPx)
+            assertEquals(0.3f, row.fraction, 1e-6f)
+            assertTrue(!row.finished, "PDF finished is never inferred")
+        }
+
+    @Test
+    fun `load restores the stored position for the matching version`() =
+        runBlocking {
+            seedPaperWithLocalPdf("2401.00001", version = 1)
+            seedPosition("2401.00001", version = 1, page = 3, offset = 20, fraction = 0.4f)
+
+            val vm = vmFor("2401.00001")
+            val state = vm.uiState.first { !it.downloading }
+
+            assertNotNull(state.file, "the mock PDF downloaded")
+            assertEquals(PdfResumeTarget(3, 20), state.initialPosition)
+        }
+
+    @Test
+    fun `a version skew does not restore but keeps the row`() =
+        runBlocking {
+            seedPaperWithLocalPdf("2401.00001", version = 2)
+            seedPosition("2401.00001", version = 1, page = 3, offset = 20, fraction = 0.4f) // stale version
+
+            val vm = vmFor("2401.00001")
+            vm.uiState.first { !it.downloading }
+
+            assertNotNull(
+                db.readingPositionDao().get("2401.00001", ReadingPositionEntity.SURFACE_PDF),
+                "the row is kept (still drives the shelf)",
+            )
+            assertNull(vm.uiState.value.initialPosition, "a version skew soft-misses to top")
         }
 }
