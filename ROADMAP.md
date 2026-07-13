@@ -1187,14 +1187,16 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   DEGRADED garbage-text quality gate (dictionary-word/whitespace/column-order heuristics on noisy-PDF fixtures) that
   rejects scrambled text before it embeds AND before it counts toward coverage; bounded model-bump re-embed. Zero
   migration (another `source_kind='body'` producer). HTML stays preferred-per-paper; PDF is the fallback.
-- [ ] **CHECKPOINT P-FullText** — `./gradlew build` green; **assert `ArxiverDatabase.VERSION == 16`** (additive
-  `source_kind`, no schema element touched); red-line audit (no new egress host — extraction is local over
-  already-downloaded HTML; jsoup network API structurally forbidden; no telemetry; body chunks excluded from
-  `ArxiverBackup`; arXiv ≥3s limiter untouched; learned head untouched); `:core:* ∌ :app`; light/dark previews +
-  TalkBack on the coverage line / the "Also found in full text" section. Device rows (VERIFICATION.md): body
-  indexing populates on HTML-reader-open; the corpus body leg surfaces a body-only match in Find + the honest
-  coverage caption; **the body FTS is fast enough at 3–5K scale** (a soft check — body runs OFF the traced main
+- [x] **CHECKPOINT P-FullText** — `./gradlew build` green; **`ArxiverDatabase.VERSION == 16`** (additive
+  `source_kind`, no schema element touched — verified `copyRoomSchemas NO-SOURCE` across all three subphases); red-line
+  audit (no new egress host — extraction is local over already-downloaded HTML; **jsoup network API now structurally
+  forbidden** via `JsoupNoNetworkStructuralTest`; no telemetry; body chunks excluded from `ArxiverBackup` — verified
+  the DTO references no chunk table; arXiv ≥3s limiter untouched; learned head untouched); `:core:* ∌ :app`; light/dark
+  previews + TalkBack on the coverage line / the "Also found in full text" section. Device rows (VERIFICATION.md
+  §R-FT): body indexing populates on HTML-reader-open; the corpus body leg surfaces a body-only match in Find + the
+  honest coverage caption; **the body FTS is fast enough at 3–5K scale** (a soft check — body runs OFF the traced main
   path, so the P-Prove D2 budget is structurally unaffected; candidate-gating is the required fix before large growth).
+  **HTML-first v1 (PFT.1–PFT.3) shipped autonomously (#157/#158/#159); PFT.4/PFT.5 remain explicitly deferred/gated.**
   *Cut/deferred (breadcrumbs, never dropped): PDF body layer → PFT.5 (Co-Founder pdfbox gate); semantic body leg →
   PFT.4/backlog; candidate-gating for the corpus body FTS at SCALE → required precondition before coverage growth
   (SPEC-SEARCH note + PFT.5); structured `.ltx_*`-aware body chunking → backlog; body-chunk storage cap/LRU →
