@@ -8,6 +8,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,6 +56,8 @@ import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
+import dev.blokz.arxiver.data.ReaderThemeMode
+import dev.blokz.arxiver.data.resolveReaderDark
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineDispatcher
@@ -72,6 +75,9 @@ fun PdfViewerScreen(
     viewModel: PdfViewerViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    // The effective dark is resolved HERE (not in the VM) so SYSTEM mode live-tracks an OS dark-toggle (P-Reader2 RNM).
+    val themeMode by viewModel.readerThemeMode.collectAsState()
+    val nightMode = resolveReaderDark(themeMode, isSystemInDarkTheme())
 
     Scaffold(
         topBar = {
@@ -83,9 +89,14 @@ fun PdfViewerScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = viewModel::toggleNightMode) {
+                    IconButton(
+                        onClick = {
+                            // Toggle writes an EXPLICIT light/dark (never leaves it on SYSTEM), and persists globally.
+                            viewModel.setReaderTheme(if (nightMode) ReaderThemeMode.LIGHT else ReaderThemeMode.DARK)
+                        },
+                    ) {
                         Icon(
-                            imageVector = if (state.nightMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                            imageVector = if (nightMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
                             contentDescription = stringResource(R.string.cd_toggle_night_mode),
                         )
                     }
@@ -131,7 +142,7 @@ fun PdfViewerScreen(
                     state.file?.let {
                         PdfPages(
                             file = it,
-                            nightMode = state.nightMode,
+                            nightMode = nightMode,
                             ioDispatcher = viewModel.ioDispatcher,
                             initialPosition = state.initialPosition,
                             onPositionChanged = viewModel::onPositionChanged,

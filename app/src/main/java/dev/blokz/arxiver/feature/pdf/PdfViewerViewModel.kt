@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
@@ -39,7 +40,6 @@ data class PdfViewerUiState(
     val file: File? = null,
     val downloading: Boolean = true,
     val error: AppError? = null,
-    val nightMode: Boolean = false,
     /**
      * The paper's canonical web URL (arXiv abstract page, else `doi.org/<doi>`, else the source PDF), set
      * once the paper resolves. On a download failure the reader offers this as an "open in browser" escape
@@ -61,6 +61,7 @@ class PdfViewerViewModel
         private val readingProgressRepository: ReadingProgressRepository,
         private val applicationScope: CoroutineScope,
         private val pdfBodyIndexTrigger: dev.blokz.arxiver.rag.PdfBodyIndexTrigger,
+        private val settingsRepository: dev.blokz.arxiver.data.SettingsRepository,
         dispatchers: DispatcherProvider,
     ) : ViewModel() {
         // The route arg is the opaque storageId (nav `Uri.encode`s it), so it round-trips for any source.
@@ -91,7 +92,21 @@ class PdfViewerViewModel
 
         fun retry() = load()
 
-        fun toggleNightMode() = _uiState.update { it.copy(nightMode = !it.nightMode) }
+        /**
+         * The shared, persisted reader night-mode preference (P-Reader2 RNM). The SCREEN resolves the effective
+         * dark from this + `isSystemInDarkTheme()` (so SYSTEM live-tracks the OS) — this VM stays system-agnostic.
+         */
+        val readerThemeMode: StateFlow<dev.blokz.arxiver.data.ReaderThemeMode> =
+            settingsRepository.readerThemeMode.stateIn(
+                viewModelScope,
+                kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000),
+                dev.blokz.arxiver.data.ReaderThemeMode.SYSTEM,
+            )
+
+        /** Persist the reader theme (on the application scope so a toggle right before back-nav still saves). */
+        fun setReaderTheme(mode: dev.blokz.arxiver.data.ReaderThemeMode) {
+            applicationScope.launch { settingsRepository.setReaderThemeMode(mode) }
+        }
 
         /**
          * A genuine user-scroll sample from the viewer (P-Read) — NOT called on open or on the restore jump, so

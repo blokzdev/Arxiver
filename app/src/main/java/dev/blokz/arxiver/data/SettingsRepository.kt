@@ -32,6 +32,7 @@ class SettingsRepository
         private val lastDigestPostedAtKey = longPreferencesKey("last_digest_posted_at")
         private val trendingEnabledKey = booleanPreferencesKey("trending_enabled")
         private val trendingCacheKey = stringPreferencesKey("trending_cache")
+        private val readerThemeModeKey = stringPreferencesKey("reader_theme_mode")
 
         val syncIntervalHours: Flow<Int> =
             context.dataStore.data.map { it[syncIntervalKey] ?: DEFAULT_SYNC_HOURS }
@@ -91,6 +92,18 @@ class SettingsRepository
 
         suspend fun setDigestEnabled(enabled: Boolean) {
             context.dataStore.edit { it[digestEnabledKey] = enabled }
+        }
+
+        /** The shared reader night-mode preference (P-Reader2 RNM), default SYSTEM; bad value degrades to SYSTEM. */
+        val readerThemeMode: Flow<ReaderThemeMode> =
+            context.dataStore.data.map { prefs ->
+                prefs[readerThemeModeKey]
+                    ?.let { runCatching { ReaderThemeMode.valueOf(it) }.getOrNull() }
+                    ?: ReaderThemeMode.SYSTEM
+            }
+
+        suspend fun setReaderThemeMode(mode: ReaderThemeMode) {
+            context.dataStore.edit { it[readerThemeModeKey] = mode.name }
         }
 
         /** "Emerging in your areas" opt-in (P-Discover2 PD.3b); default OFF — the shelf is absent until flipped on. */

@@ -110,6 +110,7 @@ class PdfViewerViewModelTest {
             readingProgressRepository = readingRepo,
             applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
             pdfBodyIndexTrigger = pdfTrigger,
+            settingsRepository = dev.blokz.arxiver.data.SettingsRepository(context),
             dispatchers = dispatchers,
         ).apply { positionSaveDebounceMs = 0L }
 
@@ -184,6 +185,26 @@ class PdfViewerViewModelTest {
             val vm = vmFor("9999.99999")
             vm.uiState.first { !it.downloading }
             assertTrue(!pdfIndexed.isCompleted, "the PDF nudge fires only on a successful download")
+        }
+
+    @Test
+    fun `readerThemeMode reflects the persisted preference and setReaderTheme write-throughs`() =
+        runBlocking {
+            val settings = dev.blokz.arxiver.data.SettingsRepository(context)
+            settings.setReaderThemeMode(dev.blokz.arxiver.data.ReaderThemeMode.DARK)
+            seedPaperWithLocalPdf("2401.00007")
+            val vm = vmFor("2401.00007")
+
+            assertEquals(
+                dev.blokz.arxiver.data.ReaderThemeMode.DARK,
+                vm.readerThemeMode.first { it == dev.blokz.arxiver.data.ReaderThemeMode.DARK },
+            )
+
+            vm.setReaderTheme(dev.blokz.arxiver.data.ReaderThemeMode.LIGHT)
+            assertEquals(
+                dev.blokz.arxiver.data.ReaderThemeMode.LIGHT,
+                settings.readerThemeMode.first { it == dev.blokz.arxiver.data.ReaderThemeMode.LIGHT },
+            )
         }
 
     @Test
