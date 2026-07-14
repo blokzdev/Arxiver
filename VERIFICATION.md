@@ -252,23 +252,39 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 > `source_kind='body'`, and surfaced in local Find as a distinct "Also found in full text" section. The engine +
 > DAO + indexing logic are CI-proven (Robolectric); these rows are the on-device confirmations CI can't run.
 
-- [ ] **R-FT1 body indexing populates on reader-open** — open a paper in the **HTML reader** (native or ar5iv). A
+- [E] **R-FT1 body indexing populates on reader-open** — open a paper in the **HTML reader** (native or ar5iv). A
   background body-index job runs once (fire-and-forget; no UI jank while reading). Then in **Explore → Library**,
   search for a **distinctive phrase that appears only in that paper's body** (not its title/abstract) → the paper
   surfaces under **"Also found in full text."** Re-opening the same paper does **not** re-embed (the `.bodyindex`
-  sidecar short-circuit).
-- [ ] **R-FT2 honest section + coverage caption** — the "Also found in full text" rows have full parity (tap opens,
+  sidecar short-circuit). _2026-07-14 (emu 5554): opening a fresh arXiv paper (2606.27287) in the HTML reader fired
+  the fire-and-forget body-index — coverage grew **2→3** distinct body papers, 49 `source_kind='body'` chunks written
+  with one `embedded_at`, `.bodyindex` stamped `bge-small-en-v1.5-q8`; opening two more (2606.23643/2606.27330) grew
+  it 3→5 (each got 53/61 chunks), and re-opening 2606.27287 ~4× never re-embedded (single `embedded_at` held). The
+  **body-only phrase "placement is randomized by sampling"** (verified absent from every title/abstract; present in
+  body ordinals 9–10 via the exact app FTS `MATCH`) surfaced 2606.27287 under **"Also found in full text."** **One
+  real finding (see HUMAN §1, 2026-07-14):** the body leg's exclude set is `keyword ∪ raw top-30 semantic KNN`
+  (`SearchViewModel` L232, `SEMANTIC_LEG_K=30` unfiltered) — so a body-only paper that is a **weak** semantic
+  neighbor **below the display cut** is hidden from BOTH the main list AND the full-text section. Proven decisively:
+  the phrase surfaced 2606.27287 **only after** temporarily removing its `paper_embeddings` row (restored byte-exact).
+  Body leg + section + no-re-embed all work; the exclude aggressiveness is the flagged product question._
+- [E] **R-FT2 honest section + coverage caption** — the "Also found in full text" rows have full parity (tap opens,
   swipe saves, long-press multi-selects); the main results are unaffected (no "Full text" badge noise); a
   query-independent caption reads **"Full text covers the N papers you've opened"** with N = the count of
-  body-indexed papers (grows as you open more papers in the reader).
+  body-indexed papers (grows as you open more papers in the reader). _2026-07-14 (emu 5554): the caption rendered
+  **"Full text covers the 3 papers you've opened"** (matching the DB body-paper count exactly) and live-grew as N
+  climbed to 5; main results carried only their **"semantic"** badge (no "Full text" badge); the full-text row was a
+  plain paper row with **no per-row badge**. Row-parity (tap/swipe/long-press) is the same `LocalHit`→`PaperListItem`
+  composable as main results (code-covered), not separately driven this pass._
 - [ ] **R-FT3 model-bump self-heal (optional)** — after an embedding-model change (or a forced re-index), the
   worker's model-mismatch wipe drops stale body chunks and the filesystem-driven backfill re-indexes the
   reader-opened papers over subsequent unmetered runs — full-text coverage recovers rather than collapsing to 0.
 - [ ] **R-FT4 body FTS is fast enough at scale (soft)** — with a few hundred reader-opened papers indexed, typing a
   common term keeps the **main results** instant (the body leg is off the traced path) and the "Also found in full
   text" section fills within a beat. (If it ever lags, candidate-gating is the tracked fix before large growth.)
-- [ ] **R-FT5 TalkBack** — the "Also found in full text" section header and the coverage caption are announced;
-  section rows read like any paper row.
+- [E] **R-FT5 TalkBack** — the "Also found in full text" section header and the coverage caption are announced;
+  section rows read like any paper row. _2026-07-14 (emu 5554): both the section header ("Also found in full text")
+  and the coverage caption render as plain `Text` nodes present in the accessibility tree (announceable); section
+  rows are the same paper-row composable as the main list. Aural TalkBack pass not driven._
 
 ## S-Read. Reading continuity + "Continue reading" shelf (Phase P-Read) _(SPEC-UI Today · SPEC-DATA §2)_
 
@@ -277,27 +293,52 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 > (Robolectric); these are the on-device confirmations CI can't run. Provisional constants to ratify from real
 > reading behavior are flagged.
 
-- [ ] **S-Read1 PDF cold-kill resume** — open a paper's **PDF**, scroll several pages in, **force-stop** the app,
+- [E] **S-Read1 PDF cold-kill resume** — open a paper's **PDF**, scroll several pages in, **force-stop** the app,
   reopen the same PDF → it restores to roughly where you left off (not page 1). A merely-opened PDF you never
   scrolled does **not** create a shelf row (see S-Read3). A version bump (new PDF) soft-misses to the top, keeping
-  the old row for the shelf.
-- [ ] **S-Read2 the shelf + surface-correct resume** — open a paper in the **HTML reader**, scroll partway, press
+  the old row for the shelf. _2026-07-14 (emu 5554): scrolling ~9 pages of a multi-page PDF (2606.23643 "TailorMind")
+  wrote `(surface=pdf, page_index=8, fraction=0.52, finished=0)`; **`am force-stop`** then cold-reopen restored to
+  **page 9** (the References page — deep, not page 1), matching the durable row that survived the kill. Never-scrolled
+  PDF is symmetric to the S-Read3 HTML open-no-scroll (PDF viewer writes only on scroll); the version-bump soft-miss
+  sub-leg not separately driven._
+- [E] **S-Read2 the shelf + surface-correct resume** — open a paper in the **HTML reader**, scroll partway, press
   back → in **Today** a **"Continue reading"** section appears at the top with that paper + a "N% · HTML edition"
   position line; tapping it reopens the **HTML** reader restored near your position. Repeat starting from a **PDF** →
-  the row reads "PDF" and tapping resumes the **PDF viewer**.
-- [ ] **S-Read3 honesty (the anti-PA.3 core)** — a paper you **opened but didn't scroll** never appears; a **TOC/
+  the row reads "PDF" and tapping resumes the **PDF viewer**. _2026-07-14 (emu 5554): a genuine HTML scroll wrote
+  `(2606.27287, html, fraction=0.0285→0.1411)`, and Today showed **"Continue reading" → 14% · HTML edition"** at the
+  top; tapping the card reopened the **HTML** reader restored near the position (abstract body, not page-1 title). The
+  PDF variant rendered **"52% · PDF"** for 2606.23643. Shelf live-updates on return (3%→14% seen). Note: the initial
+  am-start VIEW deep-link spawned a **separate task** so the first return didn't recompose Today — a test artifact of
+  the deep-link path, not a product bug (in-app nav + cold-start both refresh correctly)._
+- [E] **S-Read3 honesty (the anti-PA.3 core)** — a paper you **opened but didn't scroll** never appears; a **TOC/
   citation jump** (no real scrolling) never adds it; a paper you **scrolled to the end and dwelled on** (sustained)
   drops off; a paper you mark **library-status "read"** drops off. Reopening a "finished" paper and scrolling back
-  up makes it reappear.
-- [ ] **S-Read4 cross-surface furthest-progress** — read a paper to ~80% in **HTML**, then open its **PDF** and glance
+  up makes it reappear. _2026-07-14 (emu 5554): ALL four legs confirmed by direct `reading_positions` inspection.
+  **Open-no-scroll:** opening 2606.27330's HTML reader (HTML fetched + rendered) wrote **zero** rows. **TOC jump:**
+  jumping to section "3 Task Decomposition" updated only the PH.6 `.position` sidecar (anchor `S3`) — the shelf
+  `reading_positions` stayed empty (a jump changes where you'd resume TO, never puts the paper on the shelf).
+  **Finished:** two consecutive ≥0.95 probes (0.9961→1.0) flipped `finished=1` and the shelf query then excluded it
+  (`NOT EXISTS finished=1`); **scrolling back up to 0.90 reset the streak → `finished=0` → it reappeared.**
+  **Library-read:** tapping the "Read" status chip set `library_entries.status='read'` and the shelf query dropped it._
+- [E] **S-Read4 cross-surface furthest-progress** — read a paper to ~80% in **HTML**, then open its **PDF** and glance
   at page 1 (~3%) → the shelf shows the paper **once**, at **80% · HTML**, and resumes HTML (the recent low glance
-  never buries the real progress).
-- [ ] **S-Read5 provisional thresholds to ratify** — from real reading, sanity-check: the low **progress floor**
+  never buries the real progress). _2026-07-14 (emu 5554): 2606.23643 held BOTH a `pdf` row (0.52) and an `html` row
+  (0.0134); the shelf query (`GROUP BY paper_id, MAX(fraction)`) represented it **once**, by the higher-progress PDF
+  row (52% · PDF) — the low HTML glance neither duplicated nor buried it. (Surfaces are inverted vs. the spec's
+  example — 52% PDF > 1.3% HTML here — but the MAX-fraction furthest-progress + appears-once logic is identical.)_
+- [~] **S-Read5 provisional thresholds to ratify** — from real reading, sanity-check: the low **progress floor**
   (~0.02–0.03, "opened ≠ reading"), the **sustained-dwell finished** floor/streak (~0.95, two probes), the **recency
   window** (~30 days), and the **shelf cap** (~5). Tune in `ReadingProgressRepository`/`HtmlReaderViewModel` if reality
-  differs.
-- [ ] **S-Read6 TalkBack** — the "Continue reading" header and each row are announced in **position language**
+  differs. _2026-07-14 (emu 5554): the **0.02 floor** and **0.95×2 finished** thresholds behaved sensibly under real
+  scrolling — a 4-swipe scroll landed 0.0285 (just above floor, honestly "reading"); a 3-swipe glance landed 0.0134
+  (below floor, correctly NOT shelf-eligible on its own); finished needed exactly two ≥0.95 probes. Both feel about
+  right on the emulator, but **recency (30d) and shelf-cap (5) were not stress-tested**, and the numbers still want
+  ratification from natural real-device reading — keeping this `[~]` rather than closing it._
+- [E] **S-Read6 TalkBack** — the "Continue reading" header and each row are announced in **position language**
   ("Resume {title}, scroll position 34%, HTML edition") — never "34 percent read"; equal in strength to the visual.
+  _2026-07-14 (emu 5554): the shelf card's `content-desc` read exactly **"Resume {title}, scroll position 14%, HTML
+  edition"** (and **"…, scroll position 52%, PDF"** for the PDF card) — position language, never "percent read"; the
+  "Continue reading" header is an announceable `Text` node. Both surfaces verified in the a11y tree._
 
 ## P-PC5. Pinned sections + rename (P-Chat PC.5) _(ROADMAP P-Chat)_
 
@@ -358,6 +399,7 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 
 ## Verification log
 
+| 2026-07-14 | P-FullText §R-FT + P-Read §S-Read (post-#165, debug, **emulator** `emulator-5554` Pixel_3a API 34) | **Two whole phases device-verified in one session; one real product finding.** Installing the post-P-Read debug APK over the on-device **v16** install ran the **live v16→v17 migration on real data** — `user_version=17`, `reading_positions` created with the exact P-Read.1 schema, **0 rows** (honest empty shelf), no crash, no data loss (the coherent 65-label ranker harness + Gemma/Qwen/bge models all survived). **P-FullText §R-FT:** opening papers in the HTML reader fired the fire-and-forget body-index (coverage grew **2→3→5** distinct body papers as I opened 2606.27287/2606.23643/2606.27330; 49/53/61 body chunks; `.bodyindex` sidecar stamped; re-opens never re-embedded). A **provably body-only** phrase surfaced the reader-opened paper under **"Also found in full text"** with the caption **"Full text covers the N papers you've opened"** (N matched the DB); main results carried only their "semantic" badge, the full-text row no badge. **Finding (→ HUMAN §1):** the body leg excludes `keyword ∪ raw top-30 semantic KNN` (unfiltered) — so a body-only paper that's a **weak** semantic neighbor **below the display cut** is hidden from BOTH sections; proven decisively (the paper surfaced only after temporarily removing its `paper_embeddings` row, restored byte-exact). **P-Read §S-Read:** genuine HTML scroll wrote a shelf row and Today showed "Continue reading → N% · HTML edition"; tap resumed the correct surface restored near position; **PDF durable cold-kill resume** (scroll→`page_index=8`→`force-stop`→reopen restored to page 9); **cross-surface furthest-progress** (one card, MAX fraction); the full **honesty invariant** — open-no-scroll/TOC-jump write no row, sustained ≥0.95×2 marks finished→drops off→scroll-up reappears, library-"read" drops off; **TalkBack** content-descs in position language ("scroll position N%, {surface}"). Harness restored (2606.27287 status back to `to_read`, embedding restored, `paper_feedback` untouched). Cleared `[E]`: R-FT1/2/5, S-Read1/2/3/4/6; S-Read5 `[~]` (thresholds sane, recency/cap not stressed); R-FT3/R-FT4 still `[ ]` (model-bump + at-scale FTS need a model change / hundreds of papers). |
 | 2026-07-12 | P-Ambient PA.1b (#145, debug, **emulator** `emulator-5556`) | **The ambient digest, verified end-to-end on device.** Installing the PA.1b APK ran the **live migration v14→v16** (`user_version=16`, 303 inbox rows `digested_at`-backfilled NULL). The opt-in toggle rendered to spec ("Requires Wi-Fi sync; nothing leaves your device") and enabled cleanly. Because `cmd jobscheduler run` can't target WorkManager's periodic job on this API, a throwaway build (embedNow un-suppressed) forced a non-suppressed pass → **the digest posted**: "89 new likely-relevant papers", a `BigTextStyle` body of the top-3 by score (all LLM-agents papers — the coherent profile's real top rows) + "…and 86 more", on the `arxiver_digest` IMPORTANCE_DEFAULT channel; **exactly 89 rows stamped `digested_at`** (exactly-once, matching the eligibility query). Tap opened the app (warm→last screen; cold→Today by construction — Today-forcing rides PA.2). Throwaway reverted + shipped APK reinstalled + `digested_at` reset; the 65-label harness is intact. Residual for a real device: lockscreen-hidden render (VISIBILITY_PRIVATE is set; emulator has no lock) + the API-33 deny path. |
 | 2026-07-11 | post-#141 (debug, **emulator** `emulator-5556`) | **B1g SSRN card + detail leg (continuation).** Opened the source sheet, scrolled to confirm all **8** sources render with correct captions (chemRxiv/RS/SSRN/**Preprints.org**/**PsyArXiv** "Papers open in browser"; bio/med lag hint). Picked **SSRN** → SSRN-specific field vocab (Engineering/Social Sciences); "governance" → ONE submit → live **Top 25** (real SSRN papers via OpenAlex, short cards with **no abstract**). Opened the first hit → detail rendered the **SSRN** badge, **"No abstract available from SSRN"**, and **"Open in browser" (no PDF spinner)** + Connections (DOI 10.2139/ssrn.1148386). Cleaned up the one bare `papers` row the view persisted; ranker harness untouched (65 labels). B1g → `[E]` (only the save/multi-select-external + aural-TalkBack legs remain). |
 | 2026-07-11 | p5 QW1+P5.5 (PR #141, debug, **emulator** `emulator-5556`) | **P5.4 coherent-profile readout + B1g multi-source search.** Replaced the uninformative diffuse profile with a realistic **coherent MODERATE** one via `run-as sqlite3` (interest = LLM-agents/reasoning/RL, 30 positives = 24 saves + 6 thumb-up; hard-ish negatives = vision/image/diffusion, 35 = 15 thumb-down + 20 dismiss; class-interleaved past-millis timestamps, FK-checked). One Re-index worker pass fitted a **healthy calibration** (a=48.7, λ=0.3) and the debug card read **Overall/Rich AUC 0.89 [0.81–0.97] · P@10 1.00** — advisory NO-GO-direction for P5.4 (the existing ranker already nails the top-10). Then **B1g**: the source chip opened the "Search source" radio sheet to spec (arXiv ★; chemRxiv/RS/SSRN "Papers open in browser"; bio/med lag hint); chemRxiv picked → chemRxiv-specific field vocab, results cleared, no auto-search; "catalysis" → ONE submit → live **Top 25** OpenAlex results; **airplane mode**: sheet opened offline (local registry, zero network), submit degraded to an honest "You're offline" + Retry. Harness profile left intact (the coherent 65-label set kept as fuel); airplane restored off. |
