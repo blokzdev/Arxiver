@@ -1315,7 +1315,7 @@ phase-sized.
 - [x] **PR2.A1 (PFT.5.1) — egress guards + empty `:core:pdf` skeleton (PRECONDITION, no dep yet).** New `:core:pdf`
   android-lib (deps = `:core:common` + coroutines, NO okhttp); `PdfboxNoNetworkStructuralTest` (mirrors
   `JsoupNoNetworkStructuralTest`); `AllowedHosts.ALLOWED` exact-set pin added to `AllowedHostsTest`. CI-only.
-- [ ] **PR2.A2 (PFT.5.2+.3) — adopt `pdfbox-android` FULL + `PdfBodyTextExtractor`.** Pin the dep in the catalog →
+- [x] **PR2.A2 (PFT.5.2+.3) — adopt `pdfbox-android` FULL + `PdfBodyTextExtractor`.** Pin the dep in the catalog →
   `:core:pdf`; lazy `PDFBoxResourceLoader.init`; `PDDocument.load(File)` + `PDFTextStripper` (whitespace-collapsed
   to match the HTML shape); empty-user-password path extracts; `runCatching→""`. No wiring yet. Device: real 2-col/
   ligature PDFs → legible; scanned/locked → ""; `sortByPosition` A/B; no-egress packet check.

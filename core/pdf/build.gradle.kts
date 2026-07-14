@@ -15,6 +15,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    testOptions {
+        // Robolectric needs the merged Android assets so PDFBoxResourceLoader.init can load pdfbox's bundled
+        // font/glyphlist resources (its AAR assets) during the extract round-trip test.
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 kotlin {
@@ -29,6 +36,11 @@ kotlin {
 dependencies {
     implementation(project(":core:common"))
     api(libs.kotlinx.coroutines.core)
+    // FULL bundle — the extractor's public API is File -> String, so no pdfbox type leaks (implementation, not api).
+    implementation(libs.pdfbox.android)
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
