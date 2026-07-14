@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.core.network
 
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -8,6 +9,30 @@ class AllowedHostsTest {
     @Test
     fun `every allowed host resolves true`() {
         for (h in AllowedHosts.ALLOWED) assertTrue(AllowedHosts.isAllowed(h), h)
+    }
+
+    @Test
+    fun `the allowlist is EXACTLY these 10 hosts — any add or removal is a red-line change`() {
+        // A membership check (above) can't catch a NEW host being added. This exact-set pin (Phase P-Reader2
+        // PFT.5.1) fails CI the moment the egress perimeter changes in either direction — adding a host is a
+        // Co-Founder red-line decision (CLAUDE.md "Network calls only to …"), so editing this set must be a
+        // deliberate, reviewed act, never an incidental import. If you're here because pdfbox tempted you to
+        // add a host: it must not — it reads already-downloaded local files only.
+        assertEquals(
+            setOf(
+                "export.arxiv.org",
+                "arxiv.org",
+                "ar5iv.labs.arxiv.org",
+                "api.semanticscholar.org",
+                "chemrxiv.org",
+                "www.biorxiv.org",
+                "www.medrxiv.org",
+                "api.openalex.org",
+                "api.biorxiv.org",
+                "huggingface.co",
+            ),
+            AllowedHosts.ALLOWED,
+        )
     }
 
     @Test
