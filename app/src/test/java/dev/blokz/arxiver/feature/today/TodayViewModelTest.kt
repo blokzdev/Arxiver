@@ -9,6 +9,7 @@ import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.entity.InboxItemEntity
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.PaperFeedbackEntity
+import dev.blokz.arxiver.core.database.entity.ReadingPositionEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
@@ -73,7 +74,16 @@ class TodayViewModelTest {
                 dev.blokz.arxiver.data.SettingsRepository(context),
                 dispatchers,
             )
-        vm = TodayViewModel(inbox, SyncScheduler(context), library, categories, db.relevanceModelDao(), trending)
+        vm =
+            TodayViewModel(
+                inbox,
+                SyncScheduler(context),
+                library,
+                categories,
+                db.relevanceModelDao(),
+                trending,
+                dev.blokz.arxiver.data.ReadingProgressRepository(db.readingPositionDao()),
+            )
     }
 
     @After
@@ -108,6 +118,30 @@ class TodayViewModelTest {
             vm.uiState.test {
                 val s = awaitGreedy { it.items.size == 1 }
                 assertEquals("2401.00001", s.items.single().paper.id.value)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a scrolled unfinished paper surfaces in continueReading`() =
+        runTest {
+            seedInbox("2401.00001") // also seeds the paper row the shelf INNER JOINs
+            db.readingPositionDao().upsert(
+                ReadingPositionEntity(
+                    paperId = "2401.00001",
+                    surface = ReadingPositionEntity.SURFACE_HTML,
+                    version = 1,
+                    anchorId = "S1",
+                    offsetPx = 10,
+                    fraction = 0.5f,
+                    pageIndex = null,
+                    finished = false,
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+            vm.uiState.test {
+                val s = awaitGreedy { it.continueReading.isNotEmpty() }
+                assertEquals("2401.00001", s.continueReading.single().paper.id.value)
                 cancelAndIgnoreRemainingEvents()
             }
         }

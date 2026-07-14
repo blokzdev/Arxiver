@@ -70,6 +70,14 @@ BROWSER-tier paper's detail screen offers **Open in browser** instead of a doome
 ## 3. Screen inventory
 
 ### Today (inbox)
+- **Continue reading (P-Read)** — a calm section at the very top: papers you genuinely opened in a reader, scrolled
+  into (past a low progress floor), and haven't finished, most-recently-read first. Each row is a title + a subtle
+  **position** line ("34% · HTML edition" — position language, never "percent read"; visual + TalkBack equal in
+  strength); tapping resumes at the recorded surface (HTML reader / PDF viewer), which restores its own precise
+  position on open. A paper is represented by its **furthest-progress** row across surfaces (an 80%-HTML read is
+  never buried under a 3%-PDF glance). **Collapsible-by-absence** (renders only when something honestly qualifies —
+  no guilt-CTA), no count badge / notification / streak / completion badge. Finished (sustained dwell) or
+  library-`read` papers drop off. This is the honest successor to the cut PA.3 "saved = to-read" shelf.
 - Sections: **Likely relevant** (Phase 3 similarity score) and **More from your follows**; recency sort pre-Phase 3.
 - Item: title, authors (truncated), primary category chip, score bar (subtle), arrival time. Swipe right = save to library, swipe left = dismiss, tap = detail.
 - Top bar: sync status/last synced, manual refresh (respects rate limiter — shows "queued" if throttled).

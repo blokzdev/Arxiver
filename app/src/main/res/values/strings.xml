@@ -200,6 +200,12 @@
     <!-- P-Discover2 PD.3b: the honest "Emerging in your areas" shelf. -->
     <string name="today_emerging_heading">Emerging in your areas</string>
     <string name="today_emerging_area">%1$s — more active than usual in your recent feed</string>
+    <!-- P-Read: the honest "Continue reading" shelf. Position language, never "percent read". -->
+    <string name="today_continue_heading">Continue reading</string>
+    <string name="today_continue_html">HTML edition</string>
+    <string name="today_continue_pdf">PDF</string>
+    <string name="today_continue_position">%1$d%% · %2$s</string>
+    <string name="today_continue_cd">Resume %1$s, scroll position %2$d%%, %3$s</string>
     <string name="today_inbox_zero_title">You\'re all caught up</string>
     <string name="today_inbox_zero_body">You\'ve triaged today\'s papers. New ones from your follows arrive with the next sync.</string>
 

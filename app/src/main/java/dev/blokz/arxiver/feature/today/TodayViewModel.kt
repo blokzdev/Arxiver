@@ -4,9 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.blokz.arxiver.core.search.eval.RelevanceThreshold
+import dev.blokz.arxiver.data.ContinueReadingUi
 import dev.blokz.arxiver.data.EmergingAreaUi
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.data.InboxRepository
+import dev.blokz.arxiver.data.ReadingProgressRepository
 import dev.blokz.arxiver.data.TrendingRepository
 import dev.blokz.arxiver.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,6 +32,8 @@ data class TodayUiState(
     val relevantThreshold: Double = LEGACY_RELEVANT_THRESHOLD,
     /** "Emerging in your areas" (P-Discover2 PD.3b) — empty unless the opt-in is on and an area cleared the bar. */
     val emergingAreas: List<EmergingAreaUi> = emptyList(),
+    /** "Continue reading" (P-Read) — papers you genuinely scrolled into + haven't finished; empty is the calm norm. */
+    val continueReading: List<ContinueReadingUi> = emptyList(),
 ) {
     /** First load: a sync is running and nothing's arrived yet — show skeletons, not "inbox zero". */
     val loading: Boolean get() = syncing && items.isEmpty() && hasFollows
@@ -60,8 +64,11 @@ class TodayViewModel
         followsRepository: dev.blokz.arxiver.data.CategoryRepository,
         relevanceModelDao: dev.blokz.arxiver.core.database.dao.RelevanceModelDao,
         trendingRepository: TrendingRepository,
+        readingProgressRepository: ReadingProgressRepository,
     ) : ViewModel() {
-        val uiState: StateFlow<TodayUiState> =
+        // The existing 5-source combine (typed combine maxes at 5 args); the P-Read shelf is a 6th source, folded
+        // in via a NESTED 2-arg combine so this base — and every existing source — stays untouched.
+        private val base: kotlinx.coroutines.flow.Flow<TodayUiState> =
             combine(
                 inboxRepository.observeInbox(),
                 syncScheduler.observeSyncRunning(),
@@ -81,6 +88,11 @@ class TodayViewModel
                     relevantThreshold = RelevanceThreshold.cut(model?.calibrationA, model?.calibrationB),
                     emergingAreas = areas,
                 )
+            }
+
+        val uiState: StateFlow<TodayUiState> =
+            combine(base, readingProgressRepository.observeContinueReading()) { state, continueReading ->
+                state.copy(continueReading = continueReading)
             }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TodayUiState())
 
         fun refresh() = syncScheduler.syncNow()

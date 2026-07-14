@@ -37,6 +37,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import dev.blokz.arxiver.core.database.entity.ReadingPositionEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.search.RetrievalScope
 import dev.blokz.arxiver.feature.browse.CategoryFeedScreen
@@ -265,6 +266,16 @@ fun ArxiverApp(
                         },
                         onOpenRoutines = { navController.navigate(Routes.ROUTINES) },
                         onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                        onResumeReading = { id, surface ->
+                            // P-Read: resume at the recorded surface; the reader restores its own precise position.
+                            val route =
+                                if (surface == ReadingPositionEntity.SURFACE_HTML) {
+                                    Routes.htmlViewer(id)
+                                } else {
+                                    Routes.pdfViewer(id)
+                                }
+                            navController.navigate(route) { launchSingleTop = true }
+                        },
                         onGoBrowse = {
                             // Reaches the taxonomy (now Explore's Library resting state); ?reset=true
                             // forces the blank-query Library scope so a stale query can't hide it (PC.2).
