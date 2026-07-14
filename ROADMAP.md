@@ -1244,10 +1244,17 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   scroll persists page/offset/continuous-fraction/`finished=false`; a matching version restores `initialPosition`; a
   version skew doesn't restore but keeps the row. (The actual `scrollToItem` restore + cold-kill durability → device,
   VERIFICATION.md §M.)
-- [ ] **P-Read.3 — HTML shelf-heartbeat (PH.6 sidecar untouched).** One dual-write into the table fed **only by
-  `onPositionProbed`** — the PH.6 funnel (target flow, sidecar persist/restore, jump-settle, `onCleared` flush) is
-  NOT modified (its tests are the regression gate). Sustained-dwell `finished` (two consecutive high probes; resets
-  below the floor). No schema change.
+- [x] **P-Read.3 — HTML shelf-heartbeat (PH.6 sidecar untouched).** `HtmlReaderViewModel` gains a separate
+  `shelfProbe` signal fed **only** from `onPositionProbed` (after its jump-settle guard + anchor validation, where
+  `target` is set) → a debounced `shelfHeartbeatLoop` upserts a `reading_positions` row (surface=html, servedVersion,
+  the validated anchor/offset/fraction). Sustained-dwell `finished`: a `highProbeStreak` counter (two consecutive
+  probes ≥ `FINISHED_FLOOR` 0.95 → finished; resets to 0 the moment a later probe drops below, so the paper
+  reappears). `onCleared` flushes the last genuine shelf probe alongside the existing sidecar flush. **The PH.6 funnel
+  is byte-identical** — `target` flow, sidecar `persistLoop`/restore, jump-settle, and the sidecar `onCleared` line are
+  untouched; the existing PH.6 tests are the regression gate and stay green. A separate wall-clock `clock` seam (not
+  the elapsed-realtime `now`) stamps `updated_at`. No schema change. Tests: opening writes no shelf row; a jump writes
+  none; a genuine probe writes a row (`finished=false`); two sustained high probes set `finished`, a later below-floor
+  probe resets it; **the PH.6 restore/sidecar tests remain green.**
 - [ ] **P-Read.4 — Today "Continue reading" shelf + deep-link nav.** A calm section at the TOP of Today (a nested
   2-arg combine wrapping the untouched 5-arg one), plain clickable rows, furthest-progress cross-surface collapse,
   position language + TalkBack parity, renders only when non-empty (no guilt-CTA), deep-links to the right surface.

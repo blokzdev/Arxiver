@@ -19,9 +19,11 @@ import dev.blokz.arxiver.core.ai.ReaderDocument
 import dev.blokz.arxiver.core.ai.ReaderPosition
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.DispatcherProvider
+import dev.blokz.arxiver.core.database.entity.ReadingPositionEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.data.PaperRepository
+import dev.blokz.arxiver.data.ReadingProgressRepository
 import dev.blokz.arxiver.rag.BodyIndexTrigger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.NonCancellable
@@ -36,6 +38,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.time.Instant
 import javax.inject.Inject
 
 /**
@@ -86,6 +89,7 @@ class HtmlReaderViewModel
         private val dispatchers: DispatcherProvider,
         private val applicationScope: CoroutineScope,
         private val bodyIndexTrigger: BodyIndexTrigger,
+        private val readingProgressRepository: ReadingProgressRepository,
     ) : ViewModel() {
         internal val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
 
@@ -108,9 +112,24 @@ class HtmlReaderViewModel
         private val target = MutableStateFlow<ReaderPosition?>(null)
         private var jumpSetAt = 0L
 
+        // --- P-Read: the "Continue reading" shelf heartbeat, separate from the PH.6 sidecar funnel above ---
+
+        /** Wall-clock (epoch ms) for the reading-position recency stamp — distinct from [now] (uptime). Tests override. */
+        internal var clock: () -> Long = { Instant.now().toEpochMilli() }
+
+        /** Fed ONLY by a genuine [onPositionProbed] sample — never the load()-seed target, never [onJump]. */
+        private val shelfProbe = MutableStateFlow<ReaderPosition?>(null)
+
+        /** Consecutive high-fraction probes → the sustained-dwell `finished` flag (one deep jump can't retire a paper). */
+        private var highProbeStreak = 0
+
+        /** Shelf-write debounce (mirrors the sidecar's); tests set 0. */
+        internal var shelfDebounceMs: Long = POSITION_SAVE_DEBOUNCE_MS
+
         init {
             load()
             persistLoop()
+            shelfHeartbeatLoop()
         }
 
         fun retry() = load()
@@ -157,12 +176,18 @@ class HtmlReaderViewModel
             if (jumpSetAt != 0L && now() - jumpSetAt < JUMP_SETTLE_MS) return
             val anchors = _uiState.value.doc?.anchors ?: return
             val validAnchor = pos.anchorId?.takeIf { id -> anchors.any { it.id == id } }
-            target.value =
+            val validated =
                 ReaderPosition(
                     anchorId = validAnchor,
                     offsetCssPx = pos.offsetCssPx.coerceAtLeast(0),
                     fraction = pos.fraction.coerceIn(0f, 1f),
                 )
+            target.value = validated
+            // P-Read shelf heartbeat: reached ONLY for a genuine post-settle scroll sample — never the
+            // load()-seed (which sets `target` directly) and never a jump (which returns early above). This is
+            // what makes "Continue reading" honestly "opened + really scrolled", not "recently opened".
+            highProbeStreak = if (validated.fraction >= FINISHED_FLOOR) highProbeStreak + 1 else 0
+            shelfProbe.value = validated
         }
 
         /**
@@ -189,12 +214,45 @@ class HtmlReaderViewModel
             }
         }
 
+        /** Debounced projection of GENUINE scroll samples into the `reading_positions` shelf row (P-Read). */
+        private fun shelfHeartbeatLoop() {
+            viewModelScope.launch {
+                shelfProbe.collectLatest { pos ->
+                    if (pos != null) {
+                        delay(shelfDebounceMs)
+                        writeShelfRow(pos)
+                    }
+                }
+            }
+        }
+
+        private suspend fun writeShelfRow(pos: ReaderPosition) {
+            readingProgressRepository.upsert(
+                ReadingPositionEntity(
+                    paperId = paperId.value,
+                    surface = ReadingPositionEntity.SURFACE_HTML,
+                    version = servedVersion,
+                    anchorId = pos.anchorId,
+                    offsetPx = pos.offsetCssPx,
+                    fraction = pos.fraction,
+                    pageIndex = null,
+                    // Sustained-dwell only; resets the moment a later probe drops below the floor (paper reappears).
+                    finished = highProbeStreak >= FINISHED_STREAK,
+                    updatedAt = clock(),
+                ),
+            )
+        }
+
         override fun onCleared() {
             // Honest final flush — back-nav / PDF-fallback exit within the debounce window still
             // persists. Application scope + NonCancellable: viewModelScope is already cancelling.
             val pos = target.value ?: return
             val version = servedVersion
             applicationScope.launch(NonCancellable) { htmlStorage.storePosition(paperId, version, pos) }
+            // Also flush the last GENUINE shelf probe (P-Read); reachable only when a probe set `target` above.
+            shelfProbe.value?.let { sp ->
+                applicationScope.launch(NonCancellable) { writeShelfRow(sp) }
+            }
         }
 
         private fun load() {
@@ -302,5 +360,11 @@ class HtmlReaderViewModel
 
             /** Scroll-idle probes are persisted after this quiet window. PROVISIONAL. */
             const val POSITION_SAVE_DEBOUNCE_MS = 1_000L
+
+            /** At/above this fraction a probe counts toward the sustained-dwell `finished` flag. PROVISIONAL. */
+            const val FINISHED_FLOOR = 0.95f
+
+            /** Consecutive high probes required to mark `finished` — one deep citation-jump-then-dwell can't. */
+            const val FINISHED_STREAK = 2
         }
     }
