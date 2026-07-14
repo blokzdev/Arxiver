@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lint>
+    <!--
+      pdfbox-android (Phase P-Reader2 / PFT.5) pulls in the full BouncyCastle (bcprov/bcpkix/bcutil 1.72)
+      transitively for LOCAL PDF crypto (encrypted/signed PDF handling) — never for network. BouncyCastle
+      bundles JSSE trust-manager classes whose empty checkClientTrusted/checkServerTrusted trip
+      TrustAllX509TrustManager. Arxiver never uses BouncyCastle for TLS: all app network is OkHttp behind the
+      AllowedHosts egress gate (structurally pinned) and we implement no custom X509TrustManager, so this only
+      ever fires on the third-party JAR. Ignore the false-positive there ONLY — the check stays active for our
+      own code (a genuinely-insecure trust manager we wrote would still fail the build).
+    -->
+    <issue id="TrustAllX509TrustManager">
+        <ignore regexp="bcpkix" />
+    </issue>
+</lint>

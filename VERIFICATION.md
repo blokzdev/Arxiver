@@ -246,6 +246,25 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [ ] **Q-PS8 arbitrary-host / doi.org OA hit stays read-only (PS.2)** — an S2 bio/medRxiv (or any) hit whose `openAccessPdf.url` host is **not** allowlisted (e.g. `doi.org`, a publisher host) comes back `importable:false`; the model cites the DOI/URL for external-open and `import_to_library` on it errors cleanly — the paper **never renders in-app** and no `papers` row is created. Confirms the host-gate fails closed on device (the interceptor backstop + the search-time gate agree).
 - [ ] **Q-PS9 bio/med PDF fetch spacing + host-gate (PS.2)** — a bioRxiv/medRxiv PDF fetch reaches its host through the `@ArxivClient` interceptor and self-spaces on the **~1.2s polite** slot; a **concurrent arXiv PDF/Atom fetch still spaces ≥3s** (the per-host reversal holds — arXiv is never sped up, bio/med never eat arXiv's 3s slot). Mirrors Q-PS3 for the two new hosts.
 
+## P-Reader2. Universal PDF full-text + elevated reading (Phase P-Reader2) _(ROADMAP P-Reader2)_
+
+> PFT.5 promotes full-text body search to **PDFs** via `pdfbox-android` (FULL bundle, offline) in the isolated
+> `:core:pdf` module. The extractor + gate + arbitration are CI-proven; the rows below are the device confirmations
+> CI can't run — the sharpest being extraction QUALITY on real two-column arXiv PDFs and the no-egress guarantee.
+
+- [ ] **PR2-A2a PDF text extraction quality on real arXiv PDFs (PFT.5.2)** — open several real papers' PDFs (a
+  dense **two-column** paper, a **ligature/math-heavy** one, a **scanned** one) and dump `PdfBodyTextExtractor.extract`
+  output (debug hook or the resulting body chunks): the two-column + ligature bodies read as **legible prose** (not
+  column-interleaved or CID-mangled); the scanned/image-only one returns **""** (→ gated out, not indexed). Confirms
+  the extractor + the FULL font bundle work on device, not just the tiny CI fixture.
+- [ ] **PR2-A2b `sortByPosition` A/B ratification (PFT.5.2)** — extract the SAME two-column PDF with `sortByPosition`
+  **false vs true** and compare reading-order coherence; ratify the shipped `DEFAULT_SORT_BY_POSITION` (currently
+  `false` — content-stream order, arXiv-pdflatex-friendly) or flip it. Record the winner + why.
+- [ ] **PR2-A2c pdfbox no-egress on device (PFT.5.2)** — packet-inspect a full open→extract cycle: pdfbox opens **zero
+  sockets** (all fonts/glyphlists load from the bundled assets; no font/network fetch). The structural source
+  tripwire (`PdfboxNoNetworkStructuralTest`) + this device row together are the "zero egress" evidence (no single
+  unit test can prove it, since pdfbox runs on `java.net`, not the gated OkHttp client).
+
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 
 > HTML-first v1 (PFT.1–PFT.3): body text is extracted from the already-persisted reader HTML, chunk-indexed as
