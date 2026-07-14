@@ -173,6 +173,25 @@ class HtmlStorage(
                 CachedBodyRef(id, version, readBodyIndex(id, version))
             }.orEmpty()
 
+    /**
+     * True iff **any** cached HTML version of [id] has been body-indexed with [model] (Phase P-Reader2 PFT.5.5
+     * arbitration). The PDF body path re-checks this INSIDE the shared per-storageId lock before it indexes, so
+     * HTML (the preferred, cleaner source) is never clobbered by a PDF fallback — even if the HTML index landed
+     * between the PDF trigger firing and the PDF path acquiring the lock. "Any version" so a stale-HTML-v1 paper
+     * is not re-indexed from its newer PDF-v2 (the accepted version-skew cost: PDF never clobbers HTML).
+     */
+    fun hasCurrentModelBodyIndex(
+        id: ArxivId,
+        model: String,
+    ): Boolean {
+        val prefix = "${id.value.replace('/', '_')}v"
+        return dir().listFiles { f -> f.isDirectory && f.name.startsWith(prefix) }
+            ?.any { vdir ->
+                val version = vdir.name.removePrefix(prefix).toIntOrNull() ?: return@any false
+                readBodyIndex(id, version) == model
+            } ?: false
+    }
+
     private fun read(
         vdir: File,
         version: Int,

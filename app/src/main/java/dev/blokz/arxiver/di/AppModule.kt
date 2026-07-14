@@ -547,11 +547,28 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun pdfBodyTextExtractor(
+        @ApplicationContext context: Context,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.core.pdf.PdfBodyTextExtractor =
+        dev.blokz.arxiver.core.pdf.PdfBodyTextExtractor(context, dispatchers)
+
+    @Provides
+    @Singleton
+    fun pdfBodyStore(
+        @ApplicationContext context: Context,
+        dispatchers: DispatcherProvider,
+    ): dev.blokz.arxiver.data.PdfBodyStore = dev.blokz.arxiver.data.PdfBodyStore(context.filesDir, dispatchers)
+
+    @Provides
+    @Singleton
     fun bodyIndexer(
         htmlStorage: dev.blokz.arxiver.core.ai.HtmlStorage,
         extractor: dev.blokz.arxiver.core.ai.BodyTextExtractor,
         ragIndexer: dev.blokz.arxiver.rag.RagIndexer,
         dispatchers: DispatcherProvider,
+        pdfExtractor: dev.blokz.arxiver.core.pdf.PdfBodyTextExtractor,
+        pdfBodyStore: dev.blokz.arxiver.data.PdfBodyStore,
     ): dev.blokz.arxiver.rag.BodyIndexer =
         dev.blokz.arxiver.rag.BodyIndexer(
             htmlStorage = htmlStorage,
@@ -559,12 +576,20 @@ object AppModule {
             ragIndexer = ragIndexer,
             dispatchers = dispatchers,
             modelName = dev.blokz.arxiver.sync.EmbeddingWorker.MODEL_NAME,
+            pdfExtract = pdfExtractor::extract,
+            pdfBodyStore = pdfBodyStore,
         )
 
     /** The reader-open nudge seam (PFT.2) bound to the singleton [BodyIndexer]. */
     @Provides
     @Singleton
     fun bodyIndexTrigger(indexer: dev.blokz.arxiver.rag.BodyIndexer): dev.blokz.arxiver.rag.BodyIndexTrigger = indexer
+
+    /** The PDF-viewer-open nudge seam (P-Reader2 PFT.5.5) bound to the same singleton [BodyIndexer]. */
+    @Provides
+    @Singleton
+    fun pdfBodyIndexTrigger(indexer: dev.blokz.arxiver.rag.BodyIndexer): dev.blokz.arxiver.rag.PdfBodyIndexTrigger =
+        indexer
 
     /** The corpus-wide "Also found in full text" leg (PFT.3), over the shared body `chunk_fts`. */
     @Provides
