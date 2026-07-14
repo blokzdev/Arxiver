@@ -1255,10 +1255,15 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   the elapsed-realtime `now`) stamps `updated_at`. No schema change. Tests: opening writes no shelf row; a jump writes
   none; a genuine probe writes a row (`finished=false`); two sustained high probes set `finished`, a later below-floor
   probe resets it; **the PH.6 restore/sidecar tests remain green.**
-- [ ] **P-Read.4 — Today "Continue reading" shelf + deep-link nav.** A calm section at the TOP of Today (a nested
-  2-arg combine wrapping the untouched 5-arg one), plain clickable rows, furthest-progress cross-surface collapse,
-  position language + TalkBack parity, renders only when non-empty (no guilt-CTA), deep-links to the right surface.
-  SPEC-UI updated. No schema change.
+- [x] **P-Read.4 — Today "Continue reading" shelf + deep-link nav.** A calm section at the TOP of Today. `TodayViewModel`
+  folds the shelf in via a **nested 2-arg combine** wrapping the untouched 5-arg one (`base` flow + `observeContinueReading`)
+  — the existing 5 sources are byte-identical. `TodayScreen`/`InboxList` render a `SectionHeader` + plain clickable
+  `ContinueReadingRow`s (title + a subtle "34% · HTML edition" **position** line — never "percent read"), collapsible
+  -by-absence (no guilt-CTA empty state), `mergeDescendants` TalkBack CD in equal-strength position language. Tapping
+  calls `onResumeReading(paperId, surface)` → `ArxiverApp` navigates `Routes.htmlViewer`/`pdfViewer` `launchSingleTop`;
+  each reader restores its own precise position on open. Furthest-progress cross-surface collapse + the honesty
+  filters live in the DAO (P-Read.1). No schema change. Tests: the nested combine surfaces a scrolled paper in
+  `continueReading` without regressing the existing 5 sources; light/dark preview with the section.
 - [ ] **CHECKPOINT P-Read** — `./gradlew build` green; **`ArxiverDatabase.VERSION == 17`**, `17.json` committed,
   `Migration16To17Test` identity-hash green, no destructive migration; red-line audit (zero egress/telemetry; reading
   positions excluded from OS backup + the backup DTO + library export + BibTeX + the Claude dispatch payload —

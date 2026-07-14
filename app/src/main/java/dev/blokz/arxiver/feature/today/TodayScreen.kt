@@ -34,11 +34,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.claude.RoutineAction
+import dev.blokz.arxiver.core.database.entity.ReadingPositionEntity
 import dev.blokz.arxiver.core.model.ArxivTaxonomy
+import dev.blokz.arxiver.data.ContinueReadingUi
 import dev.blokz.arxiver.data.EmergingAreaUi
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.feature.claude.DispatchSheet
@@ -54,6 +58,7 @@ import dev.blokz.arxiver.ui.fixtures.PreviewFixtures
 import dev.blokz.arxiver.ui.theme.ArxiverTheme
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +67,7 @@ fun TodayScreen(
     onGoBrowse: () -> Unit,
     onOpenRoutines: () -> Unit,
     onOpenSettings: () -> Unit,
+    onResumeReading: (String, String) -> Unit,
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -150,7 +156,9 @@ fun TodayScreen(
                         items = state.items,
                         threshold = state.relevantThreshold,
                         emergingAreas = state.emergingAreas,
+                        continueReading = state.continueReading,
                         onPaperClick = onPaperClick,
+                        onResumeReading = onResumeReading,
                         onSave = viewModel::save,
                         onDismiss = viewModel::dismiss,
                         onVote = viewModel::relevanceVote,
@@ -190,7 +198,9 @@ private fun InboxList(
     items: List<InboxPaper>,
     threshold: Double,
     emergingAreas: List<EmergingAreaUi>,
+    continueReading: List<ContinueReadingUi>,
     onPaperClick: (String) -> Unit,
+    onResumeReading: (String, String) -> Unit,
     onSave: (InboxPaper) -> Unit,
     onDismiss: (InboxPaper) -> Unit,
     onVote: (InboxPaper, Boolean) -> Unit,
@@ -208,6 +218,16 @@ private fun InboxList(
             .toSet()
     val (scored, unscored) = items.partition { it.paper.ref.storageId in scoredIds }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        // "Continue reading" (P-Read) — papers you genuinely scrolled into and haven't finished, at the very top.
+        // Collapsible-by-absence: renders only when something honestly qualifies (no "start reading!" guilt-CTA).
+        if (continueReading.isNotEmpty()) {
+            item(key = "header-continue") { SectionHeader(stringResource(R.string.today_continue_heading)) }
+            continueReading.forEach { card ->
+                item(key = "continue-${card.paper.ref.storageId}") {
+                    ContinueReadingRow(card = card, onResumeReading = onResumeReading)
+                }
+            }
+        }
         // "Emerging in your areas" (P-Discover2 PD.3b) — a calm, opt-in, collapsible-by-absence shelf at the top.
         // Empty is the common, honest state (shown only when the opt-in is on AND an area cleared the emergence bar).
         if (emergingAreas.isNotEmpty()) {
@@ -261,6 +281,47 @@ private fun InboxList(
 private const val RELEVANT_TOP_K = 10
 
 /**
+ * One "Continue reading" row (P-Read): a paper you genuinely scrolled into, with a subtle POSITION line (never
+ * "percent read" — a scroll fraction over a body with refs/appendix can't assert reading). Tapping resumes at
+ * the recorded surface; each reader restores its own precise position on open. TalkBack gets equal-strength
+ * position language.
+ */
+@Composable
+private fun ContinueReadingRow(
+    card: ContinueReadingUi,
+    onResumeReading: (String, String) -> Unit,
+) {
+    val percent = (card.fraction * 100).roundToInt().coerceIn(0, 100)
+    val surfaceLabel =
+        if (card.surface == ReadingPositionEntity.SURFACE_HTML) {
+            stringResource(R.string.today_continue_html)
+        } else {
+            stringResource(R.string.today_continue_pdf)
+        }
+    val cd = stringResource(R.string.today_continue_cd, card.paper.title, percent, surfaceLabel)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable { onResumeReading(card.paper.ref.storageId, card.surface) }
+                .semantics(mergeDescendants = true) { contentDescription = cd }
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+    ) {
+        Text(
+            text = card.paper.title,
+            style = MaterialTheme.typography.titleSmall,
+            maxLines = 2,
+        )
+        Text(
+            text = stringResource(R.string.today_continue_position, percent, surfaceLabel),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
+    }
+}
+
+/**
  * One "Emerging in your areas" row (P-Discover2 PD.3b): a human area name + honest "more active than usual" copy +
  * a few of the driving papers (resolved from the already-observed inbox — no extra query). Never "hot"/"trending"/a
  * count badge, never implies global popularity.
@@ -307,7 +368,17 @@ private fun InboxListPreview() {
             items = PreviewFixtures.inboxPapers,
             threshold = LEGACY_RELEVANT_THRESHOLD,
             emergingAreas = emptyList(),
+            continueReading =
+                PreviewFixtures.papers.take(1).map {
+                    ContinueReadingUi(
+                        paper = it,
+                        surface = ReadingPositionEntity.SURFACE_HTML,
+                        fraction = 0.34f,
+                        updatedAt = 0,
+                    )
+                },
             onPaperClick = {},
+            onResumeReading = { _, _ -> },
             onSave = {},
             onDismiss = {},
             onVote = { _, _ -> },
