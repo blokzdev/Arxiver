@@ -127,6 +127,7 @@ class HtmlReaderViewModelTest {
         applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO),
         bodyIndexTrigger = dev.blokz.arxiver.rag.BodyIndexTrigger { _, _ -> },
         readingProgressRepository = dev.blokz.arxiver.data.ReadingProgressRepository(db.readingPositionDao()),
+        settingsRepository = dev.blokz.arxiver.data.SettingsRepository(ApplicationProvider.getApplicationContext()),
     ).apply { shelfDebounceMs = 0 }
 
     private fun doc(source: HtmlSource) =
@@ -420,6 +421,25 @@ class HtmlReaderViewModelTest {
                 }
             }
             assertEquals(ReaderPosition("S1", 42, 0.2f), pos)
+        }
+
+    @Test
+    fun `readerThemeMode reflects the shared preference and setReaderTheme write-throughs`() =
+        runBlocking {
+            val settings = dev.blokz.arxiver.data.SettingsRepository(ApplicationProvider.getApplicationContext())
+            settings.setReaderThemeMode(dev.blokz.arxiver.data.ReaderThemeMode.DARK)
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Native(doc(HtmlSource.NATIVE))))
+
+            assertEquals(
+                dev.blokz.arxiver.data.ReaderThemeMode.DARK,
+                vm.readerThemeMode.first { it == dev.blokz.arxiver.data.ReaderThemeMode.DARK },
+            )
+
+            vm.setReaderTheme(dev.blokz.arxiver.data.ReaderThemeMode.LIGHT)
+            assertEquals(
+                dev.blokz.arxiver.data.ReaderThemeMode.LIGHT,
+                settings.readerThemeMode.first { it == dev.blokz.arxiver.data.ReaderThemeMode.LIGHT },
+            )
         }
 
     private companion object {

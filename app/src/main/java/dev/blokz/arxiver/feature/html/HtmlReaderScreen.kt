@@ -2,6 +2,7 @@ package dev.blokz.arxiver.feature.html
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Toc
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -50,6 +53,8 @@ import dev.blokz.arxiver.core.ai.ReaderDocWriter
 import dev.blokz.arxiver.core.ai.TocModel
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.search.RetrievalScope
+import dev.blokz.arxiver.data.ReaderThemeMode
+import dev.blokz.arxiver.data.resolveReaderDark
 import dev.blokz.arxiver.feature.paper.ask.AskQuoteRequest
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
@@ -82,235 +87,256 @@ fun HtmlReaderScreen(
     onOpenAiSettings: () -> Unit,
     viewModel: HtmlReaderViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.uiState.collectAsState()
-    val theme = rememberReaderTheme()
-    val context = LocalContext.current
-    val feedback = LocalFeedbackController.current
-    var externalUrl by remember { mutableStateOf<String?>(null) }
-    var activeSheet by rememberSaveable { mutableStateOf(ReaderSheet.NONE) }
-    val controller = remember { ReaderScrollController() }
-    var scrollTick by remember { mutableLongStateOf(0L) }
-    val anchorIds = remember(state.doc) { state.doc?.anchors?.map { it.id } ?: emptyList() }
-    val tocEntries = remember(state.doc) { TocModel.buildToc(state.doc?.anchors ?: emptyList()) }
+    val themeMode by viewModel.readerThemeMode.collectAsState()
+    val nightMode = resolveReaderDark(themeMode, isSystemInDarkTheme())
+    // Force the reader (chrome + body) to the shared night-mode. rememberReaderTheme() + the `html` derivation
+    // below must both live INSIDE this wrapper — else the article renders in the app theme while only the chrome
+    // recolours, a half-themed reader (P-Reader2 RNM.3). Material You dynamic colour is kept (§C-8); SYSTEM mode
+    // live-tracks the OS via isSystemInDarkTheme().
+    ArxiverTheme(darkTheme = nightMode) {
+        val state by viewModel.uiState.collectAsState()
+        val theme = rememberReaderTheme()
+        val context = LocalContext.current
+        val feedback = LocalFeedbackController.current
+        var externalUrl by remember { mutableStateOf<String?>(null) }
+        var activeSheet by rememberSaveable { mutableStateOf(ReaderSheet.NONE) }
+        val controller = remember { ReaderScrollController() }
+        var scrollTick by remember { mutableLongStateOf(0L) }
+        val anchorIds = remember(state.doc) { state.doc?.anchors?.map { it.id } ?: emptyList() }
+        val tocEntries = remember(state.doc) { TocModel.buildToc(state.doc?.anchors ?: emptyList()) }
 
-    // PH.7 find-in-page. finding/query survive rotation + process death; counts are
-    // document-lifetime (auto-clear on every reload via the html key + on query change).
-    var finding by rememberSaveable { mutableStateOf(false) }
-    var findQuery by rememberSaveable { mutableStateOf("") }
-    val html = state.doc?.let { doc -> remember(doc, theme) { ReaderDocWriter.write(doc, theme) } }
-    val findCounts = remember(html) { mutableStateOf<FindCounts?>(null) }
-    val closeFind = {
-        finding = false
-        findQuery = ""
-        findCounts.value = null
-        controller.clearFind()
-    }
-
-    // PH.7 selection→Ask: the consume-once quote offer for the reader-hosted AskSheet.
-    var quoteSeq by rememberSaveable { mutableLongStateOf(0L) }
-    var pendingQuoteText by rememberSaveable { mutableStateOf<String?>(null) }
-
-    val pinnedToNotesMessage = stringResource(R.string.ask_pinned_to_notes)
-    val matchAnnounceTemplate = stringResource(R.string.html_find_match_announce)
-    val noMatchesAnnounce = stringResource(R.string.html_find_no_matches_announce)
-
-    LaunchedEffect(Unit) {
-        viewModel.effects.collect { effect ->
-            when (effect) {
-                is HtmlReaderEffect.FallbackToPdf -> onFallbackToPdf(effect.id)
-                is HtmlReaderEffect.JumpToAnchor -> {
-                    controller.jumpTo(effect.anchorId)
-                    controller.announce(context.getString(R.string.html_toc_jumped, effect.label))
-                }
-            }
+        // PH.7 find-in-page. finding/query survive rotation + process death; counts are
+        // document-lifetime (auto-clear on every reload via the html key + on query change).
+        var finding by rememberSaveable { mutableStateOf(false) }
+        var findQuery by rememberSaveable { mutableStateOf("") }
+        val html = state.doc?.let { doc -> remember(doc, theme) { ReaderDocWriter.write(doc, theme) } }
+        val findCounts = remember(html) { mutableStateOf<FindCounts?>(null) }
+        val closeFind = {
+            finding = false
+            findQuery = ""
+            findCounts.value = null
+            controller.clearFind()
         }
-    }
 
-    // Scroll-idle debounce: each tick restarts the wait; quiet → probe the reading position.
-    LaunchedEffect(scrollTick) {
-        if (scrollTick == 0L) return@LaunchedEffect
-        delay(PROBE_DEBOUNCE_MS)
-        controller.probe(anchorIds) { raw ->
-            viewModel.onPositionProbed(ReaderScrollJs.parseProbeResult(raw))
-        }
-    }
+        // PH.7 selection→Ask: the consume-once quote offer for the reader-hosted AskSheet.
+        var quoteSeq by rememberSaveable { mutableLongStateOf(0L) }
+        var pendingQuoteText by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Re-issue an active find once per reload, AFTER the PH.6 restore reveals (the reveal funnel
-    // guarantees ordering — find's match-scroll then deterministically wins over the re-apply).
-    controller.onRevealed = {
-        if (finding && findQuery.isNotBlank()) controller.findAll(findQuery)
-    }
+        val pinnedToNotesMessage = stringResource(R.string.ask_pinned_to_notes)
+        val matchAnnounceTemplate = stringResource(R.string.html_find_match_announce)
+        val noMatchesAnnounce = stringResource(R.string.html_find_no_matches_announce)
 
-    // Close the find bar (not the screen) on Back while finding.
-    BackHandler(enabled = finding) { closeFind() }
-
-    Scaffold(
-        topBar = {
-            if (finding) {
-                ReaderFindBar(
-                    query = findQuery,
-                    counts = findCounts.value,
-                    onQueryChange = { q ->
-                        findQuery = q
-                        findCounts.value = null // a slow prior count never paints a new query
-                        if (q.isNotBlank()) controller.findAll(q) else controller.clearFind()
-                    },
-                    onSubmit = {
-                        if (findCounts.value?.let { it.total > 0 } == true) {
-                            controller.findNext(true)
-                        } else if (findQuery.isNotBlank()) {
-                            controller.findAll(findQuery)
-                        }
-                    },
-                    onNext = { controller.findNext(true) },
-                    onPrevious = { controller.findNext(false) },
-                    onClose = closeFind,
-                )
-            } else {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.html_title)) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
-                        }
-                    },
-                    actions = {
-                        if (state.doc != null) {
-                            IconButton(onClick = { finding = true }) {
-                                Icon(Icons.Filled.Search, stringResource(R.string.cd_find_in_page))
-                            }
-                            IconButton(onClick = { activeSheet = ReaderSheet.TOC }) {
-                                Icon(Icons.AutoMirrored.Filled.Toc, stringResource(R.string.cd_toc))
-                            }
-                            // The guaranteed Ask path (TalkBack + every ActionMode degradation).
-                            IconButton(onClick = { activeSheet = ReaderSheet.ASK }) {
-                                Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_reader_ask))
-                            }
-                        }
-                        IconButton(onClick = viewModel::openPdfInstead) {
-                            Icon(Icons.Filled.PictureAsPdf, stringResource(R.string.action_read_pdf_instead))
-                        }
-                    },
-                )
-            }
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            when {
-                state.loading -> LoadingState()
-                state.error != null -> ErrorState(error = state.error, onRetry = viewModel::retry)
-                state.doc != null && html != null -> {
-                    val doc = state.doc!!
-                    Column(Modifier.fillMaxSize()) {
-                        if (doc.source == HtmlSource.AR5IV) Ar5ivBanner()
-                        HtmlReaderWebView(
-                            html = html,
-                            controller = controller,
-                            askSelectionLabel = stringResource(R.string.html_ask_selection),
-                            onPaperClick = onPaperClick,
-                            onExternalUrl = { externalUrl = it },
-                            onAnchorTap = viewModel::onJump,
-                            onScrollTick = { scrollTick++ },
-                            onPageReady = {
-                                // Read the VM's CURRENT target at load-completion time — never a
-                                // value captured at expose time (the PH.6 restore invariant).
-                                controller.onPageReady(
-                                    target = viewModel.restoreTarget(),
-                                    minFraction = HtmlReaderViewModel.MIN_RESTORE_FRACTION,
-                                    onApplied = viewModel::onRestoreApplied,
-                                )
-                            },
-                            onFindResult = { active, total, done ->
-                                findCounts.value = FindCounts(active, total, done)
-                                if (done) {
-                                    controller.announce(
-                                        if (total > 0) {
-                                            matchAnnounceTemplate.format(active + 1, total)
-                                        } else {
-                                            noMatchesAnnounce
-                                        },
-                                    )
-                                }
-                            },
-                            onAskSelection = { excerpt ->
-                                quoteSeq++
-                                pendingQuoteText = excerpt
-                                activeSheet = ReaderSheet.ASK
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                        )
+        LaunchedEffect(Unit) {
+            viewModel.effects.collect { effect ->
+                when (effect) {
+                    is HtmlReaderEffect.FallbackToPdf -> onFallbackToPdf(effect.id)
+                    is HtmlReaderEffect.JumpToAnchor -> {
+                        controller.jumpTo(effect.anchorId)
+                        controller.announce(context.getString(R.string.html_toc_jumped, effect.label))
                     }
                 }
             }
         }
-    }
 
-    if (activeSheet == ReaderSheet.TOC && state.doc != null) {
-        TocSheet(
-            entries = tocEntries,
-            onSelect = { entry, label ->
-                activeSheet = ReaderSheet.NONE // dismiss-then-act
-                viewModel.onTocSelect(entry.anchorId, label)
-            },
-            onDismiss = { activeSheet = ReaderSheet.NONE },
-        )
-    }
+        // Scroll-idle debounce: each tick restarts the wait; quiet → probe the reading position.
+        LaunchedEffect(scrollTick) {
+            if (scrollTick == 0L) return@LaunchedEffect
+            delay(PROBE_DEBOUNCE_MS)
+            controller.probe(anchorIds) { raw ->
+                viewModel.onPositionProbed(ReaderScrollJs.parseProbeResult(raw))
+            }
+        }
 
-    if (activeSheet == ReaderSheet.ASK && state.doc != null) {
-        val exportLabels =
-            ConversationMarkdownLabels(
-                you = stringResource(R.string.ask_export_you),
-                assistant = stringResource(R.string.ask_export_assistant),
-                sources = stringResource(R.string.ask_export_sources),
-                footer = stringResource(R.string.ask_export_footer),
-            )
-        AskSheet(
-            scope = RetrievalScope.Paper(viewModel.paperId.value),
-            onDismiss = {
-                activeSheet = ReaderSheet.NONE
-                pendingQuoteText = null
-            },
-            onConfigureProvider = {
-                activeSheet = ReaderSheet.NONE
-                onOpenAiSettings()
-            },
-            onOpenCrossRef = { rawId ->
-                ArxivId.parse(rawId)?.let { (id, _) ->
-                    activeSheet = ReaderSheet.NONE
-                    onPaperClick(id.value)
+        // Re-issue an active find once per reload, AFTER the PH.6 restore reveals (the reveal funnel
+        // guarantees ordering — find's match-scroll then deterministically wins over the re-apply).
+        controller.onRevealed = {
+            if (finding && findQuery.isNotBlank()) controller.findAll(findQuery)
+        }
+
+        // Close the find bar (not the screen) on Back while finding.
+        BackHandler(enabled = finding) { closeFind() }
+
+        Scaffold(
+            topBar = {
+                if (finding) {
+                    ReaderFindBar(
+                        query = findQuery,
+                        counts = findCounts.value,
+                        onQueryChange = { q ->
+                            findQuery = q
+                            findCounts.value = null // a slow prior count never paints a new query
+                            if (q.isNotBlank()) controller.findAll(q) else controller.clearFind()
+                        },
+                        onSubmit = {
+                            if (findCounts.value?.let { it.total > 0 } == true) {
+                                controller.findNext(true)
+                            } else if (findQuery.isNotBlank()) {
+                                controller.findAll(findQuery)
+                            }
+                        },
+                        onNext = { controller.findNext(true) },
+                        onPrevious = { controller.findNext(false) },
+                        onClose = closeFind,
+                    )
+                } else {
+                    TopAppBar(
+                        title = { Text(stringResource(R.string.html_title)) },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.cd_back))
+                            }
+                        },
+                        actions = {
+                            if (state.doc != null) {
+                                IconButton(onClick = { finding = true }) {
+                                    Icon(Icons.Filled.Search, stringResource(R.string.cd_find_in_page))
+                                }
+                                IconButton(onClick = { activeSheet = ReaderSheet.TOC }) {
+                                    Icon(Icons.AutoMirrored.Filled.Toc, stringResource(R.string.cd_toc))
+                                }
+                                // The guaranteed Ask path (TalkBack + every ActionMode degradation).
+                                IconButton(onClick = { activeSheet = ReaderSheet.ASK }) {
+                                    Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_reader_ask))
+                                }
+                            }
+                            // Shared reader night-mode toggle (RNM.3) — writes an EXPLICIT light/dark, persisted globally.
+                            IconButton(
+                                onClick = {
+                                    viewModel.setReaderTheme(
+                                        if (nightMode) ReaderThemeMode.LIGHT else ReaderThemeMode.DARK,
+                                    )
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = if (nightMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                                    contentDescription = stringResource(R.string.cd_toggle_night_mode),
+                                )
+                            }
+                            IconButton(onClick = viewModel::openPdfInstead) {
+                                Icon(Icons.Filled.PictureAsPdf, stringResource(R.string.action_read_pdf_instead))
+                            }
+                        },
+                    )
                 }
             },
-            onPinAnswer = { answer ->
-                viewModel.pinNote(answer)
-                feedback.show(FeedbackMessage(text = pinnedToNotesMessage))
-            },
-            onShareAnswer = { m ->
-                context.shareText(
-                    ConversationMarkdown.answer(m, exportLabels),
-                    subject = state.paperTitle ?: "",
-                )
-            },
-            conversationTitle = state.paperTitle,
-            initialQuote = pendingQuoteText?.let { AskQuoteRequest(quoteSeq, it) },
-        )
-    }
+        ) { padding ->
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                when {
+                    state.loading -> LoadingState()
+                    state.error != null -> ErrorState(error = state.error, onRetry = viewModel::retry)
+                    state.doc != null && html != null -> {
+                        val doc = state.doc!!
+                        Column(Modifier.fillMaxSize()) {
+                            if (doc.source == HtmlSource.AR5IV) Ar5ivBanner()
+                            HtmlReaderWebView(
+                                html = html,
+                                controller = controller,
+                                askSelectionLabel = stringResource(R.string.html_ask_selection),
+                                onPaperClick = onPaperClick,
+                                onExternalUrl = { externalUrl = it },
+                                onAnchorTap = viewModel::onJump,
+                                onScrollTick = { scrollTick++ },
+                                onPageReady = {
+                                    // Read the VM's CURRENT target at load-completion time — never a
+                                    // value captured at expose time (the PH.6 restore invariant).
+                                    controller.onPageReady(
+                                        target = viewModel.restoreTarget(),
+                                        minFraction = HtmlReaderViewModel.MIN_RESTORE_FRACTION,
+                                        onApplied = viewModel::onRestoreApplied,
+                                    )
+                                },
+                                onFindResult = { active, total, done ->
+                                    findCounts.value = FindCounts(active, total, done)
+                                    if (done) {
+                                        controller.announce(
+                                            if (total > 0) {
+                                                matchAnnounceTemplate.format(active + 1, total)
+                                            } else {
+                                                noMatchesAnnounce
+                                            },
+                                        )
+                                    }
+                                },
+                                onAskSelection = { excerpt ->
+                                    quoteSeq++
+                                    pendingQuoteText = excerpt
+                                    activeSheet = ReaderSheet.ASK
+                                },
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
-    externalUrl?.let { url ->
-        AlertDialog(
-            onDismissRequest = { externalUrl = null },
-            title = { Text(stringResource(R.string.html_external_title)) },
-            text = { Text(url) },
-            confirmButton = {
-                TextButton(onClick = {
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
-                    externalUrl = null
-                }) { Text(stringResource(R.string.html_external_open)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { externalUrl = null }) { Text(stringResource(R.string.action_cancel)) }
-            },
-        )
-    }
+        if (activeSheet == ReaderSheet.TOC && state.doc != null) {
+            TocSheet(
+                entries = tocEntries,
+                onSelect = { entry, label ->
+                    activeSheet = ReaderSheet.NONE // dismiss-then-act
+                    viewModel.onTocSelect(entry.anchorId, label)
+                },
+                onDismiss = { activeSheet = ReaderSheet.NONE },
+            )
+        }
+
+        if (activeSheet == ReaderSheet.ASK && state.doc != null) {
+            val exportLabels =
+                ConversationMarkdownLabels(
+                    you = stringResource(R.string.ask_export_you),
+                    assistant = stringResource(R.string.ask_export_assistant),
+                    sources = stringResource(R.string.ask_export_sources),
+                    footer = stringResource(R.string.ask_export_footer),
+                )
+            AskSheet(
+                scope = RetrievalScope.Paper(viewModel.paperId.value),
+                onDismiss = {
+                    activeSheet = ReaderSheet.NONE
+                    pendingQuoteText = null
+                },
+                onConfigureProvider = {
+                    activeSheet = ReaderSheet.NONE
+                    onOpenAiSettings()
+                },
+                onOpenCrossRef = { rawId ->
+                    ArxivId.parse(rawId)?.let { (id, _) ->
+                        activeSheet = ReaderSheet.NONE
+                        onPaperClick(id.value)
+                    }
+                },
+                onPinAnswer = { answer ->
+                    viewModel.pinNote(answer)
+                    feedback.show(FeedbackMessage(text = pinnedToNotesMessage))
+                },
+                onShareAnswer = { m ->
+                    context.shareText(
+                        ConversationMarkdown.answer(m, exportLabels),
+                        subject = state.paperTitle ?: "",
+                    )
+                },
+                conversationTitle = state.paperTitle,
+                initialQuote = pendingQuoteText?.let { AskQuoteRequest(quoteSeq, it) },
+            )
+        }
+
+        externalUrl?.let { url ->
+            AlertDialog(
+                onDismissRequest = { externalUrl = null },
+                title = { Text(stringResource(R.string.html_external_title)) },
+                text = { Text(url) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+                        externalUrl = null
+                    }) { Text(stringResource(R.string.html_external_open)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { externalUrl = null }) { Text(stringResource(R.string.action_cancel)) }
+                },
+            )
+        }
+    } // ArxiverTheme(darkTheme = …) — closes the forced-theme wrapper opened at the top (RNM.3)
 }
 
 /** Scroll-quiet window before a position probe fires. PROVISIONAL — device-ratified (§M). */

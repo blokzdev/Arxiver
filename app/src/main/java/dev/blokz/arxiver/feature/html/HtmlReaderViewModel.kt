@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,8 +91,26 @@ class HtmlReaderViewModel
         private val applicationScope: CoroutineScope,
         private val bodyIndexTrigger: BodyIndexTrigger,
         private val readingProgressRepository: ReadingProgressRepository,
+        private val settingsRepository: dev.blokz.arxiver.data.SettingsRepository,
     ) : ViewModel() {
         internal val paperId = ArxivId(checkNotNull(savedStateHandle["id"]))
+
+        /**
+         * The shared, persisted reader night-mode preference (P-Reader2 RNM) — the SAME setting the PDF viewer
+         * honours. The screen resolves the effective dark from this + `isSystemInDarkTheme()` (so SYSTEM
+         * live-tracks the OS) and wraps the reader in a forced `ArxiverTheme`. This VM stays Compose-free.
+         */
+        val readerThemeMode: kotlinx.coroutines.flow.StateFlow<dev.blokz.arxiver.data.ReaderThemeMode> =
+            settingsRepository.readerThemeMode.stateIn(
+                viewModelScope,
+                kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5_000),
+                dev.blokz.arxiver.data.ReaderThemeMode.SYSTEM,
+            )
+
+        /** Persist the reader theme (application scope so a toggle right before back-nav still saves). */
+        fun setReaderTheme(mode: dev.blokz.arxiver.data.ReaderThemeMode) {
+            applicationScope.launch { settingsRepository.setReaderThemeMode(mode) }
+        }
 
         // The HTML edition (LaTeXML) is arXiv-only. If a non-arXiv storageId ("chemrxiv:…") ever reaches
         // this route, load() degrades straight to PDF rather than mangle-fetching arxiv.org/html/<it> (PS.1).
