@@ -1319,7 +1319,7 @@ phase-sized.
   `:core:pdf`; lazy `PDFBoxResourceLoader.init`; `PDDocument.load(File)` + `PDFTextStripper` (whitespace-collapsed
   to match the HTML shape); empty-user-password path extracts; `runCatching→""`. No wiring yet. Device: real 2-col/
   ligature PDFs → legible; scanned/locked → ""; `sortByPosition` A/B; no-egress packet check.
-- [ ] **PR2.A3 (PFT.5.4) — `PdfTextQualityGate` (pure) + bundled wordlist.** Layered heuristics (length/word floor,
+- [x] **PR2.A3 (PFT.5.4) — `PdfTextQualityGate` (pure); function-word-ratio primary (no wordlist file needed).** Layered heuristics (length/word floor,
   bibliography-excluded dictionary ratio, token/whitespace sanity, reading-order coherence) + `GATE_VERSION`. ACCEPT
   fixtures (clean, math-heavy, correctly-extracted 2-col) pin the false-reject floor; REJECT fixtures (column-
   interleaved, ligature-mangled, CID run-together, scanned-empty). Thresholds PROVISIONAL/device-ratifiable.
