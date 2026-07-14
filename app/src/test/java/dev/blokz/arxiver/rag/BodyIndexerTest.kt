@@ -14,7 +14,10 @@ import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.pdf.PdfTextQualityGate
 import dev.blokz.arxiver.core.search.TextChunker
+import dev.blokz.arxiver.data.PdfBodyStore
+import dev.blokz.arxiver.data.PdfStorage
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
@@ -38,9 +41,15 @@ class BodyIndexerTest {
     private lateinit var db: ArxiverDatabase
     private lateinit var filesDir: File
     private lateinit var storage: HtmlStorage
+    private lateinit var pdfBodyStore: PdfBodyStore
     private val id = ArxivId("2401.00001")
     private val model = "bge-A"
     private var embedCalls = 0
+
+    // Controllable PDF-path seams (the concrete extractor + gate are faked; their real behaviour is CI-covered
+    // in :core:pdf and device-covered in VERIFICATION — here we drive BodyIndexer's arbitration/marker logic).
+    private var pdfText = "The proposed method uses gradient descent to minimize the training loss over the data."
+    private var pdfGateAccepts = true
 
     private val dispatchers =
         object : DispatcherProvider {
@@ -64,7 +73,16 @@ class BodyIndexerTest {
         )
 
     private fun bodyIndexer(modelName: String = model) =
-        BodyIndexer(storage, HtmlBodyTextExtractor, ragIndexer(modelName), dispatchers, modelName)
+        BodyIndexer(
+            htmlStorage = storage,
+            extractor = HtmlBodyTextExtractor,
+            ragIndexer = ragIndexer(modelName),
+            dispatchers = dispatchers,
+            modelName = modelName,
+            pdfExtract = { pdfText },
+            pdfBodyStore = pdfBodyStore,
+            isAcceptablePdfText = { pdfGateAccepts },
+        )
 
     @Before
     fun setUp() {
@@ -76,6 +94,7 @@ class BodyIndexerTest {
                 .build()
         filesDir = Files.createTempDirectory("bodyidx").toFile()
         storage = HtmlStorage(filesDir, dispatchers)
+        pdfBodyStore = PdfBodyStore(filesDir, dispatchers)
     }
 
     @After
@@ -84,10 +103,7 @@ class BodyIndexerTest {
         filesDir.deleteRecursively()
     }
 
-    private suspend fun seedWithBody(
-        html: String,
-        version: Int = 1,
-    ) {
+    private suspend fun seedPaper(version: Int = 1) {
         val paper =
             Paper(
                 ref = ArxivRef(id),
@@ -102,7 +118,21 @@ class BodyIndexerTest {
                 fetchedAt = Instant.EPOCH,
             )
         db.paperDao().upsertPaperWithRelations(paper.toEntity(), paper.authors, paper.categories)
+    }
+
+    private suspend fun seedWithBody(
+        html: String,
+        version: Int = 1,
+    ) {
+        seedPaper(version)
         storage.store(id, version, HtmlSource.AR5IV, html)
+    }
+
+    /** Place a (dummy) downloaded PDF + its authoritative `.pdf.id` sidecar in the cache (`pdfExtract` is faked). */
+    private suspend fun seedPdf(version: Int = 1) {
+        val pdfDir = File(filesDir, "pdfs").apply { mkdirs() }
+        File(pdfDir, PdfStorage.safeName(id.value, version)).writeText("%PDF-1.4 dummy body")
+        pdfBodyStore.storeId(id.value, version)
     }
 
     private suspend fun bodyChunks() =
@@ -159,5 +189,95 @@ class BodyIndexerTest {
 
             assertEquals("bge-B", storage.readBodyIndex(id, 1), "re-indexed + re-stamped under the new model")
             assertTrue(bodyChunks().all { it.model == "bge-B" }, "body chunks now under the new model")
+        }
+
+    // --- P-Reader2 PFT.5.5: PDF body path ---
+
+    @Test
+    fun `indexPdf on an accepted PDF writes body chunks and stamps OK`() =
+        runTest {
+            seedPaper()
+            seedPdf()
+
+            bodyIndexer().indexPdf(id.value, 1)
+
+            assertTrue(bodyChunks().isNotEmpty(), "accepted PDF body indexed")
+            assertEquals("OK:$model", pdfBodyStore.readBodyIndex(id.value, 1))
+        }
+
+    @Test
+    fun `indexPdf on a gate-rejected PDF writes no chunks and stamps SKIP`() =
+        runTest {
+            seedPaper()
+            seedPdf()
+            pdfGateAccepts = false
+
+            bodyIndexer().indexPdf(id.value, 1)
+
+            assertTrue(bodyChunks().isEmpty(), "garbage never embeds / never counts toward coverage")
+            assertEquals("SKIP:${PdfTextQualityGate.GATE_VERSION}", pdfBodyStore.readBodyIndex(id.value, 1))
+        }
+
+    @Test
+    fun `a second indexPdf of a current PDF does not re-embed`() =
+        runTest {
+            seedPaper()
+            seedPdf()
+            val indexer = bodyIndexer()
+
+            indexer.indexPdf(id.value, 1)
+            val callsAfterFirst = embedCalls
+            indexer.indexPdf(id.value, 1)
+
+            assertEquals(callsAfterFirst, embedCalls, "an OK-marked PDF short-circuits")
+        }
+
+    @Test
+    fun `indexPdf DEFERS when the HTML body is already indexed (no clobber)`() =
+        runTest {
+            // The clobber-race regression guard: HTML (preferred) is indexed first; the PDF path must not
+            // overwrite the cleaner HTML body chunks, and must leave itself unmarked (so it can index if HTML
+            // is later wiped by a model bump).
+            seedWithBody("<p>The transformer uses self attention across many tokens in a sequence.</p>")
+            val indexer = bodyIndexer()
+            indexer.indexOnOpen(id, 1)
+            val htmlBody = bodyChunks().joinToString(" ") { it.chunkText }
+            assertTrue("attention" in htmlBody, "HTML body indexed first")
+
+            pdfText = "A completely different pdf-derived body about quantum widgets and sprockets."
+            seedPdf()
+            indexer.indexPdf(id.value, 1)
+
+            assertEquals(htmlBody, bodyChunks().joinToString(" ") { it.chunkText }, "HTML chunks untouched")
+            assertTrue("quantum" !in bodyChunks().joinToString(" ") { it.chunkText }, "no PDF text leaked in")
+            assertEquals(null, pdfBodyStore.readBodyIndex(id.value, 1), "PDF left unmarked (HTML deferred, not gated)")
+        }
+
+    @Test
+    fun `a SKIP is gate-keyed so a model bump does not re-attempt garbage`() =
+        runTest {
+            seedPaper()
+            seedPdf()
+            pdfGateAccepts = false
+            bodyIndexer("bge-A").indexPdf(id.value, 1)
+            assertEquals("SKIP:${PdfTextQualityGate.GATE_VERSION}", pdfBodyStore.readBodyIndex(id.value, 1))
+
+            pdfGateAccepts = true // even if it *would* now pass, the SKIP marker short-circuits under a new model
+            val before = embedCalls
+            bodyIndexer("bge-B").indexPdf(id.value, 1)
+
+            assertEquals(before, embedCalls, "SKIP is keyed on GATE_VERSION, not the model — no re-attempt")
+        }
+
+    @Test
+    fun `backfillPdf indexes a cached PDF that has no marker yet`() =
+        runTest {
+            seedPaper()
+            seedPdf()
+
+            bodyIndexer().backfillPdf(limit = 10)
+
+            assertTrue(bodyChunks().isNotEmpty(), "the un-marked cached PDF is picked up")
+            assertEquals("OK:$model", pdfBodyStore.readBodyIndex(id.value, 1))
         }
 }

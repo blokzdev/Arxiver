@@ -1323,7 +1323,7 @@ phase-sized.
   bibliography-excluded dictionary ratio, token/whitespace sanity, reading-order coherence) + `GATE_VERSION`. ACCEPT
   fixtures (clean, math-heavy, correctly-extracted 2-col) pin the false-reject floor; REJECT fixtures (column-
   interleaved, ligature-mangled, CID run-together, scanned-empty). Thresholds PROVISIONAL/device-ratifiable.
-- [ ] **PR2.A4 (PFT.5.5+.6) — `PdfBodyStore` + `BodyIndexer` PDF path (no trigger yet).** `.pdf.id` + dual `.bodyindex`
+- [x] **PR2.A4 (PFT.5.5+.6) — `PdfBodyStore` + `BodyIndexer` PDF path (no trigger yet).** `.pdf.id` + dual `.bodyindex`
   marker; `cachedPdfs()` de-duped to newest version/storageId; `indexPdf` = inside-lock HTML-defer re-check (§5) +
   gate → `indexPaperBody`-or-`SKIP`. Unit-tested incl. the clobber-race regression guard (HTML index committed during
   a simulated PDF extract ⇒ body stays HTML-derived).
