@@ -4,24 +4,32 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.entity.ChunkEmbeddingEntity
+import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
+import dev.blokz.arxiver.core.database.entity.PaperEntity
 import dev.blokz.arxiver.core.database.fts.LocalKeywordSearch
 import dev.blokz.arxiver.core.ml.EmbeddingService
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
+import dev.blokz.arxiver.core.search.CorpusBodyRetriever
+import dev.blokz.arxiver.core.search.DaoCorpusBodySource
 import dev.blokz.arxiver.core.search.VectorIndex
 import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
 import dev.blokz.arxiver.data.testOpenAlexClient
+import dev.blokz.arxiver.sync.EmbeddingWorker
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -208,4 +216,109 @@ class SearchViewModelTest {
             assertEquals(1, db.paperDao().count())
             assertTrue(db.libraryDao().allPaperIds().contains(hit.ref.storageId))
         }
+
+    /**
+     * P-FullText exclude fix (device-found 2026-07-14): the "Also found in full text" leg dedupes against papers
+     * actually MATCHED BY METADATA — keyword hits ∪ the GATED/displayed `fused` results — NOT the raw top-K
+     * semantic KNN. A body-only paper that is only a FAINT semantic neighbour (below the 70% display gate, shown
+     * in neither the main list nor — pre-fix — this section) must still surface here. Regression guard: with the
+     * old `semanticLeg` exclude, `faint` is swallowed and `bodyOnlyResults` is empty.
+     */
+    @Test
+    fun `a faint semantic neighbour with a body-only match still surfaces under full text`() =
+        runTest {
+            // Share the scheduler so the local leg's debounce + the off-path body-leg coroutine advance here.
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+
+            // Query term "quokka" lives ONLY in each paper's BODY (title=id, abstract="") → zero keyword hits.
+            seedPaperWithBody("displayed", floatArrayOf(1f, 0f, 0f, 0f), "the quokka roams the reserve")
+            seedPaperWithBody("faint", floatArrayOf(0.15f, 0.99f, 0f, 0f), "quokka quokka quokka")
+
+            // A model DIRECTORY holding the expected model file → ModelDownloader.initialState() is Ready, so the
+            // semantic leg runs (its embedQuery is faked below; nothing actually loads the file).
+            val readyModelDir =
+                File.createTempFile("bgedir", "").apply {
+                    delete()
+                    mkdirs()
+                    deleteOnExit()
+                }
+            File(readyModelDir, ModelDownloader.ModelSpec.BGE_SMALL_EN_V15_Q8.fileName)
+                .apply {
+                    writeText("stub")
+                    deleteOnExit()
+                }
+
+            val vm =
+                SearchViewModel(
+                    paperRepository = repo,
+                    localKeywordSearch = LocalKeywordSearch(db.searchDao()),
+                    vectorIndex = VectorIndex(db.embeddingDao()),
+                    embeddingService =
+                        EmbeddingService(
+                            ModelDownloader(OkHttpClient(), dispatchers, File("build/tmp/never-used")),
+                            tokenizerProvider = { error("query embedding is faked via the embedQuery seam") },
+                            dispatchers = dispatchers,
+                        ),
+                    modelDownloader = ModelDownloader(OkHttpClient(), dispatchers, readyModelDir),
+                    searchDao = db.searchDao(),
+                    corpusBodyRetriever = CorpusBodyRetriever(DaoCorpusBodySource(db.chunkEmbeddingDao())),
+                    chunkEmbeddingDao = db.chunkEmbeddingDao(),
+                    libraryRepository = libraryRepository,
+                    categoryRepository = categoryRepository,
+                    savedStateHandle = SavedStateHandle(),
+                ).apply {
+                    // Canned query vector: cosine 1.0 with `displayed`, ≈0.15 with `faint`.
+                    embedQuery = { AppResult.Success(floatArrayOf(1f, 0f, 0f, 0f)) }
+                }
+
+            vm.onQueryChange("quokka")
+            advanceUntilIdle()
+
+            val state = vm.uiState.value
+            // `displayed` is the gated main result; `faint` (below the gate) is the body-only match the fix keeps.
+            assertTrue(state.localResults.any { it.paper.title == "displayed" }, "displayed is a main-list hit")
+            assertEquals(
+                listOf("faint"),
+                state.bodyOnlyResults.map { it.paper.title },
+                "the faint below-gate neighbour surfaces under full text; the displayed hit is deduped out",
+            )
+        }
+
+    private suspend fun seedPaperWithBody(
+        id: String,
+        vector: FloatArray,
+        body: String,
+    ) {
+        db.paperDao().upsertPaper(paperEntity(id))
+        db.embeddingDao().upsert(
+            PaperEmbeddingEntity(
+                paperId = id,
+                vector = PaperEmbeddingEntity.floatsToBlob(vector),
+                model = "test",
+                dim = vector.size,
+            ),
+        )
+        db.chunkEmbeddingDao().insert(
+            listOf(
+                ChunkEmbeddingEntity(
+                    paperId = id,
+                    chunkText = body,
+                    vector = PaperEmbeddingEntity.floatsToBlob(vector),
+                    model = EmbeddingWorker.MODEL_NAME,
+                    dim = vector.size,
+                    sourceKind = ChunkEmbeddingEntity.SOURCE_BODY,
+                    ordinal = 0,
+                    embeddedAt = 0,
+                ),
+            ),
+        )
+    }
+
+    private fun paperEntity(id: String) =
+        PaperEntity(
+            id = id, latestVersion = 1, title = id, abstract = "", publishedAt = 0, updatedAt = 0,
+            primaryCategory = "", authorsLine = "", comment = null, journalRef = null, doi = null,
+            pdfUrl = "", citationCount = null, s2PaperId = null, source = "arxiv", fetchedAt = 0,
+            embeddedAt = 0, citationsSyncedAt = null,
+        )
 }

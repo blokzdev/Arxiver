@@ -122,6 +122,13 @@ class SearchViewModel
             )
         val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
+        /**
+         * The query-embedding seam (ONNX `embedQuery`). Injectable ONLY so an ONNX-free CI test can drive the
+         * semantic leg with a canned vector (mirrors the `HtmlReaderViewModel.now/clock` internal-var seam);
+         * production always uses the real [EmbeddingService].
+         */
+        internal var embedQuery: suspend (String) -> AppResult<FloatArray> = embeddingService::embedQuery
+
         private val queryFlow = MutableStateFlow("")
         private var searchJob: Job? = null
         private var submittedFilter: SearchFilter? = null
@@ -201,7 +208,7 @@ class SearchViewModel
                 val modelReady = modelDownloader.state.value is ModelState.Ready
                 val semanticLeg =
                     if (modelReady) {
-                        embeddingService.embedQuery(query).getOrNull()?.let { queryVector ->
+                        embedQuery(query).getOrNull()?.let { queryVector ->
                             vectorIndex.topK(queryVector, k = SEMANTIC_LEG_K).map { it.paperId to it.similarity }
                         }.orEmpty()
                     } else {
@@ -229,7 +236,13 @@ class SearchViewModel
                 _uiState.update {
                     it.copy(localResults = hits, semanticActive = modelReady, bodyOnlyResults = emptyList())
                 }
-                return (keywordLeg.map { it.first } + semanticLeg.map { it.first }).toSet()
+                // Dedupe the "Also found in full text" leg against papers actually MATCHED BY METADATA: the
+                // literal keyword hits (query terms in title/abstract) ∪ the GATED/displayed `fused` results —
+                // NOT the raw top-`SEMANTIC_LEG_K` semantic KNN. The KNN always returns its k nearest however
+                // weak, so using it here hid a genuinely body-only paper that was a *faint* neighbour below the
+                // display cut from BOTH the main list AND this section (device-found 2026-07-14, HUMAN §1). A
+                // paper only "belongs" to metadata if it literally matches or ranked high enough to show.
+                return (keywordLeg.map { it.first } + fused.map { it.paperId }).toSet()
             } finally {
                 Trace.endAsyncSection(SearchTrace.HYBRID_SEARCH, cookie)
             }
