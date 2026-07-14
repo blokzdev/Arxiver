@@ -1264,13 +1264,16 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   each reader restores its own precise position on open. Furthest-progress cross-surface collapse + the honesty
   filters live in the DAO (P-Read.1). No schema change. Tests: the nested combine surfaces a scrolled paper in
   `continueReading` without regressing the existing 5 sources; light/dark preview with the section.
-- [ ] **CHECKPOINT P-Read** — `./gradlew build` green; **`ArxiverDatabase.VERSION == 17`**, `17.json` committed,
-  `Migration16To17Test` identity-hash green, no destructive migration; red-line audit (zero egress/telemetry; reading
-  positions excluded from OS backup + the backup DTO + library export + BibTeX + the Claude dispatch payload —
-  structurally enforced); `:core:* ∌ :app`; the PH.6 sidecar funnel untouched (its tests green as the regression
-  gate); light/dark previews + TalkBack (position language) on the shelf. Device rows (VERIFICATION.md §M): cold-kill
-  PDF restore, cross-surface deep-link, and the provisional thresholds (progress floor, sustained-dwell, recency
-  window, shelf cap).
+- [x] **CHECKPOINT P-Read** — `./gradlew build` green; **`ArxiverDatabase.VERSION == 17`** (additive `CREATE TABLE`,
+  no destructive migration), `17.json` committed, `Migration16To17Test` identity-hash green; red-line audit (zero
+  egress/telemetry — positions are computed + stored fully on-device; **excluded from OS backup** (`data_extraction_rules.xml`
+  walls off root) **+ the backup DTO + library export + BibTeX + the Claude dispatch payload — structurally enforced by
+  `ReadingPositionExportExclusionTest`**); `:core:* ∌ :app` (the entity/DAO are `:core:database` types, the repo maps at
+  the `:app` boundary, `HtmlStorage` gained no DAO dep); the **PH.6 sidecar funnel untouched** — its restore/sidecar
+  tests stay green as the regression gate; light/dark previews + TalkBack (position language) on the shelf. Device rows
+  (VERIFICATION.md **§S-Read**): cold-kill PDF restore, surface-correct deep-link, cross-surface furthest-progress, the
+  anti-PA.3 honesty cases, and the provisional thresholds (progress floor, sustained-dwell, recency window, shelf cap).
+  **Phase P-Read shipped autonomously (#161/#162/#163/#164); no new dependency, one additive migration (v16→v17).**
   *Cut/deferred (breadcrumbs): PDF night-mode persistence → HUMAN.md (a preference, not a position; must be scoped
   honestly); the "retire the sidecar, unified anchor store" (Option B) → future annotations phase (needs anchor
   re-validation on restore first); the annotations ranges table → backlog (this phase's anchor-capable columns are
