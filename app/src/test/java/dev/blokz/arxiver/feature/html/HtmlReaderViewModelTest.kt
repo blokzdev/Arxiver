@@ -17,6 +17,7 @@ import dev.blokz.arxiver.core.ai.ReaderPosition
 import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
+import dev.blokz.arxiver.core.database.entity.ReadingPositionEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
@@ -125,7 +126,8 @@ class HtmlReaderViewModelTest {
         dispatchers = dispatchers,
         applicationScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.IO),
         bodyIndexTrigger = dev.blokz.arxiver.rag.BodyIndexTrigger { _, _ -> },
-    )
+        readingProgressRepository = dev.blokz.arxiver.data.ReadingProgressRepository(db.readingPositionDao()),
+    ).apply { shelfDebounceMs = 0 }
 
     private fun doc(source: HtmlSource) =
         ReaderDocument(
@@ -177,6 +179,70 @@ class HtmlReaderViewModelTest {
             val state = vm.uiState.first { !it.loading }
             assertEquals(AppError.Offline, state.error)
             assertNull(state.doc)
+        }
+
+    // --- P-Read: the HTML "Continue reading" shelf heartbeat (the PH.6 sidecar funnel stays untouched) ---
+
+    private suspend fun htmlShelfRow() = db.readingPositionDao().get(PAPER_ID, ReadingPositionEntity.SURFACE_HTML)
+
+    private suspend fun awaitHtmlShelfRow(): ReadingPositionEntity =
+        kotlinx.coroutines.withTimeout(2_000) {
+            var r = htmlShelfRow()
+            while (r == null) {
+                kotlinx.coroutines.delay(10)
+                r = htmlShelfRow()
+            }
+            r
+        }
+
+    @Test
+    fun `opening the reader without scrolling writes no shelf row`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Native(doc(HtmlSource.NATIVE))))
+            vm.uiState.first { !it.loading }
+            assertNull(htmlShelfRow(), "a mere open is not 'continue reading'")
+        }
+
+    @Test
+    fun `a jump does not write a shelf row`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Native(doc(HtmlSource.NATIVE))))
+            vm.uiState.first { !it.loading }
+
+            vm.onJump("S1")
+            kotlinx.coroutines.delay(50) // give the 0-debounce heartbeat a chance; a jump never feeds the shelf probe
+            assertNull(htmlShelfRow(), "a TOC/citation jump is navigation, not progress")
+        }
+
+    @Test
+    fun `a genuine scroll probe writes a shelf row, not finished`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Native(doc(HtmlSource.NATIVE))))
+            vm.uiState.first { !it.loading }
+
+            vm.onPositionProbed(ReaderPosition(anchorId = null, offsetCssPx = 40, fraction = 0.5f))
+
+            val row = awaitHtmlShelfRow()
+            assertEquals(0.5f, row.fraction, 1e-6f)
+            assertTrue(!row.finished, "one probe is not finished")
+        }
+
+    @Test
+    fun `sustained high dwell sets finished then a below-floor probe resets it`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            val vm = vmWith(fetcherReturning(HtmlFetchResult.Native(doc(HtmlSource.NATIVE))))
+            vm.uiState.first { !it.loading }
+
+            vm.onPositionProbed(ReaderPosition(null, 0, 0.97f))
+            vm.onPositionProbed(ReaderPosition(null, 0, 0.98f)) // two consecutive high probes → finished
+            kotlinx.coroutines.withTimeout(2_000) { while (!awaitHtmlShelfRow().finished) kotlinx.coroutines.delay(10) }
+
+            vm.onPositionProbed(ReaderPosition(null, 0, 0.4f)) // scrolled back up → the paper reappears
+            kotlinx.coroutines.withTimeout(2_000) { while (awaitHtmlShelfRow().finished) kotlinx.coroutines.delay(10) }
         }
 
     @Test
