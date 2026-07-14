@@ -1180,7 +1180,7 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   a total-candidate-chunk cap, guarded by a sibling `BodyScanPerfGuardTest` mirroring `VectorScanPerfGuardTest`'s
   allocation invariant. **Ships only if an on-device D2 measurement shows headroom; else → backlog** (the fusion seam
   already supports it). Zero migration.
-- [~] **PFT.5 — [PROMOTED → Phase P-Reader2 Track A, 2026-07-14: Co-Founder GO "full bundle, build maximally"] PDF body layer.** `pdfbox-android` (Apache-2.0, offline,
+- [x] **PFT.5 — [DELIVERED under Phase P-Reader2 Track A (PR2.A1–A5), 2026-07-14: Co-Founder GO "full bundle, build maximally"] PDF body layer.** `pdfbox-android` (Apache-2.0, offline,
   ~7–7.5MB → trim to ~1MB via asset exclusion) behind the same `BodyTextExtractor` seam, completing the HTML→PDF
   fallback for universal coverage. **Not started without an explicit HUMAN.md GO.** Requires: a committed
   dependency-graph/no-egress structural test (zero sockets, zero new `AllowedHosts` entries) BEFORE adoption; a
@@ -1327,7 +1327,7 @@ phase-sized.
   marker; `cachedPdfs()` de-duped to newest version/storageId; `indexPdf` = inside-lock HTML-defer re-check (§5) +
   gate → `indexPaperBody`-or-`SKIP`. Unit-tested incl. the clobber-race regression guard (HTML index committed during
   a simulated PDF extract ⇒ body stays HTML-derived).
-- [ ] **PR2.A5 (PFT.5.7+.8) — triggers + worker backfill + one-time id-backfill + DI + docs.** `PdfViewerViewModel.
+- [x] **PR2.A5 (PFT.5.7+.8) — triggers + worker backfill + one-time id-backfill + DI + docs.** `PdfViewerViewModel.
   load()` Success fires `indexPdfOnOpen` (rebases after RNM.1+.2); `EmbeddingWorker` runs `backfillPdf(2)` after the
   HTML `backfill(4)`; one-time sound id-backfill over the already-downloaded corpus; R8 keep-rules for pdfbox
   reflection; ROADMAP PFT.5 `[x]`. Device: a non-arXiv PDF surfaces in "Also found in full text"; release-build (R8)

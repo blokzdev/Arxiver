@@ -90,6 +90,12 @@ class PdfViewerViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** Completes when the PFT.5.7 PDF-body nudge fires — so a test can await it (Success) or assert it never
+     *  completed (failure/restore paths). Fresh per test (JUnit builds a new instance per @Test). */
+    private val pdfIndexed = kotlinx.coroutines.CompletableDeferred<Pair<String, Int>>()
+    private val pdfTrigger =
+        dev.blokz.arxiver.rag.PdfBodyIndexTrigger { storageId, version -> pdfIndexed.complete(storageId to version) }
+
     private fun vmFor(id: String): PdfViewerViewModel =
         PdfViewerViewModel(
             savedStateHandle = SavedStateHandle(mapOf("id" to id)),
@@ -103,6 +109,7 @@ class PdfViewerViewModelTest {
             paperRepository = paperRepo,
             readingProgressRepository = readingRepo,
             applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            pdfBodyIndexTrigger = pdfTrigger,
             dispatchers = dispatchers,
         ).apply { positionSaveDebounceMs = 0L }
 
@@ -157,6 +164,26 @@ class PdfViewerViewModelTest {
             val state = vm.uiState.first { !it.downloading }
             assertTrue(state.error is AppError.Storage)
             assertNull(state.file)
+        }
+
+    @Test
+    fun `a successful PDF download nudges body-indexing once, with the right id and version`() =
+        runBlocking {
+            seedPaperWithLocalPdf("2401.00001", version = 3)
+            val vm = vmFor("2401.00001")
+            vm.uiState.first { !it.downloading && it.file != null }
+
+            val fired = kotlinx.coroutines.withTimeout(3_000) { pdfIndexed.await() }
+            assertEquals("2401.00001" to 3, fired)
+        }
+
+    @Test
+    fun `a load that never reaches a download does not nudge body-indexing`() =
+        runBlocking {
+            server.enqueue(MockResponse().setResponseCode(404))
+            val vm = vmFor("9999.99999")
+            vm.uiState.first { !it.downloading }
+            assertTrue(!pdfIndexed.isCompleted, "the PDF nudge fires only on a successful download")
         }
 
     @Test

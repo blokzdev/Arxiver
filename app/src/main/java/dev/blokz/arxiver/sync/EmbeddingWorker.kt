@@ -10,11 +10,13 @@ import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.database.dao.ChunkEmbeddingDao
 import dev.blokz.arxiver.core.database.dao.EmbeddingDao
 import dev.blokz.arxiver.core.database.dao.LibraryDao
+import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.entity.PaperEmbeddingEntity
 import dev.blokz.arxiver.core.database.entity.RelatedPaperEntity
 import dev.blokz.arxiver.core.ml.EmbeddingService
 import dev.blokz.arxiver.core.ml.ModelDownloader
 import dev.blokz.arxiver.core.search.VectorIndex
+import dev.blokz.arxiver.data.PdfBodyStore
 import dev.blokz.arxiver.rag.BodyIndexer
 import dev.blokz.arxiver.rag.RagIndexer
 import timber.log.Timber
@@ -40,6 +42,8 @@ class EmbeddingWorker
         private val chunkEmbeddingDao: ChunkEmbeddingDao,
         private val ragIndexer: RagIndexer,
         private val bodyIndexer: BodyIndexer,
+        private val pdfBodyStore: PdfBodyStore,
+        private val paperDao: PaperDao,
         private val rankerEvalRunner: RankerEvalRunner,
         private val digestRunner: DigestRunner,
     ) : CoroutineWorker(context, params) {
@@ -103,6 +107,17 @@ class EmbeddingWorker
             if (isStopped) return
             runCatching { bodyIndexer.backfill(BODY_BACKFILL_PER_RUN) { isStopped } }
                 .onFailure { Timber.w("Body chunk backfill failed: $it") }
+            if (isStopped) return
+            // P-Reader2 PFT.5.7: universal PDF full-text. One-time id-backfill first (recover storageIds for the
+            // pre-existing downloaded PDF corpus so the filesystem-driven backfill can reach it — the sound
+            // forward match: paper.storageId sanitized == the filename prefix), then the bounded PDF body
+            // backfill. Runs AFTER the HTML backfill so HTML wins the shared body slot per paper (the PDF path
+            // defers to a current-model HTML index). A background nicety — never fails the worker.
+            runCatching {
+                val bySanitized = paperDao.allStorageIds().associateBy { it.replace(SANITIZE, "_") }
+                pdfBodyStore.backfillMissingIds { bySanitized[it] }
+                bodyIndexer.backfillPdf(PDF_BODY_BACKFILL_PER_RUN) { isStopped }
+            }.onFailure { Timber.w("PDF body backfill failed: $it") }
         }
 
         private suspend fun embedPending() {
@@ -178,6 +193,12 @@ class EmbeddingWorker
             /** Body backfill is far heavier per paper (a whole body → up to `TextChunker.MAX_BODY_CHUNKS`
              *  embeds) than abstract backfill, so only a few papers per background run (PFT.2). */
             private const val BODY_BACKFILL_PER_RUN = 4
+
+            /** PDF bodies are the heaviest source + the noisiest — a smaller per-run bound than HTML's. */
+            private const val PDF_BODY_BACKFILL_PER_RUN = 2
+
+            /** Mirror PdfStorage.UNSAFE — build the sanitized-filename → storageId map for the id-backfill. */
+            private val SANITIZE = Regex("""[/:]""")
             private const val RELATED_COUNT = 8
         }
     }

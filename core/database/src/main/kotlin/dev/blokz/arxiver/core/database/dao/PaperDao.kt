@@ -115,6 +115,12 @@ interface PaperDao {
     )
     suspend fun paperIdByDoi(doi: String): String?
 
+    /** Every stored paper's storageId (P-Reader2 PFT.5.7 one-time PDF id-backfill: recover a cached PDF's
+     *  storageId by matching its filename's sanitized prefix against these — the sound forward direction, since
+     *  filename→id reverse-parse is non-injective). */
+    @Query("SELECT id FROM papers")
+    suspend fun allStorageIds(): List<String>
+
     /** Cached papers in a category, newest first — the cache-first Browse feed (no network). */
     @Query(
         """

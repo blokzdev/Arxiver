@@ -27,3 +27,13 @@
 -keep class androidx.datastore.preferences.protobuf.** { *; }
 -keep class androidx.datastore.preferences.PreferencesProto** { *; }
 -keepclassmembers class androidx.datastore.preferences.** { <fields>; }
+
+# pdfbox-android (P-Reader2 PFT.5): reflection-heavy font/resource loading + its transitive BouncyCastle (used
+# for LOCAL PDF crypto only, never network). Inert today (isMinifyEnabled = false) but kept so re-enabling
+# minification can't silently strip the font reflection that PDFTextStripper relies on. BouncyCastle references
+# javax.naming / desktop-JCE classes that don't exist on Android — dontwarn them.
+-keep class com.tom_roush.** { *; }
+-dontwarn com.tom_roush.**
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+-dontwarn javax.naming.**
