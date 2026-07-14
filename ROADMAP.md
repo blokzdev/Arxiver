@@ -1334,7 +1334,7 @@ phase-sized.
   extraction works; on-device no-egress over a full open→index cycle.
 
 **Track B — shared persisted reader night-mode (RNM) — the substrate; lands early:**
-- [ ] **PR2.B1 (RNM.1+.2) — persistence seam + PDF viewer honors it.** `ReaderThemeMode` enum + `SettingsRepository`
+- [x] **PR2.B1 (RNM.1+.2) — persistence seam + PDF viewer honors it.** `ReaderThemeMode` enum + `SettingsRepository`
   `readerThemeMode`/`setReaderThemeMode` (default SYSTEM, valueOf-guarded); pure `resolveReaderDark(mode, systemDark)`;
   `PdfViewerViewModel` seeds/collects it, toggle write-throughs explicit LIGHT/DARK; SYSTEM live-tracks `isSystemInDarkTheme()`.
 - [ ] **PR2.B2 (RNM.3) — HTML reader honors the shared pref + toolbar toggle.** Move `rememberReaderTheme()` + the
