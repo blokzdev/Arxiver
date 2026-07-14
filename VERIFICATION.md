@@ -270,6 +270,35 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [ ] **R-FT5 TalkBack** — the "Also found in full text" section header and the coverage caption are announced;
   section rows read like any paper row.
 
+## S-Read. Reading continuity + "Continue reading" shelf (Phase P-Read) _(SPEC-UI Today · SPEC-DATA §2)_
+
+> HTML-first design: the PH.6 `.position` sidecar stays the HTML restore source-of-truth; a v17 `reading_positions`
+> table is a shelf projection + the PDF viewer's new durable resume. The store/DAO/heartbeat logic is CI-proven
+> (Robolectric); these are the on-device confirmations CI can't run. Provisional constants to ratify from real
+> reading behavior are flagged.
+
+- [ ] **S-Read1 PDF cold-kill resume** — open a paper's **PDF**, scroll several pages in, **force-stop** the app,
+  reopen the same PDF → it restores to roughly where you left off (not page 1). A merely-opened PDF you never
+  scrolled does **not** create a shelf row (see S-Read3). A version bump (new PDF) soft-misses to the top, keeping
+  the old row for the shelf.
+- [ ] **S-Read2 the shelf + surface-correct resume** — open a paper in the **HTML reader**, scroll partway, press
+  back → in **Today** a **"Continue reading"** section appears at the top with that paper + a "N% · HTML edition"
+  position line; tapping it reopens the **HTML** reader restored near your position. Repeat starting from a **PDF** →
+  the row reads "PDF" and tapping resumes the **PDF viewer**.
+- [ ] **S-Read3 honesty (the anti-PA.3 core)** — a paper you **opened but didn't scroll** never appears; a **TOC/
+  citation jump** (no real scrolling) never adds it; a paper you **scrolled to the end and dwelled on** (sustained)
+  drops off; a paper you mark **library-status "read"** drops off. Reopening a "finished" paper and scrolling back
+  up makes it reappear.
+- [ ] **S-Read4 cross-surface furthest-progress** — read a paper to ~80% in **HTML**, then open its **PDF** and glance
+  at page 1 (~3%) → the shelf shows the paper **once**, at **80% · HTML**, and resumes HTML (the recent low glance
+  never buries the real progress).
+- [ ] **S-Read5 provisional thresholds to ratify** — from real reading, sanity-check: the low **progress floor**
+  (~0.02–0.03, "opened ≠ reading"), the **sustained-dwell finished** floor/streak (~0.95, two probes), the **recency
+  window** (~30 days), and the **shelf cap** (~5). Tune in `ReadingProgressRepository`/`HtmlReaderViewModel` if reality
+  differs.
+- [ ] **S-Read6 TalkBack** — the "Continue reading" header and each row are announced in **position language**
+  ("Resume {title}, scroll position 34%, HTML edition") — never "34 percent read"; equal in strength to the visual.
+
 ## P-PC5. Pinned sections + rename (P-Chat PC.5) _(ROADMAP P-Chat)_
 
 - [ ] **P-PC5-1 Pin/unpin** — pinning a chat floats it into a **Pinned** section header above **Recent**; the row **animates** across the boundary (not a teleport); unpin returns it to Recent; an all-recent list shows no section header.
