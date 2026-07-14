@@ -70,6 +70,23 @@ class PdfBodyStoreTest {
     }
 
     @Test
+    fun `backfillMissingIds recovers ids for pre-existing PDFs, idempotently`() {
+        // A non-arXiv id (colon → the reverse-parse-unsound case) and an arXiv id, both without a .pdf.id yet.
+        val chem = "chemrxiv:10.26434/widget"
+        writePdf(chem, 1)
+        writePdf("2401.00001", 2)
+        val bySanitized = listOf(chem, "2401.00001").associateBy { it.replace(Regex("""[/:]"""), "_") }
+
+        val written = runBlocking { store.backfillMissingIds { bySanitized[it] } }
+
+        assertEquals(2, written)
+        assertEquals(chem, store.readId(File(pdfDir, PdfStorage.safeName(chem, 1))))
+        assertEquals("2401.00001", store.readId(File(pdfDir, PdfStorage.safeName("2401.00001", 2))))
+        // Idempotent: a second pass finds nothing to write.
+        assertEquals(0, runBlocking { store.backfillMissingIds { bySanitized[it] } })
+    }
+
+    @Test
     fun `sidecars and part temps are invisible to localPdf`() {
         val sid = "2401.00001"
         val pdf = writePdf(sid, 1)

@@ -264,6 +264,19 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   sockets** (all fonts/glyphlists load from the bundled assets; no font/network fetch). The structural source
   tripwire (`PdfboxNoNetworkStructuralTest`) + this device row together are the "zero egress" evidence (no single
   unit test can prove it, since pdfbox runs on `java.net`, not the gated OkHttp client).
+- [ ] **PR2-A5a PDF full-text goes live end-to-end (PFT.5.7)** — open a **non-arXiv** (chemRxiv/bioRxiv) PDF — which
+  has no HTML edition, so PDF is the only body source — then in Explore → Library search a **body-only phrase** from
+  it → it surfaces under **"Also found in full text"** and the coverage caption count increments. Re-opening does not
+  re-embed (the `OK:<model>` marker). An **arXiv** paper opened in BOTH readers stays HTML-derived (the PDF path
+  defers — no clobber). Confirms the trigger + arbitration on device.
+- [ ] **PR2-A5b one-time id-backfill covers the pre-existing corpus (PFT.5.7)** — with PDFs downloaded **before** this
+  build (no `.pdf.id` sidecar), let one unmetered worker pass run → the id-backfill writes `.pdf.id` for the papers it
+  can match and `backfillPdf` indexes them, so the existing library becomes full-text-searchable **without** re-opening
+  each. (Verifiable on the emulator, which already holds pre-PFT.5 downloaded PDFs.)
+- [ ] **PR2-A5c release-build (R8) extraction — MOOT while `isMinifyEnabled = false`.** No R8 stripping today, so
+  pdfbox's reflection-heavy font loading is not at risk; the `com.tom_roush.**` / `org.bouncycastle.**` keep-rules are
+  committed (inert) so a future re-enable is safe. Re-check extraction on a minified release **only if** minification
+  is turned back on.
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 

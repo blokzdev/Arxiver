@@ -92,6 +92,29 @@ class PdfBodyStore(
             .groupBy { it.storageId }
             .map { (_, refs) -> refs.maxBy { it.version } }
 
+    /**
+     * One-time id-backfill (PFT.5.7): for each cached PDF lacking a `.pdf.id`, recover its storageId via
+     * [resolve] (keyed on the filename's sanitized prefix — the sound forward match) and write the sidecar, so
+     * the pre-existing downloaded corpus is covered by the worker backfill without waiting for a re-open.
+     * Idempotent — a PDF that already has a `.id` is skipped, so subsequent passes are cheap no-ops.
+     * @return the number of ids newly written.
+     */
+    suspend fun backfillMissingIds(resolve: (sanitizedPrefix: String) -> String?): Int =
+        withContext(dispatchers.io) {
+            val orphans =
+                dir().listFiles { f -> f.isFile && f.name.endsWith(".pdf") && f.length() > 0 }
+                    ?.filter { !File(it.path + ID).exists() }
+                    .orEmpty()
+            var written = 0
+            for (pdf in orphans) {
+                val sanitized = pdf.name.removeSuffix(".pdf").substringBeforeLast('v')
+                val storageId = resolve(sanitized) ?: continue
+                writeSidecar(File(pdf.path + ID), storageId)
+                written++
+            }
+            written
+        }
+
     private fun sidecar(
         storageId: String,
         version: Int,

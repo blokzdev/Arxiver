@@ -60,6 +60,7 @@ class PdfViewerViewModel
         private val paperRepository: PaperRepository,
         private val readingProgressRepository: ReadingProgressRepository,
         private val applicationScope: CoroutineScope,
+        private val pdfBodyIndexTrigger: dev.blokz.arxiver.rag.PdfBodyIndexTrigger,
         dispatchers: DispatcherProvider,
     ) : ViewModel() {
         // The route arg is the opaque storageId (nav `Uri.encode`s it), so it round-trips for any source.
@@ -157,7 +158,7 @@ class PdfViewerViewModel
                 val safeName = PdfStorage.safeName(paperRef.storageId, paper.latestVersion)
                 val destination = File(PdfStorage.dir(context), safeName)
                 when (val result = pdfDownloader.download(paper.pdfUrl, destination)) {
-                    is AppResult.Success ->
+                    is AppResult.Success -> {
                         _uiState.update {
                             it.copy(
                                 file = result.value,
@@ -166,6 +167,14 @@ class PdfViewerViewModel
                                 initialPosition = resume,
                             )
                         }
+                        // P-Reader2 PFT.5.7: nudge PDF body-indexing for full-text search — fire-and-forget on the
+                        // application scope (a near-done index completes if the user navigates away), only on a
+                        // successful download (never on failure/restore). A no-op when already current, and it
+                        // defers to a cleaner HTML body if one is indexed (HTML-preferred, PFT.5.5).
+                        applicationScope.launch(ioDispatcher) {
+                            pdfBodyIndexTrigger.indexPdfOnOpen(paperRef.storageId, pdfVersion)
+                        }
+                    }
                     is AppResult.Failure ->
                         // initialPosition is set even on failure (harmless — the error state hides the pager);
                         // a retry that succeeds then already has the resume target.
