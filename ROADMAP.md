@@ -1312,7 +1312,7 @@ phase-sized.
 > accepted, documented limitation — pixel-parity with one flag is impossible.
 
 **Track A — universal PDF full-text (PFT.5):**
-- [ ] **PR2.A1 (PFT.5.1) — egress guards + empty `:core:pdf` skeleton (PRECONDITION, no dep yet).** New `:core:pdf`
+- [x] **PR2.A1 (PFT.5.1) — egress guards + empty `:core:pdf` skeleton (PRECONDITION, no dep yet).** New `:core:pdf`
   android-lib (deps = `:core:common` + coroutines, NO okhttp); `PdfboxNoNetworkStructuralTest` (mirrors
   `JsoupNoNetworkStructuralTest`); `AllowedHosts.ALLOWED` exact-set pin added to `AllowedHostsTest`. CI-only.
 - [ ] **PR2.A2 (PFT.5.2+.3) — adopt `pdfbox-android` FULL + `PdfBodyTextExtractor`.** Pin the dep in the catalog →
