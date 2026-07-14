@@ -1337,9 +1337,13 @@ phase-sized.
 - [x] **PR2.B1 (RNM.1+.2) — persistence seam + PDF viewer honors it.** `ReaderThemeMode` enum + `SettingsRepository`
   `readerThemeMode`/`setReaderThemeMode` (default SYSTEM, valueOf-guarded); pure `resolveReaderDark(mode, systemDark)`;
   `PdfViewerViewModel` seeds/collects it, toggle write-throughs explicit LIGHT/DARK; SYSTEM live-tracks `isSystemInDarkTheme()`.
-- [ ] **PR2.B2 (RNM.3) — HTML reader honors the shared pref + toolbar toggle.** Move `rememberReaderTheme()` + the
+- [x] **PR2.B2 (RNM.3) — HTML reader honors the shared pref + toolbar toggle.** Move `rememberReaderTheme()` + the
   `html = remember(doc,theme)` derivation INSIDE `ArxiverTheme(darkTheme=resolvedDark)` (else half-themed); moon/sun
   toggle. **Structural assert: `ReaderDocWriter` goldens UNCHANGED** (zero token churn) — must land before Track D.
+  *Shipped: `HtmlReaderViewModel` gained the shared `readerThemeMode` flow + `setReaderTheme`; screen wraps chrome+body
+  in `ArxiverTheme(darkTheme = resolveReaderDark(mode, isSystemInDarkTheme()))` (Material You kept); moon/sun toolbar
+  toggle; VM write-through test added. `ReaderDocWriterTest` goldens untouched (neither `ReaderDocWriter` nor
+  `ReaderTheme` changed) → zero token churn proven.*
 - [ ] **PR2.B3 (RNM.4) — Settings tri-state control.** `SingleChoiceSegmentedButtonRow` (System/Light/Dark) + truthful
   subtitle + TalkBack; the only surface where SYSTEM is reachable.
 
