@@ -266,7 +266,11 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   (`SearchViewModel` L232, `SEMANTIC_LEG_K=30` unfiltered) — so a body-only paper that is a **weak** semantic
   neighbor **below the display cut** is hidden from BOTH the main list AND the full-text section. Proven decisively:
   the phrase surfaced 2606.27287 **only after** temporarily removing its `paper_embeddings` row (restored byte-exact).
-  Body leg + section + no-re-embed all work; the exclude aggressiveness is the flagged product question._
+  Body leg + section + no-re-embed all work; the exclude aggressiveness is the flagged product question._ **FIX SHIPPED
+  same-day (Co-Founder GO):** the body leg now dedupes against the DISPLAYED hits (keyword ∪ gated `fused`), not the
+  raw top-30 KNN. **Re-verified end-to-end on emu 5554:** the identical search now surfaces 2606.27287 under "Also
+  found in full text" **with its embedding intact** (no delete hack) — see HUMAN §1 2026-07-14 + the new
+  `SearchViewModelTest` regression guard._
 - [E] **R-FT2 honest section + coverage caption** — the "Also found in full text" rows have full parity (tap opens,
   swipe saves, long-press multi-selects); the main results are unaffected (no "Full text" badge noise); a
   query-independent caption reads **"Full text covers the N papers you've opened"** with N = the count of
