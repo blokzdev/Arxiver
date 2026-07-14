@@ -1180,7 +1180,7 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   a total-candidate-chunk cap, guarded by a sibling `BodyScanPerfGuardTest` mirroring `VectorScanPerfGuardTest`'s
   allocation invariant. **Ships only if an on-device D2 measurement shows headroom; else → backlog** (the fusion seam
   already supports it). Zero migration.
-- [ ] **PFT.5 — [DEFERRED · Co-Founder pdfbox dependency gate] PDF body layer.** `pdfbox-android` (Apache-2.0, offline,
+- [~] **PFT.5 — [PROMOTED → Phase P-Reader2 Track A, 2026-07-14: Co-Founder GO "full bundle, build maximally"] PDF body layer.** `pdfbox-android` (Apache-2.0, offline,
   ~7–7.5MB → trim to ~1MB via asset exclusion) behind the same `BodyTextExtractor` seam, completing the HTML→PDF
   fallback for universal coverage. **Not started without an explicit HUMAN.md GO.** Requires: a committed
   dependency-graph/no-egress structural test (zero sockets, zero new `AllowedHosts` entries) BEFORE adoption; a
@@ -1284,6 +1284,98 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
 no active exposure) and a **Settings "reset personalization"** control — both cheap follow-ons awaiting a steer, not
 phase-sized.
 
+### Phase P-Reader2 — universal PDF full-text + coherent, elevated reading *(plan approved 2026-07-14 — Co-Founder GO "build maximally"; plan-approval delegated to Claude, P-Tools precedent)*
+
+> Planned via an Ultracode workflow (5-reader map → 4 diverse designs → adversarial stress → Opus synthesis) **+ a
+> personal file:line validation** (AllowedHosts is exactly 10 hosts; `PdfStorage.safeName` appends `.pdf` so a
+> `…v2.pdf.id` sidecar is invisible to `localPdf`'s `endsWith(".pdf")` glob; `SettingsRepository` uses the
+> `runCatching{valueOf}` guarded string-enum pattern; `RagIndexer.indexPaperBody(id, text)` is format-agnostic →
+> zero migration; `BodyIndexer` already has the per-storageId mutex + inside-lock re-check the clobber fix builds on;
+> `PdfViewerViewModel` night-mode is in-memory `nightMode=false`). **One phase, four tracks, 17 independently-green
+> PRs.** Promotes the deferred **PFT.5** into its opening track (breadcrumb left on the P-FullText PFT.5 line).
+>
+> **Load-bearing decisions** (full rationale in the Decision log + HUMAN.md §1, 2026-07-14): (1) **Egress guards land
+> BEFORE the dependency** — pdfbox uses `java.net`, NOT the `@ArxivClient` OkHttp gate, so "zero sockets" rests on the
+> FULL local-asset bundle (no font egress) + `PDDocument.load(File)` only + a `PdfboxNoNetworkStructuralTest` source
+> tripwire + a device packet-inspection row; plus an `AllowedHosts.ALLOWED` **exact-set pin** (10 hosts). (2) **Separate
+> `PdfBodyTextExtractor: (File)->String` seam** in a new isolation module — NOT generalizing `BodyTextExtractor`
+> (leaves the HTML impl + its goldens byte-identical). (3) **`:core:pdf`** android-library carries the ~7MB pdfbox
+> dep alone, off the pure `:core:ai` path. (4) **Layered garbage-text gate** — dictionary-ratio is necessary but not
+> sufficient; a **reading-order coherence signal** catches two-column interleave (the dominant arXiv failure);
+> `sortByPosition` A/B device-ratified. (5) **Clobber-race closed inside the per-storageId mutex** (HTML-defer
+> re-checked after the slow extract); PDF never clobbers HTML. (6) **`.pdf.id` authoritative sidecar** (filename→id
+> reverse-parse is unsound: `[/:]→_` non-injective) + **GATE_VERSION dual marker** (`OK:<model>`|`SKIP:<gate>` so
+> garbage re-attempts only on gate improvement, not every model bump). (7) **Tri-state `ReaderThemeMode{SYSTEM,LIGHT,
+> DARK}`** (a boolean would regress HTML's auto-follow-system) persisted in `SettingsRepository`; one `resolveReaderDark`
+> helper; HTML recolors via a nested `ArxiverTheme` wrapping BOTH the theme + `html = remember(doc,theme)` (else
+> half-themed); PDF via the raster invert. Cross-reader dark divergence (semantic recolor vs raster invert) is an
+> accepted, documented limitation — pixel-parity with one flag is impossible.
+
+**Track A — universal PDF full-text (PFT.5):**
+- [ ] **PR2.A1 (PFT.5.1) — egress guards + empty `:core:pdf` skeleton (PRECONDITION, no dep yet).** New `:core:pdf`
+  android-lib (deps = `:core:common` + coroutines, NO okhttp); `PdfboxNoNetworkStructuralTest` (mirrors
+  `JsoupNoNetworkStructuralTest`); `AllowedHosts.ALLOWED` exact-set pin added to `AllowedHostsTest`. CI-only.
+- [ ] **PR2.A2 (PFT.5.2+.3) — adopt `pdfbox-android` FULL + `PdfBodyTextExtractor`.** Pin the dep in the catalog →
+  `:core:pdf`; lazy `PDFBoxResourceLoader.init`; `PDDocument.load(File)` + `PDFTextStripper` (whitespace-collapsed
+  to match the HTML shape); empty-user-password path extracts; `runCatching→""`. No wiring yet. Device: real 2-col/
+  ligature PDFs → legible; scanned/locked → ""; `sortByPosition` A/B; no-egress packet check.
+- [ ] **PR2.A3 (PFT.5.4) — `PdfTextQualityGate` (pure) + bundled wordlist.** Layered heuristics (length/word floor,
+  bibliography-excluded dictionary ratio, token/whitespace sanity, reading-order coherence) + `GATE_VERSION`. ACCEPT
+  fixtures (clean, math-heavy, correctly-extracted 2-col) pin the false-reject floor; REJECT fixtures (column-
+  interleaved, ligature-mangled, CID run-together, scanned-empty). Thresholds PROVISIONAL/device-ratifiable.
+- [ ] **PR2.A4 (PFT.5.5+.6) — `PdfBodyStore` + `BodyIndexer` PDF path (no trigger yet).** `.pdf.id` + dual `.bodyindex`
+  marker; `cachedPdfs()` de-duped to newest version/storageId; `indexPdf` = inside-lock HTML-defer re-check (§5) +
+  gate → `indexPaperBody`-or-`SKIP`. Unit-tested incl. the clobber-race regression guard (HTML index committed during
+  a simulated PDF extract ⇒ body stays HTML-derived).
+- [ ] **PR2.A5 (PFT.5.7+.8) — triggers + worker backfill + one-time id-backfill + DI + docs.** `PdfViewerViewModel.
+  load()` Success fires `indexPdfOnOpen` (rebases after RNM.1+.2); `EmbeddingWorker` runs `backfillPdf(2)` after the
+  HTML `backfill(4)`; one-time sound id-backfill over the already-downloaded corpus; R8 keep-rules for pdfbox
+  reflection; ROADMAP PFT.5 `[x]`. Device: a non-arXiv PDF surfaces in "Also found in full text"; release-build (R8)
+  extraction works; on-device no-egress over a full open→index cycle.
+
+**Track B — shared persisted reader night-mode (RNM) — the substrate; lands early:**
+- [ ] **PR2.B1 (RNM.1+.2) — persistence seam + PDF viewer honors it.** `ReaderThemeMode` enum + `SettingsRepository`
+  `readerThemeMode`/`setReaderThemeMode` (default SYSTEM, valueOf-guarded); pure `resolveReaderDark(mode, systemDark)`;
+  `PdfViewerViewModel` seeds/collects it, toggle write-throughs explicit LIGHT/DARK; SYSTEM live-tracks `isSystemInDarkTheme()`.
+- [ ] **PR2.B2 (RNM.3) — HTML reader honors the shared pref + toolbar toggle.** Move `rememberReaderTheme()` + the
+  `html = remember(doc,theme)` derivation INSIDE `ArxiverTheme(darkTheme=resolvedDark)` (else half-themed); moon/sun
+  toggle. **Structural assert: `ReaderDocWriter` goldens UNCHANGED** (zero token churn) — must land before Track D.
+- [ ] **PR2.B3 (RNM.4) — Settings tri-state control.** `SingleChoiceSegmentedButtonRow` (System/Light/Dark) + truthful
+  subtitle + TalkBack; the only surface where SYSTEM is reachable.
+
+**Track C — PDF reading UX (PR.UX) — composes on RNM's flag; after RNM.1/.2:**
+- [ ] **PR2.C1 (PR.UX.1) — figure-preserving smart-invert night render.** Replace full-negation with `hueRotate(180°)∘
+  invert` + softened extremes so color plots stay legible in dark. Pure ColorMatrix unit test.
+- [ ] **PR2.C2 (PR.UX.2) — DPI-aware crisp render + bitmap recycle.** Real container width (not hardcoded 1080) +
+  device-memory-aware cap (not a flat 2048 → OOM on low-RAM) + `DisposableEffect` recycle. Item aspectRatio unchanged
+  → P-Read offsets untouched.
+- [ ] **PR2.C3 (PR.UX.3) — coordinate-preserving pinch + double-tap zoom.** `graphicsLayer{scale;translation}` focal-
+  zoom (scale 1–4), post-layout so `listState` offsets keep base-layout meaning → restore math byte-identical; zoom
+  writes no shelf row. Level not persisted.
+- [ ] **PR2.C4 (PR.UX.4) — tappable jump-to-page.** Page pill → `Slider` → `scrollToItem` + explicit `onPositionChanged`
+  (deliberate jumps persist, unlike the restore jump). Folds remaining PR.UX.5 breadcrumbs → backlog.
+
+**Track D — HTML format/layout (HR-FMT) — CSS-first; after RNM.3 (goldens):**
+- [ ] **PR2.D1 (HR-FMT.1+.2) — inline font-run fidelity + equation de-gridlining.** Additive `reader.css` rules
+  (`.ltx_font_italic/_bold/_typewriter/_smallcaps`; `.ltx_eqn_*` border/background none) — class specificity beats the
+  blanket table rules; real data-table borders unchanged (golden-asserted).
+- [ ] **PR2.D2 (HR-FMT.3) — contrast token split (`--reader-muted-text`).** Split muted TEXT (onSurfaceVariant) from
+  muted BORDER; fix likely WCAG-AA failures on captions/blockquotes light+dark. Deliberate golden churn (clean because
+  RNM.3 pinned goldens-unchanged first).
+- [ ] **PR2.D3 (HR-FMT.4) — dark-mode figure matte — gated to detected-transparent figures** (§C-6 recommendation
+  adopted: don't box opaque photos).
+- [ ] **PR2.D4 (HR-FMT.5) — system font-scale honoring.** `settings.textZoom` from `LocalDensity.fontScale`
+  factory-time-static (never in `update` — would bypass the PH.6 restore funnel; never in the shared `applyRichSandbox`).
+- [ ] **PR2.D5 (HR-FMT.6) — non-destructive polish + carve-outs.** Footnote demote (still find-in-page-matchable),
+  inline-math `max-width:100%`, comfortable measure (40rem); HUMAN.md carve-outs.
+- [ ] **CHECKPOINT P-Reader2** — `./gradlew build` green across all 17 PRs; `ArxiverDatabase.VERSION` still 16 (zero
+  migration — additive `source_kind='body'` producer + DataStore prefs); red-line audit (no new egress host; pdfbox
+  no-egress structural + device packet check; body chunks excluded from `ArxiverBackup`; arXiv ≥3s limiter untouched);
+  `:core:* ∌ :app`; the `:core:pdf` isolation holds; light/dark previews + TalkBack on new controls. Device rows in
+  VERIFICATION.md §P-Reader2 (PDF full-text surfacing, R8-release extraction, shared night-mode persistence, zoom
+  restore-contract, contrast). **Sequencing:** guards (A1) before the dep; RNM.1+.2 → RNM.3 (goldens-unchanged) →
+  HR-FMT (deliberate golden churn); the three `PdfViewerViewModel.load()` edits merge RNM.1+.2 → PR.UX.1 → PFT.5.7+.8.
+
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
 > Strategic steer from the Co-Founder session of 2026-07-04, sequenced one-phase-at-a-time after
@@ -1347,6 +1439,7 @@ it, so it rides the device.
 
 | Date | Decision |
 |---|---|
+| 2026-07-14 | **Phase P-Reader2 approved + planned (Co-Founder GO "full bundle, build maximally"; plan-approval delegated, P-Tools precedent).** One phase = universal PDF full-text (PFT.5, promoted from P-FullText) + a coherent shared reader night-mode + bounded PDF-render & HTML-layout UX elevations; **17 independently-green PRs across 4 tracks** (see the P-Reader2 phase section). Planned via an Ultracode workflow (5 map → 4 design → adversarial → Opus synth) + my own file:line validation of the load-bearing claims (AllowedHosts=10; `.pdf.id` sidecar invisible to the `endsWith(".pdf")` glob; `RagIndexer.indexPaperBody` format-agnostic → **zero migration, VERSION stays 16**; SettingsRepository valueOf-guarded enum; BodyIndexer mutex; PdfViewerViewModel in-memory night-mode). **Key adopted calls** (self-approved architecture/correctness per "choose the better design"; product/UX calls logged OVERRIDABLE in HUMAN §1): egress guards land BEFORE the pdfbox dep (pdfbox uses `java.net`, not the OkHttp gate → structural source-tripwire + AllowedHosts exact-set pin + device packet check); **separate `PdfBodyTextExtractor: (File)->String` seam** (HTML impl + goldens byte-identical, overriding the workflow's own "generalize the seam" directive); a new **`:core:pdf`** isolation module for the ~7MB dep; a **layered garbage-text gate** with a reading-order coherence signal (dictionary-ratio can't catch two-column interleave); the **clobber race closed inside the per-storageId mutex** (PDF never clobbers HTML); **GATE_VERSION dual marker** so garbage re-attempts only on gate improvement; **tri-state `ReaderThemeMode`** (a boolean would regress HTML auto-follow-system). Cross-reader dark divergence (HTML semantic recolor vs PDF raster invert) accepted as a documented limitation. FULL ~7MB bundle kept (Co-Founder's pick; the ~1MB trim would lazy-download glyphs → reintroduce egress) — the old "trim to ~1MB" PFT.5 line is superseded. |
 | 2026-07-14 | **Emulator verification burndown — P-FullText §R-FT + P-Read §S-Read cleared on `emulator-5554` (see VERIFICATION §R-FT/§S-Read + the 2026-07-14 Verification-log row).** The v16→v17 `reading_positions` migration ran live on real device data with zero loss; the full P-Read honesty invariant + full-text body search verified end-to-end. **One product finding recorded AND FIXED same-day (Co-Founder GO; HUMAN.md §1 2026-07-14):** the "Also found in full text" leg dedupes against `keyword ∪ raw top-30 semantic KNN` (`SearchViewModel` L232, `SEMANTIC_LEG_K=30` unfiltered), so a body-only paper that is a weak semantic neighbor **below the display cut** was hidden from both the main list and the full-text section. **Fix:** dedupe against the DISPLAYED hits (keyword ∪ gated `fused`) — a one-token swap `semanticLeg` → `fused`, since `HybridFusion.fuse` already gates at 70% of best. Re-verified end-to-end on emu 5554 (the paper now surfaces with its embedding intact) + locked by a new `SearchViewModelTest` regression guard (faked query-vector seam, since the ONNX semantic leg can't run in CI). R-FT3 (model-bump self-heal) + R-FT4 (at-scale body FTS) remain device-pending; S-Read5 thresholds want ratification from natural real-device reading. |
 | 2026-07-10 | **CHECKPOINT P-Explorer ticked — the phase the Co-Founder's three screenshots opened is complete.** Eight PRs (#127–#134): PE.0 foundation (crash-trap · honest `pdf_fetchable` · category provenance) · PE.1 empirically-curated vocab (the census overturned all three intuitive subsets; the megajournal call was confirmed) · PE.2 `doi_norm` + the import-fork fix · PE.1b PsyArXiv identity (99.4% of it was being discarded) · PE.2h evidence-based egress verdicts (OSF's `storage.googleapis.com` rejected as an any-bucket grant; the stale `assets.chemrxiv.org` ask retired as NXDOMAIN) · PE.3 multi-source search (metering proven by counting real requests) · PE.4 the unified follow directory (the picker whose split confused the Co-Founder is deleted) · PE.5 Library source filter · PE.6 docs sweep. **Six latent bugs in already-shipped code were found and fixed along the way** — the audit's chief value. Egress: **zero new hosts shipped.** Remaining device-bound checks tracked in VERIFICATION (B1a/e/f/g). **Next per the standing queue: Phase P5 (calibrated, measurable inbox relevance) — approved-in-principle; its plan goes back to the Co-Founder for the formal go-ahead.** |
 | 2026-07-10 | **PE.4 shipped — one follow surface; the picker that started this phase is gone.** The unified Browse-&-Follow directory replaces the taxonomy-only resting state: arXiv is a peer row (native grouped taxonomy, default-expanded) beside the seven preprint sources (whole-source + curated categories). **`SourceFollowSheet` deleted** — its split-from-the-taxonomy existence was exactly why the Co-Founder found arXiv "missing" from the follow picker on device. The RssFeed top-bar action and the manage screen's empty CTA now route to the directory (tab 0 + cleared query) instead of a sheet. Reuses both existing follow write seams and `SourceFollowViewModel` unchanged; zero network on open holds structurally. |
