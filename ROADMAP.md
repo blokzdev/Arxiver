@@ -1389,9 +1389,13 @@ phase-sized.
   sansserif) + `.ltx_equation/.ltx_eqn_table/.ltx_eqnarray` (+ cell/row) border&background none so display equations
   stop inheriting the blanket table grid; equation numbers muted. `ReaderDocWriterTest` gains a case asserting the
   new rules AND that the `border: 1px solid var(--reader-muted)` data-table rule is intact.*
-- [ ] **PR2.D2 (HR-FMT.3) — contrast token split (`--reader-muted-text`).** Split muted TEXT (onSurfaceVariant) from
+- [x] **PR2.D2 (HR-FMT.3) — contrast token split (`--reader-muted-text`).** Split muted TEXT (onSurfaceVariant) from
   muted BORDER; fix likely WCAG-AA failures on captions/blockquotes light+dark. Deliberate golden churn (clean because
   RNM.3 pinned goldens-unchanged first).
+  *Shipped: core `ReaderTheme` gains `mutedText`; `ReaderDocWriter` injects `--reader-muted-text`; `reader.css` moves
+  caption/blockquote/placeholder/missing-citation/eqn-number TEXT colours to it while borders keep `--reader-muted`;
+  `rememberReaderTheme` supplies `onSurfaceVariant` (readable) vs `outlineVariant` (border). `ReaderDocWriterTest`
+  asserts both tokens inject + text uses the readable one + table borders keep the low-contrast one.*
 - [ ] **PR2.D3 (HR-FMT.4) — dark-mode figure matte — gated to detected-transparent figures** (§C-6 recommendation
   adopted: don't box opaque photos).
 - [ ] **PR2.D4 (HR-FMT.5) — system font-scale honoring.** `settings.textZoom` from `LocalDensity.fontScale`

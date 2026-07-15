@@ -15,12 +15,22 @@ import dev.blokz.arxiver.ui.markdown.toCssHex
 @Composable
 internal fun rememberReaderTheme(): ReaderTheme {
     val scheme = MaterialTheme.colorScheme
-    return remember(scheme.onSurface, scheme.surface, scheme.primary, scheme.outlineVariant, scheme.surfaceVariant) {
+    return remember(
+        scheme.onSurface,
+        scheme.surface,
+        scheme.primary,
+        scheme.outlineVariant,
+        scheme.onSurfaceVariant,
+        scheme.surfaceVariant,
+    ) {
         ReaderTheme(
             text = scheme.onSurface.toCssHex(),
             background = scheme.surface.toCssHex(),
             link = scheme.primary.toCssHex(),
+            // Border/rule hue (low-contrast by design) vs. readable muted TEXT (HR-FMT.3) — split so captions
+            // and blockquotes clear WCAG AA, which outlineVariant-as-text was failing in both light and dark.
             muted = scheme.outlineVariant.toCssHex(),
+            mutedText = scheme.onSurfaceVariant.toCssHex(),
             codeBackground = scheme.surfaceVariant.toCssHex(),
         )
     }

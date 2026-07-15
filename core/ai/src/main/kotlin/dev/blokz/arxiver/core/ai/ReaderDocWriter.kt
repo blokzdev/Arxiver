@@ -32,6 +32,7 @@ object ReaderDocWriter {
                 "--reader-bg:${theme.background};" +
                 "--reader-link:${theme.link};" +
                 "--reader-muted:${theme.muted};" +
+                "--reader-muted-text:${theme.mutedText};" +
                 "--reader-code-bg:${theme.codeBackground};" +
                 "}"
         return buildString {
