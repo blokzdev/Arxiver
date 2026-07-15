@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Contrast
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
@@ -33,6 +34,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -57,6 +61,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.BuildConfig
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.ml.ModelState
+import dev.blokz.arxiver.data.ReaderThemeMode
 import dev.blokz.arxiver.data.SettingsRepository
 import dev.blokz.arxiver.ui.components.StatusChip
 import dev.blokz.arxiver.ui.components.StatusTone
@@ -76,6 +81,7 @@ fun SettingsScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val trendingEnabled by viewModel.trendingEnabled.collectAsState()
+    val readerThemeMode by viewModel.readerThemeMode.collectAsState()
     val rankerHealth by viewModel.rankerHealth.collectAsState()
     val backupJson by viewModel.backupJson.collectAsState()
     val importResult by viewModel.importResult.collectAsState()
@@ -168,6 +174,8 @@ fun SettingsScreen(
             onSetDigestEnabled = onSetDigestEnabled,
             trendingEnabled = trendingEnabled,
             onSetTrendingEnabled = viewModel::setTrendingEnabled,
+            readerThemeMode = readerThemeMode,
+            onSetReaderTheme = viewModel::setReaderTheme,
             onDownloadModel = viewModel::downloadModel,
             onReindex = viewModel::reindex,
             onDeleteModel = viewModel::deleteModel,
@@ -198,6 +206,8 @@ private fun SettingsContent(
     onSetDigestEnabled: (Boolean) -> Unit,
     trendingEnabled: Boolean,
     onSetTrendingEnabled: (Boolean) -> Unit,
+    readerThemeMode: ReaderThemeMode,
+    onSetReaderTheme: (ReaderThemeMode) -> Unit,
     onDownloadModel: () -> Unit,
     onReindex: () -> Unit,
     onDeleteModel: () -> Unit,
@@ -275,6 +285,40 @@ private fun SettingsContent(
                 checked = trendingEnabled,
                 onCheckedChange = onSetTrendingEnabled,
             )
+        }
+
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+        // Reader night-mode (P-Reader2 RNM.4) — the ONLY surface where SYSTEM is reachable; the readers'
+        // toolbar toggle only flips Light↔Dark. One shared pref governs both the PDF and HTML readers.
+        SectionTitle(stringResource(R.string.settings_reader_section), icon = Icons.Outlined.Contrast)
+        Text(
+            stringResource(R.string.settings_reader_theme_desc),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            ReaderThemeMode.entries.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = readerThemeMode == mode,
+                    onClick = { onSetReaderTheme(mode) },
+                    shape =
+                        SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = ReaderThemeMode.entries.size,
+                        ),
+                ) {
+                    Text(
+                        stringResource(
+                            when (mode) {
+                                ReaderThemeMode.SYSTEM -> R.string.settings_reader_theme_system
+                                ReaderThemeMode.LIGHT -> R.string.settings_reader_theme_light
+                                ReaderThemeMode.DARK -> R.string.settings_reader_theme_dark
+                            },
+                        ),
+                    )
+                }
+            }
         }
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -443,6 +487,8 @@ private fun SettingsContentPreview() {
             onSetDigestEnabled = {},
             trendingEnabled = false,
             onSetTrendingEnabled = {},
+            readerThemeMode = ReaderThemeMode.SYSTEM,
+            onSetReaderTheme = {},
             onDownloadModel = {},
             onReindex = {},
             onDeleteModel = {},

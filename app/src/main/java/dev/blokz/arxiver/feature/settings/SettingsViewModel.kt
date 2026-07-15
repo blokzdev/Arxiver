@@ -88,6 +88,22 @@ class SettingsViewModel
             viewModelScope.launch { settingsRepository.setTrendingEnabled(enabled) }
         }
 
+        /**
+         * The shared reader night-mode preference (P-Reader2 RNM.4) — Settings is the ONLY surface where
+         * `SYSTEM` is reachable (the readers' toolbar toggle only flips Light↔Dark). Separate flow (the main
+         * uiState combine is already at kotlinx's typed 5-arg max, same as [trendingEnabled]).
+         */
+        val readerThemeMode: StateFlow<dev.blokz.arxiver.data.ReaderThemeMode> =
+            settingsRepository.readerThemeMode.stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                dev.blokz.arxiver.data.ReaderThemeMode.SYSTEM,
+            )
+
+        fun setReaderTheme(mode: dev.blokz.arxiver.data.ReaderThemeMode) {
+            viewModelScope.launch { settingsRepository.setReaderThemeMode(mode) }
+        }
+
         init {
             refreshPdfCacheSize()
         }

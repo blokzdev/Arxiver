@@ -1344,8 +1344,12 @@ phase-sized.
   in `ArxiverTheme(darkTheme = resolveReaderDark(mode, isSystemInDarkTheme()))` (Material You kept); moon/sun toolbar
   toggle; VM write-through test added. `ReaderDocWriterTest` goldens untouched (neither `ReaderDocWriter` nor
   `ReaderTheme` changed) → zero token churn proven.*
-- [ ] **PR2.B3 (RNM.4) — Settings tri-state control.** `SingleChoiceSegmentedButtonRow` (System/Light/Dark) + truthful
+- [x] **PR2.B3 (RNM.4) — Settings tri-state control.** `SingleChoiceSegmentedButtonRow` (System/Light/Dark) + truthful
   subtitle + TalkBack; the only surface where SYSTEM is reachable.
+  *Shipped: new "Reader appearance" section — `SingleChoiceSegmentedButtonRow` over `ReaderThemeMode.entries` writing
+  the shared pref via `SettingsViewModel.setReaderTheme`; truthful subtitle ("System follows your device's setting;
+  Light/Dark override"); light+dark previews. VM getter/setter mirror `trendingEnabled`; substrate covered by
+  `ReaderThemeModeTest` + both reader VMs' write-through tests.*
 
 **Track C — PDF reading UX (PR.UX) — composes on RNM's flag; after RNM.1/.2:**
 - [ ] **PR2.C1 (PR.UX.1) — figure-preserving smart-invert night render.** Replace full-negation with `hueRotate(180°)∘
