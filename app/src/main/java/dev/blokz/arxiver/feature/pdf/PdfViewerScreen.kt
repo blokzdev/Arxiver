@@ -59,6 +59,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -199,7 +200,11 @@ private fun PdfPages(
 
     // Restore the durable position once, after the pages exist (P-Read). scrollToItem is an instant jump — no
     // drag — so it does NOT trip the genuine-scroll persist below (reopening never re-writes or inflates recency).
-    var restored by remember(rendererState) { mutableStateOf(false) }
+    // rememberSaveable (not remember) so this "already restored" latch SURVIVES the config-change Activity
+    // recreation — .MainActivity declares no `configChanges`, so a rotate recreates the Activity. rememberLazyListState
+    // already restores the LIVE scroll on rotate; without a saved latch this effect would re-scroll to the VM's
+    // open-time page and discard the user's place (PP.3). Keyed on `file` so a genuinely new document still restores.
+    var restored by rememberSaveable(file) { mutableStateOf(false) }
     LaunchedEffect(rendererState.pageCount, initialPosition) {
         val target = initialPosition
         if (!restored && rendererState.pageCount > 0 && target != null) {
@@ -317,7 +322,9 @@ private fun PdfPages(
                     .align(Alignment.BottomCenter)
                     .padding(Spacing.lg),
         ) {
-            val jumpLabel = stringResource(R.string.cd_pdf_jump)
+            // Fold the live position into the CD so TalkBack announces "Page N of M" as well as the jump affordance
+            // (the visible pill keeps the compact "N / M" for sighted users). Recomposes on page change — trivial (PP.3).
+            val jumpLabel = stringResource(R.string.cd_pdf_jump, currentPage, rendererState.pageCount)
             Surface(
                 onClick = { showJumpDialog = true },
                 shape = CircleShape,

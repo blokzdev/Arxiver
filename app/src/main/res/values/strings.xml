@@ -122,7 +122,7 @@
     <string name="pdf_downloading">Downloading PDF…</string>
     <string name="pdf_open_in_browser">Open in browser</string>
     <string name="pdf_page_indicator">%1$d / %2$d</string>
-    <string name="cd_pdf_jump">Jump to page</string>
+    <string name="cd_pdf_jump">Page %1$d of %2$d, jump to page</string>
     <string name="pdf_jump_title">Jump to page</string>
     <string name="pdf_jump_page_label">Page %1$d of %2$d</string>
     <string name="pdf_jump_field_label">Go to page</string>

@@ -1461,7 +1461,7 @@ phase-sized.
   keep `pageText` in sync (an in-range keystroke also writes `target`, so the slider tracks typing live). TalkBack CDs on
   the steppers + a field label; the keyboard Go key jumps without reaching for the button. Deliberate-jump-persists
   unchanged.
-- [ ] **PP.3 — rotation re-snap fix (correctness) + page-pill a11y.** `.MainActivity` has no `configChanges`, so a
+- [x] **PP.3 — rotation re-snap fix (correctness) + page-pill a11y.** `.MainActivity` has no `configChanges`, so a
   rotate recreates the Activity: `rememberLazyListState` restores the LIVE scroll, but `restored` is `remember(...)`
   (not saveable) → resets false → the restore `LaunchedEffect` re-scrolls to the VM's **open-time** page, discarding
   the user's place. Fix: `restored` → `rememberSaveable(file)` so the latch survives config change (skips the
