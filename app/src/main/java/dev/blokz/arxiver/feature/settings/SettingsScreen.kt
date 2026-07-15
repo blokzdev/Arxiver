@@ -289,8 +289,8 @@ private fun SettingsContent(
 
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-        // Reader night-mode (P-Reader2 RNM.4) — the ONLY surface where SYSTEM is reachable; the readers'
-        // toolbar toggle only flips Light↔Dark. One shared pref governs both the PDF and HTML readers.
+        // Reader theme (P-Reader2 RNM.4) — the explicit picker for all three modes; the readers' toolbar toggle
+        // now cycles the same modes (PP.1), SYSTEM included. One shared pref governs both the PDF and HTML readers.
         SectionTitle(stringResource(R.string.settings_reader_section), icon = Icons.Outlined.Contrast)
         Text(
             stringResource(R.string.settings_reader_theme_desc),

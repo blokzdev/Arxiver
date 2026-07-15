@@ -13,8 +13,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.Toc
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -53,13 +51,13 @@ import dev.blokz.arxiver.core.ai.ReaderDocWriter
 import dev.blokz.arxiver.core.ai.TocModel
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.search.RetrievalScope
-import dev.blokz.arxiver.data.ReaderThemeMode
 import dev.blokz.arxiver.data.resolveReaderDark
 import dev.blokz.arxiver.feature.paper.ask.AskQuoteRequest
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
 import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdownLabels
 import dev.blokz.arxiver.ui.components.ErrorState
+import dev.blokz.arxiver.ui.components.ReaderThemeToggle
 import dev.blokz.arxiver.ui.feedback.FeedbackMessage
 import dev.blokz.arxiver.ui.feedback.LocalFeedbackController
 import dev.blokz.arxiver.ui.shareText
@@ -199,19 +197,9 @@ fun HtmlReaderScreen(
                                     Icon(Icons.AutoMirrored.Filled.Chat, stringResource(R.string.cd_reader_ask))
                                 }
                             }
-                            // Shared reader night-mode toggle (RNM.3) — writes an EXPLICIT light/dark, persisted globally.
-                            IconButton(
-                                onClick = {
-                                    viewModel.setReaderTheme(
-                                        if (nightMode) ReaderThemeMode.LIGHT else ReaderThemeMode.DARK,
-                                    )
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = if (nightMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                                    contentDescription = stringResource(R.string.cd_toggle_night_mode),
-                                )
-                            }
+                            // Shared reader theme control (RNM.3) — cycles SYSTEM→LIGHT→DARK→SYSTEM; stays INSIDE the
+                            // ArxiverTheme wrapper so the chrome recolours with the body. Global pref, both readers in step.
+                            ReaderThemeToggle(mode = themeMode, onSetMode = viewModel::setReaderTheme)
                             IconButton(onClick = viewModel::openPdfInstead) {
                                 Icon(Icons.Filled.PictureAsPdf, stringResource(R.string.action_read_pdf_instead))
                             }

@@ -1429,6 +1429,54 @@ phase-sized.
   guards (A1) before the dep; RNM.1+.2 → RNM.3 (goldens-unchanged) → HR-FMT (deliberate golden churn); the three
   `PdfViewerViewModel.load()` edits merged RNM.1+.2 → PR.UX.1 → PFT.5.7+.8.
 
+## Phase P-RPolish — reader polish (from the P-Reader2 device-verification harvest, 2026-07-15)
+
+> A focused follow-up the on-device pass earned: one genuine **correctness** fix (PDF rotation loses your place),
+> two **a11y** gaps (the reader theme toggle + page pill are mute to TalkBack), and clear **UX** wins (SYSTEM is
+> unreachable from the reader; jump-to-page is imprecise; zoom doesn't reset on a jump; the matte halos). Delegated
+> by the Co-Founder ("proceed with the polish phase, fix/refine per your best plan"), planned via an Ultracode
+> workflow + a personal file:line adversarial pass. **Scope discipline:** adopt the clear wins (incl. the jump-to-page
+> **numeric entry field**, pulled into PP.2 at the Co-Founder's request 2026-07-15); DEFER gold-plating (ink-polarity
+> matte [needs a Bitmap decode → breaks pure-JVM `ImageAlpha`], HTML toolbar overflow [icons never drop <48dp; no 6th
+> icon added], zoom coach-mark, reader-local typography sheet) → backlog.
+
+- [x] **PP.1 — in-reader tri-state theme cycle (both readers) + a11y.** The reader toolbar toggle only flips
+  LIGHT↔DARK today (`setReaderTheme(if(nightMode) LIGHT else DARK)`), so **SYSTEM is unreachable from the reader** and
+  the toggle's `contentDescription` is a static "Toggle night mode" (TalkBack can't tell the mode). Fix: a pure
+  `ReaderThemeMode.next()` (SYSTEM→LIGHT→DARK→SYSTEM, explicit `when`); one **shared `ReaderThemeToggle`** composable
+  in `ui.components` used by both readers — icon keyed on the **mode identity** (SYSTEM=Contrast, LIGHT=sun, DARK=moon;
+  this flips today's "target" icon to a "current-state" icon — an autonomous UX call, logged in HUMAN.md) + a stateful
+  `contentDescription` (current mode + next action). Remove the dead `cd_toggle_night_mode`; reword the 3 stale
+  comments (Settings + both readers). Extend `ReaderThemeModeTest` with the cycle. No reading-position risk (theme
+  mechanism unchanged from the shipped 2-state toggle).
+- [ ] **PP.2 — jump-to-page precision (numeric field + steppers) + reset-zoom-on-jump.** Hoist `scale`/`offset` out of
+  `BoxWithConstraints` to the `PdfPages` body so the jump dialog can reach them (gesture handlers still close over them
+  upward). Go handler resets zoom to 1× (`scale=1f; offset=Offset.Zero` — plain snapshot writes, **no** reading-position
+  row; the sole row stays the explicit `onPositionChanged`). Precision controls in the jump dialog, all bound to one
+  canonical `target: Int` so the Slider + "Page N of M" label stay live: **−/+ steppers** flanking the Slider
+  (`coerceIn(1,pageCount)`, `enabled` bounds) **and a numeric entry field** (pulled in from backlog at the Co-Founder's
+  request 2026-07-15) — an `OutlinedTextField` backed by a `pageText: String` (digit-filtered, freely editable incl.
+  empty / mid-type), `KeyboardType.Number` + `ImeAction.Go`; the **shared** Go action reads
+  `pageText.toIntOrNull()?.coerceIn(1,pageCount) ?: target` so the box is authoritative-on-submit while slider/steppers
+  keep `pageText` in sync (an in-range keystroke also writes `target`, so the slider tracks typing live). TalkBack CDs on
+  the steppers + a field label; the keyboard Go key jumps without reaching for the button. Deliberate-jump-persists
+  unchanged.
+- [ ] **PP.3 — rotation re-snap fix (correctness) + page-pill a11y.** `.MainActivity` has no `configChanges`, so a
+  rotate recreates the Activity: `rememberLazyListState` restores the LIVE scroll, but `restored` is `remember(...)`
+  (not saveable) → resets false → the restore `LaunchedEffect` re-scrolls to the VM's **open-time** page, discarding
+  the user's place. Fix: `restored` → `rememberSaveable(file)` so the latch survives config change (skips the
+  redundant re-scroll; adds no write). Page pill: fold the live "Page N of M" into its `contentDescription` (keep the
+  visible compact "N / M" Text).
+- [ ] **PP.4 — soften the dark-mode figure matte.** `reader.css` `.reader-dark img.reader-matte` is a hard `#ffffff`
+  card that halos against the soft-dark body; tune the declaration body only (selector byte-identical so the substring
+  golden holds): near-white `#f7f7f7` + a hairline `border: 1px solid rgba(0,0,0,0.08)` to DEFINE the edge (a defined
+  edge reads calmer than softening alone). [ink-polarity light-ink case → backlog (needs pixel decode).]
+- [ ] **CHECKPOINT P-RPolish** — `./gradlew build` green across all PRs; `ArxiverDatabase.VERSION` unchanged (zero
+  migration — pure UI/CSS/pref); `ReaderDocWriter` substring goldens still pass (matte selector unchanged); reading-
+  position invariants intact (theme cycle / zoom reset / rotation write no row; deliberate jump still persists);
+  light/dark previews + TalkBack on the new toggle/steppers/pill. Device rows → VERIFICATION.md (rotation-holds-place,
+  tri-state cycle incl. SYSTEM, jump steppers, softened matte).
+
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
 > Strategic steer from the Co-Founder session of 2026-07-04, sequenced one-phase-at-a-time after
@@ -1464,7 +1512,7 @@ it, so it rides the device.
 
 **P-Feeds PF.3 deferrals (harvested 2026-07-06 from the PF.3 adversarial pass):** **Composite inbox PK `(paper_id, follow_id)` for per-follow provenance** — PF.3 keeps `paper_id` as the sole PK (one row per paper) + cleans inbox on unfollow; a "why is this here / which follow surfaced it" UI would justify the composite PK + a migration + a Today `GROUP BY paper_id` de-dup. Track. · **Multi-source follow badges on the arXiv grid** — generalize `CategoryWithFollowState.followed` → `Set<Source> followedOn` so the grid shows which sources a category is followed on (PF.3 keeps the grid an arXiv Boolean for minimal blast radius). · **A "Following" management surface** — one screen listing ALL non-arXiv follows grouped by source with origin-scoped unfollow (PF.3 ships only the picker; the toggle state inside it already shows what's followed per source). · **"This follow returned 0 papers recently" health hint** — a mis-mapped OpenAlex Field fails silently (HTTP 200 count=0), so a lightweight in-app signal when a follow delivers nothing over N syncs would surface misconfiguration. · **OpenAlex Subfield granularity (~250 vs 26 Fields)** — Fields keep the picker small/un-metered but may be coarse for a focused chemRxiv follow; a product decision on offering Subfield refinement. · **Per-source PDF-host allowlisting** (researchsquare.com / ssrn.com / preprints.org / osf.io) — a per-source Co-Founder decision (each needs a cookie-wall/redirect check like chemRxiv's Atypon path) to enable in-app PDF read; read-only external-open until then (`HUMAN.md` §3). · **Per-source whole-source first-sync cap** — a tighter page/window bound for SSRN-scale firehoses if the OpenAlex credit budget is ever pressured (the page-1 short-circuit already bounds the common case).
 
-**P-Reader2 device-verification UX harvest (2026-07-15, emulator session — refinements the on-device pass surfaced; most are small, all reversible):** **Jump-to-page precision** — the Slider is continuous over 1..pageCount, so on a 50+-page PDF one pixel ≈ several pages and hitting an exact page is near-impossible; add a numeric text field and/or +/- steppers beside the slider (observed: a single tap jumped 9→16). · **In-reader path back to SYSTEM theme** — the reader toolbar toggle only ever writes explicit LIGHT/DARK, so once tapped a user can't restore "follow the OS" from inside the reader (only Settings); consider a 3-state cycle or long-press-for-SYSTEM. · **Soften the dark-mode matte** — the transparent-figure card is a hard `#ffffff` (reader.css) which can halo/jar against the soft-dark body; try a near-white or a hairline border + tuned padding. · **Matte ink-polarity edge case** — `ImageAlpha` detects transparency but not ink luminance, so a transparent figure drawn in WHITE/light ink becomes invisible on the white matte (the inverse of the bug being fixed); a dominant-ink-luminance check could pick a dark matte for light-ink figures. · **Zoom discoverability** — pinch + double-tap are wholly hidden gestures with no on-screen cue; a one-time hint or an explicit zoom affordance would help first-time users. · **Reset zoom on deliberate navigation** — zoom is `remember`-only and does NOT reset on a jump-to-page (only on reopen/rotation), so jumping while zoomed can land in a panned/awkward state; reset to 1× on a deliberate jump. · **HTML reader toolbar crowding** — 5 action icons (Search/TOC/Ask/Night/PDF) + title + back on a Pixel_3a width risks sub-48dp targets; consider an overflow menu on narrow screens. · **Global night-toggle feedback** — the reader toggle silently changes every reader app-wide; a subtle snackbar ("Applied to all readers") would make the scope legible. · **Reader a11y content-descriptions** — the page pill's `content-desc` is just "Jump to page" (drops the live "N / M") and the night toggle never announces on/off state; merge state into both for TalkBack. · **Reader-local appearance sheet** (expansion) — the reader offers only night-mode; a lightweight in-reader text-size / serif / line-height sheet (the CSS already defines `.ltx_font_serif/sansserif`) would serve readers who don't want to change the whole-OS font scale.
+**P-Reader2 device-verification UX harvest (2026-07-15, emulator session — refinements the on-device pass surfaced; most are small, all reversible):** _(**Phase P-RPolish** draws PP.1–PP.4 from this list — theme cycle, jump precision, zoom-reset, matte, and the a11y CDs are **in scope**; ink-polarity matte, zoom coach-mark, toolbar overflow, night-toggle snackbar, and the appearance sheet stay **backlog**.)_ **Jump-to-page precision** — the Slider is continuous over 1..pageCount, so on a 50+-page PDF one pixel ≈ several pages and hitting an exact page is near-impossible; add a numeric text field and/or +/- steppers beside the slider (observed: a single tap jumped 9→16). **→ in PP.2 (numeric field + steppers).** · **In-reader path back to SYSTEM theme** — the reader toolbar toggle only ever writes explicit LIGHT/DARK, so once tapped a user can't restore "follow the OS" from inside the reader (only Settings); consider a 3-state cycle or long-press-for-SYSTEM. · **Soften the dark-mode matte** — the transparent-figure card is a hard `#ffffff` (reader.css) which can halo/jar against the soft-dark body; try a near-white or a hairline border + tuned padding. · **Matte ink-polarity edge case** — `ImageAlpha` detects transparency but not ink luminance, so a transparent figure drawn in WHITE/light ink becomes invisible on the white matte (the inverse of the bug being fixed); a dominant-ink-luminance check could pick a dark matte for light-ink figures. · **Zoom discoverability** — pinch + double-tap are wholly hidden gestures with no on-screen cue; a one-time hint or an explicit zoom affordance would help first-time users. · **Reset zoom on deliberate navigation** — zoom is `remember`-only and does NOT reset on a jump-to-page (only on reopen/rotation), so jumping while zoomed can land in a panned/awkward state; reset to 1× on a deliberate jump. · **HTML reader toolbar crowding** — 5 action icons (Search/TOC/Ask/Night/PDF) + title + back on a Pixel_3a width risks sub-48dp targets; consider an overflow menu on narrow screens. · **Global night-toggle feedback** — the reader toggle silently changes every reader app-wide; a subtle snackbar ("Applied to all readers") would make the scope legible. · **Reader a11y content-descriptions** — the page pill's `content-desc` is just "Jump to page" (drops the live "N / M") and the night toggle never announces on/off state; merge state into both for TalkBack. · **Reader-local appearance sheet** (expansion) — the reader offers only night-mode; a lightweight in-reader text-size / serif / line-height sheet (the CSS already defines `.ltx_font_serif/sansserif`) would serve readers who don't want to change the whole-OS font scale.
 
 **P-Reader2 HR-FMT.6 deferrals (harvested 2026-07-15 from Track D):** **Reader typography options** — a serif-body
 toggle, hyphenation (`hyphens: auto` needs per-lang dictionaries in WebView), and justified text are all reader-comfort

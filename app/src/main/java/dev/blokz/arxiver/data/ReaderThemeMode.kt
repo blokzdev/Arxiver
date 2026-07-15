@@ -21,3 +21,15 @@ fun resolveReaderDark(
         ReaderThemeMode.LIGHT -> false
         ReaderThemeMode.DARK -> true
     }
+
+/**
+ * The next mode in the reader toolbar's cycle: SYSTEM → LIGHT → DARK → SYSTEM. Explicit `when` (not `entries`
+ * modulo) so the wrap is a stated contract, not an accident of declaration order — reordering the enum can't
+ * silently reshuffle the cycle. Lets the reader reach SYSTEM, which the old LIGHT⇄DARK flip couldn't (PP.1).
+ */
+fun ReaderThemeMode.next(): ReaderThemeMode =
+    when (this) {
+        ReaderThemeMode.SYSTEM -> ReaderThemeMode.LIGHT
+        ReaderThemeMode.LIGHT -> ReaderThemeMode.DARK
+        ReaderThemeMode.DARK -> ReaderThemeMode.SYSTEM
+    }

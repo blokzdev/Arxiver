@@ -68,7 +68,9 @@
     </plurals>
     <string name="cd_back">Back</string>
     <string name="cd_clear_query">Clear search query</string>
-    <string name="cd_toggle_night_mode">Toggle night mode</string>
+    <string name="cd_reader_theme_system">Reader theme: System. Activate to switch to Light.</string>
+    <string name="cd_reader_theme_light">Reader theme: Light. Activate to switch to Dark.</string>
+    <string name="cd_reader_theme_dark">Reader theme: Dark. Activate to switch to System.</string>
     <string name="cd_pdf_page">Page %1$d</string>
     <string name="cd_scroll_to_top">Scroll to top</string>
     <string name="cd_rating">Rated %1$d of 5</string>
