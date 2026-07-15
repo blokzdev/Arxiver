@@ -1471,11 +1471,14 @@ phase-sized.
   card that halos against the soft-dark body; tune the declaration body only (selector byte-identical so the substring
   golden holds): near-white `#f7f7f7` + a hairline `border: 1px solid rgba(0,0,0,0.08)` to DEFINE the edge (a defined
   edge reads calmer than softening alone). [ink-polarity light-ink case → backlog (needs pixel decode).]
-- [ ] **CHECKPOINT P-RPolish** — `./gradlew build` green across all PRs; `ArxiverDatabase.VERSION` unchanged (zero
-  migration — pure UI/CSS/pref); `ReaderDocWriter` substring goldens still pass (matte selector unchanged); reading-
-  position invariants intact (theme cycle / zoom reset / rotation write no row; deliberate jump still persists);
-  light/dark previews + TalkBack on the new toggle/steppers/pill. Device rows → VERIFICATION.md (rotation-holds-place,
-  tri-state cycle incl. SYSTEM, jump steppers, softened matte).
+- [x] **CHECKPOINT P-RPolish** — `./gradlew build` green across all PRs (#188–#191) + a final full build on merged
+  `main`; `ArxiverDatabase.VERSION` unchanged (**still 17** — zero migration, pure UI/CSS/pref); `ReaderDocWriter`
+  substring goldens still pass (matte selector byte-identical); reading-position invariants intact (theme cycle / zoom
+  reset / rotation write no row; deliberate jump still persists) — the PP.2 3-lens adversarial-verify workflow returned
+  0 findings on the invariant + hoist lenses, and PP.3's `rememberSaveable`/`rememberLazyListState` shared-bundle
+  property keeps the restore correct across both rotation and process-death. Device rows added to VERIFICATION.md
+  §P-RPolish (rotation-holds-place, tri-state cycle incl. SYSTEM, jump numeric-field/steppers, softened matte) —
+  emulator pass on `emulator-5554`.
 
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
