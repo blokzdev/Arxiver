@@ -29,7 +29,7 @@ Single activity, Navigation-Compose, bottom navigation bar with **4 destinations
 ```
 BottomNav
 ├── Today      (inbox/triage feed)
-├── Explore    (search field, Library|arXiv scope, category taxonomy as the resting state)
+├── Explore    (search field, Library|Online scope, category taxonomy as the resting state)
 ├── Library    (papers | collections | tags)
 └── Chat       (resumable conversations: recents + resume + delete/undo)
 
@@ -84,11 +84,11 @@ BROWSER-tier paper's detail screen offers **Open in browser** instead of a doome
 - Empty states: no follows yet → CTA to Explore's category taxonomy (forces the Library resting state); all triaged → "Inbox zero" moment.
 
 ### Explore
-- **Search + Browse merged into one discovery surface (PC.2).** One search field over two scopes (segmented toggle): **Library** (local hybrid, live-debounced) and **arXiv** (online, explicit submit).
+- **Search + Browse merged into one discovery surface (PC.2).** One search field over two scopes (segmented toggle): **Library** (local hybrid, live-debounced) and **Online** — a multi-source scope (arXiv natively + bioRxiv/medRxiv/chemRxiv/SSRN/… via OpenAlex + Semantic Scholar, one source per submit; see the PE.3 section below), explicit submit.
 - **Resting state (Library scope, blank query): the category taxonomy** — groups (Physics, Math, CS, …) with follow toggles; tapping a category opens its listing (latest, paged) via the stacked `browse/category/{code}` route. This taxonomy is the app's category directory, reached by clearing the query on the Library scope; the Today "no follows" CTA routes here (forcing the Library resting state via a one-shot `?reset=true`).
 - Local results show provenance badges (keyword/semantic/both) and similarity where applicable.
-- arXiv scope shows the rate-limit queue state gracefully ("searching arXiv…"), structured filters (category/date/sort), never raw throttle errors.
-- The keyboard **Search** action submits only on the arXiv scope; the Library scope is live-debounced with no explicit submit.
+- The Online scope shows the rate-limit queue state gracefully ("searching arXiv…"), a source picker, structured filters (category/date/sort) on the arXiv source, and never raw throttle errors.
+- The keyboard **Search** action submits on the Online scope (any source — one arXiv/OpenAlex/Semantic Scholar call per submit); the Library scope is live-debounced with no explicit submit.
 
 ### Chat
 
@@ -108,8 +108,11 @@ BROWSER-tier paper's detail screen offers **Open in browser** instead of a doome
 ### Connections (graph)
 - v1 is a **list-based graph view**, not a force-directed canvas: References / Cited by / Related / Shared-author sections, each row showing in-library badge. (A visual graph is v2; lists are denser and actually navigable on a phone.)
 
-### PDF reader
-- Paged PDF view, night-mode invert toggle, page slider, share. Download manager handles fetch with notification for large files.
+### HTML reader (primary reading surface)
+- The arXiv **HTML edition** (`arxiv.org/html` → `ar5iv.labs.arxiv.org` → PDF fallback) with figures inlined, find-in-page, a TOC sheet, per-paper **Ask**, and the shared tri-state night mode. "Read PDF instead" is always one tap away (never-strand floor). See SPEC-P-HTML.
+
+### PDF reader (universal fallback)
+- Paged PDF view; **shared tri-state night mode** (System/Light/Dark, honoured by both readers); **pinch & double-tap zoom**; **jump-to-page** (numeric field + −/+ steppers) alongside the page slider; **universal full-text extraction** (pdfbox-android) that feeds full-text body search; a persistent "Continue reading" position on Today; share. Download manager handles fetch with notification for large files.
 
 ### Claude — dispatch sheet & history
 - Dispatch sheet (modal bottom sheet): routine selector, action selector (contextual: 1 paper → digest/deep-dive/custom; 2–6 → +compare), editable instruction, include-notes switch, collapsible payload preview, Send.
@@ -117,7 +120,7 @@ BROWSER-tier paper's detail screen offers **Open in browser** instead of a doome
 - Routine management (settings): add/edit/delete routines, "copy routine starter instructions" button (paste-ready block for the Claude app explaining the payload schema).
 
 ### Settings
-- Follows management, sync cadence, embedding model (download/status/re-index), storage (PDF cache usage + clear), backup/export & import, theme, about/licenses.
+- Follows management, sync cadence, embedding model (download/status/re-index), **AI providers** (BYOK Anthropic/Gemini keys) and **on-device chat-model** download/status, **Background activity**, reader theme, storage (PDF cache usage + clear), backup/export & import, theme, about/licenses.
 
 ### Onboarding (Phase 5)
 1. Welcome (the pitch in one screen) → 2. Pick categories to follow (chips, searchable) → 3. Optional: semantic search model download → 4. Optional: connect a Claude routine (or "later") → Today screen with first sync running.

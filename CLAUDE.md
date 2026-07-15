@@ -4,7 +4,7 @@ Guidance for Claude Code sessions working in this repo. The project is built doc
 
 ## What this project is
 
-Local-first Android arXiv explorer (Kotlin + Jetpack Compose) with on-device hybrid search and a Claude Routines dispatch bridge. Read in order if new to the repo: `docs/PRD.md` → `docs/ARCHITECTURE.md` → the SPEC for whatever you're touching → `ROADMAP.md`.
+Local-first Android **multi-source preprint research engine** (Kotlin + Jetpack Compose): native arXiv + bioRxiv/medRxiv and OpenAlex-fronted sources (chemRxiv/SSRN/Research Square/Preprints.org/PsyArXiv), Semantic Scholar cross-search, on-device hybrid search (keyword + semantic + full-text) and HTML/PDF reading, plus a three-tier AI layer — on-device models (Qwen3/Gemma), BYOK providers (Anthropic/Gemini), and a Claude Routines dispatch bridge — driving in-app chat, Ask-a-paper, agentic corpus tool-use, and library RAG. Read in order if new to the repo: `docs/PRD.md` → `docs/ARCHITECTURE.md` → the SPEC for whatever you're touching → `ROADMAP.md`.
 
 ## Operating model (Ultracode orchestration + adversarial validation)
 
@@ -89,7 +89,7 @@ Environment note: cloud sessions need the Android SDK; if `sdkmanager` is absent
 ## Red lines (security/privacy)
 
 - Routine tokens: only ever in `EncryptedSharedPreferences` via `TokenVault`. Never in DB, logs, payload history, exports, backups, or test fixtures. Structural tests enforce payload redaction — keep them passing.
-- No analytics/telemetry dependencies. Network calls only to: the arXiv group (export.arxiv.org, arxiv.org, ar5iv.labs.arxiv.org — egress-gated via `AllowedHosts` on the `@ArxivClient` client), api.semanticscholar.org, user-configured routine URLs, the BYOK AI provider APIs (api.anthropic.com, generativelanguage.googleapis.com — only ever with a user-supplied key), and the pinned model-download URLs (huggingface.co: bge, Gemma 4, Qwen3-0.6B).
+- No analytics/telemetry dependencies. Network calls only to (all egress-gated via `AllowedHosts` on the `@ArxivClient` client — keep this list in sync with `core/network/.../AllowedHosts.kt`, currently 10 hosts): the arXiv group (export.arxiv.org, arxiv.org, ar5iv.labs.arxiv.org), the native bioRxiv/medRxiv hosts (www.biorxiv.org, www.medrxiv.org, api.biorxiv.org), OpenAlex (api.openalex.org), chemRxiv (chemrxiv.org), api.semanticscholar.org, and the pinned model-download host (huggingface.co: bge, Gemma 4, Qwen3-0.6B); plus user-configured routine URLs and the BYOK AI provider APIs (api.anthropic.com, generativelanguage.googleapis.com — only ever with a user-supplied key). Only the arXiv group carries the ≥3s rate limiter; non-arXiv hosts self-space via their own ~1.2s polite mutex.
 - arXiv rate limit (≥3s global spacing) is non-negotiable; all arXiv calls go through the shared rate limiter — never add a bypass "just for one call".
 - No secrets in the repo: signing via CI secrets; `local.properties` untracked.
 

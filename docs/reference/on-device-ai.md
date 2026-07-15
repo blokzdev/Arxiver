@@ -104,7 +104,8 @@ model.generateContentStream("prompt").collect { chunk ->
   `checkStatus()` + the Gemma and Qwen-light `ModelState`s; `TierSelector` recommends
   Gemma → LIGHT → Nano → cloud → none.
 - Privacy: on-device tiers make **no network calls**. The only allowed download host is
-  huggingface.co, carrying TWO pinned model URLs (Gemma 4 + Qwen3-0.6B).
+  huggingface.co; `:core:ai` owns two pinned model URLs (Gemma 4 + Qwen3-0.6B), and the
+  semantic-search `bge-small-en-v1.5` model is a third huggingface.co download (owned by `:core:ml`).
 
 ## Sources
 - LiteRT-LM Android: https://developers.google.com/edge/litert-lm/android
