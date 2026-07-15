@@ -299,6 +299,11 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   reading" position, pinch-zoom + pan around, then background/reopen: the durable position is **unchanged** (zoom is
   a draw-only transform; neither zoom nor pan writes a reading-position row). Zoom level itself does **not** persist
   across reopen (resets to 1×).
+- [ ] **PR2-C4a jump-to-page navigates and persists the deliberate jump (PR.UX.4)** — with a multi-page PDF, tap the
+  **page pill** (bottom-centre, now persistent) → the Slider dialog opens seeded at the current page. Drag to a far
+  page → **Go**: the reader lands there. Background/reopen → the "Continue reading" shelf + resume now point at the
+  **jumped-to** page (a deliberate jump persists, unlike the restore jump). Cancel leaves position unchanged.
+  TalkBack announces the pill as "Jump to page".
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 
