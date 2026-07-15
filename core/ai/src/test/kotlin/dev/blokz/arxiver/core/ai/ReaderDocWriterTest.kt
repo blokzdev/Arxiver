@@ -14,6 +14,7 @@ class ReaderDocWriterTest {
             background = "#ffffff",
             link = "#0066cc",
             muted = "#888888",
+            mutedText = "#555555",
             codeBackground = "#eeeeee",
         )
 
@@ -47,6 +48,22 @@ class ReaderDocWriterTest {
         // The reader is a natively-scrolling full-screen page — no self-size script, no scripts at all.
         assertTrue(d.select("script").isEmpty(), "no scripts")
         assertFalse(html.contains("arxiver://height"), "no self-size signal")
+    }
+
+    @Test
+    fun `muted TEXT and muted BORDER are separate tokens so captions clear contrast`() {
+        val style = Jsoup.parse(ReaderDocWriter.write(doc("<p>x</p>"), theme)).selectFirst("style")!!.data()
+
+        // Both tokens are injected...
+        assertTrue(style.contains("--reader-muted:#888888"), "border token injected")
+        assertTrue(style.contains("--reader-muted-text:#555555"), "muted-text token injected")
+
+        // ...muted TEXT rules reference the readable token, while the data-table BORDER keeps the low-contrast one.
+        assertTrue(style.contains("color: var(--reader-muted-text)"), "muted text uses the readable token")
+        assertTrue(
+            style.contains("border: 1px solid var(--reader-muted)"),
+            "table borders keep the low-contrast border token",
+        )
     }
 
     @Test

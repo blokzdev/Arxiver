@@ -77,7 +77,10 @@ data class ReaderTheme(
     val text: String,
     val background: String,
     val link: String,
+    /** Low-contrast hue for BORDERS/rules (outlineVariant) — never body text (HR-FMT.3). */
     val muted: String,
+    /** Readable muted TEXT (onSurfaceVariant) for captions/blockquotes — split from [muted] so it clears WCAG AA. */
+    val mutedText: String,
     val codeBackground: String,
 )
 

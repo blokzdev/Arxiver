@@ -53,7 +53,7 @@ blockquote {
   margin: 0.9em 0;
   padding-left: 1em;
   border-left: 3px solid var(--reader-muted);
-  color: var(--reader-muted);
+  color: var(--reader-muted-text);
 }
 
 code, pre, samp, kbd {
@@ -90,7 +90,7 @@ img {
 }
 figcaption, .ltx_caption {
   font-size: 0.9em;
-  color: var(--reader-muted);
+  color: var(--reader-muted-text);
   margin-top: 0.5em;
 }
 .ltx_placeholder {
@@ -98,7 +98,7 @@ figcaption, .ltx_caption {
   padding: 0.6em 1em;
   border: 1px dashed var(--reader-muted);
   border-radius: 6px;
-  color: var(--reader-muted);
+  color: var(--reader-muted-text);
   font-size: 0.9em;
 }
 
@@ -124,7 +124,7 @@ figcaption, .ltx_caption {
 .ltx_bibitem { margin: 0.5em 0; font-size: 0.95em; }
 
 /* A citation that the conversion couldn't resolve. */
-.ltx_missing_citation { color: var(--reader-muted); }
+.ltx_missing_citation { color: var(--reader-muted-text); }
 
 /*
  * Inline font runs LaTeXML emits as spans but the base stylesheet left unstyled (HR-FMT.1) — without
@@ -166,5 +166,5 @@ figcaption, .ltx_caption {
   background: none;
   padding: 0.1em 0.35em;
 }
-/* Right-aligned equation numbers stay unobtrusive. */
-.ltx_eqn_eqno { color: var(--reader-muted); }
+/* Right-aligned equation numbers stay unobtrusive (but readable — muted TEXT, not the border hue). */
+.ltx_eqn_eqno { color: var(--reader-muted-text); }

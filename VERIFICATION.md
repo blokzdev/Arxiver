@@ -309,6 +309,10 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   their emphasis (were plain body text before); display equations render **without a grid of boxes** around the terms
   (they used to inherit the data-table borders). Confirm a **real data table** in the same paper still shows its
   borders (the de-gridlining is equation-scoped).
+- [ ] **PR2-D2a caption/blockquote contrast is readable in light AND dark (HR-FMT.3)** — open an HTML paper with figure
+  **captions** and a **blockquote**. Their text should be clearly readable (muted but legible) in both light and dark
+  — not the near-invisible low-contrast grey the old shared border token produced. Table/blockquote **borders** should
+  look unchanged (still the subtle rule hue). Spot-check with a contrast checker if handy (target WCAG AA ≥ 4.5:1).
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 
