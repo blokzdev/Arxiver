@@ -304,6 +304,11 @@
     <string name="settings_digest_desc">A quiet daily notification when new papers match what you read. Requires Wi-Fi sync; nothing leaves your device.</string>
     <string name="settings_trending_title">Show emerging areas</string>
     <string name="settings_trending_desc">A calm Today shelf when one of your followed arXiv areas is more active than usual. Computed on-device from publication dates; never leaves your device.</string>
+    <string name="settings_reader_section">Reader appearance</string>
+    <string name="settings_reader_theme_desc">Night mode for the PDF and HTML readers. System follows your device\'s light/dark setting; Light and Dark override it.</string>
+    <string name="settings_reader_theme_system">System</string>
+    <string name="settings_reader_theme_light">Light</string>
+    <string name="settings_reader_theme_dark">Dark</string>
     <string name="settings_digest_permission_denied">Notifications are off for Arxiver. Enable them in system settings to get the digest.</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
