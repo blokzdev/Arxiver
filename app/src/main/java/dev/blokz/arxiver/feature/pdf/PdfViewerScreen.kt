@@ -155,18 +155,11 @@ fun PdfViewerScreen(
 
 private const val US_LETTER_ASPECT = 0.7727f
 
-/** Inverts page colors for night reading. */
-private val invertFilter =
-    ColorFilter.colorMatrix(
-        ComposeColorMatrix(
-            floatArrayOf(
-                -1f, 0f, 0f, 0f, 255f,
-                0f, -1f, 0f, 0f, 255f,
-                0f, 0f, -1f, 0f, 255f,
-                0f, 0f, 0f, 1f, 0f,
-            ),
-        ),
-    )
+/**
+ * Night-reading colour filter (P-Reader2 PR.UX.1): a hue-preserving smart invert (see [PdfNightRender]) — so
+ * coloured figures stay legible in dark instead of a plain negation flipping every hue — with softened extremes.
+ */
+private val invertFilter = ColorFilter.colorMatrix(ComposeColorMatrix(PdfNightRender.matrix))
 
 @Composable
 private fun PdfPages(
