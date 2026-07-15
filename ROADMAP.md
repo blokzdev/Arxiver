@@ -1352,8 +1352,11 @@ phase-sized.
   `ReaderThemeModeTest` + both reader VMs' write-through tests.*
 
 **Track C — PDF reading UX (PR.UX) — composes on RNM's flag; after RNM.1/.2:**
-- [ ] **PR2.C1 (PR.UX.1) — figure-preserving smart-invert night render.** Replace full-negation with `hueRotate(180°)∘
+- [x] **PR2.C1 (PR.UX.1) — figure-preserving smart-invert night render.** Replace full-negation with `hueRotate(180°)∘
   invert` + softened extremes so color plots stay legible in dark. Pure ColorMatrix unit test.
+  *Shipped: `PdfNightRender` object producing the 4×5 `−A·H(180°)` matrix (offset 230, slope 0.831 → white→~18,
+  black→~230); `invertFilter` now builds its `ColorFilter` from it. Hue family preserved (red/green/blue keep their
+  dominant channel vs. plain negation flipping them). Pure JVM `PdfNightRenderTest` (white/black/grey/hue/clamp).*
 - [ ] **PR2.C2 (PR.UX.2) — DPI-aware crisp render + bitmap recycle.** Real container width (not hardcoded 1080) +
   device-memory-aware cap (not a flat 2048 → OOM on low-RAM) + `DisposableEffect` recycle. Item aspectRatio unchanged
   → P-Read offsets untouched.
