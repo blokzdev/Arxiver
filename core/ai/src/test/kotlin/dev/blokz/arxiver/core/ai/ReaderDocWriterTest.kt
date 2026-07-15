@@ -51,6 +51,14 @@ class ReaderDocWriterTest {
     }
 
     @Test
+    fun `the polish pass sets a comfortable measure, caps inline math, and demotes footnotes`() {
+        val style = Jsoup.parse(ReaderDocWriter.write(doc("<p>x</p>"), theme)).selectFirst("style")!!.data()
+        assertTrue(style.contains("max-width: 40rem"), "comfortable reading measure")
+        assertTrue(style.contains("math { font-size: 1.05em; max-width: 100%; }"), "inline math is width-capped")
+        assertTrue(style.contains(".ltx_note_content"), "footnotes demoted (still in the DOM for find-in-page)")
+    }
+
+    @Test
     fun `muted TEXT and muted BORDER are separate tokens so captions clear contrast`() {
         val style = Jsoup.parse(ReaderDocWriter.write(doc("<p>x</p>"), theme)).selectFirst("style")!!.data()
 

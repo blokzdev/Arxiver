@@ -322,6 +322,10 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   Display → Font size, or Accessibility). Open an HTML paper: the body text is **larger** to match (WebView `textZoom`
   from the system scale). Confirm the reading-position restore still lands correctly at the larger zoom (textZoom is
   set once at WebView creation, so it doesn't fight the PH.6 restore). Reset the font size afterwards.
+- [ ] **PR2-D5a polish reads right + footnotes still find-in-page (HR-FMT.6)** — open a text-dense HTML paper: line
+  length feels comfortable (~65–75 chars, the 40rem measure); a **footnote** renders smaller/muted (demoted) but is
+  **still matched by find-in-page** (PH.7) when you search a word that only appears in it; a wide **inline formula**
+  wraps/scrolls within the measure rather than pushing the line off-screen.
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 
