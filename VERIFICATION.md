@@ -313,6 +313,11 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   **captions** and a **blockquote**. Their text should be clearly readable (muted but legible) in both light and dark
   — not the near-invisible low-contrast grey the old shared border token produced. Table/blockquote **borders** should
   look unchanged (still the subtle rule hue). Spot-check with a contrast checker if handy (target WCAG AA ≥ 4.5:1).
+- [ ] **PR2-D3a dark-mode matte rescues transparent figures without boxing photos (HR-FMT.4)** — in **dark** mode open
+  an HTML paper with a **transparent-background figure** (a matplotlib line plot / diagram — black axes on a
+  see-through canvas): it should now sit on a **light card** so the ink is visible, instead of vanishing into the dark
+  page. A paper with an **opaque photo** (JPEG) in the same session should get **no card** (not boxed). In **light**
+  mode neither is carded. Backgrounding/reopening keeps the matte (the class survives the cache re-sanitize).
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 

@@ -1396,8 +1396,14 @@ phase-sized.
   caption/blockquote/placeholder/missing-citation/eqn-number TEXT colours to it while borders keep `--reader-muted`;
   `rememberReaderTheme` supplies `onSurfaceVariant` (readable) vs `outlineVariant` (border). `ReaderDocWriterTest`
   asserts both tokens inject + text uses the readable one + table borders keep the low-contrast one.*
-- [ ] **PR2.D3 (HR-FMT.4) — dark-mode figure matte — gated to detected-transparent figures** (§C-6 recommendation
+- [x] **PR2.D3 (HR-FMT.4) — dark-mode figure matte — gated to detected-transparent figures** (§C-6 recommendation
   adopted: don't box opaque photos).
+  *Shipped: pure `ImageAlpha.hasAlpha(subtype, bytes)` (PNG colour-type/tRNS, GIF GCE flag, WebP VP8X/ALPH/VP8L;
+  JPEG+unknown → opaque) computed in `HtmlImageFetcher` from the raw bytes → `InlinedImage.transparent`; the inliner
+  tags transparent figures `.reader-matte` (class survives the cache-hit re-sanitize — verified). `ReaderTheme.dark`
+  (derived from `surface.luminance()`) makes `ReaderDocWriter` emit `<body class="reader-dark">`; `reader.css` mattes
+  `.reader-dark img.reader-matte` only (light untouched, opaque photos never boxed). Tests: `ImageAlphaTest`,
+  inliner matte-class + sanitize-survival, `ReaderDocWriterTest` dark-body/matte-rule.*
 - [ ] **PR2.D4 (HR-FMT.5) — system font-scale honoring.** `settings.textZoom` from `LocalDensity.fontScale`
   factory-time-static (never in `update` — would bypass the PH.6 restore funnel; never in the shared `applyRichSandbox`).
 - [ ] **PR2.D5 (HR-FMT.6) — non-destructive polish + carve-outs.** Footnote demote (still find-in-page-matchable),

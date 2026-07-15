@@ -47,6 +47,8 @@ data class ReaderImage(
 data class InlinedImage(
     val mimeSubtype: String,
     val base64: String,
+    /** True if the figure carries transparency (HR-FMT.4) — drives the dark-mode matte, never set for photos. */
+    val transparent: Boolean = false,
 )
 
 /**
@@ -82,6 +84,8 @@ data class ReaderTheme(
     /** Readable muted TEXT (onSurfaceVariant) for captions/blockquotes — split from [muted] so it clears WCAG AA. */
     val mutedText: String,
     val codeBackground: String,
+    /** Whether the reader is in dark mode — gates the transparent-figure matte (HR-FMT.4), a no-op in light. */
+    val dark: Boolean = false,
 )
 
 /**

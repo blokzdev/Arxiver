@@ -35,6 +35,26 @@ class HtmlImageInlinerTest {
     }
 
     @Test
+    fun `a transparent figure is tagged reader-matte, an opaque one is not, and the class survives sanitize`() {
+        val body = """<p><img data-img-key="t"></p><p><img data-img-key="o"></p>"""
+        val out =
+            HtmlImageInliner.inline(
+                body,
+                mapOf(
+                    "t" to InlinedImage("png", "AAAA", transparent = true),
+                    "o" to InlinedImage("jpeg", "BBBB", transparent = false),
+                ),
+            )
+        val imgs = reparse(out).select("img")
+        assertTrue(imgs[0].hasClass("reader-matte"), "transparent figure tagged for the matte")
+        assertFalse(imgs[1].hasClass("reader-matte"), "opaque figure is not boxed")
+
+        // The matte class must survive the cache-hit re-sanitize, or the matte would vanish on reload.
+        val sanitized = HtmlSanitizer.sanitize(out) ?: error("sanitize returned null")
+        assertTrue(reparse(sanitized).select("img")[0].hasClass("reader-matte"), "class kept through sanitize")
+    }
+
+    @Test
     fun `every raster subtype it emits survives a re-sanitize unchanged`() {
         for (sub in listOf("png", "jpeg", "gif", "webp")) {
             val out =

@@ -44,7 +44,9 @@ object ReaderDocWriter {
             )
             append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">")
             append("<style>").append(themeVars).append('\n').append(css).append("</style>")
-            append("</head><body>")
+            // A dark-mode body class gates the transparent-figure matte (HR-FMT.4) — the WebView has no
+            // prefers-color-scheme signal on this offline path, so the dark state rides the theme in.
+            append(if (theme.dark) "</head><body class=\"reader-dark\">" else "</head><body>")
             append(doc.bodyHtml)
             append("</body></html>")
         }

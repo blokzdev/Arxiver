@@ -3,6 +3,7 @@ package dev.blokz.arxiver.feature.html
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.luminance
 import dev.blokz.arxiver.core.ai.ReaderTheme
 import dev.blokz.arxiver.ui.markdown.toCssHex
 
@@ -32,6 +33,9 @@ internal fun rememberReaderTheme(): ReaderTheme {
             muted = scheme.outlineVariant.toCssHex(),
             mutedText = scheme.onSurfaceVariant.toCssHex(),
             codeBackground = scheme.surfaceVariant.toCssHex(),
+            // Derive dark from the surface luminance (rather than threading nightMode in) so this stays
+            // self-contained; it gates the transparent-figure matte (HR-FMT.4).
+            dark = scheme.surface.luminance() < 0.5f,
         )
     }
 }
