@@ -93,9 +93,12 @@ img {
  * disappears into a dark page, so give ONLY the figures the inliner tagged `.reader-matte` a light card —
  * gated to `.reader-dark` so light mode (where transparency reads fine) is untouched, and gated to detected-
  * transparent images so opaque photos are never boxed.
+ * PP.4: a near-white card with a hairline border, not a hard #ffffff. A defined edge reads calmer than a
+ * pure-white block, which halos against the soft-dark body. Selector kept byte-identical (golden substring).
  */
 .reader-dark img.reader-matte {
-  background: #ffffff;
+  background: #f7f7f7;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 6px;
   padding: 6px;
 }
