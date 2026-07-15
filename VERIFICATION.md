@@ -304,6 +304,11 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   page → **Go**: the reader lands there. Background/reopen → the "Continue reading" shelf + resume now point at the
   **jumped-to** page (a deliberate jump persists, unlike the restore jump). Cancel leaves position unchanged.
   TalkBack announces the pill as "Jump to page".
+- [ ] **PR2-D1a inline emphasis renders + equations aren't boxed (HR-FMT.1+.2)** — open an HTML-edition paper with
+  inline *italic*/**bold**/`typewriter` runs and at least one **display equation**. The inline runs now render with
+  their emphasis (were plain body text before); display equations render **without a grid of boxes** around the terms
+  (they used to inherit the data-table borders). Confirm a **real data table** in the same paper still shows its
+  borders (the de-gridlining is equation-scoped).
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 

@@ -1382,9 +1382,13 @@ phase-sized.
   polish (thumbnail strip, page-edge tap-to-page) → backlog below.*
 
 **Track D — HTML format/layout (HR-FMT) — CSS-first; after RNM.3 (goldens):**
-- [ ] **PR2.D1 (HR-FMT.1+.2) — inline font-run fidelity + equation de-gridlining.** Additive `reader.css` rules
+- [x] **PR2.D1 (HR-FMT.1+.2) — inline font-run fidelity + equation de-gridlining.** Additive `reader.css` rules
   (`.ltx_font_italic/_bold/_typewriter/_smallcaps`; `.ltx_eqn_*` border/background none) — class specificity beats the
   blanket table rules; real data-table borders unchanged (golden-asserted).
+  *Shipped: appended the `.ltx_font_*` inline-run rules (italic/oblique/bold/medium/smallcaps/typewriter/serif/
+  sansserif) + `.ltx_equation/.ltx_eqn_table/.ltx_eqnarray` (+ cell/row) border&background none so display equations
+  stop inheriting the blanket table grid; equation numbers muted. `ReaderDocWriterTest` gains a case asserting the
+  new rules AND that the `border: 1px solid var(--reader-muted)` data-table rule is intact.*
 - [ ] **PR2.D2 (HR-FMT.3) — contrast token split (`--reader-muted-text`).** Split muted TEXT (onSurfaceVariant) from
   muted BORDER; fix likely WCAG-AA failures on captions/blockquotes light+dark. Deliberate golden churn (clean because
   RNM.3 pinned goldens-unchanged first).
