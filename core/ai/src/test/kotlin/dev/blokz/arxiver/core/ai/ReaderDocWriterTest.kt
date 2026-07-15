@@ -50,6 +50,23 @@ class ReaderDocWriterTest {
     }
 
     @Test
+    fun `inline font-runs are styled and display equations are de-gridlined without touching data tables`() {
+        val style = Jsoup.parse(ReaderDocWriter.write(doc("<p>x</p>"), theme)).selectFirst("style")!!.data()
+
+        // HR-FMT.1: inline font-run classes now carry real styling.
+        assertTrue(style.contains(".ltx_font_italic"), "italic font-run rule present")
+        assertTrue(style.contains(".ltx_font_typewriter"), "typewriter font-run rule present")
+
+        // HR-FMT.2: equation tables lose their inherited gridlines...
+        assertTrue(style.contains(".ltx_eqn_table"), "equation-table de-gridline rule present")
+        // ...while genuine data tables keep their borders (the blanket rule is unchanged).
+        assertTrue(
+            style.contains("border: 1px solid var(--reader-muted)"),
+            "real data-table border rule intact",
+        )
+    }
+
+    @Test
     fun `the written document has no external host`() {
         val html = ReaderDocWriter.write(doc("<p>x</p>"), theme).lowercase()
         assertFalse(html.contains("http://"), "no http")
