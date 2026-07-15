@@ -84,6 +84,20 @@ class ReaderDocWriterTest {
     }
 
     @Test
+    fun `dark mode adds the body class and the matte rule, light mode does not`() {
+        val darkHtml = ReaderDocWriter.write(doc("<p>x</p>"), theme.copy(dark = true))
+        val darkDoc = Jsoup.parse(darkHtml)
+        assertTrue(darkDoc.selectFirst("body")!!.hasClass("reader-dark"), "dark reader tags the body")
+        assertTrue(
+            darkDoc.selectFirst("style")!!.data().contains(".reader-dark img.reader-matte"),
+            "the dark-only matte rule is present",
+        )
+
+        val lightDoc = Jsoup.parse(ReaderDocWriter.write(doc("<p>x</p>"), theme))
+        assertFalse(lightDoc.selectFirst("body")!!.hasClass("reader-dark"), "light reader does not tag the body")
+    }
+
+    @Test
     fun `the written document has no external host`() {
         val html = ReaderDocWriter.write(doc("<p>x</p>"), theme).lowercase()
         assertFalse(html.contains("http://"), "no http")

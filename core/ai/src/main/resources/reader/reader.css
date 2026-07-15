@@ -88,6 +88,17 @@ img {
   display: block;
   margin: 0.4em auto;
 }
+/*
+ * Dark-mode figure matte (HR-FMT.4). A transparent figure (black axes/ink on a see-through background)
+ * disappears into a dark page, so give ONLY the figures the inliner tagged `.reader-matte` a light card —
+ * gated to `.reader-dark` so light mode (where transparency reads fine) is untouched, and gated to detected-
+ * transparent images so opaque photos are never boxed.
+ */
+.reader-dark img.reader-matte {
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 6px;
+}
 figcaption, .ltx_caption {
   font-size: 0.9em;
   color: var(--reader-muted-text);

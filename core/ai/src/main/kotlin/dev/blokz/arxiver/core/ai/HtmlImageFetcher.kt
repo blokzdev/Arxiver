@@ -46,7 +46,12 @@ open class HtmlImageFetcher(
                 if (totalBytes >= totalBytesBudget) break
                 val (subtype, bytes) = fetchOne(image.fetchUrl) ?: continue
                 totalBytes += bytes.size
-                val inlined = InlinedImage(subtype, Base64.getEncoder().encodeToString(bytes))
+                val inlined =
+                    InlinedImage(
+                        mimeSubtype = subtype,
+                        base64 = Base64.getEncoder().encodeToString(bytes),
+                        transparent = ImageAlpha.hasAlpha(subtype, bytes),
+                    )
                 out[image.localKey] = inlined
                 onImage(image.localKey, inlined)
             }

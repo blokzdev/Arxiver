@@ -23,6 +23,8 @@ object HtmlImageInliner {
             if (hit != null) {
                 img.removeAttr("data-img-key")
                 img.attr("src", "data:image/${hit.mimeSubtype};base64,${hit.base64}")
+                // Tag transparent figures so the dark reader can matte them (HR-FMT.4); opaque photos stay bare.
+                if (hit.transparent) img.addClass("reader-matte")
             } else {
                 img.replaceWith(HtmlReaderTransform.figurePlaceholder())
             }
