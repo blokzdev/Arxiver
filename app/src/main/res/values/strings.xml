@@ -125,6 +125,9 @@
     <string name="cd_pdf_jump">Jump to page</string>
     <string name="pdf_jump_title">Jump to page</string>
     <string name="pdf_jump_page_label">Page %1$d of %2$d</string>
+    <string name="pdf_jump_field_label">Go to page</string>
+    <string name="cd_pdf_jump_prev">Previous page</string>
+    <string name="cd_pdf_jump_next">Next page</string>
     <string name="pdf_jump_go">Go</string>
 
     <!-- P-HTML PH.4: the arXiv HTML-edition reader (native arxiv.org/html → ar5iv fallback). -->

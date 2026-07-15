@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -27,14 +28,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -69,6 +75,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
@@ -225,6 +233,13 @@ private fun PdfPages(
     val scope = rememberCoroutineScope()
     var showJumpDialog by remember(rendererState) { mutableStateOf(false) }
 
+    // Pinch / double-tap zoom (PR.UX.3). scale+offset drive a DRAW-ONLY graphicsLayer on the list, so the LazyColumn
+    // still lays out at 1× and its scroll offsets keep their base-layout meaning — P-Read restore stays byte-identical,
+    // and neither zoom nor pan writes a reading-position row. Zoom is not persisted. Hoisted to the PdfPages body (above
+    // BoxWithConstraints) so the jump dialog — a sibling outside the Box — can reset it on a deliberate jump (PP.2).
+    var scale by remember(rendererState) { mutableFloatStateOf(1f) }
+    var offset by remember(rendererState) { mutableStateOf(Offset.Zero) }
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         // Rasterise each page at the reader's REAL pixel width (PR.UX.2) instead of a flat 1080 — crisp on
         // hi-DPI screens — capped on a heap-derived ceiling so a wide foldable can't OOM. Recomputed only when
@@ -232,11 +247,6 @@ private fun PdfPages(
         // own w/h, so item heights — and therefore P-Read scroll offsets — are unchanged by the resolution.
         val targetWidth = remember(constraints.maxWidth) { pdfTargetWidth(constraints.maxWidth) }
 
-        // Pinch / double-tap zoom (PR.UX.3). scale+offset drive a DRAW-ONLY graphicsLayer on the list, so the
-        // LazyColumn still lays out at 1× and its scroll offsets keep their base-layout meaning — P-Read restore
-        // stays byte-identical, and neither zoom nor pan writes a reading-position row. Zoom is not persisted.
-        var scale by remember(rendererState) { mutableFloatStateOf(1f) }
-        var offset by remember(rendererState) { mutableStateOf(Offset.Zero) }
         val viewport = IntSize(constraints.maxWidth, constraints.maxHeight)
         val zoomed = PdfZoom.isZoomed(scale)
 
@@ -324,35 +334,80 @@ private fun PdfPages(
     }
 
     if (showJumpDialog) {
-        // Seed the slider at the current page; edits are local to the dialog until "Go".
-        var target by remember { mutableIntStateOf(currentPage.coerceIn(1, rendererState.pageCount)) }
+        val pageCount = rendererState.pageCount
+        // Seed at the current page; edits are local to the dialog until "Go". `target` (Int) is canonical — the
+        // slider, steppers and the "Page N of M" label all read it; `pageText` backs the type-a-page field so it can
+        // be freely edited (empty / mid-type) without fighting the Int.
+        var target by remember { mutableIntStateOf(currentPage.coerceIn(1, pageCount)) }
+        var pageText by remember { mutableStateOf(target.toString()) }
+        // Slider + steppers write through here so the field mirrors them.
+        val setPage = { p: Int ->
+            val clamped = p.coerceIn(1, pageCount)
+            target = clamped
+            pageText = clamped.toString()
+        }
+        // The one jump action, shared by the Go button and the keyboard's Go key. `target` is the single source of
+        // truth — always in 1..pageCount and always mirrored by the label + slider, so the jump can never diverge
+        // from what the dialog shows. Resets zoom to 1× (draw-only snapshot writes — no reading-position row) so a
+        // deliberate jump never lands mid-pan/zoom.
+        val performJump: () -> Unit = {
+            showJumpDialog = false
+            val index = (target - 1).coerceIn(0, pageCount - 1)
+            scale = 1f
+            offset = Offset.Zero
+            scope.launch {
+                listState.scrollToItem(index)
+                // A DELIBERATE jump persists (unlike the restore jump, which leaves userScrolled false): record the
+                // position so the "Continue reading" shelf + resume follow the reader here.
+                onPositionChanged(index, 0, (index.toFloat() / pageCount).coerceIn(0f, 1f))
+            }
+        }
         AlertDialog(
             onDismissRequest = { showJumpDialog = false },
             title = { Text(stringResource(R.string.pdf_jump_title)) },
             text = {
                 Column {
                     Text(
-                        text = stringResource(R.string.pdf_jump_page_label, target, rendererState.pageCount),
+                        text = stringResource(R.string.pdf_jump_page_label, target, pageCount),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Slider(
-                        value = target.toFloat(),
-                        onValueChange = { target = it.roundToInt().coerceIn(1, rendererState.pageCount) },
-                        valueRange = 1f..rendererState.pageCount.toFloat(),
+                    OutlinedTextField(
+                        value = pageText,
+                        onValueChange = { raw ->
+                            val digits = raw.filter { it.isDigit() }.take(6)
+                            pageText = digits
+                            // Any parseable value moves `target` (coerced to 1..pageCount) so the label + slider
+                            // always predict where Go lands; an empty / non-numeric field leaves `target` at its
+                            // last value (Go then jumps there — a no-op page change).
+                            digits.toIntOrNull()?.let { target = it.coerceIn(1, pageCount) }
+                        },
+                        label = { Text(stringResource(R.string.pdf_jump_field_label)) },
+                        singleLine = true,
+                        keyboardOptions =
+                            KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Go,
+                            ),
+                        keyboardActions = KeyboardActions(onGo = { performJump() }),
                     )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { setPage(target - 1) }, enabled = target > 1) {
+                            Icon(Icons.Filled.Remove, stringResource(R.string.cd_pdf_jump_prev))
+                        }
+                        Slider(
+                            value = target.toFloat(),
+                            onValueChange = { setPage(it.roundToInt()) },
+                            valueRange = 1f..pageCount.toFloat(),
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { setPage(target + 1) }, enabled = target < pageCount) {
+                            Icon(Icons.Filled.Add, stringResource(R.string.cd_pdf_jump_next))
+                        }
+                    }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showJumpDialog = false
-                    val index = (target - 1).coerceIn(0, rendererState.pageCount - 1)
-                    scope.launch {
-                        listState.scrollToItem(index)
-                        // A DELIBERATE jump persists (unlike the restore jump, which leaves userScrolled false):
-                        // record the position so the "Continue reading" shelf + resume follow the reader here.
-                        onPositionChanged(index, 0, (index.toFloat() / rendererState.pageCount).coerceIn(0f, 1f))
-                    }
-                }) { Text(stringResource(R.string.pdf_jump_go)) }
+                TextButton(onClick = performJump) { Text(stringResource(R.string.pdf_jump_go)) }
             },
             dismissButton = {
                 TextButton(onClick = { showJumpDialog = false }) {

@@ -1449,7 +1449,7 @@ phase-sized.
   `contentDescription` (current mode + next action). Remove the dead `cd_toggle_night_mode`; reword the 3 stale
   comments (Settings + both readers). Extend `ReaderThemeModeTest` with the cycle. No reading-position risk (theme
   mechanism unchanged from the shipped 2-state toggle).
-- [ ] **PP.2 — jump-to-page precision (numeric field + steppers) + reset-zoom-on-jump.** Hoist `scale`/`offset` out of
+- [x] **PP.2 — jump-to-page precision (numeric field + steppers) + reset-zoom-on-jump.** Hoist `scale`/`offset` out of
   `BoxWithConstraints` to the `PdfPages` body so the jump dialog can reach them (gesture handlers still close over them
   upward). Go handler resets zoom to 1× (`scale=1f; offset=Offset.Zero` — plain snapshot writes, **no** reading-position
   row; the sole row stays the explicit `onPositionChanged`). Precision controls in the jump dialog, all bound to one
