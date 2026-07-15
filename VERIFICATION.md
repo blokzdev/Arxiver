@@ -277,6 +277,11 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   pdfbox's reflection-heavy font loading is not at risk; the `com.tom_roush.**` / `org.bouncycastle.**` keep-rules are
   committed (inert) so a future re-enable is safe. Re-check extraction on a minified release **only if** minification
   is turned back on.
+- [ ] **PR2-C1a smart-invert night render preserves figure hue (PR.UX.1)** — open a paper with a **colour figure**
+  (e.g. a plot with red/green/blue traces or a heat-map) in the PDF reader and toggle night mode. Under the new
+  smart-invert the traces keep their **hue family** (red stays red-ish, blue stays blue-ish) on a soft-dark page —
+  NOT the old plain-negation look where red→cyan / blue→orange. Black body text renders soft-light (~230), the page
+  soft-dark (~18), neither a blinding pure white nor pure black. A/B against a pre-PR.UX.1 build to confirm the win.
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 
