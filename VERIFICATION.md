@@ -291,6 +291,14 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   fold/unfold to change the container width (re-rasterise at a new resolution). The reading position must be
   **preserved** (the item aspectRatio, hence layout height, is width-independent) — confirms the P-Read offset
   invariant holds across a resolution change.
+- [ ] **PR2-C3a pinch + double-tap zoom feels right and coexists with scroll (PR.UX.3)** — at 1× a single-finger drag
+  **scrolls** the document normally. **Pinch** to zoom (1–4×): the point under the fingers stays pinned (coordinate-
+  preserving), no jarring first-frame scroll. While zoomed, a single-finger drag **pans** (clamped to the page edges,
+  never a gap). **Double-tap** toggles 1↔2.5× centred on the tap. Zoom back to 1× and confirm scroll resumes.
+- [ ] **PR2-C3b zoom leaves the reading position untouched (PR.UX.3)** — scroll to a known page, note the "Continue
+  reading" position, pinch-zoom + pan around, then background/reopen: the durable position is **unchanged** (zoom is
+  a draw-only transform; neither zoom nor pan writes a reading-position row). Zoom level itself does **not** persist
+  across reopen (resets to 1×).
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 

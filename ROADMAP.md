@@ -1365,9 +1365,14 @@ phase-sized.
   (~2.4k px @256 MB, ~1.2k @64 MB) instead of a flat 2048; floor 720, hard ceiling 2560. `PdfPage` keys `produceState`
   on width and frees each bitmap in a `DisposableEffect` onDispose. aspect stays `page.w/h` → item heights (P-Read
   offsets) unchanged. Pure `PdfTargetWidthTest`.*
-- [ ] **PR2.C3 (PR.UX.3) — coordinate-preserving pinch + double-tap zoom.** `graphicsLayer{scale;translation}` focal-
+- [x] **PR2.C3 (PR.UX.3) — coordinate-preserving pinch + double-tap zoom.** `graphicsLayer{scale;translation}` focal-
   zoom (scale 1–4), post-layout so `listState` offsets keep base-layout meaning → restore math byte-identical; zoom
   writes no shelf row. Level not persisted.
+  *Shipped: pure `PdfZoom` (focalOffset `tx'=k·tx+(centroid−centre)(1−k)+pan`, clamp `±(s−1)·dim/2`, coerce 1–4) +
+  `PdfZoomTest`. Gesture layer on the list: DRAW-ONLY `graphicsLayer`, `userScrollEnabled=!zoomed`, and an
+  Initial-pass `awaitEachGesture` that claims the gesture only for a real pinch (≥2 fingers) or while zoomed and
+  consumes only movement — single-finger scroll at 1× and stationary double-tap pass through. Double-tap toggles
+  1↔2.5×. offset auto-clamps to 0 at 1×; scale/offset are `remember` (not persisted).*
 - [ ] **PR2.C4 (PR.UX.4) — tappable jump-to-page.** Page pill → `Slider` → `scrollToItem` + explicit `onPositionChanged`
   (deliberate jumps persist, unlike the restore jump). Folds remaining PR.UX.5 breadcrumbs → backlog.
 

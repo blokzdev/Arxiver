@@ -8,6 +8,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -47,11 +54,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
@@ -225,7 +238,69 @@ private fun PdfPages(
         // the container width actually changes (rotation / unfold). aspectRatio is still driven by the page's
         // own w/h, so item heights — and therefore P-Read scroll offsets — are unchanged by the resolution.
         val targetWidth = remember(constraints.maxWidth) { pdfTargetWidth(constraints.maxWidth) }
-        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+
+        // Pinch / double-tap zoom (PR.UX.3). scale+offset drive a DRAW-ONLY graphicsLayer on the list, so the
+        // LazyColumn still lays out at 1× and its scroll offsets keep their base-layout meaning — P-Read restore
+        // stays byte-identical, and neither zoom nor pan writes a reading-position row. Zoom is not persisted.
+        var scale by remember(rendererState) { mutableFloatStateOf(1f) }
+        var offset by remember(rendererState) { mutableStateOf(Offset.Zero) }
+        val viewport = IntSize(constraints.maxWidth, constraints.maxHeight)
+        val zoomed = PdfZoom.isZoomed(scale)
+
+        LazyColumn(
+            state = listState,
+            // While zoomed, the list stops owning drags (they become pan); at 1× it scrolls normally and the
+            // gesture handler below only claims the gesture once a SECOND finger lands (a pinch).
+            userScrollEnabled = !zoomed,
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(viewport) {
+                        detectTapGestures(
+                            onDoubleTap = { tap ->
+                                // Read `scale` fresh (not the captured `zoomed`) — pointerInput doesn't restart on
+                                // a scale change, so the closure-captured value would be stale and never toggle back.
+                                val newScale = if (PdfZoom.isZoomed(scale)) 1f else PdfZoom.DOUBLE_TAP_SCALE
+                                offset = PdfZoom.focalOffset(offset, scale, newScale, tap, Offset.Zero, viewport)
+                                scale = newScale
+                            },
+                        )
+                    }
+                    .pointerInput(viewport) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false)
+                            do {
+                                // Initial pass: decide BEFORE the list's scrollable so a pinch can't first-frame
+                                // scroll the page. We claim the gesture only for a genuine pinch (2+ fingers) or
+                                // while already zoomed, and only consume actual MOVEMENT — so a single-finger drag
+                                // at 1× (and a stationary double-tap while zoomed) still reach the list / tap
+                                // detector untouched.
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val pointers = event.changes.count { it.pressed }
+                                if (pointers >= 2 || PdfZoom.isZoomed(scale)) {
+                                    val newScale = PdfZoom.coerceScale(scale * event.calculateZoom())
+                                    offset =
+                                        PdfZoom.focalOffset(
+                                            offset,
+                                            scale,
+                                            newScale,
+                                            event.calculateCentroid(useCurrent = true),
+                                            event.calculatePan(),
+                                            viewport,
+                                        )
+                                    scale = newScale
+                                    event.changes.forEach { if (it.positionChanged()) it.consume() }
+                                }
+                            } while (event.changes.any { it.pressed })
+                        }
+                    }
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        translationX = offset.x
+                        translationY = offset.y
+                    },
+        ) {
             items(count = rendererState.pageCount, key = { it }) { pageIndex ->
                 PdfPage(rendererState, pageIndex, nightMode, targetWidth)
             }
