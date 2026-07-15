@@ -22,4 +22,18 @@ class ReaderThemeModeTest {
     fun `SYSTEM is the default so a fresh install keeps the OS-following behaviour`() {
         assertEquals(ReaderThemeMode.SYSTEM, ReaderThemeMode.entries.first())
     }
+
+    @Test
+    fun `next cycles SYSTEM to LIGHT to DARK and wraps back`() {
+        assertEquals(ReaderThemeMode.LIGHT, ReaderThemeMode.SYSTEM.next())
+        assertEquals(ReaderThemeMode.DARK, ReaderThemeMode.LIGHT.next())
+        assertEquals(ReaderThemeMode.SYSTEM, ReaderThemeMode.DARK.next())
+    }
+
+    @Test
+    fun `next is a closed 3-cycle so three steps return to the start from any mode`() {
+        ReaderThemeMode.entries.forEach { start ->
+            assertEquals(start, start.next().next().next())
+        }
+    }
 }

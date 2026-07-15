@@ -29,8 +29,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,9 +75,9 @@ import androidx.core.graphics.createBitmap
 import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
-import dev.blokz.arxiver.data.ReaderThemeMode
 import dev.blokz.arxiver.data.resolveReaderDark
 import dev.blokz.arxiver.ui.components.ErrorState
+import dev.blokz.arxiver.ui.components.ReaderThemeToggle
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.launch
@@ -112,17 +110,9 @@ fun PdfViewerScreen(
                     }
                 },
                 actions = {
-                    IconButton(
-                        onClick = {
-                            // Toggle writes an EXPLICIT light/dark (never leaves it on SYSTEM), and persists globally.
-                            viewModel.setReaderTheme(if (nightMode) ReaderThemeMode.LIGHT else ReaderThemeMode.DARK)
-                        },
-                    ) {
-                        Icon(
-                            imageVector = if (nightMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                            contentDescription = stringResource(R.string.cd_toggle_night_mode),
-                        )
-                    }
+                    // Shared reader theme control — one tap advances SYSTEM→LIGHT→DARK→SYSTEM (so SYSTEM is
+                    // reachable here, unlike the old LIGHT⇄DARK flip); the pref is global, both readers stay in step.
+                    ReaderThemeToggle(mode = themeMode, onSetMode = viewModel::setReaderTheme)
                 },
             )
         },
