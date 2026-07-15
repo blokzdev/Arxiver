@@ -318,6 +318,10 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   see-through canvas): it should now sit on a **light card** so the ink is visible, instead of vanishing into the dark
   page. A paper with an **opaque photo** (JPEG) in the same session should get **no card** (not boxed). In **light**
   mode neither is carded. Backgrounding/reopening keeps the matte (the class survives the cache re-sanitize).
+- [ ] **PR2-D4a reader honours the system font-scale (HR-FMT.5)** — set the device **Font size** larger (Settings →
+  Display → Font size, or Accessibility). Open an HTML paper: the body text is **larger** to match (WebView `textZoom`
+  from the system scale). Confirm the reading-position restore still lands correctly at the larger zoom (textZoom is
+  set once at WebView creation, so it doesn't fight the PH.6 restore). Reset the font size afterwards.
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 

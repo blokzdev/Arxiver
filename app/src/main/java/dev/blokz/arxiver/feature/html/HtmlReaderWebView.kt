@@ -10,9 +10,17 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
 import dev.blokz.arxiver.core.ai.ReaderPosition
 import dev.blokz.arxiver.ui.markdown.applyRichSandbox
+import kotlin.math.roundToInt
+
+/**
+ * The WebView `textZoom` (percent) that honours the user's system font-scale (HR-FMT.5). Clamped to a sane
+ * band so an extreme accessibility scale can't render the reader unusable. Pure so it's unit-testable.
+ */
+internal fun readerTextZoom(fontScale: Float): Int = (fontScale * 100f).roundToInt().coerceIn(50, 300)
 
 /**
  * The full-screen, natively-scrolling reader WebView (P-HTML PH.4/PH.6). Reuses the shared offline
@@ -185,12 +193,18 @@ internal fun HtmlReaderWebView(
     val onFind by rememberUpdatedState(onFindResult)
     val onAsk by rememberUpdatedState(onAskSelection)
 
+    // System font-scale honoured (HR-FMT.5). Read here (Compose scope) and apply ONCE at factory time — never
+    // in `update`, since a live textZoom change relayouts the WebView and would bypass the PH.6 restore funnel
+    // (and it's the reader's own setting, not the shared applyRichSandbox's).
+    val textZoom = readerTextZoom(LocalDensity.current.fontScale)
+
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { context ->
             ReaderWebView(context).apply {
                 applyRichSandbox()
                 settings.blockNetworkImage = true // belt-and-suspenders over blockNetworkLoads
+                settings.textZoom = textZoom
                 controller.webView = this
                 askLabel = askSelectionLabel
                 // Read-then-finish (PH.7): mode.finish() clears the selection on the renderer with

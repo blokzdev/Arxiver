@@ -1404,8 +1404,11 @@ phase-sized.
   (derived from `surface.luminance()`) makes `ReaderDocWriter` emit `<body class="reader-dark">`; `reader.css` mattes
   `.reader-dark img.reader-matte` only (light untouched, opaque photos never boxed). Tests: `ImageAlphaTest`,
   inliner matte-class + sanitize-survival, `ReaderDocWriterTest` dark-body/matte-rule.*
-- [ ] **PR2.D4 (HR-FMT.5) — system font-scale honoring.** `settings.textZoom` from `LocalDensity.fontScale`
+- [x] **PR2.D4 (HR-FMT.5) — system font-scale honoring.** `settings.textZoom` from `LocalDensity.fontScale`
   factory-time-static (never in `update` — would bypass the PH.6 restore funnel; never in the shared `applyRichSandbox`).
+  *Shipped: pure `readerTextZoom(fontScale) = (fontScale*100).roundToInt().coerceIn(50,300)`; the reader WebView reads
+  `LocalDensity.current.fontScale` in Compose scope and sets `settings.textZoom` ONCE at factory time (not `update`,
+  not the shared sandbox). `ReaderTextZoomTest` covers default/large/clamped.*
 - [ ] **PR2.D5 (HR-FMT.6) — non-destructive polish + carve-outs.** Footnote demote (still find-in-page-matchable),
   inline-math `max-width:100%`, comfortable measure (40rem); HUMAN.md carve-outs.
 - [ ] **CHECKPOINT P-Reader2** — `./gradlew build` green across all 17 PRs; `ArxiverDatabase.VERSION` still 16 (zero
