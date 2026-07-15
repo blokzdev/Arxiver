@@ -24,7 +24,7 @@ body {
 
 .ltx_document,
 article {
-  max-width: 42rem;
+  max-width: 40rem; /* comfortable reading measure (~65-75 chars/line) — HR-FMT.6 */
   margin: 0 auto;
 }
 
@@ -70,7 +70,7 @@ code { background: var(--reader-code-bg); padding: 0.1em 0.3em; border-radius: 4
 pre code { background: none; padding: 0; }
 
 /* Native MathML (no KaTeX on this path). */
-math { font-size: 1.05em; }
+math { font-size: 1.05em; max-width: 100%; } /* inline math never overflows the measure (HR-FMT.6) */
 math[display="block"], .ltx_Math[display="block"] {
   display: block;
   overflow-x: auto;
@@ -136,6 +136,13 @@ figcaption, .ltx_caption {
 
 /* A citation that the conversion couldn't resolve. */
 .ltx_missing_citation { color: var(--reader-muted-text); }
+
+/*
+ * Footnotes demoted (HR-FMT.6): the note text is smaller + muted so it stops competing with the body, but is
+ * NOT hidden — it stays in the DOM so find-in-page (PH.7) can still match it.
+ */
+.ltx_note_content, .ltx_footnote { font-size: 0.85em; color: var(--reader-muted-text); }
+.ltx_note_mark, .ltx_notemark { font-size: 0.75em; vertical-align: super; }
 
 /*
  * Inline font runs LaTeXML emits as spans but the base stylesheet left unstyled (HR-FMT.1) — without

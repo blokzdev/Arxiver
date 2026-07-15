@@ -1409,8 +1409,12 @@ phase-sized.
   *Shipped: pure `readerTextZoom(fontScale) = (fontScale*100).roundToInt().coerceIn(50,300)`; the reader WebView reads
   `LocalDensity.current.fontScale` in Compose scope and sets `settings.textZoom` ONCE at factory time (not `update`,
   not the shared sandbox). `ReaderTextZoomTest` covers default/large/clamped.*
-- [ ] **PR2.D5 (HR-FMT.6) — non-destructive polish + carve-outs.** Footnote demote (still find-in-page-matchable),
+- [x] **PR2.D5 (HR-FMT.6) — non-destructive polish + carve-outs.** Footnote demote (still find-in-page-matchable),
   inline-math `max-width:100%`, comfortable measure (40rem); HUMAN.md carve-outs.
+  *Shipped: measure 42rem→40rem (~65–75 chars/line); `math` gains `max-width:100%` so wide inline math can't push the
+  line; `.ltx_note_content/.ltx_footnote` demoted (0.85em, muted-text) + `.ltx_note_mark` superscripted — NOT hidden,
+  so PH.7 find-in-page still matches. `ReaderDocWriterTest` asserts all three. Further typography (serif-body option,
+  hyphenation, justified text) → backlog below.*
 - [ ] **CHECKPOINT P-Reader2** — `./gradlew build` green across all 17 PRs; `ArxiverDatabase.VERSION` still 16 (zero
   migration — additive `source_kind='body'` producer + DataStore prefs); red-line audit (no new egress host; pdfbox
   no-egress structural + device packet check; body chunks excluded from `ArxiverBackup`; arXiv ≥3s limiter untouched);
@@ -1453,6 +1457,12 @@ VERIFICATION C3, fixture committed); the only reason it's here and not built is 
 it, so it rides the device.
 
 **P-Feeds PF.3 deferrals (harvested 2026-07-06 from the PF.3 adversarial pass):** **Composite inbox PK `(paper_id, follow_id)` for per-follow provenance** — PF.3 keeps `paper_id` as the sole PK (one row per paper) + cleans inbox on unfollow; a "why is this here / which follow surfaced it" UI would justify the composite PK + a migration + a Today `GROUP BY paper_id` de-dup. Track. · **Multi-source follow badges on the arXiv grid** — generalize `CategoryWithFollowState.followed` → `Set<Source> followedOn` so the grid shows which sources a category is followed on (PF.3 keeps the grid an arXiv Boolean for minimal blast radius). · **A "Following" management surface** — one screen listing ALL non-arXiv follows grouped by source with origin-scoped unfollow (PF.3 ships only the picker; the toggle state inside it already shows what's followed per source). · **"This follow returned 0 papers recently" health hint** — a mis-mapped OpenAlex Field fails silently (HTTP 200 count=0), so a lightweight in-app signal when a follow delivers nothing over N syncs would surface misconfiguration. · **OpenAlex Subfield granularity (~250 vs 26 Fields)** — Fields keep the picker small/un-metered but may be coarse for a focused chemRxiv follow; a product decision on offering Subfield refinement. · **Per-source PDF-host allowlisting** (researchsquare.com / ssrn.com / preprints.org / osf.io) — a per-source Co-Founder decision (each needs a cookie-wall/redirect check like chemRxiv's Atypon path) to enable in-app PDF read; read-only external-open until then (`HUMAN.md` §3). · **Per-source whole-source first-sync cap** — a tighter page/window bound for SSRN-scale firehoses if the OpenAlex credit budget is ever pressured (the page-1 short-circuit already bounds the common case).
+
+**P-Reader2 HR-FMT.6 deferrals (harvested 2026-07-15 from Track D):** **Reader typography options** — a serif-body
+toggle, hyphenation (`hyphens: auto` needs per-lang dictionaries in WebView), and justified text are all reader-comfort
+niceties held back as a potential settings cluster rather than a forced default. · **Dark-mode code-block contrast pass**
+— `--reader-code-bg` (surfaceVariant) vs `--reader-text` was not contrast-audited in dark; fold into a future a11y sweep
+if a device session flags it.
 
 **P-Reader2 PR.UX.5 deferrals (harvested 2026-07-14 from Track C):** **Page thumbnail strip / grid navigator** — the jump-to-page `Slider` (PR.UX.4) is precise but blind; a thumbnail rail would let the reader recognise the target page visually (needs low-res thumbnail rendering + a scrollable rail — its own subphase). · **Page-edge tap-to-page** — tap left/right thirds to page ±1 (a classic reader gesture) — deferred to avoid another arbitration layer over the pinch/scroll gesture stack shipped in PR.UX.3; revisit only if the device ledger finds Slider-only navigation insufficient. · **Persist zoom level across reopen** — PR.UX.3 deliberately keeps zoom `remember`-only (resets to 1× on reopen/rotation, which reads as "re-fit"); a `rememberSaveable` scale+offset would survive rotation if a device session finds the reset jarring.
 
