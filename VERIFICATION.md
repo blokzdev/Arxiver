@@ -383,6 +383,35 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   in the DOM, so find-in-page can match it); inline math (rank⁽ʳ⁾_base(j) ∈ {1,…,N}) fits within the measure. (The
   explicit "search a footnote-only word → it highlights" step wasn't run; footnote is visibly present + matchable.)_
 
+## P-RPolish. Reader polish (Phase P-RPolish) _(ROADMAP P-RPolish)_
+
+> Follow-up from the P-Reader2 device-verification harvest: one correctness fix (PDF rotation lost your place),
+> two a11y gaps (reader theme toggle + page pill were mute to TalkBack), and clear UX wins (SYSTEM unreachable
+> from the reader; jump-to-page imprecise; zoom didn't reset on a jump; matte haloed). Shipped as PP.1–PP.4
+> (#188–#191). All CI-side; these rows are the device-observable half. Target build carries all four.
+
+- [ ] **PR.1 In-reader tri-state theme cycle + a11y (PP.1)** — open a paper in the PDF reader (and the HTML reader):
+  the toolbar theme control now **cycles** System→Light→Dark→System on each tap (not a Light⇄Dark flip), so **SYSTEM
+  is reachable from inside the reader**. The icon shows the **current** mode (System = contrast/auto glyph, Light =
+  sun, Dark = moon). TalkBack announces the current mode **and** the next action (e.g. "Reader theme: Dark. Activate
+  to switch to System."). Both readers honour the one shared pref (flip it in the PDF reader → the HTML reader opens
+  in the same mode). In HTML dark, the **chrome recolours with the body** (no half-themed reader).
+- [ ] **PR.2 Jump-to-page precision + reset-zoom-on-jump (PP.2)** — on a multi-page PDF tap the page pill → the Jump
+  dialog. **Type an exact page** in the numeric field → the "Page N of M" label + slider track it live; the keyboard
+  **Go** key jumps (no need to reach for the button). The **−/+ steppers** flank the slider and disable at 1 / last
+  page. Type an out-of-range number (e.g. "9999") → the label/slider clamp to the last page and Go lands there (no
+  divergence). **Zoom then jump:** pinch-zoom a page, then jump to another page → the target page shows **at 1×**, not
+  mid-pan. A deliberate jump still persists to the "Continue reading" shelf; open/restore/zoom write no shelf row.
+- [ ] **PR.3 Rotation holds your place + page-pill a11y (PP.3)** — open a PDF you've read partway (durable resume
+  restores your page), then **rotate the device**. The reader must **stay on your current page**, not snap back to the
+  page it opened on. (Root cause was a non-saveable "restored" latch; now `rememberSaveable`.) Also kill+reopen (process
+  death) still restores your durable position. TalkBack on the page pill announces **"Page N of M, jump to page"** (not
+  just "Jump to page").
+- [ ] **PR.4 Softened dark-mode figure matte (PP.4)** — in the HTML reader (dark mode), open a paper with a
+  **transparent** figure (e.g. the Transformer architecture diagram, arXiv 1706.03762). The figure sits on a **near-white
+  `#f7f7f7` card with a hairline border** — visible against the dark body but **not a hard-white halo**. An **opaque**
+  photo is still **not** boxed; light mode is unaffected.
+
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 
 > HTML-first v1 (PFT.1–PFT.3): body text is extracted from the already-persisted reader HTML, chunk-indexed as
