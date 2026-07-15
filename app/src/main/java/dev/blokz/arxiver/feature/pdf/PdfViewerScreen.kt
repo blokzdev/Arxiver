@@ -31,14 +31,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,9 +50,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -64,6 +69,8 @@ import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
@@ -75,11 +82,12 @@ import dev.blokz.arxiver.data.resolveReaderDark
 import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import androidx.compose.ui.graphics.ColorMatrix as ComposeColorMatrix
 
@@ -221,16 +229,11 @@ private fun PdfPages(
     val currentPage by remember {
         derivedStateOf { listState.firstVisibleItemIndex + 1 }
     }
-    // The page pill shows while scrolling and lingers briefly after.
-    var pillVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            pillVisible = true
-        } else {
-            delay(PILL_LINGER_MS)
-            pillVisible = false
-        }
-    }
+    // The page pill is a persistent, tappable jump control whenever there's more than one page (PR.UX.4) — an
+    // interactive affordance shouldn't hide itself the way the old scroll-only indicator did.
+    val pillVisible = rendererState.pageCount > 1
+    val scope = rememberCoroutineScope()
+    var showJumpDialog by remember(rendererState) { mutableStateOf(false) }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         // Rasterise each page at the reader's REAL pixel width (PR.UX.2) instead of a flat 1080 — crisp on
@@ -314,9 +317,12 @@ private fun PdfPages(
                     .align(Alignment.BottomCenter)
                     .padding(Spacing.lg),
         ) {
+            val jumpLabel = stringResource(R.string.cd_pdf_jump)
             Surface(
+                onClick = { showJumpDialog = true },
                 shape = CircleShape,
                 color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.92f),
+                modifier = Modifier.semantics { contentDescription = jumpLabel },
             ) {
                 Text(
                     text = stringResource(R.string.pdf_page_indicator, currentPage, rendererState.pageCount),
@@ -326,9 +332,46 @@ private fun PdfPages(
             }
         }
     }
-}
 
-private const val PILL_LINGER_MS = 1_500L
+    if (showJumpDialog) {
+        // Seed the slider at the current page; edits are local to the dialog until "Go".
+        var target by remember { mutableIntStateOf(currentPage.coerceIn(1, rendererState.pageCount)) }
+        AlertDialog(
+            onDismissRequest = { showJumpDialog = false },
+            title = { Text(stringResource(R.string.pdf_jump_title)) },
+            text = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.pdf_jump_page_label, target, rendererState.pageCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Slider(
+                        value = target.toFloat(),
+                        onValueChange = { target = it.roundToInt().coerceIn(1, rendererState.pageCount) },
+                        valueRange = 1f..rendererState.pageCount.toFloat(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showJumpDialog = false
+                    val index = (target - 1).coerceIn(0, rendererState.pageCount - 1)
+                    scope.launch {
+                        listState.scrollToItem(index)
+                        // A DELIBERATE jump persists (unlike the restore jump, which leaves userScrolled false):
+                        // record the position so the "Continue reading" shelf + resume follow the reader here.
+                        onPositionChanged(index, 0, (index.toFloat() / rendererState.pageCount).coerceIn(0f, 1f))
+                    }
+                }) { Text(stringResource(R.string.pdf_jump_go)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJumpDialog = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+}
 
 /**
  * Continuous read progress in [0,1] — `(page + intra-page ratio)/pageCount` (P-Read), so a first-page read
