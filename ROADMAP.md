@@ -1467,7 +1467,7 @@ phase-sized.
   the user's place. Fix: `restored` → `rememberSaveable(file)` so the latch survives config change (skips the
   redundant re-scroll; adds no write). Page pill: fold the live "Page N of M" into its `contentDescription` (keep the
   visible compact "N / M" Text).
-- [ ] **PP.4 — soften the dark-mode figure matte.** `reader.css` `.reader-dark img.reader-matte` is a hard `#ffffff`
+- [x] **PP.4 — soften the dark-mode figure matte.** `reader.css` `.reader-dark img.reader-matte` is a hard `#ffffff`
   card that halos against the soft-dark body; tune the declaration body only (selector byte-identical so the substring
   golden holds): near-white `#f7f7f7` + a hairline `border: 1px solid rgba(0,0,0,0.08)` to DEFINE the edge (a defined
   edge reads calmer than softening alone). [ink-polarity light-ink case → backlog (needs pixel decode).]
