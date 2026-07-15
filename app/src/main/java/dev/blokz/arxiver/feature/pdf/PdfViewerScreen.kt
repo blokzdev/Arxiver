@@ -11,6 +11,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,6 +67,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.sqrt
 import androidx.compose.ui.graphics.ColorMatrix as ComposeColorMatrix
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -217,10 +219,15 @@ private fun PdfPages(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // Rasterise each page at the reader's REAL pixel width (PR.UX.2) instead of a flat 1080 — crisp on
+        // hi-DPI screens — capped on a heap-derived ceiling so a wide foldable can't OOM. Recomputed only when
+        // the container width actually changes (rotation / unfold). aspectRatio is still driven by the page's
+        // own w/h, so item heights — and therefore P-Read scroll offsets — are unchanged by the resolution.
+        val targetWidth = remember(constraints.maxWidth) { pdfTargetWidth(constraints.maxWidth) }
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(count = rendererState.pageCount, key = { it }) { pageIndex ->
-                PdfPage(rendererState, pageIndex, nightMode)
+                PdfPage(rendererState, pageIndex, nightMode, targetWidth)
             }
         }
         AnimatedVisibility(
@@ -262,15 +269,49 @@ private fun scrollFraction(
     return ((listState.firstVisibleItemIndex + intra) / pageCount).coerceIn(0f, 1f)
 }
 
+internal const val MIN_PDF_RENDER_WIDTH = 720
+internal const val MAX_PDF_RENDER_WIDTH = 2560
+
+/**
+ * The pixel width to rasterise each PDF page at (PR.UX.2). The reader draws each page at the container width,
+ * so rendering 1:1 with the container's REAL pixels is exactly crisp — the old flat 1080 upscaled to blur on a
+ * 1440px screen. The only reason to render *narrower* than the container is memory: a wide foldable/tablet
+ * (2000px+) at ARGB_8888 makes a page bitmap big enough to OOM, and a flat 2048 cap OOMs low-RAM devices while
+ * starving hi-RAM ones. So cap on a heap-derived ceiling instead: budget one page bitmap (4 B/px, height
+ * ≈ 1.43·width) to ~1/8 of the heap and invert `bytes ≈ 4·1.43·W²` for the max width. On a 256 MB heap that
+ * ceiling is ~2.4k px (a 1080–1440 phone passes through untouched); on a 64 MB heap it drops to ~1.2k,
+ * protecting the device. Pure + heap-injected so it is unit-testable.
+ */
+internal fun pdfTargetWidth(
+    containerPx: Int,
+    maxHeapBytes: Long = Runtime.getRuntime().maxMemory(),
+): Int {
+    val budgetBytes = maxHeapBytes / 8.0
+    val memCapWidth = sqrt(budgetBytes / (4.0 * 1.43)).toInt()
+    val ceiling = maxOf(MIN_PDF_RENDER_WIDTH, minOf(MAX_PDF_RENDER_WIDTH, memCapWidth))
+    return containerPx.coerceIn(MIN_PDF_RENDER_WIDTH, ceiling)
+}
+
 @Composable
 private fun PdfPage(
     holder: PdfRendererHolder,
     pageIndex: Int,
     nightMode: Boolean,
+    targetWidth: Int,
 ) {
-    val bitmap by produceState<Bitmap?>(initialValue = null, holder, pageIndex) {
-        value = holder.renderPage(pageIndex)
+    val bitmap by produceState<Bitmap?>(initialValue = null, holder, pageIndex, targetWidth) {
+        value = holder.renderPage(pageIndex, targetWidth)
     }
+
+    // Free each page bitmap the moment its item leaves composition (PR.UX.2). LazyColumn recycles off-screen
+    // items, so without this the higher-resolution bitmaps would linger until GC and pile up on a fast scroll.
+    // onDispose runs only after the Image is gone, so there's no draw-after-recycle; the keyed effect also
+    // frees the previous bitmap when a width change re-rasterises.
+    val current = bitmap
+    DisposableEffect(current) {
+        onDispose { if (current != null && !current.isRecycled) current.recycle() }
+    }
+
     val aspect = bitmap?.let { it.width.toFloat() / it.height } ?: US_LETTER_ASPECT
 
     Box(

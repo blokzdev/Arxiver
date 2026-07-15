@@ -1357,9 +1357,14 @@ phase-sized.
   *Shipped: `PdfNightRender` object producing the 4×5 `−A·H(180°)` matrix (offset 230, slope 0.831 → white→~18,
   black→~230); `invertFilter` now builds its `ColorFilter` from it. Hue family preserved (red/green/blue keep their
   dominant channel vs. plain negation flipping them). Pure JVM `PdfNightRenderTest` (white/black/grey/hue/clamp).*
-- [ ] **PR2.C2 (PR.UX.2) — DPI-aware crisp render + bitmap recycle.** Real container width (not hardcoded 1080) +
+- [x] **PR2.C2 (PR.UX.2) — DPI-aware crisp render + bitmap recycle.** Real container width (not hardcoded 1080) +
   device-memory-aware cap (not a flat 2048 → OOM on low-RAM) + `DisposableEffect` recycle. Item aspectRatio unchanged
   → P-Read offsets untouched.
+  *Shipped: `BoxWithConstraints` feeds the real container px to `pdfTargetWidth(containerPx, maxHeap)` — a pure,
+  heap-injected function that renders 1:1 with the container (crisp on hi-DPI) but caps on a heap-derived ceiling
+  (~2.4k px @256 MB, ~1.2k @64 MB) instead of a flat 2048; floor 720, hard ceiling 2560. `PdfPage` keys `produceState`
+  on width and frees each bitmap in a `DisposableEffect` onDispose. aspect stays `page.w/h` → item heights (P-Read
+  offsets) unchanged. Pure `PdfTargetWidthTest`.*
 - [ ] **PR2.C3 (PR.UX.3) — coordinate-preserving pinch + double-tap zoom.** `graphicsLayer{scale;translation}` focal-
   zoom (scale 1–4), post-layout so `listState` offsets keep base-layout meaning → restore math byte-identical; zoom
   writes no shelf row. Level not persisted.

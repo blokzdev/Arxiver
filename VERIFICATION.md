@@ -282,6 +282,15 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   smart-invert the traces keep their **hue family** (red stays red-ish, blue stays blue-ish) on a soft-dark page —
   NOT the old plain-negation look where red→cyan / blue→orange. Black body text renders soft-light (~230), the page
   soft-dark (~18), neither a blinding pure white nor pure black. A/B against a pre-PR.UX.1 build to confirm the win.
+- [ ] **PR2-C2a DPI-aware render is crisp + memory-stable (PR.UX.2)** — open a text-dense PDF on a hi-DPI device and
+  confirm glyphs are **sharp** (no upscale blur the old flat-1080 render showed on a 1440px screen); pinch/scan a
+  figure to confirm fine detail holds. Then **fast-fling through a long PDF** (50+ pages) and watch memory in
+  Android Studio's profiler: page bitmaps are freed as items scroll off (the `DisposableEffect` recycle) — the heap
+  should plateau, not climb unbounded. No OOM on a low-RAM device (the heap-derived width cap should engage there).
+- [ ] **PR2-C2b render-resolution change keeps reading position (PR.UX.2)** — scroll to mid-document, then rotate or
+  fold/unfold to change the container width (re-rasterise at a new resolution). The reading position must be
+  **preserved** (the item aspectRatio, hence layout height, is width-independent) — confirms the P-Read offset
+  invariant holds across a resolution change.
 
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 
