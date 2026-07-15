@@ -18,8 +18,8 @@ android {
         applicationId = "dev.blokz.arxiver"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "2.0.2"
+        versionCode = 8
+        versionName = "2.2.0"
 
         // P-Prove: the seeding hook (ArxiverApplication) reads BuildConfig.ENABLE_TEST_CORPUS. Default OFF here,
         // flipped ON ONLY for the ephemeral non-debuggable benchmark variants via androidComponents below — so
