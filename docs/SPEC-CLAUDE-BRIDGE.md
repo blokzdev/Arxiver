@@ -8,7 +8,7 @@ The Claude app's **Routines** feature lets a user define an agentic routine (ins
 
 Arxiver's job ends at delivering a **well-formed, information-rich payload**. The routine's instructions, connectors, model, and output destination are entirely the user's. This keeps the app free of LLM costs and lets users leverage every connector they have (Gmail, Drive, Notion-likes, etc.).
 
-**Non-goal (v1 and v2):** consuming routine *output* in Arxiver. Results land wherever the user's routine puts them (Claude app, email, Drive…). A result round-trip was once the top v2 candidate, but research (2026-06-14) confirmed Claude Code routines are repo-scoped cloud sessions and the fire API returns only a session id/URL — not results — so an in-app inbox would need a user-hosted webhook relay the app polls. Out of scope. The v2 conversational direction is instead **chat-with-paper via BYOK (Claude + Gemini) + on-device RAG** (separate from this Routines bridge); see ROADMAP phases P1–P2 and `docs/SPEC-AI-PROVIDERS.md`.
+**Non-goal (v1 and v2):** consuming routine *output* in Arxiver. Results land wherever the user's routine puts them (Claude app, email, Drive…). A result round-trip was once the top v2 candidate, but research (2026-06-14) confirmed Claude Code routines are repo-scoped cloud sessions and the fire API returns only a session id/URL — not results — so an in-app inbox would need a user-hosted webhook relay the app polls. Out of scope. The conversational surface is delivered **separately** from this Routines bridge as chat-with-paper via BYOK (Claude + Gemini) + on-device RAG — **shipped** in ROADMAP phases P1–P2 (in-app chat, per-paper Ask, collection RAG, on-device engines); see `docs/SPEC-AI-PROVIDERS.md`. `app_version` in the example above is runtime-injected from `BuildConfig` (illustrative value shown).
 
 ## 2. Routine configuration (in-app)
 
@@ -52,7 +52,7 @@ Versioned envelope; `schema` bumps on breaking change. Routine authors can rely 
 ```json
 {
   "schema": "arxiver/v1",
-  "app_version": "1.0.0",
+  "app_version": "2.2.0",
   "action": "digest",
   "sent_at": "2026-06-11T18:30:00Z",
   "instruction": "Digest these papers for a practitioner; focus on methods.",

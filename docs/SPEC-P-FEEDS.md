@@ -75,15 +75,17 @@ A hit collapsing onto an existing arXiv row is **insert-if-absent** (never clobb
 
 **chemRxiv honesty:** OpenAlex fixes **discovery + metadata**; the chemRxiv **PDF is Atypon cookie-walled** (the
 asset url 301-chains to `chemrxiv.org/action/cookieAbsent` HTML, not a PDF), so in-app PDF **degrades to
-open-in-browser** — do NOT claim in-app chemRxiv PDF. bioRxiv/medRxiv PDF bytes come from S2's `openAccessPdf.url`
-(PS.2 path — OpenAlex bio/med PDF coverage is only ~16%).
+open-in-browser** — do NOT claim in-app chemRxiv PDF. bioRxiv/medRxiv PDFs now fetch **in-app** from their own
+allowlisted hosts (`www.biorxiv.org` / `www.medrxiv.org`, added to `AllowedHosts` after PS.2), with S2's
+`openAccessPdf.url` as a fallback (OpenAlex bio/med PDF coverage alone is only ~16%).
 
 ## 5. Network & rate-limit contract
 
 New egress hosts (Co-Founder-approved with the phase): `api.openalex.org`, `api.biorxiv.org`. Both on the
 `@ArxivClient` host-gated client, each self-spacing ~1.2s on its own mutex — **never** the ≥3s arXiv singleton.
-Host-parse stays in `:core:network` (`AllowedHosts.isAllowedUrl`); `data/tool` imports no okhttp. New-source PDF
-hosts are **not** allowlisted (read-only) until a per-source decision.
+Host-parse stays in `:core:network` (`AllowedHosts.isAllowedUrl`); `data/tool` imports no okhttp. bioRxiv/medRxiv
+PDF hosts (`www.biorxiv.org`, `www.medrxiv.org`) are now allowlisted (in-app PDF); other new-source PDF hosts
+(chemRxiv, SSRN, Research Square, …) remain **not** allowlisted (read-only / external-open) pending per-source decisions.
 
 ## 6. Follows generalization (PF.2) + origin-aware lifecycle (PF.3)
 

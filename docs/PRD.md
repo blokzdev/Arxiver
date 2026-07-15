@@ -1,12 +1,12 @@
 # Arxiver — Product Requirements Document
 
-**Version:** 1.0 · **Status:** Approved · **Platform:** Android (Kotlin + Jetpack Compose)
+**Doc version:** 1.1 · **Status:** Living (v1.0 approved; scope-evolution revision 2026-07-10 — see §1) · **Platform:** Android (Kotlin + Jetpack Compose)
 
 ## 1. Vision
 
 Researchers drown in preprint volume and juggle disconnected tools: an RSS reader for new papers, a browser for search, a PDF app for reading, a notes app for thinking, and a chat assistant for digestion — none of which share state. Arxiver unifies discovery, indexing, reading, and digestion into one local-first Android app, and delegates open-ended intelligence to the user's own Claude via the Routines API trigger.
 
-**One-liner:** *Your personal arXiv engine, in your pocket, wired to your Claude.*
+**One-liner:** *Your personal preprint research engine, in your pocket — discover, read, and reason across arXiv and the wider preprint ecosystem.*
 
 > **Scope evolution (updated 2026-07-10, P-Explorer).** v1.0 was arXiv-scoped by design. The shipped product now
 > spans the **preprint ecosystem**: arXiv natively, bioRxiv/medRxiv natively (feeds + in-app PDFs), and
@@ -51,13 +51,13 @@ Phases match `ROADMAP.md`. Every phase ships an installable, usable APK.
 - **F2.1** Personal library: save/unsave papers; reading status (to-read / reading / read); star rating.
 - **F2.2** Collections (manual folders) and tags (flat, multi-assign).
 - **F2.3** Notes per paper: markdown text, timestamps, editable.
-- **F2.4** Full-text keyword search (FTS5) across library titles, abstracts, authors, notes — instant and offline.
+- **F2.4** Full-text keyword search (FTS4) across library titles, abstracts, authors, notes — instant and offline.
 - **F2.5** Follows: categories, authors, and saved queries. Background sync (WorkManager) pulls new matching papers into an **Inbox** feed; user triages (save / dismiss).
 - **F2.6** Library export: JSON + BibTeX.
 
 ### Phase 3 — Semantic Engine
-- **F3.1** On-device embedding pipeline: model downloaded on first use (~25MB, with progress UI); all library + inbox papers embedded in background.
-- **F3.2** Hybrid local search: keyword (FTS5) + semantic (sqlite-vec) fusion — see SPEC-SEARCH.
+- **F3.1** On-device embedding pipeline: model downloaded on first use (~34MB, with progress UI); all library + inbox papers embedded in background.
+- **F3.2** Hybrid local search: keyword (FTS4) + semantic (on-device chunked cosine scan over a BLOB embedding table; `sqlite-vec` is a v2 backlog optimization) fusion — see SPEC-SEARCH.
 - **F3.3** Related papers: per library paper, pre-computed top-K semantic neighbors from the local corpus.
 - **F3.4** Citation graph: per library paper, fetch references/citations from Semantic Scholar (free key, nightly batch); store as edges; show "cites / cited by / co-author" connections, with in-library links highlighted.
 - **F3.5** Semantic triage: inbox ranked by similarity to the user's library (their revealed interests).
