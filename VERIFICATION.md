@@ -458,12 +458,15 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   auto-foregrounding the emulator; double-tap toggle logic is unchanged from the P-Reader2 pass.) The reported PINCH
   itself stays PZ.1 (device-bound — adb has no multi-touch)._
 
-- [ ] **PZ.5 Byte-bounded page cache — large-PDF memory + reuse (`PdfPageCache`).** On the real device, open a
+- [~] **PZ.5 Byte-bounded page cache — large-PDF memory + reuse (`PdfPageCache`).** On the real device, open a
   **large** PDF (50+ pages) and **fast-fling** through it in both directions, in night mode: no crash, no jank spikes,
   and memory stays bounded (doesn't climb unboundedly with pages visited — the cache recycles off-window pages). Scroll
   **back** to an earlier page → it reappears instantly (a cache hit, not a re-render). Rotate mid-document → pages
   re-rasterise at the new width with no leak/crash. (The cache's eviction/pin-safety/single-flight logic is unit-covered
-  by `PdfPageCacheTest`; this row is the on-device memory/behaviour half.)
+  by `PdfPageCacheTest`.) _2026-07-16 (emu 5554): flung the 16-page TailorMind PDF 3→11→back through the cache and it
+  rendered every page crisply (dense tables/figures), no blank, no crash, and **zero `recycled`/`Canvas`/`OutOfMemory`
+  in logcat** — confirms no rendering/scroll regression. The 50+-page memory-profiling + reuse-timing half stays
+  device-pending (needs a large PDF + heap inspection)._
 
 ## OA. Open-access published-version resolver (Phase P-OA) _(ROADMAP P-OA)_
 
