@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -35,14 +36,18 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Hub
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,7 +81,9 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,7 +96,9 @@ import dev.blokz.arxiver.core.database.entity.NoteEntity
 import dev.blokz.arxiver.core.database.entity.TagEntity
 import dev.blokz.arxiver.core.model.Citation
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.PdfAccess
 import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.core.model.pdfAccess
 import dev.blokz.arxiver.data.NeighborsResult
 import dev.blokz.arxiver.data.PdfStorage
 import dev.blokz.arxiver.data.RelatedPaper
@@ -155,6 +164,7 @@ fun PaperDetailScreen(
     val memberCollectionIds by viewModel.memberCollectionIds.collectAsState()
     val related by viewModel.related.collectAsState()
     val followedAuthors by viewModel.followedAuthors.collectAsState()
+    val oaState by viewModel.oa.collectAsState()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
 
@@ -305,6 +315,8 @@ fun PaperDetailScreen(
                             related = related,
                             followedAuthors = followedAuthors,
                             onToggleAuthorFollow = viewModel::toggleAuthorFollow,
+                            oaState = oaState,
+                            onResolveOa = viewModel::resolveOa,
                             scrollState = scrollState,
                             onOpenPdf = onOpenPdf,
                             onOpenHtml = onOpenHtml,
@@ -392,6 +404,8 @@ private fun PaperDetailContent(
     related: NeighborsResult,
     followedAuthors: Set<String>,
     onToggleAuthorFollow: (String) -> Unit,
+    oaState: OaUiState,
+    onResolveOa: () -> Unit,
     scrollState: androidx.compose.foundation.ScrollState,
     onOpenPdf: (String) -> Unit,
     onOpenHtml: (String) -> Unit,
@@ -477,7 +491,13 @@ private fun PaperDetailContent(
                 val uriHandler = LocalUriHandler.current
                 val url = paper.canonicalUrl()
                 if (url.isNotBlank()) {
-                    FilledTonalButton(onClick = { uriHandler.openUri(url) }) {
+                    // Distinct CD with the app-switch cue so TalkBack tells this apart from the OA "Open PDF"
+                    // action below (both leave the app for the browser).
+                    val browserCd = stringResource(R.string.cd_open_in_browser)
+                    FilledTonalButton(
+                        onClick = { uriHandler.openUri(url) },
+                        modifier = Modifier.semantics { contentDescription = browserCd },
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
                         Text(
                             text = stringResource(R.string.pdf_open_in_browser),
@@ -486,6 +506,11 @@ private fun PaperDetailContent(
                     }
                 }
             }
+            // P-OA: the open-access published-version affordance — only for a browser-gated preprint with a
+            // title to search on. arXiv/bio/med already read their PDF in-app and are intentionally excluded.
+            if (paper.ref.origin.pdfAccess() == PdfAccess.BROWSER && paper.title.isNotBlank()) {
+                OaFulltextButton(oa = oaState, onResolve = onResolveOa)
+            }
             FilledTonalButton(onClick = { onOpenConnections(paper.ref.storageId) }) {
                 Icon(Icons.Filled.Hub, contentDescription = null)
                 Text(
@@ -493,6 +518,11 @@ private fun PaperDetailContent(
                     modifier = Modifier.padding(start = Spacing.sm),
                 )
             }
+        }
+        // The OA provenance / "no free version" line sits BELOW the action row so a state morph never changes a
+        // button's height (which would reflow the FlowRow under the user's finger).
+        if (paper.ref.origin.pdfAccess() == PdfAccess.BROWSER && paper.title.isNotBlank()) {
+            OaFulltextCaption(oa = oaState)
         }
 
         if (entry != null) {
@@ -970,6 +1000,98 @@ private fun DetailSkeleton() {
     }
 }
 
+/**
+ * The open-access resolver's primary action (P-OA): one morphing button that keeps a single slot across states,
+ * so the row never gains or drops a button (no flash). [OaUiState.NotFound] renders NOTHING here — the caption
+ * below the row states that outcome. Every state carries a content description; resolving + terminal states
+ * announce politely so a TalkBack user learns the result without re-scrubbing.
+ */
+@Composable
+private fun OaFulltextButton(
+    oa: OaUiState,
+    onResolve: () -> Unit,
+) {
+    when (oa) {
+        OaUiState.Idle -> {
+            val cd = stringResource(R.string.cd_find_oa_pdf)
+            FilledTonalButton(onClick = onResolve, modifier = Modifier.semantics { contentDescription = cd }) {
+                Icon(Icons.Filled.TravelExplore, contentDescription = null)
+                Text(stringResource(R.string.action_find_oa_pdf), modifier = Modifier.padding(start = Spacing.sm))
+            }
+        }
+        OaUiState.Loading -> {
+            val cd = stringResource(R.string.cd_resolving_oa)
+            FilledTonalButton(
+                onClick = {},
+                enabled = false,
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = cd
+                        liveRegion = LiveRegionMode.Polite
+                    },
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text(stringResource(R.string.oa_resolving), modifier = Modifier.padding(start = Spacing.sm))
+            }
+        }
+        is OaUiState.Ready -> {
+            val uriHandler = LocalUriHandler.current
+            val label = if (oa.versionOfRecord) R.string.action_open_oa_published else R.string.action_open_oa_free
+            val cd =
+                if (oa.versionOfRecord && oa.journalName != null) {
+                    stringResource(R.string.cd_open_oa_pdf, oa.journalName)
+                } else {
+                    stringResource(R.string.cd_open_oa_pdf_no_journal)
+                }
+            FilledTonalButton(
+                onClick = { uriHandler.openUri(oa.url) },
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = cd
+                        liveRegion = LiveRegionMode.Polite
+                    },
+            ) {
+                Icon(Icons.Filled.LockOpen, contentDescription = null)
+                Text(stringResource(label), modifier = Modifier.padding(start = Spacing.sm))
+            }
+        }
+        OaUiState.Error -> {
+            FilledTonalButton(onClick = onResolve) {
+                Icon(Icons.Filled.Refresh, contentDescription = null)
+                Text(stringResource(R.string.oa_error_retry), modifier = Modifier.padding(start = Spacing.sm))
+            }
+        }
+        OaUiState.NotFound -> Unit
+    }
+}
+
+/** Provenance ("Published in …") or the calm "no free version" line beneath the OA action row (P-OA). */
+@Composable
+private fun OaFulltextCaption(oa: OaUiState) {
+    val text =
+        when (oa) {
+            is OaUiState.Ready ->
+                when {
+                    !oa.versionOfRecord -> stringResource(R.string.oa_free_via_openalex)
+                    oa.journalName != null -> stringResource(R.string.oa_published_in, oa.journalName)
+                    else -> stringResource(R.string.oa_published_available)
+                }
+            OaUiState.NotFound -> stringResource(R.string.oa_not_found)
+            else -> null
+        }
+    if (text != null) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier =
+                Modifier
+                    .padding(top = Spacing.sm)
+                    .semantics { liveRegion = LiveRegionMode.Polite },
+        )
+    }
+}
+
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
@@ -991,6 +1113,50 @@ private fun PaperDetailContentPreview() {
             related = NeighborsResult.NoRelations,
             followedAuthors = emptySet(),
             onToggleAuthorFollow = {},
+            oaState = OaUiState.Idle,
+            onResolveOa = {},
+            scrollState = rememberScrollState(),
+            onOpenPdf = {},
+            onOpenHtml = {},
+            onPaperClick = {},
+            onOpenConnections = {},
+            onSetStatus = {},
+            onSetRating = {},
+            onAddNote = {},
+            onDeleteNote = {},
+            onAddTag = {},
+            onRemoveTag = {},
+            onAddToCollection = {},
+            onRemoveFromCollection = {},
+            onCreateCollection = {},
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "OA published found")
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, name = "OA published found dark")
+@Composable
+private fun PaperDetailContentOaFoundPreview() {
+    // P-OA found state: a browser-gated preprint resolved to its published, open-access version of record —
+    // the "Open published PDF" button + provenance caption, in light and dark.
+    ArxiverTheme {
+        PaperDetailContent(
+            paper = PreviewFixtures.chemrxivPaper,
+            entry = null,
+            notes = emptyList(),
+            tags = emptyList(),
+            collections = emptyList(),
+            memberCollectionIds = emptySet(),
+            related = NeighborsResult.NoRelations,
+            followedAuthors = emptySet(),
+            onToggleAuthorFollow = {},
+            oaState =
+                OaUiState.Ready(
+                    url = "https://example.org/published.pdf",
+                    journalName = "Environmental Microbiology",
+                    versionOfRecord = true,
+                ),
+            onResolveOa = {},
             scrollState = rememberScrollState(),
             onOpenPdf = {},
             onOpenHtml = {},
@@ -1031,6 +1197,8 @@ private fun PaperDetailContentChemRxivPreview() {
             related = NeighborsResult.NoRelations,
             followedAuthors = emptySet(),
             onToggleAuthorFollow = {},
+            oaState = OaUiState.Idle,
+            onResolveOa = {},
             scrollState = rememberScrollState(),
             onOpenPdf = {},
             onOpenHtml = {},

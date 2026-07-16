@@ -105,7 +105,7 @@ class SearchViewModelTest {
                 baseUrl = server.url("/api/query").toString(),
                 retryDelaysMs = emptyList(),
             )
-        repo = PaperRepository(arxivClient, db.paperDao(), testOpenAlexClient(server))
+        repo = PaperRepository(arxivClient, db.paperDao(), testOpenAlexClient(server), dispatchers)
         libraryRepository = LibraryRepository(db.libraryDao(), db.inboxDao())
         categoryRepository = CategoryRepository(db.categoryDao(), db.followDao(), db.inboxDao())
     }

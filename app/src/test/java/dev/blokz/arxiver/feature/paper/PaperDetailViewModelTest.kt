@@ -10,7 +10,9 @@ import dev.blokz.arxiver.core.database.entity.FollowEntity
 import dev.blokz.arxiver.core.database.toEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.ArxivRef
+import dev.blokz.arxiver.core.model.ExternalRef
 import dev.blokz.arxiver.core.model.Paper
+import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
 import dev.blokz.arxiver.data.CategoryRepository
@@ -37,6 +39,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -76,7 +79,7 @@ class PaperDetailViewModelTest {
                 baseUrl = server.url("/api/query").toString(),
                 retryDelaysMs = emptyList(),
             )
-        paperRepo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server))
+        paperRepo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server), dispatchers)
         library = LibraryRepository(db.libraryDao(), db.inboxDao())
     }
 
@@ -194,4 +197,110 @@ class PaperDetailViewModelTest {
             assertEquals("Robotics", created.name)
             assertTrue(created.id in vm.memberCollectionIds.first { it.contains(created.id) })
         }
+
+    // --- P-OA: the open-access resolver state machine ---
+
+    /** Cache a browser-tier Research-Square paper so the VM loads it and the OA resolver becomes eligible. */
+    private suspend fun cacheRsPaper() {
+        val p =
+            Paper(
+                ref = ExternalRef(Source.RESEARCH_SQUARE, RS_NATIVE_ID),
+                latestVersion = 1, title = RS_TITLE, abstract = "", publishedAt = Instant.EPOCH,
+                updatedAt = Instant.EPOCH, primaryCategory = "", categories = emptyList(),
+                authors = listOf("Ahmed Abdelfattah"), doi = RS_NATIVE_ID,
+                pdfUrl = "https://www.researchsquare.com/article/rs-27656/v1.pdf",
+            )
+        db.paperDao().upsertPaperWithRelations(p.toEntity(), p.authors, p.categories)
+    }
+
+    @Test
+    fun `resolveOa drives Idle then Ready with the published PDF and provenance`() =
+        runBlocking {
+            cacheRsPaper()
+            server.enqueue(MockResponse().setBody(OA_CROSSWALK_JSON).setHeader("Content-Type", "application/json"))
+            val vm = vmFor("researchsquare:$RS_NATIVE_ID")
+            vm.uiState.first { !it.loading }
+            assertEquals(OaUiState.Idle, vm.oa.value)
+
+            vm.resolveOa()
+
+            val ready = assertIs<OaUiState.Ready>(vm.oa.first { it is OaUiState.Ready || it is OaUiState.NotFound })
+            assertEquals(
+                "https://sfamjournals.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/1462-2920.15392",
+                ready.url,
+            )
+            assertEquals("Environmental Microbiology", ready.journalName)
+            assertTrue(ready.versionOfRecord)
+        }
+
+    @Test
+    fun `resolveOa settles on NotFound with no error noise when there is no free version`() =
+        runBlocking {
+            cacheRsPaper()
+            server.enqueue(MockResponse().setBody("""{"meta":{"count":0},"results":[]}"""))
+            val vm = vmFor("researchsquare:$RS_NATIVE_ID")
+            vm.uiState.first { !it.loading }
+
+            vm.resolveOa()
+
+            assertEquals(OaUiState.NotFound, vm.oa.first { it is OaUiState.NotFound || it is OaUiState.Ready })
+        }
+
+    @Test
+    fun `a double tap issues exactly one OpenAlex call (Loading guard)`() =
+        runBlocking {
+            cacheRsPaper()
+            server.enqueue(MockResponse().setBody(OA_CROSSWALK_JSON).setHeader("Content-Type", "application/json"))
+            val vm = vmFor("researchsquare:$RS_NATIVE_ID")
+            vm.uiState.first { !it.loading }
+
+            vm.resolveOa()
+            vm.resolveOa() // guarded — no second call while the first is in flight
+
+            vm.oa.first { it is OaUiState.Ready }
+            assertEquals(1, server.requestCount, "the Loading guard collapses a double tap to one call")
+        }
 }
+
+private const val RS_NATIVE_ID = "10.21203/rs.3.rs-27656/v1"
+private const val RS_TITLE =
+    "Experimental evidence of microbial inheritance in plants and transmission routes " +
+        "from seed to phyllosphere and root"
+
+private val OA_CROSSWALK_JSON =
+    """
+    {
+      "meta": {"count": 2},
+      "results": [
+        {
+          "id": "https://openalex.org/W2000000001",
+          "doi": "https://doi.org/10.1111/1462-2920.15392",
+          "title": "$RS_TITLE",
+          "type": "article",
+          "cited_by_count": 216,
+          "authorships": [{"author": {"display_name": "Ahmed Abdelfattah"}}],
+          "primary_location": {"source": {"display_name": "Environmental Microbiology", "type": "journal"}},
+          "best_oa_location": {
+            "pdf_url": "https://sfamjournals.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/1462-2920.15392",
+            "version": "publishedVersion", "is_oa": true,
+            "source": {"display_name": "Environmental Microbiology"}
+          },
+          "open_access": {"is_oa": true, "oa_status": "hybrid"}
+        },
+        {
+          "id": "https://openalex.org/W2000000002",
+          "doi": "https://doi.org/10.21203/rs.3.rs-27656/v1",
+          "title": "$RS_TITLE",
+          "type": "preprint",
+          "cited_by_count": 10,
+          "authorships": [{"author": {"display_name": "Ahmed Abdelfattah"}}],
+          "primary_location": {"source": {"display_name": "Research Square", "type": "repository"}},
+          "best_oa_location": {
+            "pdf_url": "https://www.researchsquare.com/article/rs-27656/v1.pdf",
+            "version": "acceptedVersion", "is_oa": true, "source": {"display_name": "Research Square"}
+          },
+          "open_access": {"is_oa": true, "oa_status": "green"}
+        }
+      ]
+    }
+    """.trimIndent()

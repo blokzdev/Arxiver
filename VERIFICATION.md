@@ -432,6 +432,33 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   the old hard-white halo), and the chrome recoloured too. **Dark-only gate confirmed** (card present in dark, absent in
   light). The opaque-photo-not-boxed leg wasn't separately driven on this figure (covered by the HR-FMT.4 detection tests)._
 
+## OA. Open-access published-version resolver (Phase P-OA) _(ROADMAP P-OA)_
+
+> The "Find free PDF" detail action resolves a browser-gated preprint to its published open-access version-of-record
+> and opens it in the external browser. Browser-open only (no allowlist change) — all CI-side except the live crosswalk
+> against `api.openalex.org`, which CI's datacenter IP can reach only intermittently, so the device is authoritative.
+
+- [ ] **OA.1 The motivating case — Research Square "seed" → the published Wiley PDF.** Explore → Online → **Research
+  Square** → search **"seed"** → open the RS preprint "Experimental evidence of microbial inheritance in plants…"
+  (`10.21203/rs.3.rs-27656/v1`). The detail action bar shows **"Find free PDF"** beside the existing "Open in browser".
+  Tap it → a brief "Searching…" → the button morphs to **"Open published PDF"** with a **"Published in Environmental
+  Microbiology · via OpenAlex"** line below the row. Tap it → the **external browser** opens the Wiley
+  `sfamjournals.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/1462-2920.15392` free PDF. (The preexisting "Open in
+  browser" still goes to the RS landing page — the two are distinct.)
+- [ ] **OA.2 Negative case is graceful (no error noise).** Open a browser-tier preprint that has **no** free published
+  version (e.g. a recent SSRN/Preprints.org paper). Tap "Find free PDF" → after the search it settles to a calm
+  **"No free version found"** caption below the row — no red, no snackbar, no toast. The "Open in browser" fallback is
+  untouched.
+- [ ] **OA.3 Offline is a retryable Error, not a false "None".** With airplane mode on, tap "Find free PDF" on a
+  browser-tier preprint → the button returns to a **retryable "Couldn't check · Retry"** state (NOT a terminal "No free
+  version found"). Re-enabling the network + tapping Retry resolves normally.
+- [ ] **OA.4 Metering + a11y.** Opening a browser-tier detail screen fires **zero** OpenAlex calls until the explicit
+  tap (one call per tap; a double-tap while "Searching…" issues only one). TalkBack: "Find free PDF" reads its purpose;
+  the resolving state announces politely; the found state's description ends with **"Opens an external browser"** — and
+  the same cue now reads on the preexisting "Open in browser" button, so the two are distinguishable.
+- [ ] **OA.5 arXiv / bio / med show no OA button.** An arXiv, bioRxiv, or medRxiv paper (IN_APP readers) shows **no**
+  "Find free PDF" action — the affordance is gated to browser-tier sources only.
+
 ## R-FT. Full-text body search (Phase P-FullText) _(SPEC-SEARCH §8)_
 
 > HTML-first v1 (PFT.1–PFT.3): body text is extracted from the already-persisted reader HTML, chunk-indexed as

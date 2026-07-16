@@ -121,6 +121,22 @@
     <string name="pdf_title">PDF</string>
     <string name="pdf_downloading">Downloading PDF…</string>
     <string name="pdf_open_in_browser">Open in browser</string>
+    <string name="cd_open_in_browser">Open this paper\'s page in your browser. Opens an external browser.</string>
+
+    <!-- P-OA: open-access published-version resolver (surfaces the free published PDF for a browser-gated preprint). -->
+    <string name="action_find_oa_pdf">Find free PDF</string>
+    <string name="action_open_oa_published">Open published PDF</string>
+    <string name="action_open_oa_free">Open free PDF</string>
+    <string name="oa_resolving">Searching…</string>
+    <string name="oa_published_in">Published in %1$s · via OpenAlex</string>
+    <string name="oa_published_available">Published version available · via OpenAlex</string>
+    <string name="oa_free_via_openalex">Free full text · via OpenAlex</string>
+    <string name="oa_not_found">No free version found</string>
+    <string name="oa_error_retry">Couldn\'t check · Retry</string>
+    <string name="cd_find_oa_pdf">Find a free published version of this paper</string>
+    <string name="cd_resolving_oa">Searching for a free published version</string>
+    <string name="cd_open_oa_pdf">Open the free published PDF in your browser. Published in %1$s. Opens an external browser.</string>
+    <string name="cd_open_oa_pdf_no_journal">Open the free published PDF in your browser. Opens an external browser.</string>
     <string name="pdf_page_indicator">%1$d / %2$d</string>
     <string name="cd_pdf_jump">Page %1$d of %2$d, jump to page</string>
     <string name="pdf_jump_title">Jump to page</string>
