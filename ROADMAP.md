@@ -1547,13 +1547,70 @@ phase-sized.
   VERIFICATION.md §OA (RS "seed" → published Wiley PDF; negative → graceful "no free version"; offline → retryable).
   **Deferrals routed to the backlog + `HUMAN.md` §1 (P-OA, 2026-07-16)** — never dropped.
 
+### Phase P-ReaderZoom — crisp tiled PDF zoom *(Co-Founder GO 2026-07-16 — "thorough planning implementation and testing/verification"; plan-approval delegated, P-Tools/P-Reader2 precedent)*
+
+> Today the PDF reader rasterises each page ONCE at container width (`pdfTargetWidth`) and pinch/double-tap just
+> GPU-upscales that bitmap via the draw-only `graphicsLayer` — zoomed text softens. This phase re-renders the
+> **visible region at zoom resolution** on gesture settle via `PdfRenderer.Page.render(bitmap, null, Matrix, …)`,
+> drawn as a **screen-space overlay OUTSIDE the scaled layer** — sharp text, bounded memory, and every shipped
+> reader invariant preserved by construction. Planned via an Ultracode workflow (1 research + 2 design stances +
+> 3 adversarial lenses + synthesis; Design A "settle overlay" won all three lenses over the in-layer tile-pyramid,
+> whose registration claim was falsified and whose pinned-cell memory model OOMs the 64MB/1440p worst case) **+ a
+> personal file:line validation that corrected the synthesis** (see PRZ.1). Key research ground truths: `transform`
+> maps PAGE POINTS→bitmap px and must be affine (`setScale`+`postTranslate`); `destClip=null` with a tile-sized
+> bitmap is the canonical recipe; un-erased ARGB_8888 tiles composite BLACK (the AndroidPdfViewer "black patches"
+> class) → `eraseColor(WHITE)` mandatory; PdfRenderer is NOT thread-safe below API 35 → every tile render funnels
+> through the existing `PdfRendererHolder` mutex; the API-35 `RenderParams` overload REDEFINES destClip/transform —
+> stay on the int-mode overload at minSdk 26. Hard invariants (all from shipped fixes): layout stays 1× (P-Read
+> positions byte-identical) · no per-frame composition reads · no `clip=true` on the scaled layer · no manual
+> `recycle()` on anything a draw can reference · continuous whole-scroll zoom · night = draw-time ColorFilter ·
+> zero DB/egress/dependency change.
+
+- [~] **PRZ.1 — pure geometry + render substrate (inert: tested, uncalled, zero behaviour change).** New
+  `PdfTileMath.kt` (pure, Compose-state-free peer of `PdfZoom`): `PageRect(pageIndex, itemOffsetPx, itemSizePx)`,
+  `TileSpec` (render recipe in zoomed-page px + draw anchor in 1×-base viewport coords), `planTiles(scale, offset,
+  viewport, targetWidth, visiblePages, padPx, tileBudgetBytes)` and `pdfTileBudgetBytes(heap) = heap/12`.
+  `PdfZoom` gains tested `project`/`unproject`/`visibleContentRect` (the exact inverse of the centre-origin draw
+  transform; round-trip-tested against `focalOffset`'s anchor semantics). `PdfRendererHolder.renderRegion(index,
+  zoomedPageWidthPx, tileLeftPx, tileTopPx, tileWpx, tileHpx)` mirrors `renderPage` (same mutex + `eraseColor
+  (WHITE)` + `runCatching`), Matrix = `setScale(zoomedPageWidthPx/page.width)` + `postTranslate(−tileLeft,−tileTop)`.
+  **Personal-validation corrections over the workflow synthesis (both unit-test-pinned):** (1) the content mapping
+  anchors to the **FULL item rect**, not the 1dp-padded rect — `ContentScale.FillWidth` + centre alignment re-expands
+  the drawn page over the item rect (the synthesis' `imgTop+padPx` mapping would misregister tiles by ~1dp·zoom ≈
+  14px at 4×); the padPx inset is only a **coverage clamp** (tiles never paint the page seam). (2) tile density =
+  `max(W·Z, targetWidth)`, not `max(W, targetWidth)·Z` — never softer than the base, never wastefully denser than
+  the screen. Also proved the plan's "extreme-pan uncomposed page" risk vacuous: the offset clamp guarantees the
+  visible preimage ⊆ viewport (always-composed items). Tests: `PdfTileMathTest` (mapping anchor, seam clamp,
+  page-boundary split, sub-pixel drop, budget degrade √-scaling, supersample floor, preimage-in-viewport) +
+  `PdfZoomTest` round-trips.
+- [ ] **PRZ.2 — settle overlay wiring (feature goes live).** In `PdfPages`: a `tiles: List<Tile>` state
+  (`remember(rendererState, targetWidth)`); ONE settle engine — `snapshotFlow { SettleKey(scale, offset,
+  layoutSig) }.collectLatest`: clear-on-unzoom synchronously, `delay(SETTLE_MS≈180)` debounce, `planTiles` →
+  `renderRegion` per spec (collectLatest = free single-flight cancellation); a sibling `Canvas` overlay AFTER the
+  LazyColumn / BEFORE the pill (no `pointerInput` — gestures fall through), whose draw lambda reads
+  `tiles`/`scale`/`offset` in the DRAW phase only, projects each tile via `PdfZoom.project` rounding EACH edge
+  (shared integer seams), `FilterQuality.Low`, night via the existing `invertFilter`. **Memory safety valve:** when
+  `pdfTargetWidth(container) < container` (heap-starved hi-DPI, e.g. 64MB/1440p) the overlay is disabled outright —
+  tile budget heap/12; worst realistic current-gen = one viewport ≈ 3.7MB (720p) / 14.7MB (1440p flagship); tiles
+  are never manually recycled (superseded generations → GC). Base layer stays byte-identical and always drawn
+  (something is ALWAYS on screen; mid-gesture = today's soft upscale, sharpening ~SETTLE_MS after settle).
+  Emulator-verify (double-tap IS adb-drivable): crisp-vs-soft screenshot A/B at 2.5×, zoom-out clears, jump clears,
+  night-mode no-black-slab, rapid zoom-scroll-zoom no-blank. Real-pinch + latency tuning + FilterQuality A/B →
+  VERIFICATION §PRZ (Samsung).
+- [ ] **CHECKPOINT P-ReaderZoom** — `./gradlew build` green; DB VERSION untouched; red-line audit (zero egress —
+  tiles are local raster; no telemetry; no new dependency); P-Read invariants regression-guarded (existing suite
+  green — item heights/scrollFraction/persist byte-identical); `:core:* ∌ :app`; VERIFICATION §PRZ rows recorded
+  (emulator rows + the device-bound pinch/latency/FilterQuality rows). Deferred (breadcrumbs, ROADMAP backlog):
+  deterministic tile recycle (profiler-gated), cross-settle tile memoisation, Design-B grid salvage at deep zoom on
+  large screens, `FilterQuality.None`-on-1:1.
+
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
 > Strategic steer from the Co-Founder session of 2026-07-04, sequenced one-phase-at-a-time after
 > the P-HTML close-out (device ledger burn-down → M5 MathML verdict → PH.8 go/no-go). Each phase
 > gets the full Ultracode planning ritual + user plan-approval before code.
 
-**P-ReaderZoom — tiled, crisp PDF zoom (captured 2026-07-16; Co-Founder said "tackle next").** _Today the PDF reader rasterises each page ONCE at container width and the pinch/double-tap just **upscales that fixed-resolution bitmap** via a draw-only `graphicsLayer` — so zoomed text and figures **soften/blur**, and upscaling a large ARGB_8888 bitmap on the GPU can spike frame times (per the research)._ **The vision:** when zoomed, **re-render the visible region at zoom resolution** using `PdfRenderer.Page.render(bitmap, clipRect, transform, RENDER_MODE_FOR_DISPLAY)` — the native tiled/region-render path — so zoomed content is **sharp** (rendered, not upscaled) AND the GPU never upscales a giant bitmap. **Design seams already in place:** the `PdfPageCache` (byte-bounded) can hold the zoom tiles; `pdfTargetWidth`'s heap ceiling bounds a tile's size (`scale·width` clamped); `PdfZoom` already gives the focal centroid/offset math; the draw-only-`graphicsLayer` + `derivedStateOf` invariants (from the pinch-blank fix) must be preserved so P-Read scroll positions stay untouched. **Open design questions for the planning ritual:** tile granularity (whole focal page at `scale·width` vs sub-tiles for very high zoom), when to swap the upscaled preview for the crisp tile (render-on-settle to avoid mid-pinch churn), eviction interplay with the page cache, and whether to keep it draw-only. **Scope:** a focused reader phase, its own Ultracode plan + user approval; NOT bundled with a bug fix. Guard against the per-page-zoom UX regression the pinch-blank redesign was rejected for (keep continuous zoom).
+**P-ReaderZoom — tiled, crisp PDF zoom.** → **Promoted to the active Phase P-ReaderZoom above** (Co-Founder GO 2026-07-16; planned via Ultracode workflow + personal validation; "discover more like this" queued next per the same steer).
 
 **P-Chat — chat becomes a first-class surface.** → **Promoted to the active Phase P-Chat above** (plan approved 2026-07-04, incl. the Explore-merge amendment).
 
