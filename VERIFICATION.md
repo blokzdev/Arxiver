@@ -446,8 +446,10 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   **3 × 2** target size + the description "Your top likely-relevant papers, on your home screen."). Dropped on home it
   rendered the header **"Likely relevant"** in the primary accent + the real calibrated **top-6** rows ("Designing
   Reward Signals…", "Prompt Injection…", "Auditing Framing-Sensitive…", "Causal Discovery…"), `maxLines=2` ellipsized,
-  on the GlanceTheme `surfaceVariant` card with 16dp corners — no render crash. Light theme only (emulator light).
-  Residual for a real device: **DARK**-theme render + resize + the empty-state ("No new picks yet")._
+  on the GlanceTheme `surfaceVariant` card with 16dp corners — no render crash. **DARK theme verified too**: toggling
+  system night mode (`cmd uimode night yes`) re-rendered the widget on a dark `surfaceVariant` card with the accent
+  header + light row text, all legible (`GlanceTheme` correctly picks `DarkColors`). Residual for a real device:
+  resize + the empty-state ("No new picks yet") on a genuinely cold profile._
 - [E] **PA-W2 Deep-links (any origin).** Tap a paper row → the app opens that **paper's detail** (test both an arXiv
   row and a **non-arXiv** row, e.g. a chemRxiv/bioRxiv paper — both must open the right paper via the storageId extra,
   not just arXiv). Tap the header / empty area → opens **Today**. Works from cold start (app not running) and warm.
@@ -462,9 +464,13 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [ ] **PA-W3 Worker refresh (zero extra wakeups).** After a background scoring pass (or a manual sync), the widget's
   rows update to the new top-k without any extra alarm/wakeup (it rides `EmbeddingWorker.updateAll`). Removing then
   re-adding the widget re-queries fresh.
-- [ ] **PA-W4 Privacy + resilience.** The widget shows only local data (titles) — nothing leaves the device; no
+- [E] **PA-W4 Privacy + resilience.** The widget shows only local data (titles) — nothing leaves the device; no
   network on refresh (airplane-mode: the widget still renders the last top-k from the DB). It never crashes the app
-  even if the DB is momentarily unavailable (fails closed to the empty state).
+  even if the DB is momentarily unavailable (fails closed to the empty state). _2026-07-16 (emu, debug): with
+  **airplane mode ON** (`settings global airplane_mode_on=1`), a forced re-render (config change) still showed the
+  header + rows — `loadTopK` is a pure Room read (`relevanceModelDao().current()` + `activeInboxTopK`) with no network
+  call / rate-limiter on the provide path, so there is nothing to fail offline. The fail-closed empty state is
+  code-guaranteed (`runCatching { … }.getOrDefault(emptyList())`). Residual: a real forced-DB-error injection._
 
 ## PDF-ZOOM. Pinch-zoom blank hotfix _(ROADMAP Decision log 2026-07-16)_
 
