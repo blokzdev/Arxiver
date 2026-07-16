@@ -71,4 +71,47 @@ class InboxDaoTest {
             inbox.insertAll(listOf(InboxItemEntity(paperId = "x", followId = 2L, arrivedAt = 0)))
             assertEquals(listOf("x"), inbox.activePaperIds())
         }
+
+    @Test
+    fun `activeInboxTopK returns scored active rows at-or-above the cut, best-first, limited, ignoring digested`() =
+        runTest {
+            val paperDao = db.paperDao()
+            val inbox = db.inboxDao()
+            listOf("hi", "mid", "low", "dismissed", "unscored", "digested").forEach { paperDao.upsertPaper(paper(it)) }
+            inbox.insertAll(
+                listOf(
+                    InboxItemEntity(paperId = "hi", followId = 1L, arrivedAt = 0, state = "new", score = 0.90),
+                    InboxItemEntity(paperId = "mid", followId = 1L, arrivedAt = 0, state = "seen", score = 0.70),
+                    // below the cut → excluded
+                    InboxItemEntity(paperId = "low", followId = 1L, arrivedAt = 0, state = "new", score = 0.40),
+                    // wrong state → excluded even though high score
+                    InboxItemEntity(
+                        paperId = "dismissed",
+                        followId = 1L,
+                        arrivedAt = 0,
+                        state = "dismissed",
+                        score = 0.95,
+                    ),
+                    // no score (cold start) → never a fake "likely relevant"
+                    InboxItemEntity(paperId = "unscored", followId = 1L, arrivedAt = 0, state = "new", score = null),
+                    // already digested → STILL shown (unlike eligibleDigest, the widget shows current best)
+                    InboxItemEntity(
+                        paperId = "digested",
+                        followId = 1L,
+                        arrivedAt = 0,
+                        state = "new",
+                        score = 0.80,
+                        digestedAt = 123L,
+                    ),
+                ),
+            )
+
+            // Eligible (score >= 0.55, state new/seen): hi(0.90), digested(0.80), mid(0.70). Top-2 by score.
+            assertEquals(listOf("hi", "digested"), inbox.activeInboxTopK(cut = 0.55, k = 2).map { it.paperId })
+            // The digested row proves the widget query drops the digest's `digested_at IS NULL` filter.
+            assertEquals(
+                listOf("hi", "digested", "mid"),
+                inbox.activeInboxTopK(cut = 0.55, k = 10).map { it.paperId },
+            )
+        }
 }

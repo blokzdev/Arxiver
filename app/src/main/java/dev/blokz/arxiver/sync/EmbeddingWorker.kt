@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.sync
 
 import android.content.Context
+import androidx.glance.appwidget.updateAll
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -19,6 +20,7 @@ import dev.blokz.arxiver.core.search.VectorIndex
 import dev.blokz.arxiver.data.PdfBodyStore
 import dev.blokz.arxiver.rag.BodyIndexer
 import dev.blokz.arxiver.rag.RagIndexer
+import dev.blokz.arxiver.widget.TodayWidget
 import timber.log.Timber
 import java.time.Instant
 
@@ -74,6 +76,9 @@ class EmbeddingWorker
             if (!isStopped) {
                 runCatching { digestRunner.maybePost(suppressed = inputData.getBoolean(SUPPRESS_DIGEST, false)) }
             }
+            // Refresh the "Likely relevant" home-screen widget (P-Ambient PA.2) with this pass's top-k — same
+            // scoring pass, zero extra wakeups. `updateAll` no-ops when no widget is placed; never fail the worker.
+            runCatching { TodayWidget().updateAll(applicationContext) }
             return Result.success()
         }
 

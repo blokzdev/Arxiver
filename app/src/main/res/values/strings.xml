@@ -335,6 +335,11 @@
     <string name="settings_reader_theme_light">Light</string>
     <string name="settings_reader_theme_dark">Dark</string>
     <string name="settings_digest_permission_denied">Notifications are off for Arxiver. Enable them in system settings to get the digest.</string>
+
+    <!-- P-Ambient PA.2: the "Likely relevant" home-screen widget. Local-only. -->
+    <string name="widget_title">Likely relevant</string>
+    <string name="widget_empty">No new picks yet — open Arxiver to sync.</string>
+    <string name="widget_description">Your top likely-relevant papers, on your home screen.</string>
     <string name="cd_add_routine">Add routine</string>
     <string name="cd_copy_starter">Copy routine starter instructions</string>
     <string name="cd_delete_routine">Delete routine %1$s</string>

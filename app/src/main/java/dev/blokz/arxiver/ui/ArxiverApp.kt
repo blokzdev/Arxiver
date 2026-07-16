@@ -150,6 +150,7 @@ object Routes {
 @Composable
 fun ArxiverApp(
     deepLinkPaperId: ArxivId? = null,
+    deepLinkStorageId: String? = null,
     startOnboarding: Boolean = false,
 ) {
     val navController = rememberNavController()
@@ -158,6 +159,11 @@ fun ArxiverApp(
 
     LaunchedEffect(deepLinkPaperId) {
         deepLinkPaperId?.let { navController.navigate(Routes.paperDetail(it)) }
+    }
+    // PA.2 widget: deep-link into a specific paper by its opaque storageId (works for any origin, unlike the
+    // arXiv-only VIEW path above). Reuses the same `paper/{id}` route the in-app taps use.
+    LaunchedEffect(deepLinkStorageId) {
+        deepLinkStorageId?.let { navController.navigate("paper/${Uri.encode(it)}") }
     }
 
     // Compare the BASE route (before any optional query args): Explore is registered as

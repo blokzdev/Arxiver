@@ -117,6 +117,26 @@ interface InboxDao {
     ): List<DigestRow>
 
     /**
+     * The current top-[k] likely-relevant rows for the home-screen widget (P-Ambient PA.2): active + scored +
+     * at/above the SAME calibrated cut the digest + Today use ([RelevanceThreshold.cut]). Unlike [eligibleDigest]
+     * this drops both the `digested_at IS NULL` filter (the widget shows the *current best*, not "newly announced"
+     * ones) and the recency floor (a widget is a standing surface, not a one-shot alert). `score IS NOT NULL`
+     * keeps cold-start/unscored papers off it (never a fake "likely relevant"). `paper_id` is the deep-link id.
+     */
+    @Query(
+        """
+        SELECT i.paper_id AS paperId, p.title AS title FROM inbox_items i
+        JOIN papers p ON p.id = i.paper_id
+        WHERE i.state IN ('new', 'seen') AND i.score IS NOT NULL AND i.score >= :cut
+        ORDER BY i.score DESC LIMIT :k
+        """,
+    )
+    suspend fun activeInboxTopK(
+        cut: Double,
+        k: Int,
+    ): List<DigestRow>
+
+    /**
      * Stamp `digested_at` on exactly the counted rows, in one statement, BEFORE the notification posts
      * (crash-safe: at worst one digest is lost, never double-fired). `digested_at IS NULL` keeps it idempotent
      * even if the id set overlaps a concurrent write.

@@ -20,6 +20,9 @@ hiltNavigationCompose = "1.2.0"
 room = "2.7.1"
 workManager = "2.10.1"
 datastore = "1.1.6"
+# Glance — the home-screen "Likely relevant" widget (P-Ambient PA.2). Compose-based app widgets; own versioning
+# (not BOM-managed). 1.1.1 is the latest stable (needs compileSdk 34+; we're on 35).
+glance = "1.1.1"
 securityCrypto = "1.1.0-alpha06"
 retrofit = "2.11.0"
 okhttp = "4.12.0"
@@ -77,6 +80,8 @@ androidx-room-testing = { group = "androidx.room", name = "room-testing", versio
 androidx-work-runtime = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "workManager" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
+androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
+androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
 androidx-security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 
 retrofit = { group = "com.squareup.retrofit2", name = "retrofit", version.ref = "retrofit" }

@@ -10,7 +10,10 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
-private val LightColors =
+// `internal` (not private) so the Glance widget (P-Ambient PA.2) reuses the SAME fallback palette via
+// glance-material3's ColorProviders — one source of truth, no duplicated colour roles. (Glance can't run the M3
+// dynamic-colour path, so it always uses these static schemes.)
+internal val LightColors =
     lightColorScheme(
         primary = Indigo40,
         onPrimary = Neutral99,
@@ -39,7 +42,7 @@ private val LightColors =
         surfaceContainerHighest = Neutral90,
     )
 
-private val DarkColors =
+internal val DarkColors =
     darkColorScheme(
         primary = Indigo80,
         onPrimary = Indigo20,
