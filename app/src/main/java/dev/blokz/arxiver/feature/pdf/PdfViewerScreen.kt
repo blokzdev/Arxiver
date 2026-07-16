@@ -252,6 +252,13 @@ private fun PdfPages(
         // own w/h, so item heights — and therefore P-Read scroll offsets — are unchanged by the resolution.
         val targetWidth = remember(constraints.maxWidth) { pdfTargetWidth(constraints.maxWidth) }
 
+        // A byte-bounded LRU cache OWNS the page bitmaps — it bounds memory on very large PDFs and reuses a
+        // re-visited page instead of re-rendering. Keyed on (renderer, width) so a document change or a width
+        // re-rasterise gets a fresh cache; the old one recycles its bitmaps on dispose. It recycles ONLY off-window
+        // pages (a composed page is pinned), so the pinch-blank use-after-free can never recur.
+        val pageCache = remember(rendererState, targetWidth) { PdfPageCache() }
+        DisposableEffect(pageCache) { onDispose { pageCache.evictAll() } }
+
         val viewport = IntSize(constraints.maxWidth, constraints.maxHeight)
         // Read `scale` through derivedStateOf so THIS composition scope recomposes only when the zoomed/not-zoomed
         // BOOLEAN flips (once per zoom-in / zoom-out), NOT on every per-frame scale write during a pinch. A bare
@@ -317,7 +324,7 @@ private fun PdfPages(
                     },
         ) {
             items(count = rendererState.pageCount, key = { it }) { pageIndex ->
-                PdfPage(rendererState, pageIndex, nightMode, targetWidth)
+                PdfPage(rendererState, pageIndex, nightMode, targetWidth, pageCache)
             }
         }
         AnimatedVisibility(
@@ -475,20 +482,24 @@ private fun PdfPage(
     pageIndex: Int,
     nightMode: Boolean,
     targetWidth: Int,
+    cache: PdfPageCache,
 ) {
-    val bitmap by produceState<Bitmap?>(initialValue = null, holder, pageIndex, targetWidth) {
-        value = holder.renderPage(pageIndex, targetWidth)
+    // Pin this page as on-screen for the cache's whole composed lifetime, so its bitmap is never evicted/recycled
+    // while a live Image can draw it (this replaces the removed racy per-item recycle). Unpins on dispose, which
+    // makes the bitmap evictable and lets the cache trim back under its byte budget.
+    DisposableEffect(cache, pageIndex) {
+        cache.pin(pageIndex)
+        onDispose { cache.unpin(pageIndex) }
+    }
+    // Render through the byte-bounded LRU cache: a re-visited page is a hit (no re-render); the cache owns bitmap
+    // lifetime and recycles only off-window pages, so memory stays bounded on very large PDFs without the
+    // use-after-free of an eager per-item recycle.
+    val bitmap by produceState<Bitmap?>(initialValue = null, cache, pageIndex, targetWidth) {
+        value = cache.getOrRender(pageIndex) { holder.renderPage(pageIndex, targetWidth) }
     }
 
-    // Bitmap lifetime is left to GC. It is bounded by the LazyColumn's composed window (only visible + prefetched
-    // pages hold a bitmap — a disposed page's produceState state is dropped, making its bitmap unreferenced and
-    // reclaimable) and each bitmap is heap-capped by pdfTargetWidth. The previous PR.UX.2 `onDispose { recycle() }`
-    // was REMOVED: during a pinch it raced a boundary page's bitmap out from under the still-compositing zoom
-    // graphicsLayer and painted the page BLANK. (A bounded LRU bitmap cache for very large PDFs is tracked in the
-    // backlog if fast-scroll heap pressure ever shows on device.)
-    //
-    // Defensive guard: never hand a recycled bitmap to asImageBitmap() — drawing one throws. Post-fix nothing
-    // recycles a composed page's bitmap, so this only future-proofs against a re-introduced recycle.
+    // Defensive guard: never hand a recycled bitmap to asImageBitmap() — drawing one throws. The cache never
+    // recycles a pinned (composed) page, so this only future-proofs against a stray recycle.
     val drawable = bitmap?.takeIf { !it.isRecycled }
     val aspect = drawable?.let { it.width.toFloat() / it.height } ?: US_LETTER_ASPECT
 
