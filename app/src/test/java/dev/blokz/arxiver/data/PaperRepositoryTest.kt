@@ -28,7 +28,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Guards the IMPORT-seam cross-source de-dup (P-Explorer PE.2). PFP.1 fixed the *follow* path
@@ -68,7 +70,7 @@ class PaperRepositoryTest {
                 baseUrl = server.url("/api/query").toString(),
                 retryDelaysMs = emptyList(),
             )
-        repo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server))
+        repo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server), dispatchers)
     }
 
     @After
@@ -196,7 +198,112 @@ class PaperRepositoryTest {
             assertEquals("Rich arXiv Title", stored.title, "the richer stored row is not clobbered")
             assertEquals(1, db.paperDao().count())
         }
+
+    // --- P-OA: open-access published-version resolver ---
+
+    private fun rsPaper(
+        title: String = OA_TITLE,
+        authors: List<String> = listOf("Ahmed Abdelfattah"),
+    ) = Paper(
+        ref = ExternalRef(Source.RESEARCH_SQUARE, "10.21203/rs.3.rs-27656/v1"),
+        latestVersion = 1, title = title, abstract = "", publishedAt = Instant.EPOCH, updatedAt = Instant.EPOCH,
+        primaryCategory = "", categories = emptyList(), authors = authors, doi = "10.21203/rs.3.rs-27656/v1",
+        pdfUrl = "https://www.researchsquare.com/article/rs-27656/v1.pdf",
+    )
+
+    private fun plainPaper(
+        ref: dev.blokz.arxiver.core.model.PaperRef,
+        title: String,
+        doi: String? = null,
+    ) = Paper(
+        ref = ref, latestVersion = 1, title = title, abstract = "", publishedAt = Instant.EPOCH,
+        updatedAt = Instant.EPOCH, primaryCategory = "", categories = emptyList(), authors = listOf("A"), doi = doi,
+    )
+
+    @Test
+    fun `resolveOaFulltext is a zero-call no-op for arXiv, IN_APP, and blank-title papers`() =
+        runBlocking {
+            assertEquals(OaResult.None, repo.resolveOaFulltext(plainPaper(ArxivRef(ArxivId("2403.09999")), "T")))
+            assertEquals(
+                OaResult.None,
+                repo.resolveOaFulltext(plainPaper(ExternalRef(Source.BIORXIV, "10.1101/x"), "T", "10.1101/x")),
+            )
+            assertEquals(OaResult.None, repo.resolveOaFulltext(rsPaper(title = "")))
+            assertEquals(0, server.requestCount, "eligibility short-circuits before any OpenAlex call")
+        }
+
+    @Test
+    fun `resolveOaFulltext finds the published OA sibling in exactly one host-free call`() =
+        runBlocking {
+            server.enqueue(
+                okhttp3.mockwebserver.MockResponse().setBody(OA_CROSSWALK_JSON)
+                    .setHeader("Content-Type", "application/json"),
+            )
+
+            val found = assertIs<OaResult.Found>(repo.resolveOaFulltext(rsPaper()))
+
+            assertEquals(
+                "https://sfamjournals.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/1462-2920.15392",
+                found.pdfUrl,
+            )
+            assertEquals("Environmental Microbiology", found.journalName)
+            assertTrue(found.versionOfRecord)
+            val req = server.takeRequest().requestUrl!!
+            assertEquals(OA_TITLE, req.queryParameter("search"))
+            assertNull(req.queryParameter("filter"), "sourceId=null → all-OpenAlex crosswalk, no source filter")
+            assertEquals(1, server.requestCount, "exactly one OpenAlex call per explicit resolve")
+        }
+
+    @Test
+    fun `resolveOaFulltext maps a transient failure to a retryable Error, never a false None`() =
+        runBlocking {
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setResponseCode(429))
+            assertTrue(repo.resolveOaFulltext(rsPaper()) is OaResult.Error)
+        }
 }
+
+private const val OA_TITLE =
+    "Experimental evidence of microbial inheritance in plants and transmission routes " +
+        "from seed to phyllosphere and root"
+
+/** A minimal live-shaped OpenAlex crosswalk: the published Wiley article + the Research-Square preprint sibling. */
+private val OA_CROSSWALK_JSON =
+    """
+    {
+      "meta": {"count": 2},
+      "results": [
+        {
+          "id": "https://openalex.org/W2000000001",
+          "doi": "https://doi.org/10.1111/1462-2920.15392",
+          "title": "$OA_TITLE",
+          "type": "article",
+          "cited_by_count": 216,
+          "authorships": [{"author": {"display_name": "Ahmed Abdelfattah"}}],
+          "primary_location": {"source": {"display_name": "Environmental Microbiology", "type": "journal"}},
+          "best_oa_location": {
+            "pdf_url": "https://sfamjournals.onlinelibrary.wiley.com/doi/pdfdirect/10.1111/1462-2920.15392",
+            "version": "publishedVersion", "is_oa": true,
+            "source": {"display_name": "Environmental Microbiology"}
+          },
+          "open_access": {"is_oa": true, "oa_status": "hybrid"}
+        },
+        {
+          "id": "https://openalex.org/W2000000002",
+          "doi": "https://doi.org/10.21203/rs.3.rs-27656/v1",
+          "title": "$OA_TITLE",
+          "type": "preprint",
+          "cited_by_count": 10,
+          "authorships": [{"author": {"display_name": "Ahmed Abdelfattah"}}],
+          "primary_location": {"source": {"display_name": "Research Square", "type": "repository"}},
+          "best_oa_location": {
+            "pdf_url": "https://www.researchsquare.com/article/rs-27656/v1.pdf",
+            "version": "acceptedVersion", "is_oa": true, "source": {"display_name": "Research Square"}
+          },
+          "open_access": {"is_oa": true, "oa_status": "green"}
+        }
+      ]
+    }
+    """.trimIndent()
 
 /** A real [OpenAlexClient] pointed at the test's [MockWebServer] — shared by every repo-constructing test. */
 fun testOpenAlexClient(server: MockWebServer): OpenAlexClient =

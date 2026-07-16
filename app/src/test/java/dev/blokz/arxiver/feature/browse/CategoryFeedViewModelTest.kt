@@ -70,7 +70,7 @@ class CategoryFeedViewModelTest {
                 baseUrl = server.url("/api/query").toString(),
                 retryDelaysMs = emptyList(),
             )
-        paperRepo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server))
+        paperRepo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server), dispatchers)
         libraryRepo = LibraryRepository(db.libraryDao(), db.inboxDao())
     }
 

@@ -1,6 +1,8 @@
 package dev.blokz.arxiver.data
 
+import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.common.AppResult
+import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.common.map
 import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.database.toDomain
@@ -12,14 +14,19 @@ import dev.blokz.arxiver.core.model.ExternalPaperDraft
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.core.model.PaperSource
+import dev.blokz.arxiver.core.model.PdfAccess
 import dev.blokz.arxiver.core.model.Source
+import dev.blokz.arxiver.core.model.pdfAccess
 import dev.blokz.arxiver.core.model.resolvePaperRef
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivFeed
 import dev.blokz.arxiver.core.network.arxiv.ArxivQuery
 import dev.blokz.arxiver.core.network.arxiv.SearchFilter
+import dev.blokz.arxiver.core.network.openalex.OaFulltextResolver
 import dev.blokz.arxiver.core.network.openalex.OpenAlexClient
 import dev.blokz.arxiver.core.network.openalex.toPaper
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,6 +44,7 @@ class PaperRepository
         private val arxivApiClient: ArxivApiClient,
         private val paperDao: PaperDao,
         private val openAlexClient: OpenAlexClient,
+        private val dispatchers: DispatcherProvider,
     ) {
         /**
          * Keyword search on a non-arXiv source (P-Explorer PE.3) — ONE OpenAlex call per explicit submit (the
@@ -114,6 +122,34 @@ class PaperRepository
         suspend fun paper(id: ArxivId): Paper? = paper(ArxivRef(id))
 
         /**
+         * Resolve the best FREE open-access fulltext for a browser-gated preprint (P-OA) — preferring the
+         * *published* version-of-record — as a browser-openable URL. **Exactly one** OpenAlex call per invocation,
+         * and only ever from an explicit user tap (the metering red line): the `search(sourceId = null)` host-free
+         * title crosswalk subsumes both OpenAlex topologies (a merged version-of-record, and a separate published
+         * sibling). No new egress host — the resolved PDF opens in the external browser, never the in-app reader.
+         *
+         * Zero-call short-circuits: a non-browser-tier source (arXiv/bio/med read their PDF in-app) or a blank
+         * title returns [OaResult.None] without touching the network. A transient failure/timeout is
+         * [OaResult.Error] (retryable) — distinct from a genuine [OaResult.None] so the UI never shows a false
+         * "no free version" while offline.
+         */
+        suspend fun resolveOaFulltext(paper: Paper): OaResult {
+            if (paper.ref.origin.pdfAccess() != PdfAccess.BROWSER || paper.title.isBlank()) return OaResult.None
+            val response =
+                withTimeoutOrNull(OA_TIMEOUT_MS) {
+                    openAlexClient.search(paper.title, OA_SCAN_LIMIT, sourceId = null)
+                } ?: return OaResult.Error(AppError.Offline)
+            return when (response) {
+                is AppResult.Success ->
+                    withContext(dispatchers.default) {
+                        val match = OaFulltextResolver.pick(OaFulltextResolver.queryFor(paper), response.value.results)
+                        match?.let { OaResult.Found(it.pdfUrl, it.journalName, it.versionOfRecord) } ?: OaResult.None
+                    }
+                is AppResult.Failure -> OaResult.Error(response.error)
+            }
+        }
+
+        /**
          * Persist a non-arXiv paper captured from a search hit ([ExternalPaperDraft]) as a real `papers` row,
          * with NO network (the draft already carries the full metadata). Idempotent via `@Upsert`. The ref is
          * chosen through [resolvePaperRef] — the single de-dup chokepoint — so a source that ever carries an
@@ -176,5 +212,12 @@ class PaperRepository
         companion object {
             private const val CACHED_PAGE = 50
             private const val EXTERNAL_PAGE_SIZE = 25
+
+            // P-OA: the crosswalk scans OpenAlex's top-N relevance-ranked title hits; 8 keeps the published
+            // sibling in-window (verified) while the title+author gates keep precision. The timeout budget must
+            // exceed OpenAlex's own ≥1.2s self-spacing mutex plus a slow response, else a queued call reads as
+            // a spurious offline error.
+            private const val OA_SCAN_LIMIT = OaFulltextResolver.DEFAULT_CAP
+            private const val OA_TIMEOUT_MS = 9_000L
         }
     }

@@ -51,6 +51,13 @@ data class OpenAlexWork(
     val locations: List<OpenAlexLocation> = emptyList(),
     @SerialName("open_access") val openAccess: OpenAlexOpenAccess? = null,
     @SerialName("primary_topic") val primaryTopic: OpenAlexTopic? = null,
+    // P-OA: the OA published-version resolver reads these. Work-level `type` distinguishes a published
+    // `article` from a `preprint`; `cited_by_count` is the deterministic tie-break between two qualifying
+    // published siblings; `is_retracted` hard-rejects a retracted version-of-record. All default-payload
+    // fields `ignoreUnknownKeys` was silently dropping — additive, so a renamed field degrades to null.
+    @SerialName("type") val type: String? = null,
+    @SerialName("cited_by_count") val citedByCount: Int? = null,
+    @SerialName("is_retracted") val isRetracted: Boolean? = null,
 ) {
     /** Reconstruct the plain-text abstract from OpenAlex's inverted index. Null when absent/empty. */
     fun abstractText(): String? {
@@ -95,6 +102,9 @@ data class OpenAlexWork(
     }
 
     fun authorNames(): List<String> = authorships.mapNotNull { it.author?.displayName?.takeIf { n -> n.isNotBlank() } }
+
+    /** The first authorship's display name (P-OA author-guard anchor) — null when the work lists no authors. */
+    fun firstAuthorName(): String? = authorships.firstOrNull()?.author?.displayName?.takeIf { it.isNotBlank() }
 }
 
 @Serializable
@@ -109,6 +119,11 @@ data class OpenAlexAuthor(
 data class OpenAlexLocation(
     @SerialName("pdf_url") val pdfUrl: String? = null,
     @SerialName("landing_page_url") val landingPageUrl: String? = null,
+    // P-OA: `version` in {publishedVersion, acceptedVersion, submittedVersion} identifies the version-of-record
+    // location; per-location `is_oa` guards that THIS copy is genuinely open (a work can be is_oa via a
+    // different location than the one we'd surface). Both default-payload fields, additive.
+    @SerialName("version") val version: String? = null,
+    @SerialName("is_oa") val isOa: Boolean? = null,
     val source: OpenAlexSource? = null,
 )
 
@@ -121,6 +136,9 @@ data class OpenAlexSource(
 
 @Serializable
 data class OpenAlexOpenAccess(
+    // P-OA: work-level is_oa — the last gate before surfacing a "free" published PDF (default false so a
+    // work that predates the field, or omits it, is treated as not-open rather than crashing).
+    @SerialName("is_oa") val isOa: Boolean = false,
     @SerialName("oa_status") val oaStatus: String? = null,
     @SerialName("oa_url") val oaUrl: String? = null,
 )

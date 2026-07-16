@@ -14,6 +14,7 @@ import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.data.CategoryRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.NeighborsResult
+import dev.blokz.arxiver.data.OaResult
 import dev.blokz.arxiver.data.PaperRepository
 import dev.blokz.arxiver.data.RelatedPaper
 import dev.blokz.arxiver.data.SemanticNeighborsRepository
@@ -36,6 +37,27 @@ data class PaperDetailUiState(
     val notFound: Boolean = false,
 )
 
+/**
+ * The open-access resolver's UI state (P-OA), memoized for the ViewModel's lifetime so recomposition and re-taps
+ * never re-bill OpenAlex. [Ready.versionOfRecord] false ⇒ the paper's own free PDF ("Open free PDF", not
+ * "published"). [Error] is a distinct, RETRYABLE terminal state — an offline tap must not read as [NotFound].
+ */
+sealed interface OaUiState {
+    data object Idle : OaUiState
+
+    data object Loading : OaUiState
+
+    data class Ready(
+        val url: String,
+        val journalName: String?,
+        val versionOfRecord: Boolean,
+    ) : OaUiState
+
+    data object NotFound : OaUiState
+
+    data object Error : OaUiState
+}
+
 @HiltViewModel
 class PaperDetailViewModel
     @Inject
@@ -53,6 +75,9 @@ class PaperDetailViewModel
 
         private val _uiState = MutableStateFlow(PaperDetailUiState())
         val uiState: StateFlow<PaperDetailUiState> = _uiState.asStateFlow()
+
+        private val _oa = MutableStateFlow<OaUiState>(OaUiState.Idle)
+        val oa: StateFlow<OaUiState> = _oa.asStateFlow()
 
         val entry: StateFlow<LibraryEntryEntity?> =
             libraryRepository.observeEntry(paperRef.storageId)
@@ -107,6 +132,26 @@ class PaperDetailViewModel
             viewModelScope.launch {
                 val paper = paperRepository.paper(paperRef)
                 _uiState.update { it.copy(paper = paper, loading = false, notFound = paper == null) }
+            }
+        }
+
+        /**
+         * Resolve the best free open-access PDF on an explicit tap (P-OA). Guards against a double-tap (no-op
+         * while [OaUiState.Loading]) so at most one OpenAlex call is in flight; [OaUiState.Error] stays retryable
+         * because the guard only blocks the in-flight state. Idempotent after a terminal state — the button just
+         * opens the memoized URL, issuing no further network.
+         */
+        fun resolveOa() {
+            if (_oa.value == OaUiState.Loading) return
+            val paper = _uiState.value.paper ?: return
+            viewModelScope.launch {
+                _oa.value = OaUiState.Loading
+                _oa.value =
+                    when (val result = paperRepository.resolveOaFulltext(paper)) {
+                        is OaResult.Found -> OaUiState.Ready(result.pdfUrl, result.journalName, result.versionOfRecord)
+                        OaResult.None -> OaUiState.NotFound
+                        is OaResult.Error -> OaUiState.Error
+                    }
             }
         }
 

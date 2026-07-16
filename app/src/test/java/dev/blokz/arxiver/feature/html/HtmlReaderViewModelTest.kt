@@ -80,7 +80,7 @@ class HtmlReaderViewModelTest {
                 baseUrl = server.url("/api/query").toString(),
                 retryDelaysMs = emptyList(),
             )
-        paperRepo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server))
+        paperRepo = PaperRepository(client, db.paperDao(), testOpenAlexClient(server), dispatchers)
         // A fresh empty temp dir guarantees a cache miss, so load() always reaches the fetcher.
         storage = HtmlStorage(Files.createTempDirectory("htmlvm").toFile(), dispatchers)
     }
