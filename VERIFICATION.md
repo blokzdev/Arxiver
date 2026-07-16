@@ -432,6 +432,26 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   the old hard-white halo), and the chrome recoloured too. **Dark-only gate confirmed** (card present in dark, absent in
   light). The opaque-photo-not-boxed leg wasn't separately driven on this figure (covered by the HR-FMT.4 detection tests)._
 
+## PA. "Likely relevant" home-screen widget (Phase P-Ambient PA.2) _(ROADMAP P-Ambient)_
+
+> A Glance widget surfacing the calibrated top-k likely-relevant papers on the home screen. Widget rendering,
+> placement, home-screen deep-links, and system refresh are all device-observable (CI compiles it; the query is
+> unit-tested by `InboxDaoTest.activeInboxTopK`).
+
+- [ ] **PA-W1 Place + render.** Long-press home screen → Widgets → Arxiver → drop the "Likely relevant" widget. With a
+  warm profile (calibrated model + scored inbox) it shows the header **"Likely relevant"** + the top rows (paper
+  titles). With a cold profile / no scores it shows **"No new picks yet — open Arxiver to sync."** (calm, no fake
+  rows). Renders correctly in **light AND dark** (reuses the app fallback palette). Resize works.
+- [ ] **PA-W2 Deep-links (any origin).** Tap a paper row → the app opens that **paper's detail** (test both an arXiv
+  row and a **non-arXiv** row, e.g. a chemRxiv/bioRxiv paper — both must open the right paper via the storageId extra,
+  not just arXiv). Tap the header / empty area → opens **Today**. Works from cold start (app not running) and warm.
+- [ ] **PA-W3 Worker refresh (zero extra wakeups).** After a background scoring pass (or a manual sync), the widget's
+  rows update to the new top-k without any extra alarm/wakeup (it rides `EmbeddingWorker.updateAll`). Removing then
+  re-adding the widget re-queries fresh.
+- [ ] **PA-W4 Privacy + resilience.** The widget shows only local data (titles) — nothing leaves the device; no
+  network on refresh (airplane-mode: the widget still renders the last top-k from the DB). It never crashes the app
+  even if the DB is momentarily unavailable (fails closed to the empty state).
+
 ## PDF-ZOOM. Pinch-zoom blank hotfix _(ROADMAP Decision log 2026-07-16)_
 
 > Real-Samsung report: the 2nd/3rd PINCH turned the in-app PDF page blank. Root cause = a composition-scope `scale`

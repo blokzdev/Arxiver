@@ -48,6 +48,10 @@ class MainActivity : ComponentActivity() {
 
     private var deepLinkPaperId by mutableStateOf<ArxivId?>(null)
 
+    // The PA.2 widget deep-links to a paper by its opaque storageId (works for any origin, unlike the arXiv-only
+    // VIEW intent). Read from the launch/new intent's extra and navigated in [ArxiverApp].
+    private var deepLinkStorageId by mutableStateOf<String?>(null)
+
     // null = not yet read. Formerly a runBlocking DataStore read that blocked the first frame (P-Prove PP.4); now
     // resolved off the main thread with the system splash held until it lands.
     private var onboarded by mutableStateOf<Boolean?>(null)
@@ -58,6 +62,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         deepLinkPaperId = intent?.extractArxivId()
+        deepLinkStorageId = intent?.getStringExtra(EXTRA_PAPER_STORAGE_ID)
         // Hold the splash while `onboarded` resolves off the main thread. TTID barely moves (the splash is simply
         // held ~as long as the read took to block before), but the main thread is now free to do the rest of
         // startup in parallel — the real TTFD / unblocked-main win a Baseline Profile can't give (P-Prove PP.4).
@@ -71,7 +76,8 @@ class MainActivity : ComponentActivity() {
                 onboarded?.let { resolved ->
                     ArxiverApp(
                         deepLinkPaperId = deepLinkPaperId,
-                        startOnboarding = shouldStartOnboarding(resolved, deepLinkPaperId),
+                        deepLinkStorageId = deepLinkStorageId,
+                        startOnboarding = shouldStartOnboarding(resolved, deepLinkPaperId, deepLinkStorageId),
                     )
                 }
                 // CrashReporter.pendingCrash reads filesDir — deferred off the first-frame path to a post-composition
@@ -96,6 +102,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.extractArxivId()?.let { deepLinkPaperId = it }
+        intent.getStringExtra(EXTRA_PAPER_STORAGE_ID)?.let { deepLinkStorageId = it }
     }
 
     /** Handles arxiv.org links (VIEW) and shared text containing them (SEND). */
@@ -110,6 +117,11 @@ class MainActivity : ComponentActivity() {
                 ?.let { return it }
         }
         return null
+    }
+
+    companion object {
+        /** Opaque `papers.id` storageId the PA.2 widget passes to deep-link into a specific paper (any origin). */
+        const val EXTRA_PAPER_STORAGE_ID = "dev.blokz.arxiver.extra.PAPER_STORAGE_ID"
     }
 }
 

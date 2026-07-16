@@ -157,6 +157,9 @@ dependencies {
     ksp(libs.hilt.androidx.compiler)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.datastore.preferences)
+    // P-Ambient PA.2: the home-screen "Likely relevant" Glance widget (local-only, no egress).
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
     implementation(libs.timber)
     // Markdown parsing for rich AI output (P-Rich): pure-JVM, offline, no Android/Compose coupling.
     implementation(libs.commonmark)

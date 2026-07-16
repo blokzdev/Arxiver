@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- P-Ambient PA.2: the "Likely relevant" home-screen widget. updatePeriodMillis=0 — refreshed by the
+     EmbeddingWorker scoring pass (updateAll), never on a system timer. initialLayout is Glance's built-in
+     loading view (Glance swaps in the real RemoteViews once provideGlance runs). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:minWidth="180dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    tools:ignore="UnusedAttribute"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="0"
+    android:description="@string/widget_description"
+    android:initialLayout="@layout/glance_default_loading_layout" />
