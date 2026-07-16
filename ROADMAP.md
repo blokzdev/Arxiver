@@ -936,11 +936,14 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   egress). **Placing the widget IS the opt-in** — no separate toggle. Read-only → **no migration**. Tests:
   `InboxDaoTest.activeInboxTopK` (cut/state/score/`digested_at`-ignored/limit/order). Device-verify (place widget,
   top-k renders, per-row + header deep-links, worker refresh, empty state, dark/light) → VERIFICATION §PA.
-- [ ] **PA.3 — [RECOMMENDED CUT] "Recently saved" shelf.** A `status='to_read'` shelf **cannot** honestly be called
-  an "unread/waiting queue" (`to_read` is the save-time default; nothing auto-advances it; opening a paper never
-  touches it) and largely duplicates the Library tab. **Recommendation: cut PA.3 from P-Ambient and fold honest
-  "Continue reading" into the queued P-Read phase** (which owns the `reading_positions` substrate that makes
-  "unread" knowable). Ship a capped honest "Recently saved" Today section only on the Co-Founder's explicit nod.
+- [x] **PA.3 — CUT (resolved 2026-07-12; applied 2026-07-16).** A `status='to_read'` shelf **cannot** honestly be
+  called an "unread/waiting queue" (`to_read` is the save-time default; nothing auto-advances it; opening a paper
+  never touches it) and largely duplicates the Library tab. The recorded decision (HUMAN.md §3, 2026-07-12, "no
+  objection recorded") was to **cut it** and fold the *honest* "Continue reading" into **P-Read** — which
+  **shipped** it (P-Read.4, PR #164: the `reading_positions`-backed Today "Continue reading" shelf that surfaces a
+  paper only when you genuinely opened + scrolled + didn't finish it). So PA.3's honest intent is delivered
+  elsewhere; the dishonest `to_read` shelf is cut. A capped "Recently saved" Today section remains available **only
+  on the Co-Founder's explicit nod** (HUMAN.md §3 carve-out).
 - [ ] **CHECKPOINT P-Ambient** — full build green; migration v15→v16 identity-hash-tested + `16.json` committed (no
   destructive); red-line audit (no new egress — the count never leaves the device; no telemetry-shaped engagement
   signal; no token/PII in any notification/PendingIntent; payload redaction goldens untouched); `:core:* ∌ :app`;
@@ -948,6 +951,16 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   worker stop, lockscreen-privacy, the metered-only "requires Wi-Fi" reality). **Accepted, disclosed:** both ambient
   surfaces ride the UNMETERED-gated scoring pass, so a cellular-only user sees an empty digest until Wi-Fi — a
   "requires Wi-Fi sync" hint on the opt-in toggle (HUMAN.md).
+  **Status 2026-07-16 — code-gates GREEN, held READY for the owner's device session (not auto-stamped, per the
+  digest's "explicit next step" note):** ✓ full build green (PA.2 CI 17m4s + local); ✓ migration v15→v16
+  identity-hash-tested (`Migration15To16Test`) + `16.json` committed (DB now v17); ✓ red-line audit — the widget adds
+  **zero** egress (no network imports; `AllowedHosts` untouched at its host set), no token/PII (titles + opaque
+  storageId only; the deep-link `ActionParameters` carry no secret), payload redaction goldens untouched; ✓
+  `:core:* ∌ :app`. **Emulator-verified both ambient surfaces** (digest §B2d 2026-07-12; widget §PA 2026-07-16 —
+  place/render light+dark/deep-link cold+warm/airplane). **Remaining = real-phone-only legs the emulator can't do:**
+  API-33+ POST_NOTIFICATIONS **deny** path, lockscreen `VISIBILITY_PRIVATE` hide, non-arXiv widget row, daily-cap
+  across real passes. These are tracked in VERIFICATION §PA/§B2d and, per loop rule 11, don't block `[x]` — but the
+  checkpoint box is left for the Co-Founder's device session (see HUMAN.md §3).
 
 ### Phase P-Prove — turn "green build" into "verified" *(ACTIVE 2026-07-12; harness autonomous, gold numbers device-gated)*
 
