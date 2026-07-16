@@ -253,7 +253,14 @@ private fun PdfPages(
         val targetWidth = remember(constraints.maxWidth) { pdfTargetWidth(constraints.maxWidth) }
 
         val viewport = IntSize(constraints.maxWidth, constraints.maxHeight)
-        val zoomed = PdfZoom.isZoomed(scale)
+        // Read `scale` through derivedStateOf so THIS composition scope recomposes only when the zoomed/not-zoomed
+        // BOOLEAN flips (once per zoom-in / zoom-out), NOT on every per-frame scale write during a pinch. A bare
+        // `PdfZoom.isZoomed(scale)` here subscribed the enclosing (LazyColumn-emitting) scope to every gesture frame,
+        // so a pinch re-measured the whole list each frame; combined with the old per-item bitmap recycle that then
+        // raced a boundary page's bitmap out from under the still-compositing zoom graphicsLayer, the page went BLANK
+        // (the reported real-device bug). The graphicsLayer below already defers its `scale`/`offset` reads to the
+        // draw phase, so zoom stays genuinely draw-only.
+        val zoomed by remember { derivedStateOf { PdfZoom.isZoomed(scale) } }
 
         LazyColumn(
             state = listState,
@@ -473,16 +480,17 @@ private fun PdfPage(
         value = holder.renderPage(pageIndex, targetWidth)
     }
 
-    // Free each page bitmap the moment its item leaves composition (PR.UX.2). LazyColumn recycles off-screen
-    // items, so without this the higher-resolution bitmaps would linger until GC and pile up on a fast scroll.
-    // onDispose runs only after the Image is gone, so there's no draw-after-recycle; the keyed effect also
-    // frees the previous bitmap when a width change re-rasterises.
-    val current = bitmap
-    DisposableEffect(current) {
-        onDispose { if (current != null && !current.isRecycled) current.recycle() }
-    }
-
-    val aspect = bitmap?.let { it.width.toFloat() / it.height } ?: US_LETTER_ASPECT
+    // Bitmap lifetime is left to GC. It is bounded by the LazyColumn's composed window (only visible + prefetched
+    // pages hold a bitmap — a disposed page's produceState state is dropped, making its bitmap unreferenced and
+    // reclaimable) and each bitmap is heap-capped by pdfTargetWidth. The previous PR.UX.2 `onDispose { recycle() }`
+    // was REMOVED: during a pinch it raced a boundary page's bitmap out from under the still-compositing zoom
+    // graphicsLayer and painted the page BLANK. (A bounded LRU bitmap cache for very large PDFs is tracked in the
+    // backlog if fast-scroll heap pressure ever shows on device.)
+    //
+    // Defensive guard: never hand a recycled bitmap to asImageBitmap() — drawing one throws. Post-fix nothing
+    // recycles a composed page's bitmap, so this only future-proofs against a re-introduced recycle.
+    val drawable = bitmap?.takeIf { !it.isRecycled }
+    val aspect = drawable?.let { it.width.toFloat() / it.height } ?: US_LETTER_ASPECT
 
     Box(
         modifier =
@@ -491,7 +499,7 @@ private fun PdfPage(
                 .aspectRatio(aspect)
                 .padding(vertical = 1.dp),
     ) {
-        bitmap?.let {
+        drawable?.let {
             Image(
                 bitmap = it.asImageBitmap(),
                 contentDescription = stringResource(R.string.cd_pdf_page, pageIndex + 1),
