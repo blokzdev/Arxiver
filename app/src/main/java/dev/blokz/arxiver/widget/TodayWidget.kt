@@ -1,19 +1,18 @@
 package dev.blokz.arxiver.widget
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.net.toUri
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
 import androidx.glance.LocalContext
+import androidx.glance.action.ActionParameters
+import androidx.glance.action.actionParametersOf
+import androidx.glance.action.actionStartActivity
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.lazy.LazyColumn
@@ -71,6 +70,14 @@ class TodayWidget : GlanceAppWidget() {
     }
 }
 
+/**
+ * Glance action parameter carrying the tapped paper's opaque storageId to [MainActivity]. Glance serializes
+ * ActionParameters through its own action pipeline (unlike a raw `Intent`'s extras, which its cold-start
+ * trampoline drops), so the key NAME must equal [MainActivity.EXTRA_PAPER_STORAGE_ID] — that is the intent-extra
+ * key Glance fills and MainActivity reads.
+ */
+private val PaperStorageIdKey = ActionParameters.Key<String>(MainActivity.EXTRA_PAPER_STORAGE_ID)
+
 @Composable
 private fun WidgetBody(rows: List<DigestRow>) {
     val context = LocalContext.current
@@ -82,8 +89,9 @@ private fun WidgetBody(rows: List<DigestRow>) {
                 .background(GlanceTheme.colors.surfaceVariant)
                 .cornerRadius(16.dp)
                 .padding(12.dp)
-                // Header / empty area opens Today (where the full ranked list lives).
-                .clickable(actionStartActivity(openApp(context))),
+                // Header / empty area opens Today (where the full ranked list lives) — no parameter, so
+                // MainActivity sees no storageId and stays on its start destination.
+                .clickable(actionStartActivity<MainActivity>()),
     ) {
         Text(
             text = context.getString(R.string.widget_title),
@@ -110,7 +118,6 @@ private fun WidgetBody(rows: List<DigestRow>) {
 
 @Composable
 private fun PaperRow(row: DigestRow) {
-    val context = LocalContext.current
     Text(
         text = row.title,
         maxLines = 2,
@@ -119,23 +126,10 @@ private fun PaperRow(row: DigestRow) {
             GlanceModifier
                 .fillMaxWidth()
                 .padding(vertical = 6.dp)
-                .clickable(actionStartActivity(openPaper(context, row.paperId))),
+                // Deep-link to this exact paper. Glance gives each lazy item a distinct fill-in PendingIntent, so
+                // the per-row parameter arrives verbatim as MainActivity's EXTRA_PAPER_STORAGE_ID extra.
+                .clickable(
+                    actionStartActivity<MainActivity>(actionParametersOf(PaperStorageIdKey to row.paperId)),
+                ),
     )
 }
-
-private fun openApp(context: Context): Intent =
-    Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-    }
-
-private fun openPaper(
-    context: Context,
-    storageId: String,
-): Intent =
-    Intent(context, MainActivity::class.java).apply {
-        // A distinct data Uri per row so each row's PendingIntent is unique — identical explicit intents would
-        // collide and every row would open the same paper. MainActivity reads the EXTRA, not the data.
-        data = "arxiver://widget/paper/${Uri.encode(storageId)}".toUri()
-        putExtra(MainActivity.EXTRA_PAPER_STORAGE_ID, storageId)
-        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-    }
