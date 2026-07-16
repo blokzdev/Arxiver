@@ -925,9 +925,12 @@ directly · a LaunchedEffect-keyed load-more for the arXiv path (red-line untouc
   *current best*, not "newly announced"] and the recency floor; keeps `score IS NOT NULL` so cold-start never fakes
   "likely relevant"). **Refreshed for free** by `TodayWidget().updateAll` right after the PA.1 digest in
   `EmbeddingWorker` (zero extra wakeups; `runCatching` — never fails the worker; no-ops when no widget is placed).
-  **Deep-links:** each row → that paper via a new `MainActivity.EXTRA_PAPER_STORAGE_ID` extra (a distinct per-row
-  `data` Uri for PendingIntent uniqueness) navigated in `ArxiverApp` — works for **any** origin (not just the
-  arXiv-only VIEW path); the header/empty area → Today. **Theme:** `GlanceTheme` reuses the app's `LightColors`/
+  **Deep-links:** each row → that paper via a new `MainActivity.EXTRA_PAPER_STORAGE_ID` extra navigated in
+  `ArxiverApp` — works for **any** origin (not just the arXiv-only VIEW path); the header/empty area → Today. The row
+  action is Glance's reified `actionStartActivity<MainActivity>(actionParametersOf(…))`, **not** the raw-`Intent`
+  overload: emulator testing proved the raw `Intent` drops its data+extras through Glance's cold-start trampoline
+  (deep-link no-op'd to Today), whereas `ActionParameters` survive (Glance serializes them, delivered as the extra) —
+  which also lets Glance own per-lazy-item PendingIntent uniqueness (no per-row `data`-Uri hack needed). **Theme:** `GlanceTheme` reuses the app's `LightColors`/
   `DarkColors` (made `internal`) via `glance-material3` `ColorProviders` — one palette source, no M3 dynamic runtime
   (which Glance can't use). Deps `androidx.glance:glance-appwidget` + `glance-material3` **1.1.1** (local-only, no
   egress). **Placing the widget IS the opt-in** — no separate toggle. Read-only → **no migration**. Tests:
