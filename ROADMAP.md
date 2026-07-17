@@ -1719,7 +1719,7 @@ phase-sized.
   closed) + §14 `recommend_papers` deferral partially resolved. Tests: POST+trailing-slash+no-tldr pin,
   body-borne seeds + URL-carries-none, DOI-slash-verbatim, empty-negatives-omitted, clamp, renamed-envelope
   → error, 400/429 mapping, BYOK header.
-- [ ] **PRS.2 — `S2HitMapping` extraction + `RecShelfRepository` + DI** (app, UI-inert). Hoist
+- [x] **PRS.2 — `S2HitMapping` extraction + `RecShelfRepository` + DI** (app, UI-inert). Hoist
   `toHit()`/`onDevice()` out of `DiscoverSimilarRepository` (its test suite must pass UNMODIFIED); seed
   builder = saves (`added_at DESC`) ∪ thumb-ups (positive-wins) → bulk `WHERE id IN` resolve (no N+1) →
   per-entity seed rule (arXiv-origin → `ARXIV:<bare>`, else `doi_norm` → `DOI:<>`, else DROP) → blend

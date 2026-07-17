@@ -100,6 +100,10 @@ interface PaperDao {
     @Query("SELECT * FROM papers WHERE id = :id")
     suspend fun paperById(id: String): PaperEntity?
 
+    /** Bulk row fetch for P-RecShelf seed resolution — one query, not N+1. Result order is NOT preserved. */
+    @Query("SELECT * FROM papers WHERE id IN (:ids)")
+    suspend fun papersByIds(ids: List<String>): List<PaperEntity>
+
     /**
      * The canonical stored id for a DOI (cross-source de-dup) — arXiv-origin preferred (a paper that was also on
      * arXiv keys under the bare arXiv id), case-insensitive. Lets a follow *or an import* re-key onto an

@@ -15,6 +15,10 @@ import androidx.room.PrimaryKey
  * One row per paper (`paper_id` PK): a later thumb upserts over an earlier dismiss. The FK CASCADE
  * is correct — a label is useless without the paper's embedding, which also CASCADE-dies with the
  * paper. **Red line:** this table is local-only — never exported, backed up, or logged.
+ * **Sanctioned exception (P-RecShelf, Co-Founder-approved 2026-07-17):** a THUMB-UP row's PUBLIC paper
+ * identifier — the prefixed `ARXIV:`/`DOI:` form only, NEVER the signal, source, score, or timestamp —
+ * may leave the device inside a user-consented Semantic Scholar recommendations request
+ * (`RecShelfRepository`, structurally test-pinned). Dismissals and thumb-downs stay fully local.
  */
 @Entity(
     tableName = "paper_feedback",

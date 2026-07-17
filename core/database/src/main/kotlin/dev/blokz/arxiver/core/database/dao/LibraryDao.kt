@@ -63,6 +63,10 @@ interface LibraryDao {
     @Query("SELECT paper_id FROM library_entries")
     suspend fun allPaperIds(): List<String>
 
+    /** Saved-paper ids, most recent first — the P-RecShelf positive-seed source (order feeds the recency blend). */
+    @Query("SELECT paper_id FROM library_entries ORDER BY added_at DESC")
+    suspend fun paperIdsByRecency(): List<String>
+
     // --- collections ---
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
