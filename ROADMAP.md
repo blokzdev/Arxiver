@@ -1669,11 +1669,16 @@ phase-sized.
   endpoint and returned **20 genuinely-topical deduped results** with correct provenance — AND surfaced a
   real bug the fixtures couldn't (the recommendations router **400s on the `tldr` field** that graph-search
   accepts; fixed with a `RECOMMENDATION_FIELDS` constant + a regression pin, re-verified live green).
-- [ ] **CHECKPOINT P-Discover-MLT** — `./gradlew build` green; DB VERSION untouched (17); red-line audit
-  (`AllowedHostsAuditTest` — no new host; egress = seed-ID-only, on tap only; no telemetry; no new dep);
-  `:core:* ∌ :app`; light/dark previews + TalkBack. Device rows in VERIFICATION §PDM (the row-tap→browser/
-  in-app open leg — deferred off the emulator by Mink shared-host contention; `from`-pool copy confirm;
-  keyless-429/offline/unindexed-seed degraded states on a real network; TalkBack over the sheet).
+- [x] **CHECKPOINT P-Discover-MLT** — **verified 2026-07-17:** `./gradlew build` green (pre-merge local ×2 + CI
+  `Build, test, lint` on #205, and a fresh local run on the merged tree at the stamp); DB VERSION untouched
+  (17 — zero schema change); red-line audit green (`AllowedHostsAuditTest` pins the allowlist byte-unchanged at
+  the 10 sanctioned hosts — the phase adds NO host; egress = the prefixed seed ID only, on explicit tap only,
+  disclosed in the pre-tap caption; no telemetry; no new dependency); `:core:* ∌ :app` (the phase touches
+  :app + :core:network only); light/dark previews on button/caption/sheet + TalkBack CDs shipped with the
+  feature. VERIFICATION §PDM recorded: PDM-1 `[E]` (live S2 call → 20 genuinely-topical deduped results; the
+  live pass caught + fixed the recommendations-router `tldr` 400) + PDM-2..5 device-bound (arXiv-row in-app
+  open leg — deferred off the emulator by Mink shared-host contention; DOI-seed on a real network;
+  keyless-429/offline/unindexed-seed degraded states; TalkBack over the sheet).
 - [ ] **PDM.5 — [DEFERRED, double-gated] bge re-rank fast-follow.** On-device pairwise cosine + ScoreBar %
   + an honest absolute floor. Gates: a VERIFICATION device-latency measurement (~20 abstracts embedded) AND
   a Co-Founder UX call. MUST hard-gate on `ModelState.Ready` (an ungated `embedPassages` triggers a
