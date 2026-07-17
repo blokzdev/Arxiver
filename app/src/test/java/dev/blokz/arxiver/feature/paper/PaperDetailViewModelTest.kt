@@ -101,7 +101,7 @@ class PaperDetailViewModelTest {
     // counter proving the memoization / double-tap guards issue no extra "egress".
     private var recommendCalls = 0
     private var recommend: suspend (String, Int) -> AppResult<S2RecommendationsResponse> =
-        { _, _ -> AppResult.Success(S2RecommendationsResponse()) }
+        { _, _ -> AppResult.Success(S2RecommendationsResponse(emptyList())) }
 
     private fun vmFor(id: String) =
         PaperDetailViewModel(
@@ -317,7 +317,7 @@ class PaperDetailViewModelTest {
     fun `a re-tap after Ready reopens from memory - the transport is never re-billed`() =
         runBlocking {
             cachePaper("2606.27302")
-            recommend = { _, _ -> AppResult.Success(S2RecommendationsResponse()) }
+            recommend = { _, _ -> AppResult.Success(S2RecommendationsResponse(emptyList())) }
             val vm = vmFor("2606.27302")
             vm.uiState.first { !it.loading }
 
@@ -341,7 +341,7 @@ class PaperDetailViewModelTest {
             val first = vm.discover.first { it is DiscoverUiState.Done } as DiscoverUiState.Done
             assertTrue(first.result is DiscoverResult.Error)
 
-            recommend = { _, _ -> AppResult.Success(S2RecommendationsResponse()) }
+            recommend = { _, _ -> AppResult.Success(S2RecommendationsResponse(emptyList())) }
             vm.discoverSimilar() // Error is retryable
             vm.discover.first { it is DiscoverUiState.Done && it.result !is DiscoverResult.Error }
             assertEquals(2, recommendCalls)

@@ -1685,6 +1685,85 @@ phase-sized.
   huggingface model download on the tap — undisclosed egress) + a model/dim-mismatch guard on the stored
   seed vector (cross-model `dotSimilarity` is an `ArrayIndexOutOfBoundsException`).
 
+### Phase P-RecShelf — "Recommended for you" Today shelf *(approved 2026-07-17 — Co-Founder decision sheet: EXPANDED scope core+auto-refresh · inbox-zero restructure YES · seeds = saves ∪ thumb-ups)*
+
+> Library-wide list-seeded recommendations on the Today surface: ONE `POST /recommendations/v1/papers/`
+> (S2's SPECTER2 KNN; same host, mutex, and BYOK supplier as P-Discover-MLT — zero new hosts/deps/schema,
+> DB stays 17) seeded from the user's OWN positive signals (`library_entries` saves ∪ `paper_feedback`
+> thumb-ups — the InboxScorer partition, positive-wins; the thumb-up egress is a FORMAL carve-out to the
+> `paper_feedback` "local-only" red line: prefixed public paper IDs only, user-consented, to S2 only —
+> KDoc amendment + structural tests + HUMAN.md row). **No negatives in v1** (dismiss is a documented weak
+> "not now", exposure-biased; S2's negative weighting unisolated) — deferred behind an evidence gate.
+> Contract LIVE-probed 2026-07-17: envelope `recommendedPapers`; this router 400s on `tldr` too;
+> unresolvable seeds silently drop while ≥1 resolves; empty/all-unresolvable → indistinguishable 400
+> (`"No positive paper examples given"`) so the repo pre-guards; DOI-form seeds accepted; trailing slash
+> load-bearing (redirect flips POST→GET); max-ids ceiling unprobed → client clamp `MAX_SEED_IDS=20`.
+> Planned via an Ultracode workflow (4 mappers + live-probe research → 3 design stances → 5 adversarial
+> lenses → synthesis) + personal validation (2 corrections: count-honest disclosure copy — no "most
+> recently" claim over a blended sample; the saves-only alternative surfaced to the Co-Founder, who chose
+> saves∪thumbs). Design: MINIMAL-SURFACE base (tap-gated, stateless repo, VM-memoized) fused with the
+> UX lens's product fixes; CACHED-AMBIENT rejected (worker-retry×3 vs "once a day" copy, tombstone wiped
+> by its own replaceAll, closed-app egress); the TTL design's machinery survives as the OPT-IN layer
+> (PRS.4) with its lens must-fixes: attempt-keyed exponential backoff, cadence-disclosing consent copy,
+> staleness label, VM-owned trigger, DataStore-JSON cache (Emerging-shelf precedent), Settings toggle,
+> opt-out wipes cache.
+
+- [x] **PRS.1 — LIST transport** (`:core:network`, inert). `S2RecommendationsRequest{positivePaperIds,
+  negativePaperIds=[]}` + `recommendationsFromLists(positiveIds, negativeIds, limit)`: `space()` → POST
+  `$base/recommendations/v1/papers/` (trailing slash) + `fields=RECOMMENDATION_FIELDS` (never tldr) →
+  body-borne seeds (empty negatives omitted) → `execute()` on a `callTimeout(10s)` twin client (the
+  injected client has none — a stalled call must not outlive the UI timeout as a zombie); per-list clamp
+  `MAX_SEED_IDS=20`. **Hardening:** `S2RecommendationsResponse.recommendedPapers` is now REQUIRED (no
+  default) — a renamed envelope key surfaces as an error on BOTH recommendations routes, never a silent
+  empty. SPEC-P-TOOLS §7 transports row added (also retro-documents the PDM forpaper transport — spec-drift
+  closed) + §14 `recommend_papers` deferral partially resolved. Tests: POST+trailing-slash+no-tldr pin,
+  body-borne seeds + URL-carries-none, DOI-slash-verbatim, empty-negatives-omitted, clamp, renamed-envelope
+  → error, 400/429 mapping, BYOK header.
+- [ ] **PRS.2 — `S2HitMapping` extraction + `RecShelfRepository` + DI** (app, UI-inert). Hoist
+  `toHit()`/`onDevice()` out of `DiscoverSimilarRepository` (its test suite must pass UNMODIFIED); seed
+  builder = saves (`added_at DESC`) ∪ thumb-ups (positive-wins) → bulk `WHERE id IN` resolve (no N+1) →
+  per-entity seed rule (arXiv-origin → `ARXIV:<bare>`, else `doi_norm` → `DOI:<>`, else DROP) → blend
+  10 recent + 10 uniform-sampled older (cap 20); sealed `RecShelfResult{Ready|NoSeeds|NotRecommendable|
+  EmptyNoneReturned|EmptyAllLocal|Error}` — pre-network `NoSeeds` guard (transport never invoked);
+  `Upstream(400)` → terminal `NotRecommendable` (the 400 is body-discarded + ambiguous); 429/offline/5xx →
+  retryable `Error`. Stateless repo, REQUEST_LIMIT=30, DISPLAY_CAP=10. `paper_feedback` red-line KDoc
+  carve-out + structural tests (`requestCarriesOnlyPrefixedIdStrings_neverSignalSourceOrScore`,
+  `seedBuilderReadsOnlyLibraryAndFeedbackTables`, disclosed-count==sent-size).
+- [ ] **PRS.3 — Today shelf UI + inbox-zero restructure + live verify.** Gate restructure: inbox-zero
+  EmptyState becomes an in-list item (`TodayScreen.kt:148-153`) so the shelf + Continue-reading survive
+  the "done" state (Co-Founder YES 2026-07-17); shelf slot between `header-relevant` (:242) and
+  `header-rest` (:261). States: <1 seedable positive → absent; Idle → heading-semantics header +
+  invitation card with COUNT-HONEST disclosure ("Sends the IDs of up to %d papers you've saved or liked
+  to Semantic Scholar. Nothing else leaves your device." — computed from the FINAL post-drop list, no
+  recency claim over the blended sample); Loading → skeleton; Ready → ≤10 rows in S2 order + provenance
+  caption + Refresh; NotRecommendable/Empty* → distinct honest copy, NO retry on NotRecommendable;
+  Error → retry (timeout copy ≠ offline copy). Rows: merged semantics + `onClickLabel` (no CD override),
+  48dp targets; arXiv → in-app `paper/{id}`; non-arXiv → doi.org → OA PDF → S2 landing; per-row "Not
+  interested" = session-only VM set (NEVER written to `paper_feedback`). `recshelf_*` strings (with
+  consumers — lint gate), previews light/dark + fontScale 1.3, SPEC-UI §3 subsection, VM tap-guard +
+  `withTimeoutOrNull(9s)` (PDM.3 pattern). Pre-merge emulator live-verify incl. a probe at exactly
+  MAX_SEED_IDS=20 (ceiling evidence → SPEC-P-TOOLS §7).
+- [ ] **PRS.4 — opt-in auto-refresh layer.** One-time consent card ON the shelf (cadence-disclosing copy:
+  "about once a day while you use the app") → pref default-OFF + Settings toggle (Emerging-shelf
+  precedent); DataStore-JSON cache (NO Room table — DB stays 17) + staleness label ("Updated Nh ago");
+  VM-owned trigger: on-shelf-visible refetch iff `now − fetchedAt > TTL(24h)` AND attempt-keyed
+  exponential backoff gate passes (failures NEVER hammer the keyless pool — the anti-backoff blocker
+  designed out); manual Refresh stays; opt-out wipes cache + returns to tap-gated. Non-opted users keep
+  the PRS.3 tap model unchanged.
+- [ ] **CHECKPOINT P-RecShelf** — `./gradlew build` green; `AllowedHostsAuditTest` byte-unchanged (10
+  hosts — phase adds NONE); DB VERSION == 17 untouched; `:core:* ∌ :app`; structural egress tests green
+  (prefixed-IDs-only, seeds-from-sanctioned-tables-only, disclosed-count==sent); previews + TalkBack;
+  SPEC-P-TOOLS §7 + SPEC-UI §3 updated; HUMAN.md §1 rows (approval + red-line carve-out) present;
+  VERIFICATION §PRS device rows recorded (live 20-seed POST, degraded 429/offline/NotRecommendable,
+  dedup honesty, inbox-zero shelf visibility, TalkBack traversal, auto-refresh TTL + backoff behavior,
+  opt-out wipe).
+- **Deferred harvest (recorded, routed):** negativePaperIds (thumb-down-only via a source-filtered query,
+  behind an evidence gate on S2's negative-weighting effect) → backlog · shelf outside the hasFollows
+  gate (saves-but-zero-follows user) → backlog · persisted Room recs cache → backlog (only on
+  demonstrated need) · `from`-pool param probe + full max-ids sweep → backlog · shelf-hides as negative
+  signals (needs new consent copy) → backlog · `heading()` semantics for ALL existing Today sections
+  (pre-existing a11y gap) → backlog.
+
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
 > Strategic steer from the Co-Founder session of 2026-07-04, sequenced one-phase-at-a-time after
@@ -1766,6 +1845,7 @@ if a device session flags it.
 
 | Date | Decision |
 |---|---|
+| 2026-07-17 | **Phase P-RecShelf approved (Co-Founder decision sheet) — "Recommended for you" Today shelf via S2 LIST-seeded recommendations; EXPANDED scope (tap-gated core + opt-in auto-refresh layer).** Four recorded calls: **(1) expanded scope** — the Co-Founder asked "is [auto-refresh] more sophisticated? should we expand the scope?"; answered honestly (the adversarial UX lens ranked the TTL design FIRST and called Design 1 "the most honest artifact ever shipped to nobody"; the other lenses' objections were mechanically fixable) → core PRS.1–3 ships tap-gated, PRS.4 layers opt-in auto-refresh with the lens must-fixes (attempt-keyed backoff, cadence-disclosing consent, staleness label, VM-owned trigger, DataStore-JSON cache, Settings toggle, opt-out wipes). **(2) inbox-zero restructure YES** — the empty state becomes an in-list item so the shelf + Continue-reading survive the "done" screen (the UX lens's all-designs blocker: the daily triage-to-zero user is the feature's best user and would never see it). **(3) seeds = saves ∪ thumb-ups** — the Co-Founder chose the richer seed set over my saves-only recommendation, accepting the FORMAL `paper_feedback` red-line carve-out (KDoc amendment + structural tests + HUMAN.md row; prefixed public paper IDs only, user-consented, S2 only). **(4) no negatives in v1** — dismiss is codebase-documented as a weak "not now" (`PaperFeedbackDao` KDoc), exposure-biased, and S2's negative weighting is unisolated; deferred behind an evidence gate. **Planning:** Ultracode workflow (4 mappers + a LIVE-probe research agent [8 keyless probes: envelope, tldr-400 on this router too, silent unresolvable-drop, the ambiguous `"No positive paper examples given"` 400, DOI-form seeds OK] → 3 design stances → 5 adversarial lenses → synthesis) + personal validation, which verified every load-bearing file:line claim and corrected the synthesis twice: **(a)** the disclosure copy claimed "most recently saved" over a BLENDED recency+uniform sample — rewritten count-honest; **(b)** the thumb-up seed union re-opens the `paper_feedback` red line even in a positives-only design — surfaced as an explicit Co-Founder choice instead of a buried default. A session-limit interruption killed 11/14 agents mid-run; resumed via workflow-cache (3 mappers replayed free) with zero loss. |
 | 2026-07-17 | **Phase P-Discover-MLT approved + substrate shipped (PDM.1+PDM.2) — "discover more like this" is ONE S2 recommendations call, not an arXiv sweep.** The Co-Founder GO'd the phase via the decision sheet (three calls: GO · **trust S2's SPECTER2 order in v1** (no on-device re-rank) · **keyless launch** on the anonymous pool). Planned via an Ultracode workflow (2 code-mappers → candidate-source research → 3 design stances → red-line/honesty/scope adversarial lenses → synthesis); **all three lenses converged** on the S2-recommendations spine over the original HUMAN.md sketch (arXiv `cat:`/`au:` seeding — dead for every non-arXiv seed and taxed N·≥3s on the shared limiter → demoted to a deferred conditional fallback) and over OpenAlex `related_works` (2 metered calls for bare W-ids → HUMAN.md carve-out). **The v1 no-re-rank call is a red-line finding, personally verified:** `EmbeddingService.embed → ensureSession → modelDownloader.ensureDownloaded()` means an ungated on-device re-rank would download the bge model from huggingface.co **on the discover tap** — an undisclosed egress; S2's citation-informed SPECTER2 KNN also simply out-ranks a single-seed cosine. bge + ScoreBar + an honest floor = the double-gated PDM.5 fast-follow. Substrate shipped dark: the transport (path-router + DOI-as-one-encoded-segment traps test-pinned) + the repository (typed honest states; dedup keyed exactly like persistence — arXiv-parse-first then `doi_norm`; `S2_STUB` stubs don't count as on-device; honest post-dedup counts). Zero new hosts / schema / deps; egress = the seed's identifier only, on tap only. UI (PDM.3/4) next; device rows → VERIFICATION §PDM. |
 | 2026-07-17 | **Phase P-ReaderZoom shipped — crisp tiled PDF zoom (Co-Founder GO "thorough planning implementation and testing/verification"; plan-approval delegated, P-Tools precedent).** Zoomed PDF text is now RENDERED at zoom resolution instead of GPU-upscaled: on gesture settle (~180ms), the visible region re-renders via `PdfRenderer.Page.render(bitmap, null, Matrix(setScale+postTranslate), …)` into viewport-bounded tiles blitted by a screen-space `Canvas` overlay OUTSIDE the scaled `graphicsLayer`. **Planned via an Ultracode workflow** (research agent: transform maps page POINTS→px, affine-only, `destClip=null` canonical, un-erased ARGB_8888 composites BLACK [the AndroidPdfViewer bug class], PdfRenderer not thread-safe <API 35, the API-35 `RenderParams` overload REDEFINES the args; 2 design stances; 3 adversarial lenses — **Design A "settle overlay" won all three** over the in-layer tile pyramid, whose registration claim was falsified and whose pinned-cell memory OOMs 64MB/1440p) **+ my personal file:line validation, which corrected the synthesis twice** (mapping anchors to the FULL item rect — the padded-rect mapping would misregister ~14px at 4×; density `max(W·Z, targetWidth)` not `max(W, targetWidth)·Z`) and proved one planned risk vacuous (the offset clamp ⇒ the visible preimage never leaves the viewport ⇒ only composed items are ever visible). **Emulator verification caught TWO real defects before merge:** (1) the crisp path itself proved out — **4.56× sharper by Laplacian variance**, pixel-registered; (2) **a latent SHIPPED bug**: every zoomed gesture's final all-up event has `calculateCentroid = Unspecified` (NaN) and `focalOffset` computed NaN·0 = NaN even at k=1 — the shipped layer silently swallowed the poisoned offset for weeks (GPU ignores NaN translation); the overlay's `roundToInt(NaN)` surfaced it as a crash. Fixed at the source (unspecified ⇒ centre anchor, term exactly 0; test-pinned) + a draw finiteness guard. Memory bounded by construction (tiles partition ≤ 1 viewport at ANY zoom) + heap/12 cap (√-degrade, never allocate-and-OOM) + a safety valve (heap-starved hi-DPI devices keep the soft upscale). Every reader invariant held: layout 1× (P-Read byte-identical), draw-phase-only reads, no clip, no manual recycle, continuous zoom, zero egress/DB/dependency. **Emulator env win:** the "adb can't double-tap" gotcha is SOLVED — a monkey script with `UserWait(130)` lands it reliably (memory updated). Deferred (backlog): deterministic tile recycle (profiler-gated), cross-settle tile memoisation, Design-B grid salvage at deep zoom, `FilterQuality.None`-on-1:1. Device rows (real pinch, SETTLE_MS tuning, FilterQuality A/B) → VERIFICATION §PRZ. **Next per the same steer: "discover more like this."** |
 | 2026-07-16 | **P-Ambient PA.2 shipped — the "Likely relevant" home-screen Glance widget** (resuming the ACTIVE P-Ambient phase after the reader/P-OA work leapfrogged it; loop "top-to-bottom, next open task"). Surfaces the P5 calibrated top-k likely-relevant papers on the home screen, calmly and locally (titles/count never leave the device). Adopted **Glance 1.1.1** (`glance-appwidget` + `glance-material3`) — the Co-Founder pre-approved the dep 2026-07-12; researched-confirmed the alternative (Jetpack `androidx.pdf`… n/a; the Compose-native Glance is the path). **Key calls:** the app's first `@EntryPoint` (`WidgetEntryPoint` via `EntryPointAccessors.fromApplication`) so the system-instantiated receiver reaches the `@Singleton` DAOs; a new `InboxDao.activeInboxTopK(cut, k)` reusing the SHARED `RelevanceThreshold.cut` (no drift with digest/Today) but dropping `digested_at IS NULL` + the recency floor (a widget shows *current best*, not a one-shot "new" alert) while keeping `score IS NOT NULL` (cold-start never fakes relevance); refresh piggybacks `EmbeddingWorker`'s scoring pass via `updateAll` (zero extra wakeups, `runCatching`); a new `MainActivity.EXTRA_PAPER_STORAGE_ID` deep-link so a tap opens the exact paper for **any** origin (not just the arXiv VIEW path) — the row action is Glance's reified **`actionStartActivity<MainActivity>(actionParametersOf(…))`**, deliberately **not** the raw-`Intent` overload: emulator testing this session proved Glance's raw-`Intent` `actionStartActivity(Intent)` **drops both the data URI and the extras through its cold-start trampoline** (onCreate saw `data=null extras=null` → the row deep-link silently no-op'd to Today), whereas `ActionParameters` survive because Glance serializes them through its own action pipeline (delivered verbatim as the `EXTRA_PAPER_STORAGE_ID` extra on cold start). `GlanceTheme` reuses the app `LightColors`/`DarkColors` (now `internal`) via `ColorProviders` (Glance can't run M3 dynamic colour). **Placing the widget IS the opt-in** (no toggle); **read-only → no migration**. Ethos held: no new egress, no telemetry, empty when cold-start (silence over noise). `InboxDaoTest.activeInboxTopK` covers the query; green `./gradlew build`. **Emulator-verified end-to-end** (Pixel API 34, debug): placed via the launcher picker (3×2 preview + description), rendered the header + real calibrated top-6 rows, a **cold-start row tap opened the exact paper detail** and the header opened Today. Residual for a real device (dark-theme render, non-arXiv row, worker refresh, airplane resilience) → VERIFICATION §PA. |
