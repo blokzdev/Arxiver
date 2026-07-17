@@ -414,6 +414,17 @@ object AppModule {
             apiKey = { aiKeyVault.get(dev.blokz.arxiver.core.ai.ProviderId.SEMANTIC_SCHOLAR) },
         )
 
+    // P-Discover-MLT PDM.2: "Discover more like this". The transport seam is a lambda bound to the S2
+    // recommendations endpoint (same gated client + 1.2s mutex + BYOK key supplier as every S2 call) so
+    // the repository is testable without a server. Read-only DAO dedup; zero persistence until a row tap.
+    @Provides
+    @Singleton
+    fun discoverSimilarRepository(
+        s2Client: dev.blokz.arxiver.core.network.s2.SemanticScholarClient,
+        paperDao: dev.blokz.arxiver.core.database.dao.PaperDao,
+    ): dev.blokz.arxiver.data.DiscoverSimilarRepository =
+        dev.blokz.arxiver.data.DiscoverSimilarRepository(s2Client::recommendationsForPaper, paperDao)
+
     // P-Tools PT.4: chemRxiv (Cambridge Open Engage) search client. **UNWIRED since P-Feeds PF.1** — chemRxiv's
     // API is Cloudflare-dead for scripted clients (memory chemrxiv-cloudflare-blocked), so `search_chemrxiv`
     // now discovers via OpenAlex. Kept in-tree (+ its test) in case the API ever un-gates; this provider has no
