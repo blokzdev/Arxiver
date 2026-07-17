@@ -160,6 +160,34 @@
     </plurals>
     <string name="cd_discover_open_in_app">Open %1$s in Arxiver</string>
     <string name="cd_discover_open_browser">Open %1$s in an external browser</string>
+    <!-- P-RecShelf: "Recommended for you" Today shelf (PRS.3) -->
+    <string name="recshelf_heading">Recommended for you</string>
+    <plurals name="recshelf_invite">
+        <item quantity="one">Find papers like the %d you\'ve saved</item>
+        <item quantity="other">Find papers like the %d you\'ve saved</item>
+    </plurals>
+    <plurals name="recshelf_disclosure">
+        <item quantity="one">Sends the ID of %d paper you\'ve saved or liked to Semantic Scholar. Nothing else leaves your device.</item>
+        <item quantity="other">Sends the IDs of up to %d papers you\'ve saved or liked to Semantic Scholar. Nothing else leaves your device.</item>
+    </plurals>
+    <string name="cd_recshelf_fetch">Find recommended papers. Sends only the IDs of papers you\'ve saved or liked.</string>
+    <string name="recshelf_loading">Finding recommendations…</string>
+    <string name="cd_recshelf_loading">Finding recommendations via Semantic Scholar</string>
+    <string name="recshelf_provenance">Based on papers you\'ve saved · via Semantic Scholar</string>
+    <string name="recshelf_refresh">Refresh</string>
+    <string name="cd_recshelf_refresh">Refresh recommendations</string>
+    <string name="recshelf_not_recommendable">No recommendations for your library yet — save a few more papers.</string>
+    <string name="recshelf_empty_none">No new recommendations right now.</string>
+    <string name="recshelf_empty_all_local">You already have the papers we\'d recommend.</string>
+    <string name="recshelf_error_offline">You\'re offline · Retry</string>
+    <string name="recshelf_error_busy">Semantic Scholar is busy · Retry</string>
+    <string name="recshelf_error_generic">Couldn\'t reach Semantic Scholar · Retry</string>
+    <string name="cd_recshelf_retry">Retry finding recommendations</string>
+    <string name="recshelf_hide">Not interested</string>
+    <string name="cd_recshelf_hide">Not interested in %1$s</string>
+    <string name="cd_recshelf_more">More options for %1$s</string>
+    <string name="recshelf_open_in_app">Open in Arxiver</string>
+    <string name="recshelf_open_browser">Open in an external browser</string>
     <string name="pdf_page_indicator">%1$d / %2$d</string>
     <string name="cd_pdf_jump">Page %1$d of %2$d, jump to page</string>
     <string name="pdf_jump_title">Jump to page</string>

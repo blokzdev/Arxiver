@@ -1738,7 +1738,7 @@ phase-sized.
   map→dedup→cap pipeline have ONE author across both surfaces (3 review angles converged on this);
   (d) SQL `LIMIT` pushed into `paperIdsByRecency`; (e) the entity KDoc no longer over-claims its pin's
   scope; (f) the ≥`CANDIDATE_POOL_CAP`-saves thumb-starvation bound documented.
-- [ ] **PRS.3 — Today shelf UI + inbox-zero restructure + live verify.** Gate restructure: inbox-zero
+- [x] **PRS.3 — Today shelf UI + inbox-zero restructure + live verify.** Gate restructure: inbox-zero
   EmptyState becomes an in-list item (`TodayScreen.kt:148-153`) so the shelf + Continue-reading survive
   the "done" state (Co-Founder YES 2026-07-17); shelf slot between `header-relevant` (:242) and
   `header-rest` (:261). States: <1 seedable positive → absent; Idle → heading-semantics header +
