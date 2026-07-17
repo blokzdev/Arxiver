@@ -7,8 +7,8 @@ import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.normalizeDoi
 import dev.blokz.arxiver.core.network.s2.S2RecommendationsResponse
-import dev.blokz.arxiver.data.s2.holdsOnDevice
-import dev.blokz.arxiver.data.s2.toDiscoverHit
+import dev.blokz.arxiver.data.s2.dedupSurvivors
+import dev.blokz.arxiver.data.s2.s2SeedId
 
 /**
  * One genuinely-NEW similar paper (P-Discover-MLT PDM.2) — everything the results sheet needs to display
@@ -67,9 +67,7 @@ class DiscoverSimilarRepository(
     private val paperDao: PaperDao,
 ) {
     /** The prefixed S2 seed identifier, or null when the paper is not seedable (the button is hidden). */
-    fun seedIdFor(paper: Paper): String? =
-        paper.ref.arxivIdOrNull?.let { "ARXIV:${it.value}" }
-            ?: normalizeDoi(paper.doi)?.let { "DOI:$it" }
+    fun seedIdFor(paper: Paper): String? = s2SeedId(paper.ref.arxivIdOrNull, normalizeDoi(paper.doi))
 
     suspend fun discoverSimilar(seed: Paper): DiscoverResult {
         val seedId = seedIdFor(seed) ?: return DiscoverResult.SeedNotFound
@@ -82,12 +80,9 @@ class DiscoverSimilarRepository(
             is AppResult.Success -> {
                 val returned = result.value.recommendedPapers
                 if (returned.isEmpty()) return DiscoverResult.EmptyNoneReturned
-                val hits =
-                    returned
-                        .mapNotNull { it.toDiscoverHit() }
-                        .filterNot { paperDao.holdsOnDevice(it) }
-                        .take(DISPLAY_CAP)
-                // The Ready count is the HONEST post-dedup survivor count — never S2's raw N.
+                // The Ready count is the HONEST post-dedup survivor count — never S2's raw N. The
+                // pipeline itself is the shared dedupSurvivors (one author for both surfaces).
+                val hits = dedupSurvivors(returned, paperDao, DISPLAY_CAP)
                 if (hits.isEmpty()) DiscoverResult.EmptyAllLocal else DiscoverResult.Ready(hits)
             }
         }

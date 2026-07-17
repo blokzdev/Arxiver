@@ -43,3 +43,31 @@ internal suspend fun PaperDao.holdsOnDevice(hit: DiscoverHit): Boolean {
     val byDoi = paperById(doiRowId)
     return byDoi != null && byDoi.source != PaperSource.S2_STUB.name
 }
+
+/**
+ * The ONE prefixed-S2-seed-id rule (`ARXIV:<bare>` first, else `DOI:<normalized>`, else null =
+ * non-seedable) — the recommendations WIRE contract, so it must have exactly one author. Callers adapt
+ * their own type into the two already-resolved fields (`Paper` re-derives via `normalizeDoi`;
+ * `PaperEntity` trusts its persisted `doi_norm`).
+ */
+internal fun s2SeedId(
+    arxivId: ArxivId?,
+    doiNorm: String?,
+): String? = arxivId?.let { "ARXIV:${it.value}" } ?: doiNorm?.let { "DOI:$it" }
+
+/**
+ * The shared post-success pipeline — candidate mapping → on-device dedup → cap — for BOTH
+ * recommendations surfaces (the PaperDetail sheet and the Today shelf). This is the load-bearing
+ * "genuinely NEW, honestly counted" invariant: the survivor list's size is the HONEST post-dedup
+ * count (never S2's raw N), and any change to dedup-vs-cap ordering must land here, once. Each caller
+ * types the empty/ready split into its own sealed result.
+ */
+internal suspend fun dedupSurvivors(
+    returned: List<S2SearchPaper>,
+    paperDao: PaperDao,
+    cap: Int,
+): List<DiscoverHit> =
+    returned
+        .mapNotNull { it.toDiscoverHit() }
+        .filterNot { paperDao.holdsOnDevice(it) }
+        .take(cap)

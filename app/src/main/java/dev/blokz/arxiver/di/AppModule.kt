@@ -437,7 +437,7 @@ object AppModule {
         paperFeedbackDao: dev.blokz.arxiver.core.database.dao.PaperFeedbackDao,
     ): dev.blokz.arxiver.data.RecShelfRepository =
         dev.blokz.arxiver.data.RecShelfRepository(
-            recommend = { positives, limit ->
+            transport = { positives, limit ->
                 s2Client.recommendationsFromLists(positiveIds = positives, limit = limit)
             },
             paperDao = paperDao,

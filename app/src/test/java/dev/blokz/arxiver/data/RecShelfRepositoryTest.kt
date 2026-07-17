@@ -19,7 +19,6 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import kotlin.random.Random
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -49,7 +48,7 @@ class RecShelfRepositoryTest {
 
     private fun repo(
         recommend: suspend (List<String>, Int) -> AppResult<S2RecommendationsResponse> = { _, _ -> success() },
-    ) = RecShelfRepository(recommend, db.paperDao(), db.libraryDao(), db.paperFeedbackDao(), random = Random(42))
+    ) = RecShelfRepository(recommend, db.paperDao(), db.libraryDao(), db.paperFeedbackDao())
 
     private fun success(vararg papers: S2SearchPaper) =
         AppResult.Success(S2RecommendationsResponse(recommendedPapers = papers.toList()))
@@ -161,6 +160,25 @@ class RecShelfRepositoryTest {
                 PaperFeedbackEntity(paperId = "2606.11111", signal = 1, source = "thumb", createdAt = 10),
             )
             assertEquals(listOf("ARXIV:2606.11111"), repo().seedIds())
+        }
+
+    @Test
+    fun `two rows sharing a doi_norm resolve to ONE seed - the disclosed count never over-states`() =
+        runBlocking {
+            save("biorxiv:10.1101/2026.06.01.123456", addedAt = 30, doiNorm = "10.1101/2026.06.01.123456")
+            save("researchsquare:10.1101/2026.06.01.123456", addedAt = 20, doiNorm = "10.1101/2026.06.01.123456")
+            assertEquals(listOf("DOI:10.1101/2026.06.01.123456"), repo().seedIds())
+        }
+
+    @Test
+    fun `seedIds is IDEMPOTENT past the sampled half - disclose-then-fetch can never drift`() =
+        runBlocking {
+            // >10 seedables engages the sampled "older" half — the path where a shared mutable RNG
+            // would re-roll between the invitation card's disclosure and the tap's fetch.
+            (1..30).forEach { save("2606.%05d".format(it), addedAt = it.toLong()) }
+            val first = repo().seedIds()
+            val second = repo().seedIds()
+            assertEquals(first, second)
         }
 
     // --- the pre-network guard + structural egress pins ---

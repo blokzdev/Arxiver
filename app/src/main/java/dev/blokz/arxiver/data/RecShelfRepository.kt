@@ -8,8 +8,8 @@ import dev.blokz.arxiver.core.database.dao.PaperFeedbackDao
 import dev.blokz.arxiver.core.database.entity.PaperEntity
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.network.s2.S2RecommendationsResponse
-import dev.blokz.arxiver.data.s2.holdsOnDevice
-import dev.blokz.arxiver.data.s2.toDiscoverHit
+import dev.blokz.arxiver.data.s2.dedupSurvivors
+import dev.blokz.arxiver.data.s2.s2SeedId
 import kotlin.random.Random
 
 /**
@@ -55,35 +55,47 @@ sealed interface RecShelfResult {
  * paper ids only — the signal/source/score columns never leave the device.
  *
  * **Disclosure seam:** the caller discloses `seedIds().size` on the invitation card and passes THAT
- * list to [recommend] — one computation, so the disclosed count and the sent list cannot drift.
+ * list to [recommend] — one computation, so the disclosed count and the sent list cannot drift. As a
+ * second line of defense, [seedIds] is IDEMPOTENT per library state (the sampler is seeded from the
+ * candidate content, never from shared RNG state): even a caller that recomputes between disclosing
+ * and sending gets the identical list.
  *
- * [recommend] is the transport seam (bound to `SemanticScholarClient.recommendationsFromLists` with
+ * [transport] is the wire seam (bound to `SemanticScholarClient.recommendationsFromLists` with
  * positives only in DI; a lambda so tests fake the wire — the [DiscoverSimilarRepository] precedent).
  */
 class RecShelfRepository(
-    private val recommend: suspend (positiveIds: List<String>, limit: Int) -> AppResult<S2RecommendationsResponse>,
+    private val transport: suspend (positiveIds: List<String>, limit: Int) -> AppResult<S2RecommendationsResponse>,
     private val paperDao: PaperDao,
     private val libraryDao: LibraryDao,
     private val feedbackDao: PaperFeedbackDao,
-    private val random: Random = Random.Default,
 ) {
     /**
-     * The FINAL seed-id list — post-resolution, post-drop, blended, capped. `[]` means [RecShelfResult.NoSeeds]:
-     * render nothing (or the cold-start silence) and never call [recommend].
+     * The FINAL seed-id list — post-resolution, post-drop, deduped on the RESOLVED seed string,
+     * blended, capped. `[]` means [RecShelfResult.NoSeeds]: render nothing (or the cold-start silence)
+     * and never call [recommend]. Bound worth knowing: saves fill the candidate pool before thumb-ups,
+     * so past [CANDIDATE_POOL_CAP] saves the thumb signal is crowded out — the approved saves-dominant
+     * policy (a recency-MERGED pool across both sources is a recorded backlog item).
      */
     suspend fun seedIds(): List<String> {
         // Recency-ordered candidate row ids, saves first then thumb-ups, first occurrence wins. The pool
         // is capped BEFORE the bulk resolve (SQLite bind-arg ceiling; sampling needs a pool, not a census).
         val candidateIds =
-            (libraryDao.paperIdsByRecency() + feedbackDao.positivePaperIds())
+            (libraryDao.paperIdsByRecency(CANDIDATE_POOL_CAP) + feedbackDao.positivePaperIds())
                 .distinct()
                 .take(CANDIDATE_POOL_CAP)
         if (candidateIds.isEmpty()) return emptyList()
         val entities = paperDao.papersByIds(candidateIds).associateBy { it.id }
-        val seedable = candidateIds.mapNotNull { id -> entities[id]?.let(::seedIdFor) }
+        // distinct() again on the RESOLVED strings: two rows sharing a doi_norm must yield ONE seed,
+        // or the disclosed count over-states what S2 actually receives.
+        val seedable =
+            candidateIds
+                .mapNotNull { id -> entities[id]?.let(::seedIdFor) }
+                .distinct()
         val recent = seedable.take(RECENT_COUNT)
         val older = seedable.drop(RECENT_COUNT)
-        return recent + older.shuffled(random).take(SAMPLE_COUNT)
+        // Content-seeded sampler: same library state → same sample. Never a shared mutable RNG — a
+        // second seedIds() call between "disclose" and "send" must not re-roll the list.
+        return recent + older.shuffled(Random(candidateIds.hashCode())).take(SAMPLE_COUNT)
     }
 
     /**
@@ -93,7 +105,7 @@ class RecShelfRepository(
      */
     suspend fun recommend(seedIds: List<String>): RecShelfResult {
         if (seedIds.isEmpty()) return RecShelfResult.NoSeeds
-        return when (val result = recommend.invoke(seedIds, REQUEST_LIMIT)) {
+        return when (val result = transport(seedIds, REQUEST_LIMIT)) {
             is AppResult.Failure ->
                 when {
                     (result.error as? AppError.Upstream)?.httpCode == 400 -> RecShelfResult.NotRecommendable
@@ -102,12 +114,9 @@ class RecShelfRepository(
             is AppResult.Success -> {
                 val returned = result.value.recommendedPapers
                 if (returned.isEmpty()) return RecShelfResult.EmptyNoneReturned
-                val hits =
-                    returned
-                        .mapNotNull { it.toDiscoverHit() }
-                        .filterNot { paperDao.holdsOnDevice(it) }
-                        .take(DISPLAY_CAP)
-                // The Ready count is the HONEST post-dedup survivor count — never S2's raw N.
+                // The Ready count is the HONEST post-dedup survivor count — never S2's raw N. The
+                // pipeline itself is the shared dedupSurvivors (one author for both surfaces).
+                val hits = dedupSurvivors(returned, paperDao, DISPLAY_CAP)
                 if (hits.isEmpty()) RecShelfResult.EmptyAllLocal else RecShelfResult.Ready(hits)
             }
         }
@@ -116,11 +125,10 @@ class RecShelfRepository(
     /**
      * A stored row's prefixed S2 seed id, or null when non-seedable. arXiv-parse-FIRST on the row PK
      * (arXiv-origin rows store the bare arXiv id; non-arXiv PKs are `wire:native` and never parse), then
-     * the stored `doi_norm` (already normalized at persist time — not re-derived here).
+     * the stored `doi_norm` (already normalized at persist time — not re-derived here). The rule itself
+     * is the shared [s2SeedId] — this only adapts the entity's fields into it.
      */
-    private fun seedIdFor(entity: PaperEntity): String? =
-        ArxivId.parse(entity.id)?.first?.let { "ARXIV:${it.value}" }
-            ?: entity.doiNorm?.let { "DOI:$it" }
+    private fun seedIdFor(entity: PaperEntity): String? = s2SeedId(ArxivId.parse(entity.id)?.first, entity.doiNorm)
 
     companion object {
         /** Most-recent seedable positives always included — the "what I'm into now" half of the blend. */

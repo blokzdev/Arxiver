@@ -17,8 +17,10 @@ import androidx.room.PrimaryKey
  * paper. **Red line:** this table is local-only — never exported, backed up, or logged.
  * **Sanctioned exception (P-RecShelf, Co-Founder-approved 2026-07-17):** a THUMB-UP row's PUBLIC paper
  * identifier — the prefixed `ARXIV:`/`DOI:` form only, NEVER the signal, source, score, or timestamp —
- * may leave the device inside a user-consented Semantic Scholar recommendations request
- * (`RecShelfRepository`, structurally test-pinned). Dismissals and thumb-downs stay fully local.
+ * may leave the device inside a user-consented Semantic Scholar recommendations request. That ONE
+ * egress path is pinned at its seam (`RecShelfRepositoryTest`: the wire receives only prefixed public
+ * id strings, positives-only structurally); the pin does NOT generalize — any FUTURE consumer that
+ * egresses rows from this table must add its own seam pin. Dismissals and thumb-downs stay fully local.
  */
 @Entity(
     tableName = "paper_feedback",
