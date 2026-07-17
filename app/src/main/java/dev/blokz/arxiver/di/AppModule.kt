@@ -425,6 +425,26 @@ object AppModule {
     ): dev.blokz.arxiver.data.DiscoverSimilarRepository =
         dev.blokz.arxiver.data.DiscoverSimilarRepository(s2Client::recommendationsForPaper, paperDao)
 
+    // P-RecShelf PRS.2: "Recommended for you". The transport lambda binds POSITIVES ONLY — the v1
+    // no-negatives call is structural (the seam has no negative-list parameter), so dismissals/thumb-downs
+    // cannot egress by construction. Same gated client + 1.2s mutex + BYOK supplier as every S2 call.
+    @Provides
+    @Singleton
+    fun recShelfRepository(
+        s2Client: dev.blokz.arxiver.core.network.s2.SemanticScholarClient,
+        paperDao: dev.blokz.arxiver.core.database.dao.PaperDao,
+        libraryDao: dev.blokz.arxiver.core.database.dao.LibraryDao,
+        paperFeedbackDao: dev.blokz.arxiver.core.database.dao.PaperFeedbackDao,
+    ): dev.blokz.arxiver.data.RecShelfRepository =
+        dev.blokz.arxiver.data.RecShelfRepository(
+            transport = { positives, limit ->
+                s2Client.recommendationsFromLists(positiveIds = positives, limit = limit)
+            },
+            paperDao = paperDao,
+            libraryDao = libraryDao,
+            feedbackDao = paperFeedbackDao,
+        )
+
     // P-Tools PT.4: chemRxiv (Cambridge Open Engage) search client. **UNWIRED since P-Feeds PF.1** — chemRxiv's
     // API is Cloudflare-dead for scripted clients (memory chemrxiv-cloudflare-blocked), so `search_chemrxiv`
     // now discovers via OpenAlex. Kept in-tree (+ its test) in case the API ever un-gates; this provider has no

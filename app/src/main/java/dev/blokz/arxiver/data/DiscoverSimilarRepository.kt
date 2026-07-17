@@ -5,10 +5,10 @@ import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.database.dao.PaperDao
 import dev.blokz.arxiver.core.model.ArxivId
 import dev.blokz.arxiver.core.model.Paper
-import dev.blokz.arxiver.core.model.PaperSource
 import dev.blokz.arxiver.core.model.normalizeDoi
 import dev.blokz.arxiver.core.network.s2.S2RecommendationsResponse
-import dev.blokz.arxiver.core.network.s2.S2SearchPaper
+import dev.blokz.arxiver.data.s2.dedupSurvivors
+import dev.blokz.arxiver.data.s2.s2SeedId
 
 /**
  * One genuinely-NEW similar paper (P-Discover-MLT PDM.2) — everything the results sheet needs to display
@@ -67,9 +67,7 @@ class DiscoverSimilarRepository(
     private val paperDao: PaperDao,
 ) {
     /** The prefixed S2 seed identifier, or null when the paper is not seedable (the button is hidden). */
-    fun seedIdFor(paper: Paper): String? =
-        paper.ref.arxivIdOrNull?.let { "ARXIV:${it.value}" }
-            ?: normalizeDoi(paper.doi)?.let { "DOI:$it" }
+    fun seedIdFor(paper: Paper): String? = s2SeedId(paper.ref.arxivIdOrNull, normalizeDoi(paper.doi))
 
     suspend fun discoverSimilar(seed: Paper): DiscoverResult {
         val seedId = seedIdFor(seed) ?: return DiscoverResult.SeedNotFound
@@ -82,47 +80,12 @@ class DiscoverSimilarRepository(
             is AppResult.Success -> {
                 val returned = result.value.recommendedPapers
                 if (returned.isEmpty()) return DiscoverResult.EmptyNoneReturned
-                val hits =
-                    returned
-                        .mapNotNull { it.toHit() }
-                        .filterNot { onDevice(it) }
-                        .take(DISPLAY_CAP)
-                // The Ready count is the HONEST post-dedup survivor count — never S2's raw N.
+                // The Ready count is the HONEST post-dedup survivor count — never S2's raw N. The
+                // pipeline itself is the shared dedupSurvivors (one author for both surfaces).
+                val hits = dedupSurvivors(returned, paperDao, DISPLAY_CAP)
                 if (hits.isEmpty()) DiscoverResult.EmptyAllLocal else DiscoverResult.Ready(hits)
             }
         }
-    }
-
-    /** A displayable candidate needs a title + a stable S2 id; identity fields are normalized here once. */
-    private fun S2SearchPaper.toHit(): DiscoverHit? {
-        val id = paperId?.takeIf { it.isNotBlank() } ?: return null
-        val shownTitle = title?.takeIf { it.isNotBlank() } ?: return null
-        return DiscoverHit(
-            s2PaperId = id,
-            title = shownTitle,
-            authors = authors.mapNotNull { it.name },
-            year = year,
-            venue = venue?.takeIf { it.isNotBlank() },
-            abstract = abstract?.takeIf { it.isNotBlank() },
-            arxivId = externalIds?.ArXiv?.let { ArxivId.parse(it)?.first },
-            doi = normalizeDoi(externalIds?.DOI),
-            openAccessPdfUrl = openAccessPdf?.url,
-        )
-    }
-
-    /**
-     * True when the candidate already exists as a REAL on-device row. Keyed exactly like persistence
-     * (arXiv-parse-first per [resolvePaperRef]'s contract, then the normalized-DOI crosswalk), so dedup and
-     * a later save can never disagree. A `S2_STUB` citation-graph stub does NOT count as "on device" —
-     * candidates held only as stubs still legitimately surface (the stub has no abstract, no PDF, no shelf
-     * presence; the `unembeddedPapers` worker skips it too).
-     */
-    private suspend fun onDevice(hit: DiscoverHit): Boolean {
-        val byArxiv = hit.arxivId?.let { paperDao.paperById(it.value) }
-        if (byArxiv != null && byArxiv.source != PaperSource.S2_STUB.name) return true
-        val doiRowId = hit.doi?.let { paperDao.paperIdByDoi(it) } ?: return false
-        val byDoi = paperDao.paperById(doiRowId)
-        return byDoi != null && byDoi.source != PaperSource.S2_STUB.name
     }
 
     companion object {

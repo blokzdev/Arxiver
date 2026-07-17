@@ -21,8 +21,11 @@ interface PaperFeedbackDao {
     @Query("SELECT paper_id FROM paper_feedback WHERE signal < 0")
     suspend fun negativePaperIds(): List<String>
 
-    /** Papers labelled positive (thumb-up) — augments the library positives. */
-    @Query("SELECT paper_id FROM paper_feedback WHERE signal > 0")
+    /**
+     * Papers labelled positive (thumb-up) — augments the library positives. Recency-ordered for the
+     * P-RecShelf seed blend (existing callers `.toSet()` and are order-indifferent).
+     */
+    @Query("SELECT paper_id FROM paper_feedback WHERE signal > 0 ORDER BY created_at DESC")
     suspend fun positivePaperIds(): List<String>
 
     /** Current vote for a paper (+1 / -1), or null if unlabelled — drives the row's thumb state. */

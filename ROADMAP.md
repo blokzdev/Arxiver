@@ -1719,7 +1719,7 @@ phase-sized.
   closed) + §14 `recommend_papers` deferral partially resolved. Tests: POST+trailing-slash+no-tldr pin,
   body-borne seeds + URL-carries-none, DOI-slash-verbatim, empty-negatives-omitted, clamp, renamed-envelope
   → error, 400/429 mapping, BYOK header.
-- [ ] **PRS.2 — `S2HitMapping` extraction + `RecShelfRepository` + DI** (app, UI-inert). Hoist
+- [x] **PRS.2 — `S2HitMapping` extraction + `RecShelfRepository` + DI** (app, UI-inert). Hoist
   `toHit()`/`onDevice()` out of `DiscoverSimilarRepository` (its test suite must pass UNMODIFIED); seed
   builder = saves (`added_at DESC`) ∪ thumb-ups (positive-wins) → bulk `WHERE id IN` resolve (no N+1) →
   per-entity seed rule (arXiv-origin → `ARXIV:<bare>`, else `doi_norm` → `DOI:<>`, else DROP) → blend
@@ -1728,7 +1728,16 @@ phase-sized.
   `Upstream(400)` → terminal `NotRecommendable` (the 400 is body-discarded + ambiguous); 429/offline/5xx →
   retryable `Error`. Stateless repo, REQUEST_LIMIT=30, DISPLAY_CAP=10. `paper_feedback` red-line KDoc
   carve-out + structural tests (`requestCarriesOnlyPrefixedIdStrings_neverSignalSourceOrScore`,
-  `seedBuilderReadsOnlyLibraryAndFeedbackTables`, disclosed-count==sent-size).
+  `seedBuilderReadsOnlyLibraryAndFeedbackTables`, disclosed-count==sent-size). **Hardened by an 8-angle
+  adversarial review pass + 1-vote verify before merge** (thoroughness steer 2026-07-17): (a) `seedIds()`
+  made IDEMPOTENT per library state — the sampler is content-seeded, never shared-RNG (a count-then-fetch
+  caller could otherwise disclose one sample and send another; the >10-seedable path is now test-pinned);
+  (b) seedables deduped on the RESOLVED seed string (two rows sharing a `doi_norm` yielded a duplicate
+  seed + an inflated disclosed count; test-pinned); (c) the half-hoist finished — `s2SeedId()` +
+  `dedupSurvivors()` joined the shared `S2HitMapping` so the wire-contract prefix rule and the
+  map→dedup→cap pipeline have ONE author across both surfaces (3 review angles converged on this);
+  (d) SQL `LIMIT` pushed into `paperIdsByRecency`; (e) the entity KDoc no longer over-claims its pin's
+  scope; (f) the ≥`CANDIDATE_POOL_CAP`-saves thumb-starvation bound documented.
 - [ ] **PRS.3 — Today shelf UI + inbox-zero restructure + live verify.** Gate restructure: inbox-zero
   EmptyState becomes an in-list item (`TodayScreen.kt:148-153`) so the shelf + Continue-reading survive
   the "done" state (Co-Founder YES 2026-07-17); shelf slot between `header-relevant` (:242) and
@@ -1762,7 +1771,13 @@ phase-sized.
   gate (saves-but-zero-follows user) → backlog · persisted Room recs cache → backlog (only on
   demonstrated need) · `from`-pool param probe + full max-ids sweep → backlog · shelf-hides as negative
   signals (needs new consent copy) → backlog · `heading()` semantics for ALL existing Today sections
-  (pre-existing a11y gap) → backlog.
+  (pre-existing a11y gap) → backlog. **From the PRS.2 review pass (verifier-confirmed defensible
+  deferrals):** bulk/lazy `holdsOnDevice` resolve (the ≤3-point-queries-per-candidate dedup is bounded
+  at REQUEST_LIMIT, never corpus-scaling, and byte-shared with the shipped Discover pipeline — a bulk
+  rewrite is one shared-helper change when warranted) → backlog · recency-MERGED candidate pool across
+  saves+thumbs (fixes thumb-starvation past 400 saves; needs a joined query; the bound is KDoc'd) →
+  backlog · shared S2 test fixtures for the twin repo suites (deferred to keep the refactor-guard suite
+  untouched in the hoist PR) → backlog.
 
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
