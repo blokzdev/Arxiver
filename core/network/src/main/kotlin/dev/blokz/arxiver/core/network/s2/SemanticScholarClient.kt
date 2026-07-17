@@ -8,11 +8,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 @Serializable
 data class S2ExternalIds(
@@ -84,10 +88,22 @@ data class S2SearchResponse(
     val data: List<S2SearchPaper> = emptyList(),
 )
 
-/** `/recommendations/v1/papers/forpaper/{id}` envelope (P-Discover-MLT PDM.1). */
+/**
+ * Envelope shared by BOTH recommendations routes (`GET …/forpaper/{id}` PDM.1, `POST …/papers/`
+ * PRS.1). [recommendedPapers] is deliberately REQUIRED (no default): with `ignoreUnknownKeys`, a
+ * renamed envelope key would otherwise decode as a silent success-empty — an upstream contract change
+ * must surface as an error, never as an empty shelf.
+ */
 @Serializable
 data class S2RecommendationsResponse(
-    val recommendedPapers: List<S2SearchPaper> = emptyList(),
+    val recommendedPapers: List<S2SearchPaper>,
+)
+
+/** `POST /recommendations/v1/papers/` body (P-RecShelf PRS.1). Seed ids are prefixed `ARXIV:`/`DOI:`. */
+@Serializable
+data class S2RecommendationsRequest(
+    val positivePaperIds: List<String>,
+    val negativePaperIds: List<String> = emptyList(),
 )
 
 /**
@@ -111,6 +127,16 @@ class SemanticScholarClient(
     private val mutex = Mutex()
     private var lastRequestAtMs = Long.MIN_VALUE / 2
 
+    /**
+     * [httpClient] + a hard per-call ceiling (shares its pool/dispatcher via `newBuilder`). The
+     * injected client sets NO `callTimeout`, so a UI-side `withTimeoutOrNull` alone would leave a
+     * stalled wire call running as a zombie past the UI's give-up; only [recommendationsFromLists]
+     * rides this twin (its callers are tap-driven surfaces with their own shorter UI timeout).
+     */
+    private val timedClient: OkHttpClient by lazy {
+        httpClient.newBuilder().callTimeout(CALL_TIMEOUT_MS, TimeUnit.MILLISECONDS).build()
+    }
+
     suspend fun paperByArxivId(arxivId: String): AppResult<S2Paper> =
         withContext(dispatchers.io) {
             space()
@@ -120,7 +146,7 @@ class SemanticScholarClient(
                     .url(url)
                     .apply { apiKey()?.let { header("x-api-key", it) } }
                     .build()
-            execute(request) { json.decodeFromString<S2Paper>(it) }
+            execute(httpClient, request) { json.decodeFromString<S2Paper>(it) }
         }
 
     /**
@@ -153,7 +179,7 @@ class SemanticScholarClient(
                     .url(url)
                     .apply { apiKey()?.let { header("x-api-key", it) } }
                     .build()
-            execute(request) { json.decodeFromString<S2SearchResponse>(it) }
+            execute(httpClient, request) { json.decodeFromString<S2SearchResponse>(it) }
         }
 
     /**
@@ -184,7 +210,48 @@ class SemanticScholarClient(
                     .url(url)
                     .apply { apiKey()?.let { header("x-api-key", it) } }
                     .build()
-            execute(request) { json.decodeFromString<S2RecommendationsResponse>(it) }
+            execute(httpClient, request) { json.decodeFromString<S2RecommendationsResponse>(it) }
+        }
+
+    /**
+     * List-seeded recommendations (`POST /recommendations/v1/papers/`, P-RecShelf PRS.1) — SPECTER2
+     * KNN over a POSITIVE seed list with optional negatives, backing the "Recommended for you" shelf.
+     * The prefixed seed ids (`ARXIV:<id>` / `DOI:<doi>`) ride in the JSON BODY — never the URL — and
+     * are the ONLY thing that leaves the device. Live-probed contract (2026-07-17, VERIFICATION §PRS):
+     * the path keeps its TRAILING slash (a redirect would flip OkHttp's POST to a GET); `fields`
+     * reuses [RECOMMENDATION_FIELDS] (this router 400s on `tldr` exactly like its `forpaper` sibling);
+     * an unresolvable id is silently dropped while >= 1 positive resolves, but empty-or-all-unresolvable
+     * positives 400 (`{"error":"No positive paper examples given"}`) with a body [execute] discards —
+     * callers MUST pre-guard >= 1 seedable positive before invoking. Both lists are defensively clamped
+     * to [MAX_SEED_IDS] (the router's real ceiling is unprobed — its docs are unfetchable). Runs on the
+     * [timedClient] twin so a stalled wire call cannot outlive the caller's UI timeout.
+     */
+    suspend fun recommendationsFromLists(
+        positiveIds: List<String>,
+        negativeIds: List<String> = emptyList(),
+        limit: Int,
+    ): AppResult<S2RecommendationsResponse> =
+        withContext(dispatchers.io) {
+            space()
+            val url =
+                "$baseUrl/recommendations/v1/papers/".toHttpUrl().newBuilder()
+                    .addQueryParameter("limit", limit.toString())
+                    .addQueryParameter("fields", RECOMMENDATION_FIELDS)
+                    .build()
+            val body =
+                json.encodeToString(
+                    S2RecommendationsRequest(
+                        positivePaperIds = positiveIds.take(MAX_SEED_IDS),
+                        negativePaperIds = negativeIds.take(MAX_SEED_IDS),
+                    ),
+                ).toRequestBody(JSON_MEDIA_TYPE)
+            val request =
+                Request.Builder()
+                    .url(url)
+                    .post(body)
+                    .apply { apiKey()?.let { header("x-api-key", it) } }
+                    .build()
+            execute(timedClient, request) { json.decodeFromString<S2RecommendationsResponse>(it) }
         }
 
     /** Claim a 1.2s-spaced slot (the sole politeness spacer; the caller/worker holds none). */
@@ -195,13 +262,14 @@ class SemanticScholarClient(
             lastRequestAtMs = nowMs()
         }
 
-    /** Run [request], decode a 2xx body via [decode]; non-2xx → `Upstream(code)`, IO → `Offline`. */
+    /** Run [request] on [client], decode a 2xx body via [decode]; non-2xx → `Upstream(code)`, IO → `Offline`. */
     private inline fun <T> execute(
+        client: OkHttpClient,
         request: Request,
         decode: (String) -> T,
     ): AppResult<T> =
         runCatching {
-            httpClient.newCall(request).execute().use { response ->
+            client.newCall(request).execute().use { response ->
                 when {
                     response.isSuccessful -> {
                         val body = response.body?.string() ?: throw IOException("empty body")
@@ -219,7 +287,16 @@ class SemanticScholarClient(
 
     companion object {
         const val DEFAULT_BASE_URL = "https://api.semanticscholar.org"
+
+        /**
+         * Defensive per-list clamp for [recommendationsFromLists] — the router's real max-ids ceiling
+         * is unprobed (docs unfetchable), and callers cap far below this anyway (P-RecShelf sends
+         * <= 20 blended positives). Public so the shelf repository/tests can reference the bound.
+         */
+        const val MAX_SEED_IDS = 20
         private const val MIN_SPACING_MS = 1_200L
+        private const val CALL_TIMEOUT_MS = 10_000L
+        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
         private const val FIELDS =
             "paperId,citationCount,references.externalIds,references.title,citations.externalIds,citations.title"
         private const val SEARCH_FIELDS =

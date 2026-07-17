@@ -233,4 +233,97 @@ class SemanticScholarClientTest {
             val r = client().recommendationsForPaper("ARXIV:2606.00001", limit = 30)
             assertEquals(AppResult.Failure(AppError.Upstream(429)), r)
         }
+
+    // --- recommendationsFromLists (P-RecShelf PRS.1). Contract live-probed 2026-07-17: POST to the
+    // trailing-slash list route, seed ids in the JSON body only, same envelope + tldr-400 as the
+    // forpaper sibling, empty/all-unresolvable positives → 400 with a discarded body. ---
+
+    @Test
+    fun `recommendationsFromLists POSTs to the trailing-slash list route with fields and limit - never tldr`() =
+        runTest {
+            enqueue(recommendationsBody())
+            val r = client().recommendationsFromLists(listOf("ARXIV:1706.03762"), limit = 12)
+            assertIs<AppResult.Success<S2RecommendationsResponse>>(r)
+            val req = server.takeRequest()
+            assertEquals("POST", req.method)
+            val path = req.path!!
+            // The trailing slash is load-bearing: without it the router 301s and OkHttp converts the
+            // redirected POST into a GET, silently dropping the seed body.
+            assertTrue(path.startsWith("/recommendations/v1/papers/?"), path)
+            assertTrue(path.contains("limit=12"), path)
+            assertTrue(path.contains("fields="), path)
+            assertTrue(!path.contains("tldr"), "the recommendations router 400s on tldr: $path")
+        }
+
+    @Test
+    fun `seed ids ride in the JSON body - the URL carries none, and a DOI slash needs no encoding`() =
+        runTest {
+            enqueue(recommendationsBody())
+            client().recommendationsFromLists(
+                positiveIds = listOf("ARXIV:1706.03762", "DOI:10.21203/rs.3.rs-27656/v1"),
+                negativeIds = listOf("ARXIV:1301.3781"),
+                limit = 10,
+            )
+            val req = server.takeRequest()
+            assertTrue(req.getHeader("Content-Type")!!.startsWith("application/json"))
+            val body = req.body.readUtf8()
+            assertTrue(body.contains("\"positivePaperIds\""), body)
+            assertTrue(body.contains("ARXIV:1706.03762"), body)
+            // Body-borne, so the DOI's slashes stay verbatim — no path-segment encoding involved.
+            assertTrue(body.contains("DOI:10.21203/rs.3.rs-27656/v1"), body)
+            assertTrue(body.contains("\"negativePaperIds\""), body)
+            assertTrue(body.contains("ARXIV:1301.3781"), body)
+            assertTrue(!req.path!!.contains("ARXIV"), "seed ids must never leak into the URL: ${req.path}")
+        }
+
+    @Test
+    fun `empty negatives are omitted from the body - the positives-only shape the live probe validated`() =
+        runTest {
+            enqueue(recommendationsBody())
+            client().recommendationsFromLists(listOf("ARXIV:1706.03762"), limit = 10)
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(!body.contains("negativePaperIds"), body)
+        }
+
+    @Test
+    fun `both seed lists are clamped to MAX_SEED_IDS`() =
+        runTest {
+            enqueue(recommendationsBody())
+            val ids = (1..25).map { "ARXIV:26%02d.11111".format(it) }
+            client().recommendationsFromLists(positiveIds = ids, negativeIds = ids, limit = 10)
+            val body = server.takeRequest().body.readUtf8()
+            assertTrue(body.contains("ARXIV:2620.11111"), body)
+            assertTrue(!body.contains("ARXIV:2621.11111"), "seed #21 must be clamped away: $body")
+        }
+
+    @Test
+    fun `a renamed envelope key surfaces as an error - never a silent empty shelf`() =
+        runTest {
+            // ignoreUnknownKeys would happily drop a renamed key; the REQUIRED (default-less)
+            // recommendedPapers field turns an upstream contract change into a visible failure.
+            enqueue("""{ "papers": [] }""")
+            val r = client().recommendationsFromLists(listOf("ARXIV:1706.03762"), limit = 10)
+            assertTrue(r is AppResult.Failure, "renamed envelope must not decode as success: $r")
+        }
+
+    @Test
+    fun `the empty-or-all-unresolvable-positives 400 surfaces as Upstream(400)`() =
+        runTest {
+            server.enqueue(
+                MockResponse().setResponseCode(400).setBody("""{"error":"No positive paper examples given"}"""),
+            )
+            val r = client().recommendationsFromLists(listOf("DOI:10.9999/unindexed"), limit = 10)
+            assertEquals(AppResult.Failure(AppError.Upstream(400)), r)
+        }
+
+    @Test
+    fun `the list route sends the BYOK key when set and a 429 maps to Upstream(429)`() =
+        runTest {
+            enqueue(recommendationsBody())
+            client(apiKey = { "secret-key" }).recommendationsFromLists(listOf("ARXIV:1706.03762"), limit = 10)
+            assertEquals("secret-key", server.takeRequest().getHeader("x-api-key"))
+            server.enqueue(MockResponse().setResponseCode(429).setBody("rate limited"))
+            val r = client().recommendationsFromLists(listOf("ARXIV:1706.03762"), limit = 10)
+            assertEquals(AppResult.Failure(AppError.Upstream(429)), r)
+        }
 }
