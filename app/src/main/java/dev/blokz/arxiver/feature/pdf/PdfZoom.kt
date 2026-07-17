@@ -2,6 +2,7 @@ package dev.blokz.arxiver.feature.pdf
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.unit.IntSize
 
 /**
@@ -45,8 +46,16 @@ internal object PdfZoom {
         val k = if (oldScale <= 0f) 1f else newScale / oldScale
         val centreX = size.width / 2f
         val centreY = size.height / 2f
-        val x = k * current.x + (centroid.x - centreX) * (1f - k) + pan.x
-        val y = k * current.y + (centroid.y - centreY) * (1f - k) + pan.y
+        // A gesture's boundary events (the final all-up; a lone down) carry no trackable pointer pair, so
+        // Compose's calculateCentroid returns Offset.Unspecified — i.e. NaN. IEEE NaN·0 = NaN, so even the
+        // k == 1 "no zoom change" case would poison the offset through `(NaN − centre)·(1 − k)`. The shipped
+        // graphicsLayer silently shrugged that off (GPU ignores a NaN translation), but the PRZ.2 tile
+        // projection is arithmetic — roundToInt(NaN) throws. An unspecified centroid means "nothing to
+        // anchor", so anchor at the centre: its (1 − k) term is exactly zero and the offset stays finite.
+        val cx = if (centroid.isSpecified) centroid.x else centreX
+        val cy = if (centroid.isSpecified) centroid.y else centreY
+        val x = k * current.x + (cx - centreX) * (1f - k) + pan.x
+        val y = k * current.y + (cy - centreY) * (1f - k) + pan.y
         return clampOffset(Offset(x, y), newScale, size)
     }
 

@@ -8,6 +8,7 @@ import android.os.ParcelFileDescriptor
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -67,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -74,11 +76,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.createBitmap
@@ -90,6 +94,8 @@ import dev.blokz.arxiver.ui.components.ErrorState
 import dev.blokz.arxiver.ui.components.ReaderThemeToggle
 import dev.blokz.arxiver.ui.theme.Spacing
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -270,6 +276,50 @@ private fun PdfPages(
         // draw phase, so zoom stays genuinely draw-only.
         val zoomed by remember { derivedStateOf { PdfZoom.isZoomed(scale) } }
 
+        // --- P-ReaderZoom (PRZ.2): sharp settle tiles. Mid-gesture the base pages stay exactly as before (a
+        // soft draw-only GPU upscale); after PDF_TILE_SETTLE_MS of stillness while zoomed, the VISIBLE region
+        // re-renders at zoom resolution and the overlay Canvas below blits it 1:1. `scale`/`offset` are read
+        // ONLY inside snapshotFlow (an observer coroutine, like the isScrollInProgress effect above) and the
+        // Canvas draw lambda — never in composition scope (the pinch-blank invariant, see `zoomed` above).
+        val padPx = with(LocalDensity.current) { 1.dp.roundToPx() }
+        // Memory safety valve: a heap-starved hi-DPI device (pdfTargetWidth already forced below the container
+        // width) skips tiles outright — sharpening is a luxury; the always-drawn upscaled base is the guarantee.
+        val tilesEnabled = targetWidth >= constraints.maxWidth
+        var tiles by remember(rendererState, targetWidth) { mutableStateOf(emptyList<PdfTile>()) }
+        LaunchedEffect(rendererState, targetWidth, viewport, tilesEnabled) {
+            snapshotFlow {
+                // layoutSig folds late item-height resolution (placeholder aspect → real bitmap aspect) into
+                // the key so a re-measured page re-plans; while zoomed the list itself cannot scroll (pan is
+                // draw-only), so this is stable during a zoom session.
+                var sig = 0
+                for (item in listState.layoutInfo.visibleItemsInfo) {
+                    sig = sig * 31 + item.index * 961 + item.offset * 31 + item.size
+                }
+                Triple(scale, offset, sig)
+            }.collectLatest { (settleScale, settleOffset, _) ->
+                if (!PdfZoom.isZoomed(settleScale)) {
+                    // Clear synchronously (before any delay) so a pinch-out never leaves a stale sharp tile.
+                    if (tiles.isNotEmpty()) tiles = emptyList()
+                    return@collectLatest
+                }
+                if (!tilesEnabled) return@collectLatest
+                delay(PDF_TILE_SETTLE_MS) // any new gesture frame cancels (collectLatest) + restarts the clock
+                val visible = listState.layoutInfo.visibleItemsInfo.map { PageRect(it.index, it.offset, it.size) }
+                val specs =
+                    planTiles(settleScale, settleOffset, viewport, targetWidth, visible, padPx, pdfTileBudgetBytes())
+                // Sequential renders through the single PdfRenderer mutex; a new emission cancels between tiles
+                // (collectLatest = free single-flight — stale settle renders never queue up).
+                val rendered = ArrayList<PdfTile>(specs.size)
+                for (spec in specs) {
+                    val bitmap = rendererState.renderRegion(spec) ?: continue
+                    rendered += PdfTile(bitmap.asImageBitmap(), spec)
+                }
+                // Superseded generations are never recycle()d — GC reclaims them once the draw stops referencing
+                // them (the use-after-free class stays impossible by construction).
+                tiles = rendered
+            }
+        }
+
         LazyColumn(
             state = listState,
             // While zoomed, the list stops owning drags (they become pan); at 1× it scrolls normally and the
@@ -326,6 +376,56 @@ private fun PdfPages(
         ) {
             items(count = rendererState.pageCount, key = { it }) { pageIndex ->
                 PdfPage(rendererState, pageIndex, nightMode, targetWidth, pageCache)
+            }
+        }
+        // The sharp-tile overlay (PRZ.2): a SIBLING outside the scaled graphicsLayer — no clip/offscreen-buffer
+        // interplay with the layer (the shipped blank-regression class can't reach it) — drawn above the list,
+        // below the page pill. A bare Canvas is a draw node only (no pointerInput), so pinch/double-tap/pan all
+        // still land on the list's handlers. Every state read here is in the DRAW phase: a gesture frame only
+        // re-draws this node (draw-only, exactly like the graphicsLayer it mirrors).
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val currentScale = scale
+            if (PdfZoom.isZoomed(currentScale)) {
+                val currentOffset = offset
+                for (tile in tiles) {
+                    val spec = tile.spec
+                    // Project the tile's base region through the CURRENT transform, rounding EACH edge — so
+                    // vertically-adjacent page tiles share one integer edge (no seam/overlap), and a tile stays
+                    // registered mid-gesture (scaling softly with the base until the next settle replaces it).
+                    val topLeft =
+                        PdfZoom.project(
+                            Offset(spec.regionLeft, spec.regionTop),
+                            currentScale,
+                            currentOffset,
+                            viewport,
+                        )
+                    val bottomRight =
+                        PdfZoom.project(
+                            Offset(spec.regionLeft + spec.regionWidth, spec.regionTop + spec.regionHeight),
+                            currentScale,
+                            currentOffset,
+                            viewport,
+                        )
+                    // Never round a non-finite projection (roundToInt(NaN) throws). focalOffset now heals the
+                    // unspecified-centroid NaN at the source; this is the belt-and-braces for any future one.
+                    if (!topLeft.x.isFinite() || !topLeft.y.isFinite() ||
+                        !bottomRight.x.isFinite() || !bottomRight.y.isFinite()
+                    ) {
+                        continue
+                    }
+                    val left = topLeft.x.roundToInt()
+                    val top = topLeft.y.roundToInt()
+                    val width = bottomRight.x.roundToInt() - left
+                    val height = bottomRight.y.roundToInt() - top
+                    if (width < 1 || height < 1) continue
+                    drawImage(
+                        image = tile.image,
+                        dstOffset = IntOffset(left, top),
+                        dstSize = IntSize(width, height),
+                        filterQuality = FilterQuality.Low,
+                        colorFilter = if (nightMode) invertFilter else null,
+                    )
+                }
             }
         }
         AnimatedVisibility(

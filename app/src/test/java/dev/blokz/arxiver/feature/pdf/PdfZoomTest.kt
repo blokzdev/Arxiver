@@ -112,6 +112,27 @@ class PdfZoomTest {
     }
 
     @Test
+    fun `an unspecified centroid never poisons the offset`() {
+        // Every zoomed gesture ENDS with an all-pointers-up event whose calculateCentroid is
+        // Offset.Unspecified (NaN). IEEE NaN·0 = NaN, so the pre-fix math corrupted the offset even in the
+        // k == 1 no-op case — harmless to the GPU layer, but roundToInt(NaN) crashed the PRZ.2 tile draw
+        // (caught live on the emulator before merge). Unspecified must anchor at the centre: a no-op.
+        val current = Offset(120f, -300f)
+        val o = PdfZoom.focalOffset(current, 2.5f, 2.5f, Offset.Unspecified, Offset.Zero, size)
+        assertEquals(current.x, o.x, eps)
+        assertEquals(current.y, o.y, eps)
+        assertTrue(o.x.isFinite() && o.y.isFinite())
+    }
+
+    @Test
+    fun `an unspecified centroid with a real rescale still yields a finite centre-anchored offset`() {
+        val o = PdfZoom.focalOffset(Offset(100f, 200f), 2f, 3f, Offset.Unspecified, Offset.Zero, size)
+        // k = 1.5, centre-anchored: x = 1.5·100, y = 1.5·200 (both within the 3× clamp band).
+        assertEquals(150f, o.x, eps)
+        assertEquals(300f, o.y, eps)
+    }
+
+    @Test
     fun `focalOffset and project agree - the content point under the centroid stays put across a rescale`() {
         // Anchor consistency: take the content point under the centroid, apply focalOffset's rescale, and the
         // SAME content point must project back to the centroid (plus pan). Ties the overlay's registration math

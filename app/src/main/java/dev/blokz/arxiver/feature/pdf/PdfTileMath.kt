@@ -1,6 +1,7 @@
 package dev.blokz.arxiver.feature.pdf
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.unit.IntSize
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -29,6 +30,16 @@ internal data class TileSpec(
     val regionWidth: Float,
     val regionHeight: Float,
 )
+
+/**
+ * A rendered sharp tile: the bitmap (wrapped as [ImageBitmap] ONCE at creation, never per frame) + the plan
+ * spec whose `region*` fields anchor the draw. Superseded generations are simply dropped — never `recycle()`d
+ * (a manual recycle of anything a retained draw might reference is the shipped use-after-free class).
+ */
+internal class PdfTile(val image: ImageBitmap, val spec: TileSpec)
+
+/** Stillness window before the sharp tiles render (device-tuned on real hardware; see VERIFICATION §PRZ). */
+internal const val PDF_TILE_SETTLE_MS = 180L
 
 /** The hard byte cap for one tile generation (~1/12 heap; the realistic worst case is one viewport ≈ 4–15MB). */
 internal fun pdfTileBudgetBytes(maxHeapBytes: Long = Runtime.getRuntime().maxMemory()): Long = maxHeapBytes / 12
