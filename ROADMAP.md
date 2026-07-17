@@ -1605,12 +1605,15 @@ phase-sized.
   blank-regression trigger) renders crisp with no blank; night-mode tiles invert cleanly (no black/white slab —
   `eraseColor(WHITE)` + draw-time filter); jump-dialog Go resets zoom + clears tiles; **zero crashes** across the
   matrix. Real-pinch + SETTLE_MS latency tuning + FilterQuality A/B → VERIFICATION §PRZ (Samsung).
-- [ ] **CHECKPOINT P-ReaderZoom** — `./gradlew build` green; DB VERSION untouched; red-line audit (zero egress —
-  tiles are local raster; no telemetry; no new dependency); P-Read invariants regression-guarded (existing suite
-  green — item heights/scrollFraction/persist byte-identical); `:core:* ∌ :app`; VERIFICATION §PRZ rows recorded
-  (emulator rows + the device-bound pinch/latency/FilterQuality rows). Deferred (breadcrumbs, ROADMAP backlog):
-  deterministic tile recycle (profiler-gated), cross-settle tile memoisation, Design-B grid salvage at deep zoom on
-  large screens, `FilterQuality.None`-on-1:1.
+- [x] **CHECKPOINT P-ReaderZoom** — **verified 2026-07-17:** `./gradlew build` green (local 12m39s + CI 12m24s on
+  the merged tree, PRs #202/#203 each `Build, test, lint` green before self-merge); DB VERSION untouched (17 —
+  zero schema change); red-line audit green (zero egress — tiles are local raster, no network import in any
+  touched file; no telemetry; no new dependency); P-Read invariants regression-guarded (the existing reader suite
+  green — item heights/scrollFraction/persist byte-identical; layout stays 1×); `:core:* ∌ :app` (the whole phase
+  is app+docs-only). VERIFICATION §PRZ recorded: PRZ-1 `[E]` (4.56× Laplacian sharpness, registration, night,
+  clears, zero crashes) + PRZ-2..5 device-bound (real pinch / SETTLE_MS feel / FilterQuality A/B / memory churn —
+  the Samsung session). The latent shipped NaN-offset bug found by verification is fixed + test-pinned. Deferred
+  breadcrumbs recorded in the backlog ("P-ReaderZoom deferrals", 2026-07-17) — nothing silently dropped.
 
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
@@ -1658,6 +1661,8 @@ niceties held back as a potential settings cluster rather than a forced default.
 if a device session flags it.
 
 **P-Reader2 PR.UX.5 deferrals (harvested 2026-07-14 from Track C):** **Page thumbnail strip / grid navigator** — the jump-to-page `Slider` (PR.UX.4) is precise but blind; a thumbnail rail would let the reader recognise the target page visually (needs low-res thumbnail rendering + a scrollable rail — its own subphase). · **Page-edge tap-to-page** — tap left/right thirds to page ±1 (a classic reader gesture) — deferred to avoid another arbitration layer over the pinch/scroll gesture stack shipped in PR.UX.3; revisit only if the device ledger finds Slider-only navigation insufficient. · **Persist zoom level across reopen** — PR.UX.3 deliberately keeps zoom `remember`-only (resets to 1× on reopen/rotation, which reads as "re-fit"); a `rememberSaveable` scale+offset would survive rotation if a device session finds the reset jarring.
+
+**P-ReaderZoom deferrals (harvested 2026-07-17, adversarial-workflow + device-planning residue):** **Deterministic tile recycle** (single-slot pool OR lag-recycle: free generation N only after N+1 committed AND drew) — profiler-gated: adopt only if the §PRZ-5 Samsung trace shows settle-time GC pauses; GC-managed shipped first because ANY manual recycle brushes the use-after-free class the pin scheme exists to prevent. · **Cross-settle tile memoisation** (pan away + back at constant zoom → cache hit instead of a re-render through the mutex) — add only if repeat-settle latency shows on device. · **Design-B grid salvage** (the tile-pyramid's per-page grid + byte-bounded cache drawn at the out-of-layer site) — only if the single per-page visible-region tile proves too coarse at deep zoom on a large screen. · **`FilterQuality.None`-on-1:1** — flip only after the §PRZ-4 device A/B proves the integer-aligned blit shimmer-free. · **Tiles-on-valve-devices** (√-degraded tiles instead of none for heap-starved hi-DPI) — only on a Co-Founder call; the valve is the deliberate memory-first default.
 
 **PDF-zoom-blank hotfix deferrals (harvested 2026-07-16):** **Byte-bounded LRU bitmap cache — ✓ RESOLVED 2026-07-16 (`PdfPageCache`).** Shipped a single-owner cache bounded by a **total-byte budget** (`maxMemory/6`, not a fixed count → no foldable OOM), recycling only **off-window** pages (a composed page is `pin`ned → never the permanent-spinner or use-after-free case), with **single-flight** per-index renders and scroll-back **reuse** (a revisited page is a cache hit, not a re-render). `PdfPageCacheTest` covers eviction/pin-safety/MRU-protection/single-flight. Researched first: `androidx.pdf` (Jetpack) is SDK-35-only + Fragment-based → not viable; `PdfRenderer` requires ARGB_8888 (no RGB_565 memory halving); the byte-`LruCache` sizing convention is the canonical pattern. · **Crisper zoom → promoted to the captured-vision Phase P-ReaderZoom below** (was: re-rasterise the focal region at `scale·targetWidth`). · **Zoom discoverability** — pinch/double-tap are still uncued (already in the PR.UX harvest above).
 
