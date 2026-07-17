@@ -2,6 +2,7 @@ package dev.blokz.arxiver.feature.pdf
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.compose.animation.AnimatedVisibility
@@ -549,6 +550,37 @@ private class PdfRendererHolder(
                         bitmap.eraseColor(android.graphics.Color.WHITE)
                         page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                         bitmap
+                    }
+                }.getOrNull()
+            }
+        }
+
+    /**
+     * Renders a REGION of a page at zoom resolution into a tile bitmap (P-ReaderZoom). The transform maps page
+     * points → zoomed-page px (`zoomedPageWidthPx / page.width`, affine: setScale + postTranslate), shifted so
+     * the region's corner lands at the bitmap's (0,0); `destClip` stays null — the bitmap itself is the crop
+     * (the canonical int-mode recipe; the API-35 `RenderParams` overload REDEFINES these args — never port this
+     * recipe there). `eraseColor(WHITE)` is mandatory: an ARGB_8888 bitmap defaults transparent, and any pixel
+     * the page doesn't cover would composite BLACK in day — or a blinding slab under the night invert (the
+     * classic AndroidPdfViewer "black patches when zooming" bug class). Same mutex as [renderPage]: PdfRenderer
+     * is not thread-safe below API 35 and allows only one open page. runCatching also swallows the
+     * reader-closed-mid-settle race ([close] doesn't take the mutex — same accepted class as [renderPage]).
+     */
+    suspend fun renderRegion(spec: TileSpec): Bitmap? =
+        withContext(ioDispatcher) {
+            mutex.withLock {
+                runCatching {
+                    renderer.openPage(spec.pageIndex).use { page ->
+                        val scale = spec.zoomedPageWidthPx / page.width
+                        val transform =
+                            Matrix().apply {
+                                setScale(scale, scale)
+                                postTranslate(-spec.tileLeftPx, -spec.tileTopPx)
+                            }
+                        createBitmap(spec.tileWpx, spec.tileHpx).apply {
+                            eraseColor(android.graphics.Color.WHITE)
+                            page.render(this, null, transform, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        }
                     }
                 }.getOrNull()
             }
