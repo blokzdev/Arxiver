@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import dev.blokz.arxiver.core.common.AppError
+import dev.blokz.arxiver.core.common.AppResult
 import dev.blokz.arxiver.core.common.DispatcherProvider
 import dev.blokz.arxiver.core.database.ArxiverDatabase
 import dev.blokz.arxiver.core.database.entity.FollowEntity
@@ -15,7 +17,12 @@ import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.network.arxiv.ArxivApiClient
 import dev.blokz.arxiver.core.network.arxiv.ArxivRateLimiter
+import dev.blokz.arxiver.core.network.s2.S2ExternalIds
+import dev.blokz.arxiver.core.network.s2.S2RecommendationsResponse
+import dev.blokz.arxiver.core.network.s2.S2SearchPaper
 import dev.blokz.arxiver.data.CategoryRepository
+import dev.blokz.arxiver.data.DiscoverResult
+import dev.blokz.arxiver.data.DiscoverSimilarRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.PaperRepository
 import dev.blokz.arxiver.data.SemanticNeighborsRepository
@@ -90,6 +97,12 @@ class PaperDetailViewModelTest {
         Dispatchers.resetMain()
     }
 
+    // PDM.3: a swappable fake transport for the discover repo (tests assign before tapping) + a call
+    // counter proving the memoization / double-tap guards issue no extra "egress".
+    private var recommendCalls = 0
+    private var recommend: suspend (String, Int) -> AppResult<S2RecommendationsResponse> =
+        { _, _ -> AppResult.Success(S2RecommendationsResponse()) }
+
     private fun vmFor(id: String) =
         PaperDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("id" to id)),
@@ -99,6 +112,14 @@ class PaperDetailViewModelTest {
             // Constructed lazily (WorkManager is only touched on syncNow(), which these tests don't call).
             syncScheduler = SyncScheduler(ApplicationProvider.getApplicationContext()),
             neighborsRepository = SemanticNeighborsRepository(db.paperDao(), db.embeddingDao(), dispatchers),
+            discoverRepository =
+                DiscoverSimilarRepository(
+                    recommend = { seedId, limit ->
+                        recommendCalls++
+                        recommend(seedId, limit)
+                    },
+                    paperDao = db.paperDao(),
+                ),
             embeddingDao = db.embeddingDao(),
         )
 
@@ -259,6 +280,81 @@ class PaperDetailViewModelTest {
 
             vm.oa.first { it is OaUiState.Ready }
             assertEquals(1, server.requestCount, "the Loading guard collapses a double tap to one call")
+        }
+
+    // --- discoverSimilar (P-Discover-MLT PDM.3) ---
+
+    @Test
+    fun `discoverSimilar lands on Done Ready with the fetched hits`() =
+        runBlocking {
+            cachePaper("2606.27302")
+            recommend = { _, _ ->
+                AppResult.Success(
+                    S2RecommendationsResponse(
+                        recommendedPapers =
+                            listOf(
+                                S2SearchPaper(
+                                    paperId = "r1",
+                                    title = "Similar",
+                                    externalIds = S2ExternalIds(ArXiv = "2606.99999"),
+                                ),
+                            ),
+                    ),
+                )
+            }
+            val vm = vmFor("2606.27302")
+            vm.uiState.first { !it.loading }
+
+            vm.discoverSimilar()
+
+            val done = vm.discover.first { it is DiscoverUiState.Done } as DiscoverUiState.Done
+            val ready = assertIs<DiscoverResult.Ready>(done.result)
+            assertEquals(listOf("r1"), ready.hits.map { it.s2PaperId })
+            assertEquals(1, recommendCalls)
+        }
+
+    @Test
+    fun `a re-tap after Ready reopens from memory - the transport is never re-billed`() =
+        runBlocking {
+            cachePaper("2606.27302")
+            recommend = { _, _ -> AppResult.Success(S2RecommendationsResponse()) }
+            val vm = vmFor("2606.27302")
+            vm.uiState.first { !it.loading }
+
+            vm.discoverSimilar()
+            vm.discover.first { it is DiscoverUiState.Done }
+            vm.discoverSimilar() // memoized terminal — must not re-fire
+            vm.discoverSimilar()
+
+            assertEquals(1, recommendCalls, "non-Error terminals are memoized; re-taps never re-egress")
+        }
+
+    @Test
+    fun `an Error terminal stays retryable - the re-tap re-fires exactly once`() =
+        runBlocking {
+            cachePaper("2606.27302")
+            recommend = { _, _ -> AppResult.Failure(AppError.Upstream(429)) }
+            val vm = vmFor("2606.27302")
+            vm.uiState.first { !it.loading }
+
+            vm.discoverSimilar()
+            val first = vm.discover.first { it is DiscoverUiState.Done } as DiscoverUiState.Done
+            assertTrue(first.result is DiscoverResult.Error)
+
+            recommend = { _, _ -> AppResult.Success(S2RecommendationsResponse()) }
+            vm.discoverSimilar() // Error is retryable
+            vm.discover.first { it is DiscoverUiState.Done && it.result !is DiscoverResult.Error }
+            assertEquals(2, recommendCalls)
+        }
+
+    @Test
+    fun `isDiscoverable is true for an arXiv seed and false for a DOI-less external`() =
+        runBlocking {
+            cachePaper("2606.27302")
+            val vm = vmFor("2606.27302")
+            val paper = vm.uiState.first { !it.loading }.paper!!
+            assertTrue(vm.isDiscoverable(paper))
+            assertTrue(!vm.isDiscoverable(paper.copy(ref = ExternalRef(Source.PSYARXIV, "osf-x"), doi = null)))
         }
 }
 

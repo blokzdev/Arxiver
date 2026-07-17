@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Hub
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.ManageSearch
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PictureAsPdf
@@ -58,6 +60,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -99,6 +102,8 @@ import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PdfAccess
 import dev.blokz.arxiver.core.model.Source
 import dev.blokz.arxiver.core.model.pdfAccess
+import dev.blokz.arxiver.data.DiscoverHit
+import dev.blokz.arxiver.data.DiscoverResult
 import dev.blokz.arxiver.data.NeighborsResult
 import dev.blokz.arxiver.data.PdfStorage
 import dev.blokz.arxiver.data.RelatedPaper
@@ -140,6 +145,7 @@ fun PaperDetailScreen(
     var showDispatch by remember { mutableStateOf(false) }
     var showAsk by remember { mutableStateOf(false) }
     var showOrganize by remember { mutableStateOf(false) }
+    var showDiscoverSheet by remember { mutableStateOf(false) }
     var showActionsMenu by remember { mutableStateOf(false) }
     val feedback = LocalFeedbackController.current
     val clipboard = LocalClipboardManager.current
@@ -165,6 +171,7 @@ fun PaperDetailScreen(
     val related by viewModel.related.collectAsState()
     val followedAuthors by viewModel.followedAuthors.collectAsState()
     val oaState by viewModel.oa.collectAsState()
+    val discoverState by viewModel.discover.collectAsState()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
 
@@ -317,6 +324,10 @@ fun PaperDetailScreen(
                             onToggleAuthorFollow = viewModel::toggleAuthorFollow,
                             oaState = oaState,
                             onResolveOa = viewModel::resolveOa,
+                            discoverState = discoverState,
+                            discoverable = viewModel.isDiscoverable(paper),
+                            onDiscover = viewModel::discoverSimilar,
+                            onShowDiscoverResults = { showDiscoverSheet = true },
                             scrollState = scrollState,
                             onOpenPdf = onOpenPdf,
                             onOpenHtml = onOpenHtml,
@@ -390,6 +401,23 @@ fun PaperDetailScreen(
             )
         }
     }
+
+    // P-Discover-MLT PDM.4: the discovery results — everything is already in hand from the ONE memoized
+    // response (zero network on open/scroll; re-opening never re-egresses). An arXiv row navigates in-app
+    // (the destination detail screen fetch-persists the native record — the existing paper(ref) path);
+    // a non-arXiv row opens the browser inside the sheet row itself.
+    if (showDiscoverSheet) {
+        ((discoverState as? DiscoverUiState.Done)?.result as? DiscoverResult.Ready)?.let { ready ->
+            DiscoverResultsSheet(
+                hits = ready.hits,
+                onDismiss = { showDiscoverSheet = false },
+                onOpenArxiv = { bareId ->
+                    showDiscoverSheet = false
+                    onPaperClick(bareId)
+                },
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -406,6 +434,10 @@ private fun PaperDetailContent(
     onToggleAuthorFollow: (String) -> Unit,
     oaState: OaUiState,
     onResolveOa: () -> Unit,
+    discoverState: DiscoverUiState,
+    discoverable: Boolean,
+    onDiscover: () -> Unit,
+    onShowDiscoverResults: () -> Unit,
     scrollState: androidx.compose.foundation.ScrollState,
     onOpenPdf: (String) -> Unit,
     onOpenHtml: (String) -> Unit,
@@ -511,6 +543,16 @@ private fun PaperDetailContent(
             if (paper.ref.origin.pdfAccess() == PdfAccess.BROWSER && paper.title.isNotBlank()) {
                 OaFulltextButton(oa = oaState, onResolve = onResolveOa)
             }
+            // P-Discover-MLT: "Discover similar" — hidden when the paper carries neither an arXiv id nor a
+            // DOI (never a dead control). Two-tap morph (the ratified P-OA pattern): tap 1 searches (the ONE
+            // disclosed S2 call), the button morphs to "Show N similar", tap 2 opens the sheet from memory.
+            if (discoverable) {
+                DiscoverSimilarButton(
+                    state = discoverState,
+                    onDiscover = onDiscover,
+                    onShowResults = onShowDiscoverResults,
+                )
+            }
             FilledTonalButton(onClick = { onOpenConnections(paper.ref.storageId) }) {
                 Icon(Icons.Filled.Hub, contentDescription = null)
                 Text(
@@ -523,6 +565,10 @@ private fun PaperDetailContent(
         // button's height (which would reflow the FlowRow under the user's finger).
         if (paper.ref.origin.pdfAccess() == PdfAccess.BROWSER && paper.title.isNotBlank()) {
             OaFulltextCaption(oa = oaState)
+        }
+        // The discovery disclosure / outcome line — same below-the-row placement discipline as the OA caption.
+        if (discoverable) {
+            DiscoverCaption(state = discoverState)
         }
 
         if (entry != null) {
@@ -1092,6 +1138,213 @@ private fun OaFulltextCaption(oa: OaUiState) {
     }
 }
 
+/**
+ * The two-tap "Discover similar" morph (P-Discover-MLT PDM.3, cloning the ratified P-OA pattern): Idle
+ * searches (the ONE disclosed S2 call); Ready shows the honest post-dedup count and reopens the memoized
+ * sheet (no re-egress); only a retryable Error re-fires. The honest empties + SeedNotFound render NO
+ * button — the caption below the row carries the explanation (a control that can only no-op is noise).
+ */
+@Composable
+private fun DiscoverSimilarButton(
+    state: DiscoverUiState,
+    onDiscover: () -> Unit,
+    onShowResults: () -> Unit,
+) {
+    when (state) {
+        DiscoverUiState.Idle -> {
+            val cd = stringResource(R.string.cd_discover_similar)
+            FilledTonalButton(onClick = onDiscover, modifier = Modifier.semantics { contentDescription = cd }) {
+                Icon(Icons.Filled.ManageSearch, contentDescription = null)
+                Text(
+                    stringResource(R.string.action_discover_similar),
+                    modifier = Modifier.padding(start = Spacing.sm),
+                )
+            }
+        }
+        DiscoverUiState.Loading -> {
+            val cd = stringResource(R.string.cd_discover_searching)
+            FilledTonalButton(
+                onClick = {},
+                enabled = false,
+                modifier =
+                    Modifier.semantics {
+                        contentDescription = cd
+                        liveRegion = LiveRegionMode.Polite
+                    },
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                Text(
+                    stringResource(R.string.discover_searching),
+                    modifier = Modifier.padding(start = Spacing.sm),
+                )
+            }
+        }
+        is DiscoverUiState.Done ->
+            when (val result = state.result) {
+                is DiscoverResult.Ready -> {
+                    val count = result.hits.size
+                    val cd = stringResource(R.string.cd_show_similar)
+                    FilledTonalButton(
+                        onClick = onShowResults,
+                        modifier =
+                            Modifier.semantics {
+                                contentDescription = cd
+                                liveRegion = LiveRegionMode.Polite
+                            },
+                    ) {
+                        Icon(Icons.Filled.ManageSearch, contentDescription = null)
+                        Text(
+                            pluralStringResource(R.plurals.action_show_similar, count, count),
+                            modifier = Modifier.padding(start = Spacing.sm),
+                        )
+                    }
+                }
+                is DiscoverResult.Error -> {
+                    FilledTonalButton(onClick = onDiscover) {
+                        Icon(Icons.Filled.Refresh, contentDescription = null)
+                        Text(
+                            stringResource(R.string.discover_error_retry),
+                            modifier = Modifier.padding(start = Spacing.sm),
+                        )
+                    }
+                }
+                // Honest terminals: no dead control — the caption explains the outcome.
+                DiscoverResult.SeedNotFound,
+                DiscoverResult.EmptyNoneReturned,
+                DiscoverResult.EmptyAllLocal,
+                -> Unit
+            }
+    }
+}
+
+/**
+ * The discovery disclosure / outcome line under the action row (PDM.3). Pre-tap it IS the egress
+ * disclosure ("sends only this paper's ID" — the tap is the opt-in, the P-OA resolve-on-tap precedent);
+ * post-tap it names the honest outcome cause. Same never-reflow-the-row placement as [OaFulltextCaption].
+ */
+@Composable
+private fun DiscoverCaption(state: DiscoverUiState) {
+    val text =
+        when (state) {
+            DiscoverUiState.Idle, DiscoverUiState.Loading -> stringResource(R.string.discover_disclosure)
+            is DiscoverUiState.Done ->
+                when (state.result) {
+                    is DiscoverResult.Ready -> stringResource(R.string.discover_ordered_by)
+                    DiscoverResult.SeedNotFound -> stringResource(R.string.discover_seed_not_found)
+                    DiscoverResult.EmptyNoneReturned -> stringResource(R.string.discover_empty_none)
+                    DiscoverResult.EmptyAllLocal -> stringResource(R.string.discover_empty_all_local)
+                    is DiscoverResult.Error -> stringResource(R.string.discover_error_caption)
+                }
+        }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier =
+            Modifier
+                .padding(top = Spacing.sm)
+                .semantics { liveRegion = LiveRegionMode.Polite },
+    )
+}
+
+/**
+ * The bounded discovery results (PDM.4). Everything is in hand from the one memoized response — this
+ * sheet issues ZERO network on open or scroll. An arXiv row opens in-app (the destination detail screen
+ * fetch-persists the native record); a non-arXiv row opens the browser (doi.org → the hit's OA PDF → its
+ * S2 landing page) and persists nothing — the shipped read-only posture for non-arXiv S2 hits.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DiscoverResultsSheet(
+    hits: List<DiscoverHit>,
+    onDismiss: () -> Unit,
+    onOpenArxiv: (String) -> Unit,
+) {
+    val uriHandler = LocalUriHandler.current
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier =
+                Modifier
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = Spacing.lg)
+                    .padding(bottom = Spacing.xl),
+        ) {
+            Text(
+                text = pluralStringResource(R.plurals.discover_sheet_count, hits.size, hits.size),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                text = stringResource(R.string.discover_ordered_by),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = Spacing.sm),
+            )
+            hits.forEach { hit ->
+                val inApp = hit.arxivId != null
+                val actionCd =
+                    if (inApp) {
+                        stringResource(R.string.cd_discover_open_in_app, hit.title)
+                    } else {
+                        stringResource(R.string.cd_discover_open_browser, hit.title)
+                    }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .clickable {
+                                val arxivId = hit.arxivId
+                                if (arxivId != null) {
+                                    onOpenArxiv(arxivId.value)
+                                } else {
+                                    val url =
+                                        hit.doi?.let { "https://doi.org/$it" }
+                                            ?: hit.openAccessPdfUrl
+                                            ?: "https://www.semanticscholar.org/paper/${hit.s2PaperId}"
+                                    uriHandler.openUri(url)
+                                }
+                            }
+                            .padding(vertical = Spacing.sm)
+                            .semantics(mergeDescendants = true) { contentDescription = actionCd },
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = hit.title,
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val byline =
+                            listOfNotNull(
+                                hit.authors.take(3).joinToString(", ").takeIf { it.isNotBlank() },
+                                hit.year?.toString(),
+                                hit.venue,
+                            ).joinToString(" · ")
+                        if (byline.isNotBlank()) {
+                            Text(
+                                text = byline,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    if (!inApp) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.OpenInNew,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = Spacing.sm),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
@@ -1115,6 +1368,10 @@ private fun PaperDetailContentPreview() {
             onToggleAuthorFollow = {},
             oaState = OaUiState.Idle,
             onResolveOa = {},
+            discoverState = DiscoverUiState.Idle,
+            discoverable = true,
+            onDiscover = {},
+            onShowDiscoverResults = {},
             scrollState = rememberScrollState(),
             onOpenPdf = {},
             onOpenHtml = {},
@@ -1157,6 +1414,10 @@ private fun PaperDetailContentOaFoundPreview() {
                     versionOfRecord = true,
                 ),
             onResolveOa = {},
+            discoverState = DiscoverUiState.Done(DiscoverResult.EmptyAllLocal),
+            discoverable = true,
+            onDiscover = {},
+            onShowDiscoverResults = {},
             scrollState = rememberScrollState(),
             onOpenPdf = {},
             onOpenHtml = {},
@@ -1199,6 +1460,10 @@ private fun PaperDetailContentChemRxivPreview() {
             onToggleAuthorFollow = {},
             oaState = OaUiState.Idle,
             onResolveOa = {},
+            discoverState = DiscoverUiState.Idle,
+            discoverable = true,
+            onDiscover = {},
+            onShowDiscoverResults = {},
             scrollState = rememberScrollState(),
             onOpenPdf = {},
             onOpenHtml = {},

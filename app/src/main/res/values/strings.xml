@@ -137,6 +137,29 @@
     <string name="cd_resolving_oa">Searching for a free published version</string>
     <string name="cd_open_oa_pdf">Open the free published PDF in your browser. Published in %1$s. Opens an external browser.</string>
     <string name="cd_open_oa_pdf_no_journal">Open the free published PDF in your browser. Opens an external browser.</string>
+    <!-- P-Discover-MLT: "Discover more like this" (PDM.3/PDM.4) -->
+    <string name="action_discover_similar">Discover similar</string>
+    <string name="cd_discover_similar">Find new similar papers via Semantic Scholar. Sends only this paper\'s ID.</string>
+    <string name="discover_searching">Searching…</string>
+    <string name="cd_discover_searching">Searching Semantic Scholar for similar papers</string>
+    <plurals name="action_show_similar">
+        <item quantity="one">Show %d similar</item>
+        <item quantity="other">Show %d similar</item>
+    </plurals>
+    <string name="cd_show_similar">Show the new similar papers found</string>
+    <string name="discover_error_retry">Couldn\'t check · Retry</string>
+    <string name="discover_disclosure">Finds new similar papers via Semantic Scholar — sends only this paper\'s ID.</string>
+    <string name="discover_ordered_by">Ordered by Semantic Scholar · recent similar papers you don\'t already have</string>
+    <string name="discover_seed_not_found">This paper isn\'t in Semantic Scholar yet.</string>
+    <string name="discover_empty_none">No recent similar papers found.</string>
+    <string name="discover_empty_all_local">You already have the recent similar papers we found.</string>
+    <string name="discover_error_caption">Couldn\'t reach Semantic Scholar.</string>
+    <plurals name="discover_sheet_count">
+        <item quantity="one">%d new similar paper</item>
+        <item quantity="other">%d new similar papers</item>
+    </plurals>
+    <string name="cd_discover_open_in_app">Open %1$s in Arxiver</string>
+    <string name="cd_discover_open_browser">Open %1$s in an external browser</string>
     <string name="pdf_page_indicator">%1$d / %2$d</string>
     <string name="cd_pdf_jump">Page %1$d of %2$d, jump to page</string>
     <string name="pdf_jump_title">Jump to page</string>

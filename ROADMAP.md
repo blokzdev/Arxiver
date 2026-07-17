@@ -1650,19 +1650,30 @@ phase-sized.
   seam bound in DI (`s2Client::recommendationsForPaper`) — tests fake the wire (12 Robolectric cases:
   order/identities, arXiv + cross-source-DOI dedup, stub boundary, cap, drop-untitled, all states,
   seed-id derivation incl. the RS `/vN` DOI, verbatim transport pass-through).
-- [ ] **PDM.3 — PaperDetail "Discover similar" button + VM state.** Cloned from the P-OA `OaFulltextButton`
-  morph pattern (Idle→Loading→Ready-reopens-sheet; memoized for the VM lifetime; double-tap guard;
-  `withTimeoutOrNull(~9s)`). Visibility gate: seed carries an arXiv id OR a DOI (never a dead control).
-  Egress on TAP only; caption disclosure: "Finds new similar papers via Semantic Scholar — sends only this
-  paper's ID." Strings + `cd_` + light/dark previews per state from day one.
-- [ ] **PDM.4 — results `ModalBottomSheet` + CHECKPOINT.** Ranked list (S2's order, "Ordered by Semantic
-  Scholar" header note — no fabricated similarity %), source chip for non-arXiv rows, honest survivor
-  count. Row actions: arXiv → persist via `cacheSearchHit` (native fetch) + open detail; non-arXiv →
-  browser (doi.org / openAccessPdf / S2 landing) — read-only, matching the shipped PT.3 posture. The sheet
-  issues ZERO network on scroll (everything is in hand from the one response); re-tap reopens memoized (no
-  re-egress). CHECKPOINT gates: build green · red-line audit test (`AllowedHosts` byte-unchanged) ·
-  egress-fires-on-tap-only structural intent · VERIFICATION §PDM rows (live arXiv-seed + DOI-seed call,
-  `from`-pool behavior, keyless-429 degraded state, offline tap, unindexed-seed NotFound, TalkBack).
+- [x] **PDM.3 — PaperDetail "Discover similar" button + VM state.** Cloned from the P-OA `OaFulltextButton`
+  morph pattern: `DiscoverUiState{Idle|Loading|Done(result)}` on `PaperDetailViewModel`; `discoverSimilar()`
+  memoized for the VM lifetime with a Loading double-tap guard AND a non-Error-terminal guard (Ready reopens
+  the memoized sheet; only a retryable Error re-fires) + `withTimeoutOrNull(9s)`. Visibility gate
+  `isDiscoverable` (arXiv id OR DOI — never a dead control). Egress on TAP only; the below-row caption IS
+  the pre-tap disclosure ("sends only this paper's ID") and the post-tap honest-outcome line. Strings + `cd_`
+  + previews. Tests: `PaperDetailViewModelTest` +4 (Ready, re-tap-never-re-billed [call-counter], Error
+  stays retryable, `isDiscoverable`).
+- [x] **PDM.4 — results `ModalBottomSheet` + CHECKPOINT.** Bounded list in S2's order, "Ordered by Semantic
+  Scholar · recent similar papers you don't already have" header (no fabricated %), honest survivor count
+  plural. Rows: title (2-line) + authors/year/venue byline; arXiv row → in-app (`onPaperClick`, the
+  destination fetch-persists); non-arXiv row → browser (doi.org → OA pdf → S2 landing) with the
+  external-link icon — read-only, the shipped PT.3 posture. ZERO network on open/scroll (all in hand from
+  the one memoized response); re-tap reopens without re-egress. CHECKPOINT gates: build green ·
+  `AllowedHostsAuditTest` (host set byte-unchanged, `api.semanticscholar.org` present) · VERIFICATION §PDM.
+  **Live-verified end-to-end pre-merge (emu, real S2 call):** the tap fired the real recommendations
+  endpoint and returned **20 genuinely-topical deduped results** with correct provenance — AND surfaced a
+  real bug the fixtures couldn't (the recommendations router **400s on the `tldr` field** that graph-search
+  accepts; fixed with a `RECOMMENDATION_FIELDS` constant + a regression pin, re-verified live green).
+- [ ] **CHECKPOINT P-Discover-MLT** — `./gradlew build` green; DB VERSION untouched (17); red-line audit
+  (`AllowedHostsAuditTest` — no new host; egress = seed-ID-only, on tap only; no telemetry; no new dep);
+  `:core:* ∌ :app`; light/dark previews + TalkBack. Device rows in VERIFICATION §PDM (the row-tap→browser/
+  in-app open leg — deferred off the emulator by Mink shared-host contention; `from`-pool copy confirm;
+  keyless-429/offline/unindexed-seed degraded states on a real network; TalkBack over the sheet).
 - [ ] **PDM.5 — [DEFERRED, double-gated] bge re-rank fast-follow.** On-device pairwise cosine + ScoreBar %
   + an honest absolute floor. Gates: a VERIFICATION device-latency measurement (~20 abstracts embedded) AND
   a Co-Founder UX call. MUST hard-gate on `ModelState.Ready` (an ungated `embedPassages` triggers a

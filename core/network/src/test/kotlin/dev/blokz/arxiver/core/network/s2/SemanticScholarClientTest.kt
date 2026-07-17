@@ -192,6 +192,9 @@ class SemanticScholarClientTest {
             assertTrue(path.startsWith("/recommendations/v1/papers/forpaper/ARXIV:1706.03762"), path)
             assertTrue(path.contains("limit=30"), path)
             assertTrue(path.contains("fields="), path)
+            // The recommendations router 400s on `tldr` (verified live 2026-07-17) — it must NOT be requested
+            // here even though the graph-search sibling accepts it. This pin guards a copy-paste regression.
+            assertTrue(!path.contains("tldr"), "recommendations must not request the unsupported tldr field: $path")
         }
 
     @Test

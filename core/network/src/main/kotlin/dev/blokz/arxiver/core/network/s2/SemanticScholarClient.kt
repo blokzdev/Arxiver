@@ -177,7 +177,7 @@ class SemanticScholarClient(
                 "$baseUrl/recommendations/v1/papers/forpaper".toHttpUrl().newBuilder()
                     .addPathSegment(seedId)
                     .addQueryParameter("limit", limit.toString())
-                    .addQueryParameter("fields", SEARCH_FIELDS)
+                    .addQueryParameter("fields", RECOMMENDATION_FIELDS)
                     .build()
             val request =
                 Request.Builder()
@@ -224,6 +224,12 @@ class SemanticScholarClient(
             "paperId,citationCount,references.externalIds,references.title,citations.externalIds,citations.title"
         private const val SEARCH_FIELDS =
             "paperId,title,abstract,tldr,openAccessPdf,externalIds,venue,year,authors,citationCount"
+
+        // The recommendations router does NOT accept `tldr` — requesting it 400s ("Unrecognized or
+        // unsupported fields: [tldr]"), verified against the live endpoint 2026-07-17. The two S2 APIs share
+        // a host but not a field vocabulary; discovery doesn't display the tldr anyway.
+        private const val RECOMMENDATION_FIELDS =
+            "paperId,title,abstract,openAccessPdf,externalIds,venue,year,authors,citationCount"
 
         /** S2's `year` filter: `2019-2023` / `2019-` / `-2023` / `2020`; null when both bounds absent. */
         internal fun yearFilter(
