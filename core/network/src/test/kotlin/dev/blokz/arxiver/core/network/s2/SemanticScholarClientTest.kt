@@ -160,4 +160,77 @@ class SemanticScholarClientTest {
         assertEquals("-2023", SemanticScholarClient.yearFilter(null, 2023))
         assertNull(SemanticScholarClient.yearFilter(null, null))
     }
+
+    // --- recommendationsForPaper (P-Discover-MLT PDM.1) ---
+
+    // The documented /recommendations/v1/papers/forpaper envelope: `recommendedPapers` of the SAME
+    // paper shape as search (fields param reuses SEARCH_FIELDS) — re-confirm against a live GET
+    // (VERIFICATION §PDM) before trusting field names.
+    private fun recommendationsBody() =
+        """
+        { "recommendedPapers": [
+          { "paperId": "r1", "title": "A very similar paper", "abstract": "Similar things.",
+            "externalIds": {"ArXiv":"2606.11111","CorpusId":1}, "venue": "", "year": 2026,
+            "authors": [{"authorId":"9","name":"C. Lee"}], "citationCount": 3 },
+          { "paperId": "r2", "title": "A DOI-only recommendation",
+            "externalIds": {"DOI":"10.1101/2026.06.01.123456","CorpusId":2}, "year": 2026 }
+        ] }
+        """.trimIndent()
+
+    @Test
+    fun `recommendationsForPaper hits the recommendations router with an arXiv seed`() =
+        runTest {
+            enqueue(recommendationsBody())
+            val r = client().recommendationsForPaper("ARXIV:1706.03762", limit = 30)
+            assertIs<AppResult.Success<S2RecommendationsResponse>>(r)
+            assertEquals(2, r.value.recommendedPapers.size)
+            assertEquals("2606.11111", r.value.recommendedPapers[0].externalIds?.ArXiv)
+            val path = server.takeRequest().path!!
+            // The recommendations API is NOT under /graph/v1 — a copy-paste of the search base path
+            // would 404 in production while passing any envelope-only test. (`:` is a legal pchar and
+            // stays literal in the segment.)
+            assertTrue(path.startsWith("/recommendations/v1/papers/forpaper/ARXIV:1706.03762"), path)
+            assertTrue(path.contains("limit=30"), path)
+            assertTrue(path.contains("fields="), path)
+            // The recommendations router 400s on `tldr` (verified live 2026-07-17) — it must NOT be requested
+            // here even though the graph-search sibling accepts it. This pin guards a copy-paste regression.
+            assertTrue(!path.contains("tldr"), "recommendations must not request the unsupported tldr field: $path")
+        }
+
+    @Test
+    fun `a DOI seed is one ENCODED path segment - its slash cannot inject extra segments`() =
+        runTest {
+            enqueue(recommendationsBody())
+            client().recommendationsForPaper("DOI:10.21203/rs.3.rs-27656/v1", limit = 10)
+            val path = server.takeRequest().path!!
+            // HttpUrl.addPathSegment percent-encodes the DOI's slashes: the seed stays ONE segment.
+            // Raw interpolation (the paperByArxivId style) would produce .../forpaper/DOI:10.21203/rs.3…
+            // — extra segments and a broken route. (`:` is a legal pchar and stays literal.)
+            assertTrue(path.contains("/forpaper/DOI:10.21203%2Frs.3.rs-27656%2Fv1"), path)
+        }
+
+    @Test
+    fun `an empty recommendations envelope decodes to an empty list, not a crash`() =
+        runTest {
+            enqueue("""{ "recommendedPapers": [] }""")
+            val r = client().recommendationsForPaper("ARXIV:2606.00001", limit = 30)
+            assertIs<AppResult.Success<S2RecommendationsResponse>>(r)
+            assertTrue(r.value.recommendedPapers.isEmpty())
+        }
+
+    @Test
+    fun `an unindexed seed 404 surfaces as Upstream(404) - distinct from empty`() =
+        runTest {
+            server.enqueue(MockResponse().setResponseCode(404).setBody("""{"error":"Paper not found"}"""))
+            val r = client().recommendationsForPaper("DOI:10.9999/unknown", limit = 30)
+            assertEquals(AppResult.Failure(AppError.Upstream(404)), r)
+        }
+
+    @Test
+    fun `recommendations 429 surfaces as Upstream(429) - the keyless anonymous-pool case`() =
+        runTest {
+            server.enqueue(MockResponse().setResponseCode(429).setBody("rate limited"))
+            val r = client().recommendationsForPaper("ARXIV:2606.00001", limit = 30)
+            assertEquals(AppResult.Failure(AppError.Upstream(429)), r)
+        }
 }

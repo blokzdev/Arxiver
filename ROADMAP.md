@@ -1615,6 +1615,71 @@ phase-sized.
   the Samsung session). The latent shipped NaN-offset bug found by verification is fixed + test-pinned. Deferred
   breadcrumbs recorded in the backlog ("P-ReaderZoom deferrals", 2026-07-17) — nothing silently dropped.
 
+### Phase P-Discover-MLT — "Discover more like this" *(approved 2026-07-17 — Co-Founder GO via decision sheet: trust-S2-order v1 · keyless launch)*
+
+> From a seed paper's detail screen, one tap fetches genuinely NEW similar papers the user does NOT hold —
+> ONE Semantic Scholar recommendations call (`api.semanticscholar.org`: already allowlisted, gated,
+> 1.2s-mutexed, BYOK-wired — the PT.3 backlog endpoint finds its MVP caller) → read-only dedup vs the
+> on-device corpus → a bounded sheet in S2's SPECTER2 order → persist-on-tap through existing chokepoints.
+> Zero new hosts, zero schema change, zero new dependency, egress on tap only (~1 RTT). Planned via an
+> Ultracode workflow (2 mappers + candidate-source research + 3 design stances + red-line/honesty/scope
+> judges + synthesis; all three lenses converged on the S2 spine) + my personal file:line validation of
+> every load-bearing claim — incl. confirming the red-line judge's decisive find: an ungated on-device
+> re-rank would trigger a huggingface bge download on the tap (undisclosed egress), so v1 trusts S2's
+> server-side order and the bge floor is the gated PDM.5 fast-follow. The hand-rolled arXiv cat:/au: sweep
+> (the original sketch) lost on coverage (dead for every non-arXiv seed) + the N·≥3s limiter tax → demoted
+> to a deferred conditional fallback; OpenAlex `related_works` rejected (2 metered calls, bare W-ids) →
+> HUMAN.md carve-out.
+
+- [x] **PDM.1 — S2 recommendations transport** (`:core:network`, dark). `recommendationsForPaper(seedId,
+  limit)` + `S2RecommendationsResponse{recommendedPapers: List<S2SearchPaper>}` on the existing client —
+  same gated client, 1.2s mutex, per-request BYOK supplier, error map (429→`Upstream(429)`, IO→`Offline`).
+  Two traps designed out (test-pinned): the base path is `/recommendations/v1/`, NOT `/graph/v1/` (shared
+  host, different router); the seed id is ONE encoded path segment via `HttpUrl.addPathSegment` — a DOI's
+  slashes become `%2F` and can never inject extra segments (the sibling `paperByArxivId` raw-interpolation
+  style is safe only for arXiv ids). The `from` pool param is deliberately omitted in v1 (endpoint default;
+  UI copy says "recent"). Tests: arXiv-seed routing, DOI-seed encoded-path proof, empty envelope, 404, 429.
+- [x] **PDM.2 — `DiscoverSimilarRepository`** (`:app/data`, dark). Mirrors `SemanticNeighborsRepository`'s
+  typed-result shape: `DiscoverResult{Ready|SeedNotFound|EmptyNoneReturned|EmptyAllLocal|Error}` — the
+  three failure families stay DISTINCT (a retryable Error must never read as "no similar papers"; the two
+  empty causes get different honest copy; 404 = SeedNotFound, non-retryable). Candidates map through
+  `ArxivId.parse` + `normalizeDoi` ONCE; dedup is read-only and keyed EXACTLY like persistence
+  (arXiv-parse-first, then the `doi_norm` crosswalk via `paperIdByDoi`) so dedup and a later save can never
+  disagree; an `S2_STUB` citation stub does NOT count as on-device (candidates held only as stubs still
+  surface). Ready carries the honest post-dedup survivor count (cap 20, request 40). Transport is a lambda
+  seam bound in DI (`s2Client::recommendationsForPaper`) — tests fake the wire (12 Robolectric cases:
+  order/identities, arXiv + cross-source-DOI dedup, stub boundary, cap, drop-untitled, all states,
+  seed-id derivation incl. the RS `/vN` DOI, verbatim transport pass-through).
+- [x] **PDM.3 — PaperDetail "Discover similar" button + VM state.** Cloned from the P-OA `OaFulltextButton`
+  morph pattern: `DiscoverUiState{Idle|Loading|Done(result)}` on `PaperDetailViewModel`; `discoverSimilar()`
+  memoized for the VM lifetime with a Loading double-tap guard AND a non-Error-terminal guard (Ready reopens
+  the memoized sheet; only a retryable Error re-fires) + `withTimeoutOrNull(9s)`. Visibility gate
+  `isDiscoverable` (arXiv id OR DOI — never a dead control). Egress on TAP only; the below-row caption IS
+  the pre-tap disclosure ("sends only this paper's ID") and the post-tap honest-outcome line. Strings + `cd_`
+  + previews. Tests: `PaperDetailViewModelTest` +4 (Ready, re-tap-never-re-billed [call-counter], Error
+  stays retryable, `isDiscoverable`).
+- [x] **PDM.4 — results `ModalBottomSheet` + CHECKPOINT.** Bounded list in S2's order, "Ordered by Semantic
+  Scholar · recent similar papers you don't already have" header (no fabricated %), honest survivor count
+  plural. Rows: title (2-line) + authors/year/venue byline; arXiv row → in-app (`onPaperClick`, the
+  destination fetch-persists); non-arXiv row → browser (doi.org → OA pdf → S2 landing) with the
+  external-link icon — read-only, the shipped PT.3 posture. ZERO network on open/scroll (all in hand from
+  the one memoized response); re-tap reopens without re-egress. CHECKPOINT gates: build green ·
+  `AllowedHostsAuditTest` (host set byte-unchanged, `api.semanticscholar.org` present) · VERIFICATION §PDM.
+  **Live-verified end-to-end pre-merge (emu, real S2 call):** the tap fired the real recommendations
+  endpoint and returned **20 genuinely-topical deduped results** with correct provenance — AND surfaced a
+  real bug the fixtures couldn't (the recommendations router **400s on the `tldr` field** that graph-search
+  accepts; fixed with a `RECOMMENDATION_FIELDS` constant + a regression pin, re-verified live green).
+- [ ] **CHECKPOINT P-Discover-MLT** — `./gradlew build` green; DB VERSION untouched (17); red-line audit
+  (`AllowedHostsAuditTest` — no new host; egress = seed-ID-only, on tap only; no telemetry; no new dep);
+  `:core:* ∌ :app`; light/dark previews + TalkBack. Device rows in VERIFICATION §PDM (the row-tap→browser/
+  in-app open leg — deferred off the emulator by Mink shared-host contention; `from`-pool copy confirm;
+  keyless-429/offline/unindexed-seed degraded states on a real network; TalkBack over the sheet).
+- [ ] **PDM.5 — [DEFERRED, double-gated] bge re-rank fast-follow.** On-device pairwise cosine + ScoreBar %
+  + an honest absolute floor. Gates: a VERIFICATION device-latency measurement (~20 abstracts embedded) AND
+  a Co-Founder UX call. MUST hard-gate on `ModelState.Ready` (an ungated `embedPassages` triggers a
+  huggingface model download on the tap — undisclosed egress) + a model/dim-mismatch guard on the stored
+  seed vector (cross-model `dotSimilarity` is an `ArrayIndexOutOfBoundsException`).
+
 ## Future phases (captured vision — user-approved sequencing 2026-07-04)
 
 > Strategic steer from the Co-Founder session of 2026-07-04, sequenced one-phase-at-a-time after
@@ -1696,6 +1761,7 @@ if a device session flags it.
 
 | Date | Decision |
 |---|---|
+| 2026-07-17 | **Phase P-Discover-MLT approved + substrate shipped (PDM.1+PDM.2) — "discover more like this" is ONE S2 recommendations call, not an arXiv sweep.** The Co-Founder GO'd the phase via the decision sheet (three calls: GO · **trust S2's SPECTER2 order in v1** (no on-device re-rank) · **keyless launch** on the anonymous pool). Planned via an Ultracode workflow (2 code-mappers → candidate-source research → 3 design stances → red-line/honesty/scope adversarial lenses → synthesis); **all three lenses converged** on the S2-recommendations spine over the original HUMAN.md sketch (arXiv `cat:`/`au:` seeding — dead for every non-arXiv seed and taxed N·≥3s on the shared limiter → demoted to a deferred conditional fallback) and over OpenAlex `related_works` (2 metered calls for bare W-ids → HUMAN.md carve-out). **The v1 no-re-rank call is a red-line finding, personally verified:** `EmbeddingService.embed → ensureSession → modelDownloader.ensureDownloaded()` means an ungated on-device re-rank would download the bge model from huggingface.co **on the discover tap** — an undisclosed egress; S2's citation-informed SPECTER2 KNN also simply out-ranks a single-seed cosine. bge + ScoreBar + an honest floor = the double-gated PDM.5 fast-follow. Substrate shipped dark: the transport (path-router + DOI-as-one-encoded-segment traps test-pinned) + the repository (typed honest states; dedup keyed exactly like persistence — arXiv-parse-first then `doi_norm`; `S2_STUB` stubs don't count as on-device; honest post-dedup counts). Zero new hosts / schema / deps; egress = the seed's identifier only, on tap only. UI (PDM.3/4) next; device rows → VERIFICATION §PDM. |
 | 2026-07-17 | **Phase P-ReaderZoom shipped — crisp tiled PDF zoom (Co-Founder GO "thorough planning implementation and testing/verification"; plan-approval delegated, P-Tools precedent).** Zoomed PDF text is now RENDERED at zoom resolution instead of GPU-upscaled: on gesture settle (~180ms), the visible region re-renders via `PdfRenderer.Page.render(bitmap, null, Matrix(setScale+postTranslate), …)` into viewport-bounded tiles blitted by a screen-space `Canvas` overlay OUTSIDE the scaled `graphicsLayer`. **Planned via an Ultracode workflow** (research agent: transform maps page POINTS→px, affine-only, `destClip=null` canonical, un-erased ARGB_8888 composites BLACK [the AndroidPdfViewer bug class], PdfRenderer not thread-safe <API 35, the API-35 `RenderParams` overload REDEFINES the args; 2 design stances; 3 adversarial lenses — **Design A "settle overlay" won all three** over the in-layer tile pyramid, whose registration claim was falsified and whose pinned-cell memory OOMs 64MB/1440p) **+ my personal file:line validation, which corrected the synthesis twice** (mapping anchors to the FULL item rect — the padded-rect mapping would misregister ~14px at 4×; density `max(W·Z, targetWidth)` not `max(W, targetWidth)·Z`) and proved one planned risk vacuous (the offset clamp ⇒ the visible preimage never leaves the viewport ⇒ only composed items are ever visible). **Emulator verification caught TWO real defects before merge:** (1) the crisp path itself proved out — **4.56× sharper by Laplacian variance**, pixel-registered; (2) **a latent SHIPPED bug**: every zoomed gesture's final all-up event has `calculateCentroid = Unspecified` (NaN) and `focalOffset` computed NaN·0 = NaN even at k=1 — the shipped layer silently swallowed the poisoned offset for weeks (GPU ignores NaN translation); the overlay's `roundToInt(NaN)` surfaced it as a crash. Fixed at the source (unspecified ⇒ centre anchor, term exactly 0; test-pinned) + a draw finiteness guard. Memory bounded by construction (tiles partition ≤ 1 viewport at ANY zoom) + heap/12 cap (√-degrade, never allocate-and-OOM) + a safety valve (heap-starved hi-DPI devices keep the soft upscale). Every reader invariant held: layout 1× (P-Read byte-identical), draw-phase-only reads, no clip, no manual recycle, continuous zoom, zero egress/DB/dependency. **Emulator env win:** the "adb can't double-tap" gotcha is SOLVED — a monkey script with `UserWait(130)` lands it reliably (memory updated). Deferred (backlog): deterministic tile recycle (profiler-gated), cross-settle tile memoisation, Design-B grid salvage at deep zoom, `FilterQuality.None`-on-1:1. Device rows (real pinch, SETTLE_MS tuning, FilterQuality A/B) → VERIFICATION §PRZ. **Next per the same steer: "discover more like this."** |
 | 2026-07-16 | **P-Ambient PA.2 shipped — the "Likely relevant" home-screen Glance widget** (resuming the ACTIVE P-Ambient phase after the reader/P-OA work leapfrogged it; loop "top-to-bottom, next open task"). Surfaces the P5 calibrated top-k likely-relevant papers on the home screen, calmly and locally (titles/count never leave the device). Adopted **Glance 1.1.1** (`glance-appwidget` + `glance-material3`) — the Co-Founder pre-approved the dep 2026-07-12; researched-confirmed the alternative (Jetpack `androidx.pdf`… n/a; the Compose-native Glance is the path). **Key calls:** the app's first `@EntryPoint` (`WidgetEntryPoint` via `EntryPointAccessors.fromApplication`) so the system-instantiated receiver reaches the `@Singleton` DAOs; a new `InboxDao.activeInboxTopK(cut, k)` reusing the SHARED `RelevanceThreshold.cut` (no drift with digest/Today) but dropping `digested_at IS NULL` + the recency floor (a widget shows *current best*, not a one-shot "new" alert) while keeping `score IS NOT NULL` (cold-start never fakes relevance); refresh piggybacks `EmbeddingWorker`'s scoring pass via `updateAll` (zero extra wakeups, `runCatching`); a new `MainActivity.EXTRA_PAPER_STORAGE_ID` deep-link so a tap opens the exact paper for **any** origin (not just the arXiv VIEW path) — the row action is Glance's reified **`actionStartActivity<MainActivity>(actionParametersOf(…))`**, deliberately **not** the raw-`Intent` overload: emulator testing this session proved Glance's raw-`Intent` `actionStartActivity(Intent)` **drops both the data URI and the extras through its cold-start trampoline** (onCreate saw `data=null extras=null` → the row deep-link silently no-op'd to Today), whereas `ActionParameters` survive because Glance serializes them through its own action pipeline (delivered verbatim as the `EXTRA_PAPER_STORAGE_ID` extra on cold start). `GlanceTheme` reuses the app `LightColors`/`DarkColors` (now `internal`) via `ColorProviders` (Glance can't run M3 dynamic colour). **Placing the widget IS the opt-in** (no toggle); **read-only → no migration**. Ethos held: no new egress, no telemetry, empty when cold-start (silence over noise). `InboxDaoTest.activeInboxTopK` covers the query; green `./gradlew build`. **Emulator-verified end-to-end** (Pixel API 34, debug): placed via the launcher picker (3×2 preview + description), rendered the header + real calibrated top-6 rows, a **cold-start row tap opened the exact paper detail** and the header opened Today. Residual for a real device (dark-theme render, non-arXiv row, worker refresh, airplane resilience) → VERIFICATION §PA. |
 | 2026-07-16 | **`PdfPageCache` shipped — a byte-bounded LRU page-bitmap cache (Co-Founder-directed follow-up to the pinch-blank fix; "do it thoroughly").** The pinch-blank fix deleted an eager per-item `bitmap.recycle()` and left bitmap lifetime to GC; this restores a *safe* memory bound + adds scroll-back reuse. **Researched first** (web): `androidx.pdf` (Jetpack) is `1.0.0-alpha01`, **SDK-35-only + Fragment-based** → not viable for minSdk-26/Compose (watch); `PdfRenderer` **requires ARGB_8888** (no RGB_565 memory halving); the canonical robust pattern is a **byte-sized `LruCache`** (`byteCount`, ~1/8 heap) recycling an evicted bitmap only when certainly unused. **Design** (every adversarial trap designed out): single owner, bounded by **total bytes** (`maxMemory/6`, not a fixed count → no foldable OOM); recycle **only off-window** pages (a composed page is `pin`ned via a DisposableEffect → never the use-after-free or permanent-spinner case; a freshly-rendered page is MRU → protected during the pin-commit window); **single-flight** per index (a fast scroll can't double-render or leak the loser); a revisited page is a **hit** (no re-render). All map/accounting under a fast non-suspending monitor; the render runs outside the lock (PdfRenderer self-serialises). P-Read invariants byte-identical (item heights/scrollFraction/scrollToItem/persist untouched). `PdfPageCacheTest` (7 cases: hit-reuse, byte-budget eviction, pin-never-evicted, MRU-protection, unpin-trims, evictAll-recycles, single-flight). Green `./gradlew build`. **Crisp-zoom vision → captured as future Phase P-ReaderZoom** (tiled region-render at zoom resolution). Device-verify (fast-scroll memory on a large PDF) → VERIFICATION §PDF-ZOOM. |

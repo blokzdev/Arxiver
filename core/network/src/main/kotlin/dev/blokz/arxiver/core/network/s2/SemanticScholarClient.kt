@@ -84,6 +84,12 @@ data class S2SearchResponse(
     val data: List<S2SearchPaper> = emptyList(),
 )
 
+/** `/recommendations/v1/papers/forpaper/{id}` envelope (P-Discover-MLT PDM.1). */
+@Serializable
+data class S2RecommendationsResponse(
+    val recommendedPapers: List<S2SearchPaper> = emptyList(),
+)
+
 /**
  * Semantic Scholar Academic Graph client (ARCHITECTURE §3.5, SPEC-DATA §2, P-Tools PT.3).
  * Free tier works keyless: requests are spaced >= 1.2s via the internal [mutex] and callers batch
@@ -150,6 +156,37 @@ class SemanticScholarClient(
             execute(request) { json.decodeFromString<S2SearchResponse>(it) }
         }
 
+    /**
+     * Paper-seeded recommendations (`/recommendations/v1/papers/forpaper/{prefix:id}`, P-Discover-MLT
+     * PDM.1) — S2's SPECTER2-embedding KNN over its corpus, backing "Discover more like this". [seedId]
+     * is the PREFIXED identifier (`ARXIV:<id>` or `DOI:<doi>`) and is the ONLY thing that leaves the
+     * device (no abstract, no derived query). NOTE two traps this method designs out: (1) the base path
+     * is `/recommendations/v1/`, NOT `/graph/v1/` — the two S2 APIs share a host but not a router;
+     * (2) the seed id is appended as a SINGLE encoded path segment via `HttpUrl.addPathSegment` — a DOI
+     * always contains `/`, and the raw-interpolation style of [paperByArxivId] (safe only for arXiv ids)
+     * would inject extra path segments. Same fields/mutex/error-map as [searchPapers]; the `from` pool
+     * param is deliberately omitted in v1 (endpoint default ≈ recent papers — the UI copy says so).
+     */
+    suspend fun recommendationsForPaper(
+        seedId: String,
+        limit: Int,
+    ): AppResult<S2RecommendationsResponse> =
+        withContext(dispatchers.io) {
+            space()
+            val url =
+                "$baseUrl/recommendations/v1/papers/forpaper".toHttpUrl().newBuilder()
+                    .addPathSegment(seedId)
+                    .addQueryParameter("limit", limit.toString())
+                    .addQueryParameter("fields", RECOMMENDATION_FIELDS)
+                    .build()
+            val request =
+                Request.Builder()
+                    .url(url)
+                    .apply { apiKey()?.let { header("x-api-key", it) } }
+                    .build()
+            execute(request) { json.decodeFromString<S2RecommendationsResponse>(it) }
+        }
+
     /** Claim a 1.2s-spaced slot (the sole politeness spacer; the caller/worker holds none). */
     private suspend fun space() =
         mutex.withLock {
@@ -187,6 +224,12 @@ class SemanticScholarClient(
             "paperId,citationCount,references.externalIds,references.title,citations.externalIds,citations.title"
         private const val SEARCH_FIELDS =
             "paperId,title,abstract,tldr,openAccessPdf,externalIds,venue,year,authors,citationCount"
+
+        // The recommendations router does NOT accept `tldr` — requesting it 400s ("Unrecognized or
+        // unsupported fields: [tldr]"), verified against the live endpoint 2026-07-17. The two S2 APIs share
+        // a host but not a field vocabulary; discovery doesn't display the tldr anyway.
+        private const val RECOMMENDATION_FIELDS =
+            "paperId,title,abstract,openAccessPdf,externalIds,venue,year,authors,citationCount"
 
         /** S2's `year` filter: `2019-2023` / `2019-` / `-2023` / `2020`; null when both bounds absent. */
         internal fun yearFilter(

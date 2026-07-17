@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.blokz.arxiver.core.common.AppError
 import dev.blokz.arxiver.core.database.entity.FollowEntity
 import dev.blokz.arxiver.core.database.entity.LibraryEntryEntity
 import dev.blokz.arxiver.core.database.entity.NoteEntity
@@ -12,6 +13,8 @@ import dev.blokz.arxiver.core.database.toListDomain
 import dev.blokz.arxiver.core.model.Paper
 import dev.blokz.arxiver.core.model.PaperRef
 import dev.blokz.arxiver.data.CategoryRepository
+import dev.blokz.arxiver.data.DiscoverResult
+import dev.blokz.arxiver.data.DiscoverSimilarRepository
 import dev.blokz.arxiver.data.LibraryRepository
 import dev.blokz.arxiver.data.NeighborsResult
 import dev.blokz.arxiver.data.OaResult
@@ -29,7 +32,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
+
+/** Ceiling on a discovery fetch — a politeness-mutex-queued call must never leave the button spinning. */
+private const val DISCOVER_TIMEOUT_MS = 9_000L
 
 data class PaperDetailUiState(
     val paper: Paper? = null,
@@ -58,6 +65,20 @@ sealed interface OaUiState {
     data object Error : OaUiState
 }
 
+/**
+ * "Discover more like this" UI state (P-Discover-MLT PDM.3), memoized for the ViewModel's lifetime —
+ * recomposition and re-taps never re-egress: a [Done]-Ready button reopens the sheet from memory, and only
+ * a retryable [DiscoverResult.Error] permits a re-fire (the two-tap morph pattern the Co-Founder ratified
+ * for P-OA). The wrapped [DiscoverResult] keeps the repository's honest terminal taxonomy verbatim.
+ */
+sealed interface DiscoverUiState {
+    data object Idle : DiscoverUiState
+
+    data object Loading : DiscoverUiState
+
+    data class Done(val result: DiscoverResult) : DiscoverUiState
+}
+
 @HiltViewModel
 class PaperDetailViewModel
     @Inject
@@ -68,6 +89,7 @@ class PaperDetailViewModel
         private val categoryRepository: CategoryRepository,
         private val syncScheduler: SyncScheduler,
         private val neighborsRepository: SemanticNeighborsRepository,
+        private val discoverRepository: DiscoverSimilarRepository,
         embeddingDao: dev.blokz.arxiver.core.database.dao.EmbeddingDao,
     ) : ViewModel() {
         // The route arg is the opaque storageId (nav Uri.encode-d) — fromStorageId dispatches arXiv vs. non-arXiv.
@@ -78,6 +100,9 @@ class PaperDetailViewModel
 
         private val _oa = MutableStateFlow<OaUiState>(OaUiState.Idle)
         val oa: StateFlow<OaUiState> = _oa.asStateFlow()
+
+        private val _discover = MutableStateFlow<DiscoverUiState>(DiscoverUiState.Idle)
+        val discover: StateFlow<DiscoverUiState> = _discover.asStateFlow()
 
         val entry: StateFlow<LibraryEntryEntity?> =
             libraryRepository.observeEntry(paperRef.storageId)
@@ -152,6 +177,30 @@ class PaperDetailViewModel
                         OaResult.None -> OaUiState.NotFound
                         is OaResult.Error -> OaUiState.Error
                     }
+            }
+        }
+
+        /** True when the loaded paper can seed a discovery (arXiv id or DOI) — drives the button's visibility. */
+        fun isDiscoverable(paper: Paper): Boolean = discoverRepository.seedIdFor(paper) != null
+
+        /**
+         * Fetch genuinely-new similar papers on an explicit tap (P-Discover-MLT PDM.3). ONE Semantic Scholar
+         * call; only the seed's identifier leaves the device. Guards: no-op while [DiscoverUiState.Loading]
+         * (double-tap) and after ANY non-Error terminal (Ready reopens the memoized sheet; the honest empties
+         * and SeedNotFound are final for this paper) — only a retryable [DiscoverResult.Error] re-fires. The
+         * timeout converts a mutex-queued hang into a retryable Error so the button can never spin forever.
+         */
+        fun discoverSimilar() {
+            val current = _discover.value
+            if (current == DiscoverUiState.Loading) return
+            if (current is DiscoverUiState.Done && current.result !is DiscoverResult.Error) return
+            val paper = _uiState.value.paper ?: return
+            viewModelScope.launch {
+                _discover.value = DiscoverUiState.Loading
+                val result =
+                    withTimeoutOrNull(DISCOVER_TIMEOUT_MS) { discoverRepository.discoverSimilar(paper) }
+                        ?: DiscoverResult.Error(AppError.Offline)
+                _discover.value = DiscoverUiState.Done(result)
             }
         }
 
