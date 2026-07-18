@@ -552,6 +552,20 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   for <title>"); the full screen-reader walkthrough (heading-landmark navigation, each row SPEAKING its
   title+byline via merged descendants, "double tap to open in Arxiver / in an external browser" via `onClickLabel`,
   ≥48dp targets, font-scale 1.3) is device-bound — needs a TalkBack session.
+- [E] **PRS-8 Auto-refresh opt-in + cached render (PRS.4).** _2026-07-17 (emu Pixel_8 / port 5554, debug,
+  pre-merge; Mink's 5556 untouched): the inline consent card rendered with the honest cadence + egress
+  disclosure ("Keep this fresh automatically? Refreshes about once a day while you use the app, sending your
+  saved/liked paper IDs to Semantic Scholar." · Turn on / Not now). "Turn on" fired the fetch → the shelf
+  became the **Cached** state: "Updated just now" staleness label + Refresh + 10 on-topic rows, and the consent
+  card was gone (won't re-nag). **Cache render proven offline:** airplane-mode ON + a COLD relaunch (fresh VM,
+  no network) still rendered "Updated just now" + 10 rows — those can only come from the DataStore cache, so
+  the one-shot init reads the cache and renders with ZERO egress._
+- [ ] **PRS-9 Auto-refresh TTL + backoff (real network).** Within 24h of a success, re-entering Today renders
+  from cache with NO new POST. Past the TTL, one background POST fires on entry. Under a failing network,
+  confirm repeated Today entries do NOT hammer S2 — the attempt-keyed backoff spaces retries (30m·2ⁿ) and the
+  last-good rows keep showing (stale-while-error).
+- [ ] **PRS-10 Opt-out wipes the cache.** Toggle auto OFF in Settings → confirm the DataStore `recshelf_cache`
+  key is cleared and a fresh Today entry shows the tap-gated Idle invite (not stale cached rows).
 
 ## PRZ. Crisp tiled PDF zoom (Phase P-ReaderZoom) _(ROADMAP P-ReaderZoom)_
 

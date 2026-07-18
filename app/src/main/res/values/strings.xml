@@ -181,6 +181,21 @@
     <string name="recshelf_error_busy">Semantic Scholar is busy · Retry</string>
     <string name="recshelf_error_generic">Couldn\'t reach Semantic Scholar · Retry</string>
     <string name="cd_recshelf_retry">Retry finding recommendations</string>
+    <!-- P-RecShelf PRS.4: opt-in auto-refresh -->
+    <string name="recshelf_auto_consent">Keep this fresh automatically? Refreshes about once a day while you use the app, sending your saved/liked paper IDs to Semantic Scholar.</string>
+    <string name="recshelf_auto_enable">Turn on</string>
+    <string name="recshelf_auto_dismiss">Not now</string>
+    <string name="recshelf_updated_recent">Updated just now</string>
+    <plurals name="recshelf_updated_hours">
+        <item quantity="one">Updated %d hour ago</item>
+        <item quantity="other">Updated %d hours ago</item>
+    </plurals>
+    <plurals name="recshelf_updated_days">
+        <item quantity="one">Updated %d day ago</item>
+        <item quantity="other">Updated %d days ago</item>
+    </plurals>
+    <string name="settings_recshelf_auto_title">Auto-refresh recommendations</string>
+    <string name="settings_recshelf_auto_desc">Refresh the Today \"Recommended for you\" shelf about once a day while you use the app. Sends the IDs of your saved/liked papers to Semantic Scholar. Off = the shelf only fetches when you tap it.</string>
     <string name="recshelf_hide">Not interested</string>
     <string name="cd_recshelf_hide">Not interested in %1$s</string>
     <string name="cd_recshelf_more">More options for %1$s</string>

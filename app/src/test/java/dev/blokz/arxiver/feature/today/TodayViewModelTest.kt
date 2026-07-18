@@ -44,6 +44,7 @@ class TodayViewModelTest {
     private lateinit var library: LibraryRepository
     private lateinit var categories: CategoryRepository
     private lateinit var context: Context
+    private lateinit var settings: dev.blokz.arxiver.data.SettingsRepository
     private lateinit var trending: dev.blokz.arxiver.data.TrendingRepository
     private lateinit var vm: TodayViewModel
 
@@ -70,10 +71,17 @@ class TodayViewModelTest {
                 override val default = kotlinx.coroutines.Dispatchers.Unconfined
                 override val main = kotlinx.coroutines.Dispatchers.Unconfined
             }
+        settings = dev.blokz.arxiver.data.SettingsRepository(context)
+        // The DataStore file is a process-shared singleton — reset the PRS.4 prefs so no prior test's
+        // auto/consent/cache state leaks in. (No lingering collectors now, so writing here is safe.)
+        kotlinx.coroutines.runBlocking {
+            settings.setRecShelfAutoRefreshEnabled(false) // also wipes the cache
+            settings.setRecShelfConsentSeen(false)
+        }
         trending =
             dev.blokz.arxiver.data.TrendingRepository(
                 db.inboxDao(),
-                dev.blokz.arxiver.data.SettingsRepository(context),
+                settings,
                 dispatchers,
             )
         vm = vmWith { _, _ -> emptyRecs() }
@@ -100,6 +108,7 @@ class TodayViewModelTest {
             db.libraryDao(),
             db.paperFeedbackDao(),
         ),
+        settings,
         categories,
         db.relevanceModelDao(),
         trending,
@@ -459,6 +468,142 @@ class TodayViewModelTest {
             // NOT left as Done(Ready(empty)) — that would collapse the header+Refresh with no way back.
             // The seed still exists, so it re-offers the invitation.
             assertEquals(RecShelfUiState.Idle(seedCount = 1), shelf.recShelf.value)
+        }
+
+    // --- PRS.4: opt-in auto-refresh ---
+
+    @Test
+    fun `enabling auto-refresh fetches and renders a Cached shelf stamped with the clock`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val fixed = 1_000_000_000L
+            val shelf = vmWith { _, _ -> recsOf(recPaper("s2-a", arxiv = "2606.22222")) }
+            shelf.now = { fixed }
+            shelf.enableAutoRefresh()
+            shelf.recShelf.test {
+                val cached = awaitGreedy { it is RecShelfUiState.Cached }
+                cached as RecShelfUiState.Cached
+                assertEquals(listOf("s2-a"), cached.hits.map { it.s2PaperId })
+                assertEquals(fixed, cached.fetchedAtMs)
+                assertFalse(cached.refreshing)
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a fresh cache renders instantly WITHOUT a network call on the next screen entry`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val fixed = 2_000_000_000L
+            var calls = 0
+            val shelf =
+                vmWith { _, _ ->
+                    calls++
+                    recsOf(recPaper("s2-a", arxiv = "2606.22222"))
+                }
+            shelf.now = { fixed }
+            shelf.enableAutoRefresh() // first fetch → cache written
+            shelf.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Cached }
+                cancelAndIgnoreRemainingEvents()
+            }
+            val afterFirst = calls
+            // A SECOND VM (a fresh screen entry), same clock, reads the FRESH cache via its init one-shot →
+            // renders Cached with NO new fetch (auto pref persisted from the first enable).
+            val shelf2 =
+                vmWith { _, _ ->
+                    calls++
+                    recsOf(recPaper("s2-a", arxiv = "2606.22222"))
+                }
+            shelf2.now = { fixed + 60_000 } // still well within the 24h TTL
+            shelf2.recShelf.test {
+                val cached = awaitGreedy { it is RecShelfUiState.Cached }
+                cached as RecShelfUiState.Cached
+                assertEquals(listOf("s2-a"), cached.hits.map { it.s2PaperId })
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertEquals(afterFirst, calls, "a fresh cache must not trigger another egress")
+        }
+
+    @Test
+    fun `opting out wipes the cache so a fresh screen entry is the tap-gated Idle shelf`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> recsOf(recPaper("s2-a", arxiv = "2606.22222")) }
+            shelf.now = { 3_000_000_000L }
+            shelf.enableAutoRefresh()
+            shelf.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Cached }
+                cancelAndIgnoreRemainingEvents()
+            }
+            // Opt out via Settings → the setter wipes the cache atomically.
+            settings.setRecShelfAutoRefreshEnabled(false)
+            assertNull(settings.recShelfCache.first(), "opt-out must wipe the cache")
+            // A fresh screen entry now reads auto=off + no cache → the tap-gated Idle invite.
+            val shelf2 = vmWith { _, _ -> recsOf(recPaper("s2-a", arxiv = "2606.22222")) }
+            shelf2.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Idle }
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `a transient empty response does NOT destroy the last-good cached rows`() =
+        runTest {
+            saveArxiv("2606.11111")
+            var empty = false
+            val shelf =
+                vmWith { _, _ -> if (empty) recsOf() else recsOf(recPaper("s2-a", arxiv = "2606.22222")) }
+            shelf.now = { 5_000_000_000L }
+            shelf.enableAutoRefresh()
+            shelf.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Cached }
+                // Now S2 hiccups with an empty result on a manual Refresh.
+                empty = true
+                shelf.refreshRecommendations()
+                // The good rows must survive (stale-while-empty), NOT collapse to an empty note.
+                val stillCached =
+                    awaitGreedy { it is RecShelfUiState.Cached && !(it as RecShelfUiState.Cached).refreshing }
+                stillCached as RecShelfUiState.Cached
+                assertEquals(listOf("s2-a"), stillCached.hits.map { it.s2PaperId })
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `after a Settings opt-out, a Refresh tap does NOT re-persist a cache`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> recsOf(recPaper("s2-a", arxiv = "2606.22222")) }
+            shelf.now = { 6_000_000_000L }
+            shelf.enableAutoRefresh()
+            shelf.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Cached }
+                cancelAndIgnoreRemainingEvents()
+            }
+            // Opt out via Settings → cache wiped + the mirrored flag flips false.
+            settings.setRecShelfAutoRefreshEnabled(false)
+            assertNull(settings.recShelfCache.first())
+            // A Refresh on the still-alive VM must run tap-gated (persist=false) — never rewrite the cache.
+            shelf.refreshRecommendations()
+            shelf.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Done }
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertNull(settings.recShelfCache.first(), "a post-opt-out refresh must not resurrect the cache")
+        }
+
+    @Test
+    fun `the consent invite is available only while auto is off and unseen`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> emptyRecs() }
+            shelf.recShelfConsentAvailable.test {
+                assertTrue(awaitGreedy { it }) // default: off + unseen → available
+                shelf.dismissAutoRefreshInvite()
+                assertFalse(awaitGreedy { !it }) // dismissed → never again
+                cancelAndIgnoreRemainingEvents()
+            }
         }
 
     @Test

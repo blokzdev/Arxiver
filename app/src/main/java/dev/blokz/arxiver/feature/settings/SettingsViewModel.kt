@@ -88,6 +88,18 @@ class SettingsViewModel
             viewModelScope.launch { settingsRepository.setTrendingEnabled(enabled) }
         }
 
+        /** "Recommended for you" auto-refresh opt-in (P-RecShelf PRS.4) — default OFF; opting out wipes the cache. */
+        val recShelfAutoRefreshEnabled: StateFlow<Boolean> =
+            settingsRepository.recShelfAutoRefreshEnabled.stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                false,
+            )
+
+        fun setRecShelfAutoRefreshEnabled(enabled: Boolean) {
+            viewModelScope.launch { settingsRepository.setRecShelfAutoRefreshEnabled(enabled) }
+        }
+
         /**
          * The shared reader night-mode preference (P-Reader2 RNM.4) — Settings is the ONLY surface where
          * `SYSTEM` is reachable (the readers' toolbar toggle only flips Light↔Dark). Separate flow (the main

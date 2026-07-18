@@ -91,7 +91,16 @@ BROWSER-tier paper's detail screen offers **Open in browser** instead of a doome
   hits in-app (the destination fetch-persists) and non-arXiv hits via the shipped browser chain (doi.org → OA PDF →
   S2 landing); a per-row "Not interested" overflow hides a row **session-only** (NEVER written to `paper_feedback`).
   Seeds carry only prefixed PUBLIC ids; the signal/source/score never leave the device (`paper_feedback` red-line
-  carve-out). *(PRS.4 adds an OPT-IN auto-refresh layer on top; the default stays tap-gated.)*
+  carve-out).
+  - **Opt-in auto-refresh (PRS.4)** — layered ON TOP; the default stays tap-gated. A one-time inline invitation
+    ("Keep this fresh automatically? … about once a day while you use the app, sending your saved/liked paper IDs
+    to Semantic Scholar") — Turn on / Not now, never nagged twice — plus a Settings toggle (default OFF). Once on:
+    the shelf renders instantly from a **DataStore-JSON cache** (no Room table — DB stays 17) with a **staleness
+    label** ("Updated Nh ago"); a background refresh fires on screen entry only when the cache is older than a
+    **24h TTL** AND an **attempt-keyed exponential backoff** window (30m·2ⁿ, capped 24h) has elapsed — so a failing
+    keyless pool is never hammered. Failures keep the last-good rows (**stale-while-error**); the last successful
+    fetch alone advances freshness. **Opt-out atomically wipes the cache** and returns to tap-gated. A live
+    Settings→Today toggle reflects on the next Today entry, not mid-session (an accepted deferral).
 - Item: title, authors (truncated), primary category chip, score bar (subtle), arrival time. Swipe right = save to library, swipe left = dismiss, tap = detail.
 - Top bar: sync status/last synced, manual refresh (respects rate limiter — shows "queued" if throttled).
 - Empty states: no follows yet → CTA to Explore's category taxonomy (forces the Library resting state); all triaged →

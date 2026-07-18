@@ -31,6 +31,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -91,6 +92,7 @@ fun TodayScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val recShelf by viewModel.recShelf.collectAsState()
+    val recConsentAvailable by viewModel.recShelfConsentAvailable.collectAsState()
     val triageEvent by viewModel.triageEvent.collectAsState()
     var weeklyReviewIds by remember { mutableStateOf<List<String>?>(null) }
     var organizeIds by remember { mutableStateOf<List<String>?>(null) }
@@ -175,6 +177,7 @@ fun TodayScreen(
                         emergingAreas = state.emergingAreas,
                         continueReading = state.continueReading,
                         recShelf = recShelf,
+                        recConsentAvailable = recConsentAvailable,
                         onPaperClick = onPaperClick,
                         onResumeReading = onResumeReading,
                         onSave = viewModel::save,
@@ -183,6 +186,8 @@ fun TodayScreen(
                         onFetchRec = viewModel::fetchRecommendations,
                         onRefreshRec = viewModel::refreshRecommendations,
                         onHideRec = viewModel::hideRecommendation,
+                        onEnableAutoRec = viewModel::enableAutoRefresh,
+                        onDismissAutoRec = viewModel::dismissAutoRefreshInvite,
                     )
             }
         }
@@ -221,6 +226,7 @@ private fun InboxList(
     emergingAreas: List<EmergingAreaUi>,
     continueReading: List<ContinueReadingUi>,
     recShelf: RecShelfUiState,
+    recConsentAvailable: Boolean,
     onPaperClick: (String) -> Unit,
     onResumeReading: (String, String) -> Unit,
     onSave: (InboxPaper) -> Unit,
@@ -229,6 +235,8 @@ private fun InboxList(
     onFetchRec: () -> Unit,
     onRefreshRec: () -> Unit,
     onHideRec: (String) -> Unit,
+    onEnableAutoRec: () -> Unit,
+    onDismissAutoRec: () -> Unit,
 ) {
     val itemsById = remember(items) { items.associateBy { it.paper.ref.storageId } }
     // SPEC-SEARCH §5: scored items lead under "Likely relevant"; rest follow.
@@ -291,10 +299,13 @@ private fun InboxList(
         // firehose; never crowds out "Likely relevant". Collapses to nothing when there's no seed.
         recShelfSection(
             state = recShelf,
+            consentAvailable = recConsentAvailable,
             onFetch = onFetchRec,
             onRefresh = onRefreshRec,
             onHide = onHideRec,
             onOpenPaper = onPaperClick,
+            onEnableAuto = onEnableAutoRec,
+            onDismissAuto = onDismissAutoRec,
         )
         if (scored.isNotEmpty() && unscored.isNotEmpty()) {
             item(key = "header-rest") { SectionHeader(stringResource(R.string.today_more_from_follows)) }
@@ -356,10 +367,13 @@ private fun InboxZeroCard() {
  */
 private fun LazyListScope.recShelfSection(
     state: RecShelfUiState,
+    consentAvailable: Boolean,
     onFetch: () -> Unit,
     onRefresh: () -> Unit,
     onHide: (String) -> Unit,
     onOpenPaper: (String) -> Unit,
+    onEnableAuto: () -> Unit,
+    onDismissAuto: () -> Unit,
 ) {
     // Nothing seedable → the shelf is simply absent (cold-start silence).
     if (state is RecShelfUiState.Hidden) return
@@ -372,16 +386,37 @@ private fun LazyListScope.recShelfSection(
     }
 
     item(key = "header-recshelf") {
+        // Refresh is offered once something has been fetched (a terminal Done that isn't NotRecommendable,
+        // or a Cached render) — never on the Idle invite or a mid-fetch Loading.
         val showRefresh =
-            state is RecShelfUiState.Done && state.result !is RecShelfResult.NotRecommendable
+            (state is RecShelfUiState.Done && state.result !is RecShelfResult.NotRecommendable) ||
+                state is RecShelfUiState.Cached
         RecShelfHeader(showRefresh = showRefresh, onRefresh = onRefresh)
     }
 
     when (state) {
-        is RecShelfUiState.Idle ->
+        is RecShelfUiState.Idle -> {
             item(key = "recshelf-invite") { RecShelfInviteCard(seedCount = state.seedCount, onFetch = onFetch) }
+            // The one-time auto-refresh invitation (PRS.4) — only while auto is OFF and not yet acted on.
+            if (consentAvailable) {
+                item(key = "recshelf-consent") {
+                    RecShelfAutoConsentCard(onEnable = onEnableAuto, onDismiss = onDismissAuto)
+                }
+            }
+        }
         is RecShelfUiState.Loading ->
             item(key = "recshelf-loading") { RecShelfLoadingRow() }
+        is RecShelfUiState.Cached -> {
+            // Provenance stays visible in the always-on auto mode too (not just tap-mode Ready) — the egress
+            // attribution matters MOST where the shelf is persistent.
+            item(key = "recshelf-provenance") { RecShelfProvenance() }
+            item(
+                key = "recshelf-staleness",
+            ) { RecShelfStaleness(fetchedAtMs = state.fetchedAtMs, refreshing = state.refreshing) }
+            items(state.hits, key = { "recshelf-${it.s2PaperId}" }) { hit ->
+                RecShelfRow(hit = hit, onOpenPaper = onOpenPaper, onHide = onHide)
+            }
+        }
         is RecShelfUiState.Done ->
             when (val result = state.result) {
                 is RecShelfResult.Ready -> {
@@ -493,6 +528,68 @@ private fun RecShelfProvenance() {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs),
     )
+}
+
+/** Auto-refresh mode caption: an honest "Updated Nh ago" staleness label, with a subtle spinner while refreshing. */
+@Composable
+private fun RecShelfStaleness(
+    fetchedAtMs: Long,
+    refreshing: Boolean,
+) {
+    val label = recShelfStalenessLabel(fetchedAtMs)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+    ) {
+        if (refreshing) {
+            CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(12.dp).padding(end = Spacing.xs))
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** "Updated just now / Nh ago / N days ago" from the last successful fetch timestamp. */
+@Composable
+private fun recShelfStalenessLabel(fetchedAtMs: Long): String {
+    val ageMs = (System.currentTimeMillis() - fetchedAtMs).coerceAtLeast(0)
+    val hours = ageMs / (60 * 60 * 1000)
+    val days = hours / 24
+    return when {
+        hours < 1 -> stringResource(R.string.recshelf_updated_recent)
+        days < 1 -> pluralStringResource(R.plurals.recshelf_updated_hours, hours.toInt(), hours.toInt())
+        else -> pluralStringResource(R.plurals.recshelf_updated_days, days.toInt(), days.toInt())
+    }
+}
+
+/** The one-time auto-refresh invitation (PRS.4) — cadence-honest, dismissible; the opt-in also lives in Settings. */
+@Composable
+private fun RecShelfAutoConsentCard(
+    onEnable: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg, vertical = Spacing.sm),
+    ) {
+        Text(
+            text = stringResource(R.string.recshelf_auto_consent),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row {
+            TextButton(onClick = onEnable) { Text(stringResource(R.string.recshelf_auto_enable)) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.recshelf_auto_dismiss)) }
+        }
+    }
 }
 
 @Composable
@@ -715,6 +812,7 @@ private fun InboxListPreview() {
                     )
                 },
             recShelf = RecShelfUiState.Idle(seedCount = 12),
+            recConsentAvailable = true,
             onPaperClick = {},
             onResumeReading = { _, _ -> },
             onSave = {},
@@ -723,6 +821,8 @@ private fun InboxListPreview() {
             onFetchRec = {},
             onRefreshRec = {},
             onHideRec = {},
+            onEnableAutoRec = {},
+            onDismissAutoRec = {},
         )
     }
 }
@@ -752,26 +852,70 @@ private fun RecShelfReadyPreview() {
                             },
                         ),
                     ),
+                consentAvailable = false,
                 onFetch = {},
                 onRefresh = {},
                 onHide = {},
                 onOpenPaper = {},
+                onEnableAuto = {},
+                onDismissAuto = {},
             )
         }
     }
 }
 
-@Preview(showBackground = true, name = "RecShelf — Idle invite")
+@Preview(showBackground = true, name = "RecShelf — Idle + auto consent")
 @Composable
 private fun RecShelfIdlePreview() {
     ArxiverTheme {
         LazyColumn {
             recShelfSection(
                 state = RecShelfUiState.Idle(seedCount = 12),
+                consentAvailable = true,
                 onFetch = {},
                 onRefresh = {},
                 onHide = {},
                 onOpenPaper = {},
+                onEnableAuto = {},
+                onDismissAuto = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "RecShelf — Cached (auto)")
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, name = "RecShelf — Cached (dark)")
+@Composable
+private fun RecShelfCachedPreview() {
+    ArxiverTheme {
+        LazyColumn {
+            recShelfSection(
+                state =
+                    RecShelfUiState.Cached(
+                        hits =
+                            PreviewFixtures.papers.take(2).map { p ->
+                                dev.blokz.arxiver.data.DiscoverHit(
+                                    s2PaperId = "s2-${p.ref.storageId}",
+                                    title = p.title,
+                                    authors = p.authors.take(3),
+                                    year = 2026,
+                                    venue = "ICML",
+                                    abstract = p.abstract,
+                                    arxivId = p.ref.arxivIdOrNull,
+                                    doi = null,
+                                    openAccessPdfUrl = null,
+                                )
+                            },
+                        fetchedAtMs = System.currentTimeMillis() - 3 * 60 * 60 * 1000,
+                        refreshing = false,
+                    ),
+                consentAvailable = false,
+                onFetch = {},
+                onRefresh = {},
+                onHide = {},
+                onOpenPaper = {},
+                onEnableAuto = {},
+                onDismissAuto = {},
             )
         }
     }
