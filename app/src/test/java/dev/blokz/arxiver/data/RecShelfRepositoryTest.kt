@@ -295,6 +295,25 @@ class RecShelfRepositoryTest {
         }
 
     @Test
+    fun `a duplicate s2PaperId in the response collapses to ONE hit - no duplicate list keys`() =
+        runBlocking {
+            save("2606.11111", addedAt = 1)
+            // S2 can repeat a paperId across a recommendation list; two identical keys would crash the
+            // LazyColumn shelf. dedupSurvivors must distinctBy s2PaperId.
+            val repo =
+                repo({ _, _ ->
+                    success(
+                        candidate(s2Id = "dup", arxiv = "2607.11111"),
+                        candidate(s2Id = "dup", arxiv = "2607.11111"),
+                        candidate(s2Id = "unique", arxiv = "2607.22222"),
+                    )
+                })
+            val r = repo.recommend(repo.seedIds())
+            assertIs<RecShelfResult.Ready>(r)
+            assertEquals(listOf("dup", "unique"), r.hits.map { it.s2PaperId })
+        }
+
+    @Test
     fun `request limit exceeds the display cap so dedup survivors can fill it`() {
         assertTrue(RecShelfRepository.REQUEST_LIMIT > RecShelfRepository.DISPLAY_CAP)
     }

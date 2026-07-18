@@ -79,9 +79,24 @@ BROWSER-tier paper's detail screen offers **Open in browser** instead of a doome
   no guilt-CTA), no count badge / notification / streak / completion badge. Finished (sustained dwell) or
   library-`read` papers drop off. This is the honest successor to the cut PA.3 "saved = to-read" shelf.
 - Sections: **Likely relevant** (Phase 3 similarity score) and **More from your follows**; recency sort pre-Phase 3.
+- **Recommended for you (P-RecShelf)** — a tap-gated shelf seeded from the user's OWN positive signals (library
+  saves ∪ thumb-ups), backed by ONE Semantic Scholar list-recommendations call. Placement is deliberate:
+  **after "Likely relevant", before "More from your follows"** — it never crowds out the user's own scored triage.
+  **Tap-gated egress = consent:** the shelf shows an **invitation card** disclosing the EXACT count of IDs the tap
+  will send ("Sends the IDs of up to N papers you've saved or liked to Semantic Scholar. Nothing else leaves your
+  device."); egress happens only on that tap; the result is memoized for the surface's life. **Absent** when nothing
+  seedable exists (cold-start silence — no empty card). Honest typed states with distinct copy: Ready (≤10 rows,
+  provenance caption + Refresh), NotRecommendable (S2 resolved none of the seeds — terminal, **no retry**),
+  none-returned / all-local empties, and retryable errors with **timeout copy ≠ offline copy**. Rows open arXiv
+  hits in-app (the destination fetch-persists) and non-arXiv hits via the shipped browser chain (doi.org → OA PDF →
+  S2 landing); a per-row "Not interested" overflow hides a row **session-only** (NEVER written to `paper_feedback`).
+  Seeds carry only prefixed PUBLIC ids; the signal/source/score never leave the device (`paper_feedback` red-line
+  carve-out). *(PRS.4 adds an OPT-IN auto-refresh layer on top; the default stays tap-gated.)*
 - Item: title, authors (truncated), primary category chip, score bar (subtle), arrival time. Swipe right = save to library, swipe left = dismiss, tap = detail.
 - Top bar: sync status/last synced, manual refresh (respects rate limiter — shows "queued" if throttled).
-- Empty states: no follows yet → CTA to Explore's category taxonomy (forces the Library resting state); all triaged → "Inbox zero" moment.
+- Empty states: no follows yet → CTA to Explore's category taxonomy (forces the Library resting state); all triaged →
+  **"Inbox zero" is now an in-list card, not a full-screen takeover** (P-RecShelf PRS.3) — so the Recommended-for-you
+  shelf and Continue-reading survive the daily triage-to-zero moment (the shelf's best user).
 
 ### Explore
 - **Search + Browse merged into one discovery surface (PC.2).** One search field over two scopes (segmented toggle): **Library** (local hybrid, live-debounced) and **Online** — a multi-source scope (arXiv natively + bioRxiv/medRxiv/chemRxiv/SSRN/… via OpenAlex + Semantic Scholar, one source per submit; see the PE.3 section below), explicit submit.

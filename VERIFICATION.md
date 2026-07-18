@@ -504,6 +504,55 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
 - [ ] **PDM-5 TalkBack over the sheet.** Row semantics merged into a full-sentence CD ("Open <title> in
   Arxiver / in an external browser"), ≥48dp rows, the header/caption `liveRegion=Polite` announce.
 
+## PRS. "Recommended for you" shelf (Phase P-RecShelf) _(ROADMAP P-RecShelf)_
+
+> A tap-gated Today shelf seeded from the user's OWN positive signals (saves ∪ thumb-ups), backed by ONE S2
+> list-recommendations POST. The transport / repository / VM-state logic is unit-tested (SemanticScholarClient
+> POST pins, RecShelfRepository 19 cases incl. idempotent-disclosure + resolved-seed dedup, TodayViewModel 7
+> shelf-state cases); the live-endpoint behaviour, the inbox-zero restructure, the degraded states on a real
+> network, and TalkBack are device-observable. Run on Arxiver's own AVD (identify by AVD name; Mink holds a
+> separate port this session — never install to / tap `mink_test`).
+
+- [E] **PRS-1 Full happy path (live list POST).** _2026-07-17 (emu Pixel_8 API 36 on isolated port 5554, debug,
+  pre-merge; Mink held 5556/Pixel_3a — untouched): saved "Attention Is All You Need" (arXiv 1706.03762) via
+  Explore → the Today shelf rendered "Recommended for you" + the **count-honest disclosure verbatim** "Sends the
+  ID of **1** paper you've saved or liked to Semantic Scholar. Nothing else leaves your device." (singular grammar
+  correct for one seed) + the invite card. Tap → Loading ("Finding
+  recommendations…") → the **real** `POST …/recommendations/v1/papers/` returned **genuinely on-topic** rows
+  (Machine Translation Text Optimization Model based on Transformer Algorithm; Neural Machine Translation for
+  English-Hindi; Achieving Constant Memory Complexity in Long Context Transformers; ResonatorLM; Latent Recurrent
+  Transformer) under the header + "Based on papers you've saved · via Semantic Scholar" caption + Refresh. No
+  network line in logcat (no telemetry — correct). Placed between "Likely relevant" and "More from your follows"._
+- [ ] **PRS-2 Seed ceiling (live probe at MAX_SEED_IDS).** With ≥20 saved seedable papers, confirm the POST body
+  carries exactly 20 ids (client clamp) and still returns 200 — records the real router max-ids ceiling for
+  SPEC-P-TOOLS §7 (docs unfetchable; only live-observable).
+- [E] **PRS-3 arXiv row in-app open.** _2026-07-17 (same session): rows split by provenance in the UI — non-arXiv
+  hits carry the `OpenInNew` icon, arXiv hits don't. Tapping an icon-less arXiv row ("ResonatorLM: Causal Resonant
+  Field Mixing…") opened the paper **IN-APP** (the detail route's skeleton → resolved to the native record with
+  "Read HTML"/"Discover similar" + the ResonatorLM abstract), confirming the destination fetch-persisted by ref —
+  NOT a browser hand-off. The non-arXiv → browser leg rides the identical shipped PDM chain (doi.org → OA PDF → S2
+  landing); the literal browser hand-off tap was not re-exercised here._
+- [E] **PRS-4 Inbox-zero restructure.** _2026-07-17 (same session): dismissed the full synced inbox to zero → the
+  "**You're all caught up**" state rendered as a COMPACT IN-LIST card ("You've triaged today's papers. New ones
+  from your follows arrive with the next sync."), with the full "Recommended for you" shelf (10 rows) still visible
+  BELOW it — NOT a full-screen takeover. The exact Co-Founder-flagged blocker resolved (the daily triage-to-zero
+  reader now sees the shelf)._
+- [E] **PRS-5 Honest degraded states (partial — offline leg live).** _2026-07-17 (same session): airplane-mode +
+  Refresh → "**You're offline · Retry**" (error color, header + Refresh retained, no false empty); disabling
+  airplane + tap Retry recovered to Ready. Still device-pending distinct-copy branches: the **9s-timeout → neutral
+  "Couldn't reach Semantic Scholar · Retry"** (Upstream(null), not unit-testable — see the VM note in
+  TodayViewModelTest), keyless-pool **429 → "Semantic Scholar is busy · Retry"**, and **NotRecommendable → "No
+  recommendations for your library yet" (no retry button)**._
+- [E] **PRS-6 "Not interested" is session-only.** _2026-07-17 (same session): overflow (⋮) → "Not interested" on
+  "Machine Translation Text Optimization Model…" removed exactly that row and the list re-flowed (a 4th rec
+  surfaced). No feedback write is possible by construction (`hideRecommendation` mutates only in-memory VM state;
+  the unit test `hideRecommendation removes only that row and never writes feedback` pins it — an on-device DB
+  re-query wasn't available: no sqlite3 binary on this AVD)._
+- [ ] **PRS-7 TalkBack over the shelf.** The overflow labels are confirmed present in the a11y tree ("More options
+  for <title>"); the full screen-reader walkthrough (heading-landmark navigation, each row SPEAKING its
+  title+byline via merged descendants, "double tap to open in Arxiver / in an external browser" via `onClickLabel`,
+  ≥48dp targets, font-scale 1.3) is device-bound — needs a TalkBack session.
+
 ## PRZ. Crisp tiled PDF zoom (Phase P-ReaderZoom) _(ROADMAP P-ReaderZoom)_
 
 > On gesture settle the visible region re-renders at zoom resolution (sharp tiles over the soft upscaled base).

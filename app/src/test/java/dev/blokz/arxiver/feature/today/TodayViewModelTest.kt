@@ -43,12 +43,14 @@ class TodayViewModelTest {
     private lateinit var inbox: InboxRepository
     private lateinit var library: LibraryRepository
     private lateinit var categories: CategoryRepository
+    private lateinit var context: Context
+    private lateinit var trending: dev.blokz.arxiver.data.TrendingRepository
     private lateinit var vm: TodayViewModel
 
     @Before
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        context = ApplicationProvider.getApplicationContext<Context>()
         // Idempotent across test classes in a shared JVM — re-init throws otherwise.
         runCatching { WorkManagerTestInitHelper.initializeTestWorkManager(context) }
         db =
@@ -68,23 +70,73 @@ class TodayViewModelTest {
                 override val default = kotlinx.coroutines.Dispatchers.Unconfined
                 override val main = kotlinx.coroutines.Dispatchers.Unconfined
             }
-        val trending =
+        trending =
             dev.blokz.arxiver.data.TrendingRepository(
                 db.inboxDao(),
                 dev.blokz.arxiver.data.SettingsRepository(context),
                 dispatchers,
             )
-        vm =
-            TodayViewModel(
-                inbox,
-                SyncScheduler(context),
-                library,
-                categories,
-                db.relevanceModelDao(),
-                trending,
-                dev.blokz.arxiver.data.ReadingProgressRepository(db.readingPositionDao()),
-            )
+        vm = vmWith { _, _ -> emptyRecs() }
     }
+
+    private fun emptyRecs() =
+        dev.blokz.arxiver.core.common.AppResult.Success(
+            dev.blokz.arxiver.core.network.s2.S2RecommendationsResponse(emptyList()),
+        )
+
+    /** A VM wired to a fake recommendations transport (the wire itself is covered by the client suite). */
+    private fun vmWith(
+        transport: suspend (
+            List<String>,
+            Int,
+        ) -> dev.blokz.arxiver.core.common.AppResult<dev.blokz.arxiver.core.network.s2.S2RecommendationsResponse>,
+    ) = TodayViewModel(
+        inbox,
+        SyncScheduler(context),
+        library,
+        dev.blokz.arxiver.data.RecShelfRepository(
+            transport,
+            db.paperDao(),
+            db.libraryDao(),
+            db.paperFeedbackDao(),
+        ),
+        categories,
+        db.relevanceModelDao(),
+        trending,
+        dev.blokz.arxiver.data.ReadingProgressRepository(db.readingPositionDao()),
+    )
+
+    private suspend fun saveArxiv(id: String) {
+        val p =
+            Paper(
+                ref = ArxivRef(ArxivId(id)),
+                latestVersion = 1,
+                title = "T $id",
+                abstract = "A",
+                publishedAt = Instant.EPOCH,
+                updatedAt = Instant.EPOCH,
+                primaryCategory = "cs.LG",
+                categories = listOf("cs.LG"),
+                authors = listOf("A"),
+            )
+        db.paperDao().upsertPaperWithRelations(p.toEntity(), p.authors, p.categories)
+        db.libraryDao().upsertEntry(LibraryEntryEntity(paperId = id, addedAt = 1))
+    }
+
+    private fun recPaper(
+        s2Id: String,
+        arxiv: String,
+    ) = dev.blokz.arxiver.core.network.s2.S2SearchPaper(
+        paperId = s2Id,
+        title = "Rec $s2Id",
+        externalIds = dev.blokz.arxiver.core.network.s2.S2ExternalIds(ArXiv = arxiv),
+        year = 2026,
+    )
+
+    private fun recsOf(vararg papers: dev.blokz.arxiver.core.network.s2.S2SearchPaper) =
+        dev.blokz.arxiver.core.common.AppResult.Success(
+            dev.blokz.arxiver.core.network.s2.S2RecommendationsResponse(papers.toList()),
+        )
 
     @After
     fun tearDown() {
@@ -286,6 +338,143 @@ class TodayViewModelTest {
                 assertEquals(0.4, calibrated.relevantThreshold, 1e-9)
                 cancelAndIgnoreRemainingEvents()
             }
+        }
+
+    // --- P-RecShelf PRS.3: the "Recommended for you" shelf ---
+
+    @Test
+    fun `the shelf is Hidden when no seedable positive exists`() =
+        runTest {
+            val shelf = vmWith { _, _ -> emptyRecs() }
+            assertEquals(RecShelfUiState.Hidden, shelf.recShelf.value)
+        }
+
+    @Test
+    fun `a saved arXiv paper puts the shelf in Idle with the exact disclosed count`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> emptyRecs() }
+            assertEquals(RecShelfUiState.Idle(seedCount = 1), shelf.recShelf.value)
+        }
+
+    @Test
+    fun `the fetch sends EXACTLY the disclosed seed ids and yields Ready`() =
+        runTest {
+            saveArxiv("2606.11111")
+            var sent: List<String>? = null
+            val shelf =
+                vmWith { ids, _ ->
+                    sent = ids
+                    recsOf(recPaper("s2-r1", arxiv = "2606.22222"))
+                }
+            val disclosed = (shelf.recShelf.value as RecShelfUiState.Idle).seedCount
+
+            shelf.fetchRecommendations()
+
+            // disclosed == sent, structurally: the count on the card is the size of the list on the wire.
+            assertEquals(disclosed, sent?.size)
+            assertEquals(listOf("ARXIV:2606.11111"), sent)
+            val done = shelf.recShelf.value as RecShelfUiState.Done
+            val ready = done.result as dev.blokz.arxiver.data.RecShelfResult.Ready
+            assertEquals(listOf("s2-r1"), ready.hits.map { it.s2PaperId })
+        }
+
+    @Test
+    fun `a 400 maps to terminal NotRecommendable`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf =
+                vmWith { _, _ ->
+                    dev.blokz.arxiver.core.common.AppResult.Failure(
+                        dev.blokz.arxiver.core.common.AppError.Upstream(400),
+                    )
+                }
+            shelf.fetchRecommendations()
+            val done = shelf.recShelf.value as RecShelfUiState.Done
+            assertTrue(done.result is dev.blokz.arxiver.data.RecShelfResult.NotRecommendable)
+        }
+
+    @Test
+    fun `offline maps to a retryable Error - distinct from the neutral timeout`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf =
+                vmWith { _, _ ->
+                    dev.blokz.arxiver.core.common.AppResult.Failure(dev.blokz.arxiver.core.common.AppError.Offline)
+                }
+            shelf.fetchRecommendations()
+            val done = shelf.recShelf.value as RecShelfUiState.Done
+            val err = done.result as dev.blokz.arxiver.data.RecShelfResult.Error
+            assertEquals(dev.blokz.arxiver.core.common.AppError.Offline, err.error)
+        }
+
+    // NOTE: the 9s-timeout → neutral Error(Upstream(null)) branch is intentionally NOT unit-tested — the
+    // VM's Main dispatcher isn't tied to runTest's scheduler, so virtual time can't advance the timeout
+    // deterministically (a real 9s delay would be a flaky, slow test). It's a device leg instead:
+    // VERIFICATION §PRS "airplane-mode mid-fetch → neutral 'Couldn't reach' copy, distinct from offline".
+
+    @Test
+    fun `hideRecommendation removes only that row and never writes feedback`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf =
+                vmWith { _, _ ->
+                    recsOf(
+                        recPaper("s2-a", arxiv = "2606.22222"),
+                        recPaper("s2-b", arxiv = "2606.33333"),
+                    )
+                }
+            shelf.fetchRecommendations()
+
+            shelf.hideRecommendation("s2-a")
+
+            val done = shelf.recShelf.value as RecShelfUiState.Done
+            val ready = done.result as dev.blokz.arxiver.data.RecShelfResult.Ready
+            assertEquals(listOf("s2-b"), ready.hits.map { it.s2PaperId })
+            // "Not interested" is session-only — it must NOT persist a negative label.
+            assertNull(db.paperFeedbackDao().voteFor("2606.22222"))
+        }
+
+    @Test
+    fun `an unexpected transport throw settles to a retryable Error - never stuck on Loading`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> throw IllegalStateException("boom") }
+            shelf.fetchRecommendations()
+            // The throw must be caught: shelf is Done(Error), not stuck Loading (and no VM-scope crash).
+            val done = shelf.recShelf.value as RecShelfUiState.Done
+            assertTrue(done.result is dev.blokz.arxiver.data.RecShelfResult.Error)
+        }
+
+    @Test
+    fun `hiding the LAST row returns the shelf to a re-offerable state - not a collapsed dead section`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> recsOf(recPaper("s2-only", arxiv = "2606.22222")) }
+            shelf.fetchRecommendations()
+            assertTrue(shelf.recShelf.value is RecShelfUiState.Done)
+
+            shelf.hideRecommendation("s2-only")
+
+            // NOT left as Done(Ready(empty)) — that would collapse the header+Refresh with no way back.
+            // The seed still exists, so it re-offers the invitation.
+            assertEquals(RecShelfUiState.Idle(seedCount = 1), shelf.recShelf.value)
+        }
+
+    @Test
+    fun `a save after the shelf is fetched does not reset the engaged shelf`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> recsOf(recPaper("s2-a", arxiv = "2606.22222")) }
+            shelf.fetchRecommendations()
+            assertTrue(shelf.recShelf.value is RecShelfUiState.Done)
+
+            seedInbox("2401.99999")
+            val item = inbox.observeInbox().first().single { it.paper.id.value == "2401.99999" }
+            shelf.save(item)
+
+            // The memoized Done shelf survives a later save (refreshSeedState is guarded on Done/Loading).
+            assertTrue(shelf.recShelf.value is RecShelfUiState.Done)
         }
 }
 

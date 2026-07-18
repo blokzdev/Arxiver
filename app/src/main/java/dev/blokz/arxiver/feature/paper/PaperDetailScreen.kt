@@ -107,6 +107,8 @@ import dev.blokz.arxiver.data.DiscoverResult
 import dev.blokz.arxiver.data.NeighborsResult
 import dev.blokz.arxiver.data.PdfStorage
 import dev.blokz.arxiver.data.RelatedPaper
+import dev.blokz.arxiver.data.s2.browserFallbackUrl
+import dev.blokz.arxiver.data.s2.bylineText
 import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.feature.paper.ask.AskSheet
 import dev.blokz.arxiver.feature.paper.ask.ConversationMarkdown
@@ -1298,11 +1300,7 @@ private fun DiscoverResultsSheet(
                                 if (arxivId != null) {
                                     onOpenArxiv(arxivId.value)
                                 } else {
-                                    val url =
-                                        hit.doi?.let { "https://doi.org/$it" }
-                                            ?: hit.openAccessPdfUrl
-                                            ?: "https://www.semanticscholar.org/paper/${hit.s2PaperId}"
-                                    uriHandler.openUri(url)
+                                    uriHandler.openUri(hit.browserFallbackUrl())
                                 }
                             }
                             .padding(vertical = Spacing.sm)
@@ -1315,12 +1313,7 @@ private fun DiscoverResultsSheet(
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        val byline =
-                            listOfNotNull(
-                                hit.authors.take(3).joinToString(", ").takeIf { it.isNotBlank() },
-                                hit.year?.toString(),
-                                hit.venue,
-                            ).joinToString(" · ")
+                        val byline = hit.bylineText()
                         if (byline.isNotBlank()) {
                             Text(
                                 text = byline,

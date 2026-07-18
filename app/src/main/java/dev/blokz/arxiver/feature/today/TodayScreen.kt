@@ -2,18 +2,29 @@ package dev.blokz.arxiver.feature.today
 
 import android.content.res.Configuration
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.TaskAlt
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,12 +42,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import dev.blokz.arxiver.R
 import dev.blokz.arxiver.core.claude.RoutineAction
@@ -45,6 +61,9 @@ import dev.blokz.arxiver.core.model.ArxivTaxonomy
 import dev.blokz.arxiver.data.ContinueReadingUi
 import dev.blokz.arxiver.data.EmergingAreaUi
 import dev.blokz.arxiver.data.InboxPaper
+import dev.blokz.arxiver.data.RecShelfResult
+import dev.blokz.arxiver.data.s2.browserFallbackUrl
+import dev.blokz.arxiver.data.s2.bylineText
 import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.feature.organize.OrganizeSheet
 import dev.blokz.arxiver.ui.components.EmptyState
@@ -71,6 +90,7 @@ fun TodayScreen(
     viewModel: TodayViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val recShelf by viewModel.recShelf.collectAsState()
     val triageEvent by viewModel.triageEvent.collectAsState()
     var weeklyReviewIds by remember { mutableStateOf<List<String>?>(null) }
     var organizeIds by remember { mutableStateOf<List<String>?>(null) }
@@ -145,23 +165,24 @@ fun TodayScreen(
                         onAction = onGoBrowse,
                     )
                 state.loading -> SkeletonList()
-                state.items.isEmpty() ->
-                    EmptyState(
-                        title = stringResource(R.string.today_inbox_zero_title),
-                        body = stringResource(R.string.today_inbox_zero_body),
-                        icon = Icons.Outlined.TaskAlt,
-                    )
+                // Inbox-zero no longer takes over the whole surface (PRS.3): InboxList renders the
+                // "all caught up" card as an in-list item so Continue-reading and the recommendations
+                // shelf survive the daily triage-to-zero moment — the shelf's best user.
                 else ->
                     InboxList(
                         items = state.items,
                         threshold = state.relevantThreshold,
                         emergingAreas = state.emergingAreas,
                         continueReading = state.continueReading,
+                        recShelf = recShelf,
                         onPaperClick = onPaperClick,
                         onResumeReading = onResumeReading,
                         onSave = viewModel::save,
                         onDismiss = viewModel::dismiss,
                         onVote = viewModel::relevanceVote,
+                        onFetchRec = viewModel::fetchRecommendations,
+                        onRefreshRec = viewModel::refreshRecommendations,
+                        onHideRec = viewModel::hideRecommendation,
                     )
             }
         }
@@ -199,11 +220,15 @@ private fun InboxList(
     threshold: Double,
     emergingAreas: List<EmergingAreaUi>,
     continueReading: List<ContinueReadingUi>,
+    recShelf: RecShelfUiState,
     onPaperClick: (String) -> Unit,
     onResumeReading: (String, String) -> Unit,
     onSave: (InboxPaper) -> Unit,
     onDismiss: (InboxPaper) -> Unit,
     onVote: (InboxPaper, Boolean) -> Unit,
+    onFetchRec: () -> Unit,
+    onRefreshRec: () -> Unit,
+    onHideRec: (String) -> Unit,
 ) {
     val itemsById = remember(items) { items.associateBy { it.paper.ref.storageId } }
     // SPEC-SEARCH §5: scored items lead under "Likely relevant"; rest follow.
@@ -218,6 +243,11 @@ private fun InboxList(
             .toSet()
     val (scored, unscored) = items.partition { it.paper.ref.storageId in scoredIds }
     LazyColumn(modifier = Modifier.fillMaxSize()) {
+        // Inbox-zero as an in-list card (PRS.3): the "all caught up" message no longer replaces the
+        // whole surface, so the shelf + Continue-reading below it survive an empty inbox.
+        if (items.isEmpty()) {
+            item(key = "inbox-zero-card") { InboxZeroCard() }
+        }
         // "Continue reading" (P-Read) — papers you genuinely scrolled into and haven't finished, at the very top.
         // Collapsible-by-absence: renders only when something honestly qualifies (no "start reading!" guilt-CTA).
         if (continueReading.isNotEmpty()) {
@@ -257,6 +287,15 @@ private fun InboxList(
                 )
             }
         }
+        // "Recommended for you" (P-RecShelf) — AFTER the user's own scored triage, BEFORE the follows
+        // firehose; never crowds out "Likely relevant". Collapses to nothing when there's no seed.
+        recShelfSection(
+            state = recShelf,
+            onFetch = onFetchRec,
+            onRefresh = onRefreshRec,
+            onHide = onHideRec,
+            onOpenPaper = onPaperClick,
+        )
         if (scored.isNotEmpty() && unscored.isNotEmpty()) {
             item(key = "header-rest") { SectionHeader(stringResource(R.string.today_more_from_follows)) }
         }
@@ -279,6 +318,304 @@ private fun InboxList(
 }
 
 private const val RELEVANT_TOP_K = 10
+
+/** The in-list "all caught up" card (PRS.3) — compact, so the shelf below it stays visible at inbox-zero. */
+@Composable
+private fun InboxZeroCard() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg, vertical = Spacing.lg),
+    ) {
+        Icon(
+            Icons.Outlined.TaskAlt,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(modifier = Modifier.padding(start = Spacing.md)) {
+            Text(
+                text = stringResource(R.string.today_inbox_zero_title),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Text(
+                text = stringResource(R.string.today_inbox_zero_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * The "Recommended for you" shelf section (PRS.3), rendered as LazyColumn items so it flows inline with
+ * the feed. Tap-gated: [RecShelfUiState.Idle] shows a disclosed invitation, [onFetch] is the only egress
+ * trigger, the result is memoized. Collapses to zero items when [RecShelfUiState.Hidden] (no seedable
+ * positive) or when a Ready list has been fully hidden — no lonely header.
+ */
+private fun LazyListScope.recShelfSection(
+    state: RecShelfUiState,
+    onFetch: () -> Unit,
+    onRefresh: () -> Unit,
+    onHide: (String) -> Unit,
+    onOpenPaper: (String) -> Unit,
+) {
+    // Nothing seedable → the shelf is simply absent (cold-start silence).
+    if (state is RecShelfUiState.Hidden) return
+    // The two "render nothing" terminals in ONE place: a Ready list emptied by "Not interested" on every
+    // row, and a NoSeeds result (defensive — the VM normally converts empty seeds to Hidden before any
+    // fetch, but guarding here keeps the header from appearing alone if that ever changes).
+    if (state is RecShelfUiState.Done) {
+        val r = state.result
+        if (r is RecShelfResult.NoSeeds || (r is RecShelfResult.Ready && r.hits.isEmpty())) return
+    }
+
+    item(key = "header-recshelf") {
+        val showRefresh =
+            state is RecShelfUiState.Done && state.result !is RecShelfResult.NotRecommendable
+        RecShelfHeader(showRefresh = showRefresh, onRefresh = onRefresh)
+    }
+
+    when (state) {
+        is RecShelfUiState.Idle ->
+            item(key = "recshelf-invite") { RecShelfInviteCard(seedCount = state.seedCount, onFetch = onFetch) }
+        is RecShelfUiState.Loading ->
+            item(key = "recshelf-loading") { RecShelfLoadingRow() }
+        is RecShelfUiState.Done ->
+            when (val result = state.result) {
+                is RecShelfResult.Ready -> {
+                    item(key = "recshelf-provenance") { RecShelfProvenance() }
+                    items(result.hits, key = { "recshelf-${it.s2PaperId}" }) { hit ->
+                        RecShelfRow(hit = hit, onOpenPaper = onOpenPaper, onHide = onHide)
+                    }
+                }
+                is RecShelfResult.Error ->
+                    item(key = "recshelf-error") { RecShelfErrorCard(error = result.error, onRetry = onFetch) }
+                RecShelfResult.NotRecommendable ->
+                    item(key = "recshelf-note") { RecShelfNote(stringResource(R.string.recshelf_not_recommendable)) }
+                RecShelfResult.EmptyNoneReturned ->
+                    item(key = "recshelf-note") { RecShelfNote(stringResource(R.string.recshelf_empty_none)) }
+                RecShelfResult.EmptyAllLocal ->
+                    item(key = "recshelf-note") { RecShelfNote(stringResource(R.string.recshelf_empty_all_local)) }
+                // NoSeeds can only arise if the library emptied mid-session; treat as silence.
+                RecShelfResult.NoSeeds -> Unit
+            }
+        RecShelfUiState.Hidden -> Unit // handled above
+    }
+}
+
+@Composable
+private fun RecShelfHeader(
+    showRefresh: Boolean,
+    onRefresh: () -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        SectionHeader(
+            text = stringResource(R.string.recshelf_heading),
+            // The section title is a heading landmark for TalkBack navigation.
+            modifier = Modifier.weight(1f).semantics { heading() },
+        )
+        if (showRefresh) {
+            IconButton(onClick = onRefresh, modifier = Modifier.padding(end = Spacing.sm)) {
+                Icon(Icons.Filled.Refresh, contentDescription = stringResource(R.string.cd_recshelf_refresh))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecShelfInviteCard(
+    seedCount: Int,
+    onFetch: () -> Unit,
+) {
+    // The disclosure IS the pre-tap contract: the count shown is EXACTLY what the tap sends.
+    val disclosure = pluralStringResource(R.plurals.recshelf_disclosure, seedCount, seedCount)
+    val invite = pluralStringResource(R.plurals.recshelf_invite, seedCount, seedCount)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(onClickLabel = stringResource(R.string.cd_recshelf_fetch), onClick = onFetch)
+                .padding(horizontal = Spacing.lg, vertical = Spacing.md)
+                .semantics(mergeDescendants = true) {},
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = invite,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.padding(start = Spacing.sm),
+            )
+        }
+        Text(
+            text = disclosure,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = Spacing.xs),
+        )
+    }
+}
+
+@Composable
+private fun RecShelfLoadingRow() {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = Spacing.lg, vertical = Spacing.md)
+                .semantics(mergeDescendants = true) {},
+    ) {
+        CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+        Text(
+            text = stringResource(R.string.recshelf_loading),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = Spacing.md),
+        )
+    }
+}
+
+@Composable
+private fun RecShelfProvenance() {
+    Text(
+        text = stringResource(R.string.recshelf_provenance),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.xs),
+    )
+}
+
+@Composable
+private fun RecShelfNote(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = Spacing.lg, vertical = Spacing.md),
+    )
+}
+
+@Composable
+private fun RecShelfErrorCard(
+    error: dev.blokz.arxiver.core.common.AppError,
+    onRetry: () -> Unit,
+) {
+    // Timeout (Upstream(null)) and 5xx get a NEUTRAL "couldn't reach"; Offline and 429 get their own copy.
+    val message =
+        when {
+            error is dev.blokz.arxiver.core.common.AppError.Offline -> stringResource(R.string.recshelf_error_offline)
+            error is dev.blokz.arxiver.core.common.AppError.Upstream && error.httpCode == 429 ->
+                stringResource(R.string.recshelf_error_busy)
+            else -> stringResource(R.string.recshelf_error_generic)
+        }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(onClickLabel = stringResource(R.string.cd_recshelf_retry), onClick = onRetry)
+                .padding(horizontal = Spacing.lg, vertical = Spacing.md),
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+/**
+ * One recommendation row. a11y (PRS.3 fix over the PDM sheet's CD-override): merge the title+byline so
+ * TalkBack SPEAKS them, and put the open intent on the clickable's [onClickLabel] instead of replacing
+ * the text with a contentDescription. arXiv hits open in-app (the destination fetch-persists); non-arXiv
+ * hits open in the browser via the shipped doi.org → OA PDF → S2-landing chain.
+ */
+@Composable
+private fun RecShelfRow(
+    hit: dev.blokz.arxiver.data.DiscoverHit,
+    onOpenPaper: (String) -> Unit,
+    onHide: (String) -> Unit,
+) {
+    val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+    val inApp = hit.arxivId != null
+    val openLabel =
+        if (inApp) stringResource(R.string.recshelf_open_in_app) else stringResource(R.string.recshelf_open_browser)
+    val hideCd = stringResource(R.string.cd_recshelf_hide, hit.title)
+    var menuOpen by remember { mutableStateOf(false) }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .clickable(onClickLabel = openLabel) {
+                    val arxivId = hit.arxivId
+                    if (arxivId != null) {
+                        onOpenPaper(arxivId.value)
+                    } else {
+                        uriHandler.openUri(hit.browserFallbackUrl())
+                    }
+                }
+                .padding(start = Spacing.lg, top = Spacing.sm, bottom = Spacing.sm)
+                .semantics(mergeDescendants = true) {},
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = hit.title,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val byline = hit.bylineText()
+            if (byline.isNotBlank()) {
+                Text(
+                    text = byline,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        if (!inApp) {
+            Icon(
+                Icons.AutoMirrored.Filled.OpenInNew,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = Spacing.sm),
+            )
+        }
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.cd_recshelf_more, hit.title),
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.recshelf_hide)) },
+                    onClick = {
+                        menuOpen = false
+                        onHide(hit.s2PaperId)
+                    },
+                    modifier = Modifier.semantics { contentDescription = hideCd },
+                )
+            }
+        }
+    }
+}
 
 /**
  * One "Continue reading" row (P-Read): a paper you genuinely scrolled into, with a subtle POSITION line (never
@@ -377,11 +714,65 @@ private fun InboxListPreview() {
                         updatedAt = 0,
                     )
                 },
+            recShelf = RecShelfUiState.Idle(seedCount = 12),
             onPaperClick = {},
             onResumeReading = { _, _ -> },
             onSave = {},
             onDismiss = {},
             onVote = { _, _ -> },
+            onFetchRec = {},
+            onRefreshRec = {},
+            onHideRec = {},
         )
+    }
+}
+
+@Preview(showBackground = true, name = "RecShelf — Ready")
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, name = "RecShelf — Ready (dark)")
+@Composable
+private fun RecShelfReadyPreview() {
+    ArxiverTheme {
+        LazyColumn {
+            recShelfSection(
+                state =
+                    RecShelfUiState.Done(
+                        RecShelfResult.Ready(
+                            PreviewFixtures.papers.take(3).map { p ->
+                                dev.blokz.arxiver.data.DiscoverHit(
+                                    s2PaperId = "s2-${p.ref.storageId}",
+                                    title = p.title,
+                                    authors = p.authors.take(3),
+                                    year = 2026,
+                                    venue = "NeurIPS",
+                                    abstract = p.abstract,
+                                    arxivId = p.ref.arxivIdOrNull,
+                                    doi = if (p.ref.arxivIdOrNull == null) "10.1101/2026.01.01.1" else null,
+                                    openAccessPdfUrl = null,
+                                )
+                            },
+                        ),
+                    ),
+                onFetch = {},
+                onRefresh = {},
+                onHide = {},
+                onOpenPaper = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "RecShelf — Idle invite")
+@Composable
+private fun RecShelfIdlePreview() {
+    ArxiverTheme {
+        LazyColumn {
+            recShelfSection(
+                state = RecShelfUiState.Idle(seedCount = 12),
+                onFetch = {},
+                onRefresh = {},
+                onHide = {},
+                onOpenPaper = {},
+            )
+        }
     }
 }
