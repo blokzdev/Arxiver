@@ -32,6 +32,9 @@ class SettingsRepository
         private val lastDigestPostedAtKey = longPreferencesKey("last_digest_posted_at")
         private val trendingEnabledKey = booleanPreferencesKey("trending_enabled")
         private val trendingCacheKey = stringPreferencesKey("trending_cache")
+        private val recShelfAutoKey = booleanPreferencesKey("recshelf_auto_refresh_enabled")
+        private val recShelfConsentSeenKey = booleanPreferencesKey("recshelf_consent_seen")
+        private val recShelfCacheKey = stringPreferencesKey("recshelf_cache")
         private val readerThemeModeKey = stringPreferencesKey("reader_theme_mode")
 
         val syncIntervalHours: Flow<Int> =
@@ -120,6 +123,37 @@ class SettingsRepository
 
         suspend fun setTrendingCache(json: String) {
             context.dataStore.edit { it[trendingCacheKey] = json }
+        }
+
+        /**
+         * "Recommended for you" AUTO-REFRESH opt-in (P-RecShelf PRS.4); default OFF — the shelf stays tap-gated
+         * until flipped on. Opting OUT atomically wipes the cache in the same edit, so no stale recommendations
+         * (or their derived seed egress) linger past consent withdrawal.
+         */
+        val recShelfAutoRefreshEnabled: Flow<Boolean> =
+            context.dataStore.data.map { it[recShelfAutoKey] ?: false }
+
+        suspend fun setRecShelfAutoRefreshEnabled(enabled: Boolean) {
+            context.dataStore.edit { prefs ->
+                prefs[recShelfAutoKey] = enabled
+                if (!enabled) prefs.remove(recShelfCacheKey) // opt-out wipes the cache — one atomic edit
+            }
+        }
+
+        /** Whether the one-time inline auto-refresh invitation has been acted on (enabled OR dismissed) — never nag twice. */
+        val recShelfConsentSeen: Flow<Boolean> =
+            context.dataStore.data.map { it[recShelfConsentSeenKey] ?: false }
+
+        suspend fun setRecShelfConsentSeen(seen: Boolean = true) {
+            context.dataStore.edit { it[recShelfConsentSeenKey] = seen }
+        }
+
+        /** The auto-refresh recommendations cache (JSON: hits + last-success time + backoff state, PRS.4). Null = none. */
+        val recShelfCache: Flow<String?> =
+            context.dataStore.data.map { it[recShelfCacheKey] }
+
+        suspend fun setRecShelfCache(json: String) {
+            context.dataStore.edit { it[recShelfCacheKey] = json }
         }
 
         /** When the last digest was actually posted (the daily-cap cursor); 0 = never. Kept distinct from the

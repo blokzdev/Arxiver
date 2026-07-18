@@ -81,6 +81,7 @@ fun SettingsScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val trendingEnabled by viewModel.trendingEnabled.collectAsState()
+    val recShelfAutoEnabled by viewModel.recShelfAutoRefreshEnabled.collectAsState()
     val readerThemeMode by viewModel.readerThemeMode.collectAsState()
     val rankerHealth by viewModel.rankerHealth.collectAsState()
     val backupJson by viewModel.backupJson.collectAsState()
@@ -174,6 +175,8 @@ fun SettingsScreen(
             onSetDigestEnabled = onSetDigestEnabled,
             trendingEnabled = trendingEnabled,
             onSetTrendingEnabled = viewModel::setTrendingEnabled,
+            recShelfAutoEnabled = recShelfAutoEnabled,
+            onSetRecShelfAutoEnabled = viewModel::setRecShelfAutoRefreshEnabled,
             readerThemeMode = readerThemeMode,
             onSetReaderTheme = viewModel::setReaderTheme,
             onDownloadModel = viewModel::downloadModel,
@@ -206,6 +209,8 @@ private fun SettingsContent(
     onSetDigestEnabled: (Boolean) -> Unit,
     trendingEnabled: Boolean,
     onSetTrendingEnabled: (Boolean) -> Unit,
+    recShelfAutoEnabled: Boolean,
+    onSetRecShelfAutoEnabled: (Boolean) -> Unit,
     readerThemeMode: ReaderThemeMode,
     onSetReaderTheme: (ReaderThemeMode) -> Unit,
     onDownloadModel: () -> Unit,
@@ -284,6 +289,29 @@ private fun SettingsContent(
             androidx.compose.material3.Switch(
                 checked = trendingEnabled,
                 onCheckedChange = onSetTrendingEnabled,
+            )
+        }
+
+        // "Recommended for you" auto-refresh opt-in (P-RecShelf PRS.4) — this one DOES egress (saved/liked
+        // paper IDs to Semantic Scholar), so the description discloses it; off keeps the shelf tap-gated.
+        Row(
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Spacing.md),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.settings_recshelf_auto_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    stringResource(R.string.settings_recshelf_auto_desc),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            androidx.compose.material3.Switch(
+                checked = recShelfAutoEnabled,
+                onCheckedChange = onSetRecShelfAutoEnabled,
             )
         }
 
@@ -487,6 +515,8 @@ private fun SettingsContentPreview() {
             onSetDigestEnabled = {},
             trendingEnabled = false,
             onSetTrendingEnabled = {},
+            recShelfAutoEnabled = false,
+            onSetRecShelfAutoEnabled = {},
             readerThemeMode = ReaderThemeMode.SYSTEM,
             onSetReaderTheme = {},
             onDownloadModel = {},

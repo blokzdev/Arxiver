@@ -552,6 +552,16 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   for <title>"); the full screen-reader walkthrough (heading-landmark navigation, each row SPEAKING its
   title+byline via merged descendants, "double tap to open in Arxiver / in an external browser" via `onClickLabel`,
   ≥48dp targets, font-scale 1.3) is device-bound — needs a TalkBack session.
+- [ ] **PRS-8 Auto-refresh opt-in + cached render (PRS.4).** Tap the inline "Keep this fresh automatically? …
+  Turn on" invite (or the Settings toggle) → the shelf refetches and thereafter renders instantly from cache
+  on Today entry with an "Updated Nh ago" staleness label + Refresh. Confirm the one-time invite never
+  reappears after Turn-on / Not-now (the `recshelf_consent_seen` pref).
+- [ ] **PRS-9 Auto-refresh TTL + backoff (real network).** Within 24h of a success, re-entering Today renders
+  from cache with NO new POST. Past the TTL, one background POST fires on entry. Under a failing network,
+  confirm repeated Today entries do NOT hammer S2 — the attempt-keyed backoff spaces retries (30m·2ⁿ) and the
+  last-good rows keep showing (stale-while-error).
+- [ ] **PRS-10 Opt-out wipes the cache.** Toggle auto OFF in Settings → confirm the DataStore `recshelf_cache`
+  key is cleared and a fresh Today entry shows the tap-gated Idle invite (not stale cached rows).
 
 ## PRZ. Crisp tiled PDF zoom (Phase P-ReaderZoom) _(ROADMAP P-ReaderZoom)_
 
