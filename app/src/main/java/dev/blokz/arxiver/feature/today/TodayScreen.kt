@@ -407,6 +407,9 @@ private fun LazyListScope.recShelfSection(
         is RecShelfUiState.Loading ->
             item(key = "recshelf-loading") { RecShelfLoadingRow() }
         is RecShelfUiState.Cached -> {
+            // Provenance stays visible in the always-on auto mode too (not just tap-mode Ready) — the egress
+            // attribution matters MOST where the shelf is persistent.
+            item(key = "recshelf-provenance") { RecShelfProvenance() }
             item(
                 key = "recshelf-staleness",
             ) { RecShelfStaleness(fetchedAtMs = state.fetchedAtMs, refreshing = state.refreshing) }

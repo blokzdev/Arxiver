@@ -177,6 +177,13 @@ class TodayViewModel
                 autoEnabled = settings.recShelfAutoRefreshEnabled.first()
                 if (autoEnabled) autoLoadShelf()
             }
+            // Keep the mirrored flag accurate even across a Settings opt-out (this VM outlives the Settings
+            // round-trip), so a later Refresh tap can't re-persist a cache the opt-out just wiped. PURE field
+            // mirror — NO DB / no autoLoadShelf here — so it can't query a closed DB in tests, and a cache
+            // WRITE re-emitting the pref just re-sets the same bool (no fetch loop).
+            viewModelScope.launch {
+                settings.recShelfAutoRefreshEnabled.collect { autoEnabled = it }
+            }
         }
 
         /**
@@ -259,45 +266,56 @@ class TodayViewModel
          * cache as a success-empty so we don't re-hit for the TTL. Tap-gated mode (persist=false) is the
          * PRS.3 behavior: Done(result), no cache.
          */
+        private var fetching = false
+
         private suspend fun runFetch(
             ids: List<String>,
             persist: Boolean,
             priorCache: RecShelfCache?,
         ) {
-            cachedSeedIds = ids
-            if (ids.isEmpty()) {
-                _recShelf.value = RecShelfUiState.Hidden
-                return
-            }
-            val stale = if (persist) priorCache?.hits?.takeIf { it.isNotEmpty() }?.map { it.toHit() } else null
-            _recShelf.value =
-                if (stale != null) {
-                    RecShelfUiState.Cached(stale, priorCache!!.fetchedAtMs, refreshing = true)
+            // Serialize all fetch entry points (the init one-shot, a tap, Refresh) — two overlapping
+            // recommend() calls would double-egress against the keyless pool AND both read the same
+            // failedAttempts, undercounting the backoff. The callers' Loading-guard misses the race window
+            // before Loading is set; this flag closes it.
+            if (fetching) return
+            fetching = true
+            try {
+                cachedSeedIds = ids
+                if (ids.isEmpty()) {
+                    _recShelf.value = RecShelfUiState.Hidden
+                    return
+                }
+                val stale = if (persist) priorCache?.hits?.takeIf { it.isNotEmpty() }?.map { it.toHit() } else null
+                _recShelf.value =
+                    if (stale != null) {
+                        RecShelfUiState.Cached(stale, priorCache!!.fetchedAtMs, refreshing = true)
+                    } else {
+                        RecShelfUiState.Loading
+                    }
+                val nowMs = now()
+                // A queued 1.2s mutex slot could otherwise hang forever; the timeout maps to a NEUTRAL "couldn't
+                // reach" error (Upstream(null)) — distinct from Offline. A stray throw (a dedup DB read / transport
+                // rethrow) is caught so the shelf never sticks on the spinner and viewModelScope never crashes.
+                val result =
+                    try {
+                        withTimeoutOrNull(RECSHELF_TIMEOUT_MS) { recShelfRepository.recommend(ids) }
+                            ?: RecShelfResult.Error(AppError.Upstream(null))
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        RecShelfResult.Error(AppError.Unexpected(e))
+                    }
+                if (persist) {
+                    persistAndRender(
+                        result,
+                        nowMs,
+                        priorCache,
+                    )
                 } else {
-                    RecShelfUiState.Loading
+                    _recShelf.value = RecShelfUiState.Done(result)
                 }
-            val nowMs = now()
-            // A queued 1.2s mutex slot could otherwise hang forever; the timeout maps to a NEUTRAL "couldn't
-            // reach" error (Upstream(null)) — distinct from Offline. A stray throw (a dedup DB read / transport
-            // rethrow) is caught so the shelf never sticks on the spinner and viewModelScope never crashes.
-            val result =
-                try {
-                    withTimeoutOrNull(RECSHELF_TIMEOUT_MS) { recShelfRepository.recommend(ids) }
-                        ?: RecShelfResult.Error(AppError.Upstream(null))
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    RecShelfResult.Error(AppError.Unexpected(e))
-                }
-            if (persist) {
-                persistAndRender(
-                    result,
-                    nowMs,
-                    priorCache,
-                    staleHits = stale,
-                )
-            } else {
-                _recShelf.value = RecShelfUiState.Done(result)
+            } finally {
+                fetching = false
             }
         }
 
@@ -305,38 +323,47 @@ class TodayViewModel
             result: RecShelfResult,
             nowMs: Long,
             priorCache: RecShelfCache?,
-            staleHits: List<DiscoverHit>?,
         ) {
+            if (result is RecShelfResult.Ready) {
+                writeCache(RecShelfCache(fetchedAtMs = nowMs, hits = result.hits.map { it.toCached() }))
+                _recShelf.value = RecShelfUiState.Cached(result.hits, nowMs, refreshing = false)
+                return
+            }
+            // Any NON-success (Error, empty, NotRecommendable): NEVER destroy the last good rows. If we have
+            // them, keep showing them (stale-while-error/empty) and advance backoff so we retry LATER — a
+            // transient hiccup must not blank a populated shelf or lock it fresh for the whole TTL.
+            val priorHits = priorCache?.hits?.takeIf { it.isNotEmpty() }
+            if (priorHits != null) {
+                val attempts = priorCache.failedAttempts + 1
+                writeCache(
+                    priorCache.copy(
+                        failedAttempts = attempts,
+                        nextAllowedAtMs = RecShelfRefreshPolicy.nextAllowedAt(nowMs, attempts),
+                    ),
+                )
+                _recShelf.value = RecShelfUiState.Cached(priorHits.map { it.toHit() }, priorCache.fetchedAtMs, refreshing = false)
+                return
+            }
+            // No good rows to protect — surface the honest outcome.
             when (result) {
-                is RecShelfResult.Ready -> {
-                    writeCache(RecShelfCache(fetchedAtMs = nowMs, hits = result.hits.map { it.toCached() }))
-                    _recShelf.value = RecShelfUiState.Cached(result.hits, nowMs, refreshing = false)
-                }
                 is RecShelfResult.Error -> {
-                    // Backoff advances; the last SUCCESSFUL rows/time are preserved (stale-while-error).
                     val attempts = (priorCache?.failedAttempts ?: 0) + 1
                     writeCache(
                         RecShelfCache(
                             fetchedAtMs = priorCache?.fetchedAtMs ?: 0,
-                            hits = priorCache?.hits ?: emptyList(),
+                            hits = emptyList(),
                             failedAttempts = attempts,
                             nextAllowedAtMs = RecShelfRefreshPolicy.nextAllowedAt(nowMs, attempts),
                         ),
                     )
-                    _recShelf.value =
-                        if (staleHits != null && priorCache != null) {
-                            RecShelfUiState.Cached(staleHits, priorCache.fetchedAtMs, refreshing = false)
-                        } else {
-                            RecShelfUiState.Done(result)
-                        }
                 }
                 else -> {
-                    // Empties + NotRecommendable = the server answered with nothing to show. Cache a
-                    // success-empty (resets the TTL clock) so we don't re-hit for 24h, and show the honest note.
+                    // Empties + NotRecommendable with nothing to protect: cache a success-empty (resets the TTL
+                    // clock) so we don't re-hit for 24h; the note is honest and a manual Refresh bypasses it.
                     writeCache(RecShelfCache(fetchedAtMs = nowMs, hits = emptyList()))
-                    _recShelf.value = RecShelfUiState.Done(result)
                 }
             }
+            _recShelf.value = RecShelfUiState.Done(result)
         }
 
         private suspend fun readCache(): RecShelfCache? =

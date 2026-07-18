@@ -136,7 +136,13 @@ class SettingsRepository
         suspend fun setRecShelfAutoRefreshEnabled(enabled: Boolean) {
             context.dataStore.edit { prefs ->
                 prefs[recShelfAutoKey] = enabled
-                if (!enabled) prefs.remove(recShelfCacheKey) // opt-out wipes the cache — one atomic edit
+                if (enabled) {
+                    // Enabling via ANY path (inline card OR Settings) counts as "consent acted on" — so a later
+                    // Settings opt-out never re-shows the one-time inline invite.
+                    prefs[recShelfConsentSeenKey] = true
+                } else {
+                    prefs.remove(recShelfCacheKey) // opt-out wipes the cache — one atomic edit
+                }
             }
         }
 

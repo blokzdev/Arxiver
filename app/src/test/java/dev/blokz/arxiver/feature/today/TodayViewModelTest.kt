@@ -548,6 +548,52 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `a transient empty response does NOT destroy the last-good cached rows`() =
+        runTest {
+            saveArxiv("2606.11111")
+            var empty = false
+            val shelf =
+                vmWith { _, _ -> if (empty) recsOf() else recsOf(recPaper("s2-a", arxiv = "2606.22222")) }
+            shelf.now = { 5_000_000_000L }
+            shelf.enableAutoRefresh()
+            shelf.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Cached }
+                // Now S2 hiccups with an empty result on a manual Refresh.
+                empty = true
+                shelf.refreshRecommendations()
+                // The good rows must survive (stale-while-empty), NOT collapse to an empty note.
+                val stillCached =
+                    awaitGreedy { it is RecShelfUiState.Cached && !(it as RecShelfUiState.Cached).refreshing }
+                stillCached as RecShelfUiState.Cached
+                assertEquals(listOf("s2-a"), stillCached.hits.map { it.s2PaperId })
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+
+    @Test
+    fun `after a Settings opt-out, a Refresh tap does NOT re-persist a cache`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> recsOf(recPaper("s2-a", arxiv = "2606.22222")) }
+            shelf.now = { 6_000_000_000L }
+            shelf.enableAutoRefresh()
+            shelf.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Cached }
+                cancelAndIgnoreRemainingEvents()
+            }
+            // Opt out via Settings → cache wiped + the mirrored flag flips false.
+            settings.setRecShelfAutoRefreshEnabled(false)
+            assertNull(settings.recShelfCache.first())
+            // A Refresh on the still-alive VM must run tap-gated (persist=false) — never rewrite the cache.
+            shelf.refreshRecommendations()
+            shelf.recShelf.test {
+                awaitGreedy { it is RecShelfUiState.Done }
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertNull(settings.recShelfCache.first(), "a post-opt-out refresh must not resurrect the cache")
+        }
+
+    @Test
     fun `the consent invite is available only while auto is off and unseen`() =
         runTest {
             saveArxiv("2606.11111")
