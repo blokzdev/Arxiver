@@ -3,9 +3,9 @@ package dev.blokz.arxiver.data
 import dev.blokz.arxiver.core.model.ArxivId
 import kotlinx.serialization.Serializable
 
-/**
+/*
  * The opt-in auto-refresh substrate for the "Recommended for you" shelf (P-RecShelf PRS.4). A
- * DataStore-JSON cache (NO Room table — DB stays 17) plus a PURE [RecShelfRefreshPolicy] that decides,
+ * DataStore-JSON cache (NO Room table — DB stays 17) plus a PURE RecShelfRefreshPolicy that decides,
  * from timestamps alone, when a background auto-refresh may fire. The policy is separated out and
  * exhaustively unit-tested because a naive version (refresh whenever the shelf is visible) would hammer
  * Semantic Scholar's shared keyless pool during an outage — the review's anti-backoff blocker.

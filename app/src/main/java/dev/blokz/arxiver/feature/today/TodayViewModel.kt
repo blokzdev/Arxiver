@@ -221,7 +221,8 @@ class TodayViewModel
             val cache = readCache()
             val nowMs = now()
             if (cache != null && RecShelfRefreshPolicy.isFresh(nowMs, cache) && cache.hits.isNotEmpty()) {
-                _recShelf.value = RecShelfUiState.Cached(cache.hits.map { it.toHit() }, cache.fetchedAtMs, refreshing = false)
+                _recShelf.value =
+                    RecShelfUiState.Cached(cache.hits.map { it.toHit() }, cache.fetchedAtMs, refreshing = false)
                 return
             }
             val stale = cache?.hits?.takeIf { it.isNotEmpty() }?.map { it.toHit() }
@@ -341,7 +342,8 @@ class TodayViewModel
                         nextAllowedAtMs = RecShelfRefreshPolicy.nextAllowedAt(nowMs, attempts),
                     ),
                 )
-                _recShelf.value = RecShelfUiState.Cached(priorHits.map { it.toHit() }, priorCache.fetchedAtMs, refreshing = false)
+                _recShelf.value =
+                    RecShelfUiState.Cached(priorHits.map { it.toHit() }, priorCache.fetchedAtMs, refreshing = false)
                 return
             }
             // No good rows to protect — surface the honest outcome.
