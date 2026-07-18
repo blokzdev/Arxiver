@@ -69,5 +69,27 @@ internal suspend fun dedupSurvivors(
 ): List<DiscoverHit> =
     returned
         .mapNotNull { it.toDiscoverHit() }
+        // Collapse an upstream duplicate paperId to ONE hit — otherwise two identical LazyColumn keys
+        // crash the shelf (S2 can repeat a paperId across a recommendation list).
+        .distinctBy { it.s2PaperId }
         .filterNot { paperDao.holdsOnDevice(it) }
         .take(cap)
+
+/** The row byline: up to 3 authors · year · venue, " · "-joined; blank when nothing is present. */
+internal fun DiscoverHit.bylineText(): String =
+    listOfNotNull(
+        authors.take(3).joinToString(", ").takeIf { it.isNotBlank() },
+        year?.toString(),
+        venue,
+    ).joinToString(" · ")
+
+/**
+ * The browser-open target for a non-arXiv hit: doi.org first (stable, resolver-routed), else the
+ * open-access PDF, else the S2 landing page. One author for this fallback ORDER across every
+ * recommendations surface (the PaperDetail sheet + the Today shelf) — it is a product decision, so
+ * it must not drift between the two.
+ */
+internal fun DiscoverHit.browserFallbackUrl(): String =
+    doi?.let { "https://doi.org/$it" }
+        ?: openAccessPdfUrl
+        ?: "https://www.semanticscholar.org/paper/$s2PaperId"

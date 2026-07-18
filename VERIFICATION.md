@@ -517,7 +517,7 @@ see the `[E]` items and the Verification-log. §I re-checks now pass on the emul
   pre-merge; Mink held 5556/Pixel_3a — untouched): saved "Attention Is All You Need" (arXiv 1706.03762) via
   Explore → the Today shelf rendered "Recommended for you" + the **count-honest disclosure verbatim** "Sends the
   ID of **1** paper you've saved or liked to Semantic Scholar. Nothing else leaves your device." (singular grammar
-  correct for one seed) + the invite "Find papers like the 1 you've saved". Tap → Loading ("Finding
+  correct for one seed) + the invite card. Tap → Loading ("Finding
   recommendations…") → the **real** `POST …/recommendations/v1/papers/` returned **genuinely on-topic** rows
   (Machine Translation Text Optimization Model based on Transformer Algorithm; Neural Machine Translation for
   English-Hindi; Achieving Constant Memory Complexity in Long Context Transformers; ResonatorLM; Latent Recurrent

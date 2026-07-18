@@ -146,6 +146,12 @@ class TodayViewModel
             if (_recShelf.value is RecShelfUiState.Loading || _recShelf.value is RecShelfUiState.Done) return
             viewModelScope.launch {
                 val ids = recShelfRepository.seedIds()
+                // Re-check AFTER the DB suspension: a tap could have flipped the shelf to Loading/Done
+                // while seedIds() was awaiting. Writing unconditionally would revert an in-flight fetch to
+                // Idle and un-gate a second (double) egress. TOCTOU guard.
+                if (_recShelf.value is RecShelfUiState.Loading || _recShelf.value is RecShelfUiState.Done) {
+                    return@launch
+                }
                 cachedSeedIds = ids
                 _recShelf.value = if (ids.isEmpty()) RecShelfUiState.Hidden else RecShelfUiState.Idle(ids.size)
             }
@@ -172,9 +178,18 @@ class TodayViewModel
             _recShelf.value = RecShelfUiState.Loading
             // A queued 1.2s mutex slot could otherwise hang the shelf indefinitely; the timeout maps to a
             // NEUTRAL "couldn't reach" error (Upstream(null)) — deliberately distinct from Offline's copy.
+            // The repository maps AppResult failures to typed results, but a DB read in dedup (or an
+            // unexpected transport throw) could still escape; catch it so the shelf never sticks on the
+            // spinner (and the exception never crashes viewModelScope) — an unexpected throw is retryable.
             val result =
-                withTimeoutOrNull(RECSHELF_TIMEOUT_MS) { recShelfRepository.recommend(ids) }
-                    ?: RecShelfResult.Error(AppError.Upstream(null))
+                try {
+                    withTimeoutOrNull(RECSHELF_TIMEOUT_MS) { recShelfRepository.recommend(ids) }
+                        ?: RecShelfResult.Error(AppError.Upstream(null))
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    RecShelfResult.Error(AppError.Unexpected(e))
+                }
             _recShelf.value = RecShelfUiState.Done(result)
         }
 
@@ -183,7 +198,14 @@ class TodayViewModel
             val current = _recShelf.value
             if (current is RecShelfUiState.Done && current.result is RecShelfResult.Ready) {
                 val remaining = current.result.hits.filterNot { it.s2PaperId == s2PaperId }
-                _recShelf.value = RecShelfUiState.Done(RecShelfResult.Ready(remaining))
+                if (remaining.isEmpty()) {
+                    // Hid the LAST row — don't leave a collapsed dead section (header + Refresh would
+                    // vanish with no way back). Reset to the re-offerable invitation instead.
+                    _recShelf.value = RecShelfUiState.Hidden
+                    refreshSeedState()
+                } else {
+                    _recShelf.value = RecShelfUiState.Done(RecShelfResult.Ready(remaining))
+                }
             }
         }
 

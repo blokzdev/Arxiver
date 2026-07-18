@@ -62,6 +62,8 @@ import dev.blokz.arxiver.data.ContinueReadingUi
 import dev.blokz.arxiver.data.EmergingAreaUi
 import dev.blokz.arxiver.data.InboxPaper
 import dev.blokz.arxiver.data.RecShelfResult
+import dev.blokz.arxiver.data.s2.browserFallbackUrl
+import dev.blokz.arxiver.data.s2.bylineText
 import dev.blokz.arxiver.feature.claude.DispatchSheet
 import dev.blokz.arxiver.feature.organize.OrganizeSheet
 import dev.blokz.arxiver.ui.components.EmptyState
@@ -361,12 +363,12 @@ private fun LazyListScope.recShelfSection(
 ) {
     // Nothing seedable → the shelf is simply absent (cold-start silence).
     if (state is RecShelfUiState.Hidden) return
-    // A Ready list emptied by "Not interested" on every row → collapse the whole section.
-    if (state is RecShelfUiState.Done &&
-        state.result is RecShelfResult.Ready &&
-        state.result.hits.isEmpty()
-    ) {
-        return
+    // The two "render nothing" terminals in ONE place: a Ready list emptied by "Not interested" on every
+    // row, and a NoSeeds result (defensive — the VM normally converts empty seeds to Hidden before any
+    // fetch, but guarding here keeps the header from appearing alone if that ever changes).
+    if (state is RecShelfUiState.Done) {
+        val r = state.result
+        if (r is RecShelfResult.NoSeeds || (r is RecShelfResult.Ready && r.hits.isEmpty())) return
     }
 
     item(key = "header-recshelf") {
@@ -549,6 +551,7 @@ private fun RecShelfRow(
     val inApp = hit.arxivId != null
     val openLabel =
         if (inApp) stringResource(R.string.recshelf_open_in_app) else stringResource(R.string.recshelf_open_browser)
+    val hideCd = stringResource(R.string.cd_recshelf_hide, hit.title)
     var menuOpen by remember { mutableStateOf(false) }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -561,11 +564,7 @@ private fun RecShelfRow(
                     if (arxivId != null) {
                         onOpenPaper(arxivId.value)
                     } else {
-                        val url =
-                            hit.doi?.let { "https://doi.org/$it" }
-                                ?: hit.openAccessPdfUrl
-                                ?: "https://www.semanticscholar.org/paper/${hit.s2PaperId}"
-                        uriHandler.openUri(url)
+                        uriHandler.openUri(hit.browserFallbackUrl())
                     }
                 }
                 .padding(start = Spacing.lg, top = Spacing.sm, bottom = Spacing.sm)
@@ -578,12 +577,7 @@ private fun RecShelfRow(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            val byline =
-                listOfNotNull(
-                    hit.authors.take(3).joinToString(", ").takeIf { it.isNotBlank() },
-                    hit.year?.toString(),
-                    hit.venue,
-                ).joinToString(" · ")
+            val byline = hit.bylineText()
             if (byline.isNotBlank()) {
                 Text(
                     text = byline,
@@ -616,6 +610,7 @@ private fun RecShelfRow(
                         menuOpen = false
                         onHide(hit.s2PaperId)
                     },
+                    modifier = Modifier.semantics { contentDescription = hideCd },
                 )
             }
         }

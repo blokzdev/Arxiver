@@ -436,6 +436,32 @@ class TodayViewModelTest {
         }
 
     @Test
+    fun `an unexpected transport throw settles to a retryable Error - never stuck on Loading`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> throw IllegalStateException("boom") }
+            shelf.fetchRecommendations()
+            // The throw must be caught: shelf is Done(Error), not stuck Loading (and no VM-scope crash).
+            val done = shelf.recShelf.value as RecShelfUiState.Done
+            assertTrue(done.result is dev.blokz.arxiver.data.RecShelfResult.Error)
+        }
+
+    @Test
+    fun `hiding the LAST row returns the shelf to a re-offerable state - not a collapsed dead section`() =
+        runTest {
+            saveArxiv("2606.11111")
+            val shelf = vmWith { _, _ -> recsOf(recPaper("s2-only", arxiv = "2606.22222")) }
+            shelf.fetchRecommendations()
+            assertTrue(shelf.recShelf.value is RecShelfUiState.Done)
+
+            shelf.hideRecommendation("s2-only")
+
+            // NOT left as Done(Ready(empty)) — that would collapse the header+Refresh with no way back.
+            // The seed still exists, so it re-offers the invitation.
+            assertEquals(RecShelfUiState.Idle(seedCount = 1), shelf.recShelf.value)
+        }
+
+    @Test
     fun `a save after the shelf is fetched does not reset the engaged shelf`() =
         runTest {
             saveArxiv("2606.11111")
